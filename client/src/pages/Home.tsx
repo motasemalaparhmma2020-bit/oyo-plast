@@ -13,6 +13,20 @@ export default function Home() {
 
   return (
     <div className="flex flex-col gap-12 pb-20">
+      {/* Welcome Banner */}
+      <section className="relative overflow-hidden bg-gradient-to-r from-primary via-blue-500 to-primary py-8 lg:py-10">
+        <div className="container mx-auto px-4">
+          <div className="text-center">
+            <h2 className="text-3xl lg:text-4xl font-extrabold text-white drop-shadow-lg">
+              أويو بلاست - حلول التغليف المتكاملة في اليمن
+            </h2>
+            <p className="text-white/90 text-lg mt-2 font-medium drop-shadow-md">
+              خدمة متوفرة فقط في الجمهورية اليمنية
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-primary/5 py-20 lg:py-32">
         <div className="container mx-auto px-4 relative z-10">
@@ -111,16 +125,26 @@ export default function Home() {
 
       {/* Featured Products */}
       <section className="container mx-auto px-4">
-        <h2 className="text-3xl font-bold text-foreground mb-8 text-center">أحدث المنتجات</h2>
+        <div className="flex justify-between items-end mb-10">
+          <div>
+            <h2 className="text-3xl lg:text-4xl font-extrabold text-foreground">أحدث المنتجات</h2>
+            <p className="text-muted-foreground mt-2 font-medium">اختر من أفضل تشكيلتنا المتنوعة</p>
+          </div>
+          <Link href="/products">
+            <Button variant="ghost" className="text-primary hover:text-primary/80 font-bold text-base gap-2 hidden md:flex">
+              عرض الكل <ArrowLeft className="h-5 w-5" />
+            </Button>
+          </Link>
+        </div>
         
         {isLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-80 bg-gray-100 rounded-xl animate-pulse" />
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="h-80 bg-gray-100 rounded-2xl animate-pulse" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
             {featuredProducts?.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
