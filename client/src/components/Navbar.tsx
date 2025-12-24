@@ -70,8 +70,8 @@ export function Navbar() {
             <div className="bg-primary p-1.5 rounded-lg">
               <Package className="h-6 w-6 text-white" />
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-primary to-teal-600 bg-clip-text text-transparent">
-              باكجنج برو
+            <span className="text-xl font-bold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
+              اويو بلاست
             </span>
           </Link>
         </div>

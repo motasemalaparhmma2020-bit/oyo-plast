@@ -8,20 +8,20 @@
   --font-sans: 'IBM Plex Sans Arabic', sans-serif;
   --font-display: 'IBM Plex Sans Arabic', sans-serif;
 
-  /* Savvy-inspired Teal/Blue Palette */
+  /* OYO PLAST Sky Blue Palette */
   --background: 0 0% 100%;
   --foreground: 215 28% 17%; /* Dark slate blue text */
   
-  --primary: 183 100% 35%; /* Teal primary */
+  --primary: 215 91% 48%; /* OYO PLAST Sky Blue */
   --primary-foreground: 0 0% 100%;
   
-  --secondary: 183 30% 96%; /* Very light teal for backgrounds */
-  --secondary-foreground: 183 100% 25%;
+  --secondary: 215 91% 96%; /* Very light blue for backgrounds */
+  --secondary-foreground: 215 91% 28%;
   
   --muted: 210 20% 96%;
   --muted-foreground: 215 16% 47%;
   
-  --accent: 38 92% 50%; /* Orange accent for CTAs */
+  --accent: 215 91% 48%; /* Sky blue accent */
   --accent-foreground: 0 0% 100%;
   
   --destructive: 0 84% 60%;
@@ -29,7 +29,7 @@
   
   --border: 220 13% 91%;
   --input: 220 13% 91%;
-  --ring: 183 100% 35%;
+  --ring: 215 91% 48%;
   
   --radius: 0.5rem;
 }

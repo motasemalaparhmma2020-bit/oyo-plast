@@ -14,11 +14,7 @@ import Auth from "@/pages/Auth";
 import NotFound from "@/pages/not-found";
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return null; // or a loading spinner
-  }
+  const { isAuthenticated } = useAuth();
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
@@ -41,8 +37,8 @@ function Router() {
       </main>
       <footer className="bg-white border-t py-12 mt-auto">
         <div className="container mx-auto px-4 text-center text-muted-foreground">
-          <p className="font-medium mb-2">© {new Date().getFullYear()} باكجنج برو - جميع الحقوق محفوظة</p>
-          <p className="text-sm">أفضل حلول التغليف لمشروعك التجاري في المملكة العربية السعودية</p>
+          <p className="font-medium mb-2">© {new Date().getFullYear()} اويو بلاست - جميع الحقوق محفوظة</p>
+          <p className="text-sm">أفضل حلول التغليف والبلاستيك لمشروعك التجاري في اليمن</p>
         </div>
       </footer>
     </div>
