@@ -20,9 +20,21 @@ export interface IStorage {
   deleteCartItem(id: number): Promise<void>;
   clearCart(userId: string): Promise<void>;
 
-  createOrder(userId: string, total: string): Promise<Order>;
+  createOrder(userId: string, orderData: {
+    total: string;
+    currency?: string;
+    depositAmount?: string | null;
+    paymentMethod?: string | null;
+    receiptImageUrl?: string | null;
+    customerPhone?: string | null;
+    shippingCity?: string | null;
+    shippingAddress?: string | null;
+    notes?: string | null;
+    status?: string;
+  }): Promise<Order>;
   createOrderItem(orderItem: typeof orderItems.$inferInsert): Promise<OrderItem>;
   getOrders(userId: string): Promise<Order[]>;
+  getAllOrders(): Promise<Order[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -105,11 +117,38 @@ export class DatabaseStorage implements IStorage {
     await db.delete(cartItems).where(eq(cartItems.userId, userId));
   }
 
-  async createOrder(userId: string, total: string): Promise<Order> {
+  async createOrder(userId: string, orderData: {
+    total: string;
+    currency?: string;
+    depositAmount?: string | null;
+    paymentMethod?: string | null;
+    receiptImageUrl?: string | null;
+    customerPhone?: string | null;
+    shippingCity?: string | null;
+    shippingAddress?: string | null;
+    notes?: string | null;
+    status?: string;
+  }): Promise<Order> {
     const [order] = await db.insert(orders)
-      .values({ userId, total, status: 'completed' })
+      .values({ 
+        userId, 
+        total: orderData.total,
+        currency: orderData.currency || 'YER',
+        depositAmount: orderData.depositAmount,
+        paymentMethod: orderData.paymentMethod,
+        receiptImageUrl: orderData.receiptImageUrl,
+        customerPhone: orderData.customerPhone,
+        shippingCity: orderData.shippingCity,
+        shippingAddress: orderData.shippingAddress,
+        notes: orderData.notes,
+        status: orderData.status || 'pending'
+      })
       .returning();
     return order;
+  }
+
+  async getAllOrders(): Promise<Order[]> {
+    return await db.select().from(orders).orderBy(orders.createdAt);
   }
 
   async createOrderItem(orderItem: typeof orderItems.$inferInsert): Promise<OrderItem> {

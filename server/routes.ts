@@ -4,6 +4,10 @@ import { setupAuth } from "./replit_integrations/auth";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import { orders } from "@shared/schema";
+import { eq } from "drizzle-orm";
+
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "oyo2024admin";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -70,15 +74,65 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Cart is empty" });
     }
 
-    const total = cartItems.reduce((sum, item) => sum + (Number(item.product.price) * item.quantity), 0);
-    const order = await storage.createOrder(userId, total.toString());
+    const { 
+      paymentMethod, 
+      receiptImageUrl, 
+      customerPhone, 
+      shippingCity, 
+      shippingAddress, 
+      notes,
+      currency = 'YER'
+    } = req.body;
+
+    // Validate payment method
+    const validPaymentMethods = ['cash_on_delivery', 'karimi', 'najm'];
+    if (!validPaymentMethods.includes(paymentMethod)) {
+      return res.status(400).json({ message: "Invalid payment method" });
+    }
+
+    // Validate required fields for bank transfer
+    if ((paymentMethod === 'karimi' || paymentMethod === 'najm') && !receiptImageUrl) {
+      return res.status(400).json({ message: "Receipt image required for bank transfer" });
+    }
+
+    // Calculate total server-side based on currency
+    const total = cartItems.reduce((sum, item) => {
+      const price = currency === 'SAR' && item.product.priceSar 
+        ? Number(item.product.priceSar) 
+        : Number(item.product.price);
+      return sum + (price * item.quantity);
+    }, 0);
+
+    // Calculate deposit (30% for bank transfers)
+    const depositAmount = (paymentMethod === 'karimi' || paymentMethod === 'najm') 
+      ? Math.ceil(total * 0.3).toString() 
+      : null;
+
+    // Determine status based on payment method
+    const status = paymentMethod === 'cash_on_delivery' ? 'pending' : 'deposit_paid';
+
+    const order = await storage.createOrder(userId, {
+      total: total.toString(),
+      currency,
+      depositAmount,
+      paymentMethod,
+      receiptImageUrl,
+      customerPhone,
+      shippingCity,
+      shippingAddress,
+      notes,
+      status
+    });
 
     for (const item of cartItems) {
+      const itemPrice = currency === 'SAR' && item.product.priceSar 
+        ? item.product.priceSar 
+        : item.product.price;
       await storage.createOrderItem({
         orderId: order.id,
         productId: item.productId,
         quantity: item.quantity,
-        price: item.product.price,
+        price: itemPrice,
       });
     }
 
@@ -90,6 +144,55 @@ export async function registerRoutes(
     if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
     const orders = await storage.getOrders(getUserId(req));
     res.json(orders);
+  });
+
+  // Admin authentication with session token
+  const adminSessions = new Set<string>();
+  
+  app.post("/api/admin/login", async (req, res) => {
+    const { password } = req.body;
+    if (password === ADMIN_PASSWORD) {
+      const token = `admin_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      adminSessions.add(token);
+      res.json({ success: true, token });
+    } else {
+      res.status(401).json({ error: "Invalid password" });
+    }
+  });
+
+  // Admin middleware
+  const requireAdmin = (req: any, res: any, next: any) => {
+    const token = req.headers['x-admin-token'];
+    if (!token || !adminSessions.has(token)) {
+      return res.status(401).json({ error: "Admin authentication required" });
+    }
+    next();
+  };
+
+  // Admin routes (protected)
+  app.get("/api/admin/orders", requireAdmin, async (req, res) => {
+    const allOrders = await storage.getAllOrders();
+    res.json(allOrders);
+  });
+
+  app.patch("/api/admin/orders/:id/status", requireAdmin, async (req, res) => {
+    const { status } = req.body;
+    const orderId = Number(req.params.id);
+    
+    const validStatuses = ['pending', 'deposit_paid', 'completed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+    
+    try {
+      const [updated] = await db.update(orders)
+        .set({ status })
+        .where(eq(orders.id, orderId))
+        .returning();
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update order" });
+    }
   });
 
 

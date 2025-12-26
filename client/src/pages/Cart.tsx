@@ -1,19 +1,38 @@
 import { useCart, useUpdateCartItem, useRemoveFromCart } from "@/hooks/use-cart";
-import { useCreateOrder } from "@/hooks/use-orders";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Trash2, Plus, Minus, ArrowLeft, ShoppingBag, Loader2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { useState, useEffect } from "react";
 
 export default function Cart() {
   const { data: cartItems, isLoading } = useCart();
   const { mutate: updateItem } = useUpdateCartItem();
   const { mutate: removeItem } = useRemoveFromCart();
-  const { mutate: createOrder, isPending: isOrdering } = useCreateOrder();
+  
+  const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
+    return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
+  });
 
-  const subtotal = cartItems?.reduce((acc, item) => acc + (Number(item.product.price) * item.quantity), 0) || 0;
-  const tax = subtotal * 0.15; // 15% VAT
-  const total = subtotal + tax;
+  useEffect(() => {
+    const handleCurrencyChange = () => {
+      setCurrency((localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER');
+    };
+    window.addEventListener('currencyChange', handleCurrencyChange);
+    return () => window.removeEventListener('currencyChange', handleCurrencyChange);
+  }, []);
+
+  const formatPrice = (price: number) => {
+    return price.toLocaleString('ar-YE');
+  };
+
+  const getItemPrice = (item: typeof cartItems[0]) => {
+    return currency === 'SAR' && item.product.priceSar 
+      ? Number(item.product.priceSar) 
+      : Number(item.product.price);
+  };
+
+  const subtotal = cartItems?.reduce((acc, item) => acc + (getItemPrice(item) * item.quantity), 0) || 0;
 
   if (isLoading) {
     return (
@@ -62,7 +81,7 @@ export default function Cart() {
               <div className="flex-grow text-center sm:text-right">
                 <h3 className="font-bold text-lg mb-1">{item.product.name}</h3>
                 <p className="text-primary font-bold">
-                  {Number(item.product.price).toFixed(2)} ريال
+                  {formatPrice(getItemPrice(item))} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
                 </p>
               </div>
 
@@ -106,40 +125,28 @@ export default function Cart() {
             
             <div className="space-y-4 mb-6">
               <div className="flex justify-between text-muted-foreground">
-                <span>المجموع الفرعي</span>
-                <span className="font-bold text-foreground">{subtotal.toFixed(2)} ريال</span>
-              </div>
-              <div className="flex justify-between text-muted-foreground">
-                <span>ضريبة القيمة المضافة (15%)</span>
-                <span className="font-bold text-foreground">{tax.toFixed(2)} ريال</span>
+                <span>المجموع</span>
+                <span className="font-bold text-foreground">{formatPrice(subtotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
               </div>
               <Separator />
               <div className="flex justify-between text-xl font-bold text-primary">
                 <span>الإجمالي</span>
-                <span>{total.toFixed(2)} ريال</span>
+                <span>{formatPrice(subtotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
               </div>
             </div>
 
-            <Button 
-              className="w-full h-14 text-lg font-bold rounded-xl shadow-lg shadow-primary/20"
-              onClick={() => createOrder()}
-              disabled={isOrdering}
-            >
-              {isOrdering ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  جاري المعالجة...
-                </>
-              ) : (
-                <>
-                  إتمام الطلب
-                  <ArrowLeft className="mr-2 h-5 w-5" />
-                </>
-              )}
-            </Button>
+            <Link href="/checkout">
+              <Button 
+                className="w-full h-14 text-lg font-bold rounded-xl shadow-lg shadow-primary/20"
+                data-testid="button-checkout"
+              >
+                إتمام الطلب
+                <ArrowLeft className="mr-2 h-5 w-5" />
+              </Button>
+            </Link>
             
             <p className="text-xs text-center text-muted-foreground mt-4">
-              بالضغط على إتمام الطلب، فإنك توافق على شروط الاستخدام وسياسة الخصوصية
+              سيتم تحديد طريقة الدفع في الخطوة التالية
             </p>
           </div>
         </div>

@@ -1,0 +1,426 @@
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Order, Product } from "@shared/schema";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { 
+  ShoppingBag, 
+  Package, 
+  Eye, 
+  Loader2, 
+  Lock, 
+  CheckCircle, 
+  Clock, 
+  XCircle,
+  TrendingUp,
+  DollarSign,
+  Users
+} from "lucide-react";
+
+const statusMap: Record<string, { label: string; color: string; icon: any }> = {
+  pending: { label: "قيد الانتظار", color: "bg-yellow-100 text-yellow-800", icon: Clock },
+  deposit_paid: { label: "تم دفع العربون", color: "bg-blue-100 text-blue-800", icon: DollarSign },
+  completed: { label: "مكتمل", color: "bg-green-100 text-green-800", icon: CheckCircle },
+  cancelled: { label: "ملغي", color: "bg-red-100 text-red-800", icon: XCircle },
+};
+
+export default function Admin() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [adminToken, setAdminToken] = useState<string | null>(null);
+  const [password, setPassword] = useState("");
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const savedToken = sessionStorage.getItem("admin_token");
+    if (savedToken) {
+      setAdminToken(savedToken);
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  const { data: orders, isLoading: ordersLoading } = useQuery<Order[]>({
+    queryKey: ['/api/admin/orders'],
+    enabled: isAuthenticated && !!adminToken,
+    queryFn: async () => {
+      const res = await fetch('/api/admin/orders', {
+        headers: { 'x-admin-token': adminToken || '' }
+      });
+      if (!res.ok) throw new Error('Failed to fetch orders');
+      return res.json();
+    }
+  });
+
+  const { data: products, isLoading: productsLoading } = useQuery<Product[]>({
+    queryKey: ['/api/products'],
+    enabled: isAuthenticated,
+  });
+
+  const updateOrderStatus = useMutation({
+    mutationFn: async ({ orderId, status }: { orderId: number; status: string }) => {
+      const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken || '' 
+        },
+        body: JSON.stringify({ status })
+      });
+      if (!res.ok) throw new Error('Failed to update order');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      toast({ title: "تم تحديث حالة الطلب" });
+    }
+  });
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const response = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setAdminToken(data.token);
+        setIsAuthenticated(true);
+        sessionStorage.setItem("admin_token", data.token);
+        toast({ title: "مرحباً بك في لوحة التحكم" });
+      } else {
+        toast({ title: "كلمة المرور غير صحيحة", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "حدث خطأ في الاتصال", variant: "destructive" });
+    }
+  };
+
+  const formatPrice = (price: string | number | null) => {
+    if (!price) return '0';
+    return Number(price).toLocaleString('ar-YE');
+  };
+
+  const formatDate = (date: string | Date | null) => {
+    if (!date) return '-';
+    return new Date(date).toLocaleDateString('ar-YE', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+              <Lock className="h-8 w-8 text-primary" />
+            </div>
+            <CardTitle className="text-2xl">لوحة التحكم</CardTitle>
+            <p className="text-muted-foreground">أدخل كلمة المرور للوصول</p>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <Label htmlFor="password">كلمة المرور</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="أدخل كلمة المرور"
+                  className="mt-1"
+                  data-testid="input-admin-password"
+                />
+              </div>
+              <Button type="submit" className="w-full" data-testid="button-admin-login">
+                دخول
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const totalRevenue = orders?.reduce((sum, o) => sum + Number(o.total || 0), 0) || 0;
+  const pendingOrders = orders?.filter(o => o.status === 'pending' || o.status === 'deposit_paid').length || 0;
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <div className="bg-primary text-white p-6">
+        <div className="container mx-auto">
+          <h1 className="text-2xl font-bold">لوحة تحكم OYO PLAST</h1>
+          <p className="text-primary-foreground/80">إدارة الطلبات والمنتجات</p>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 py-6">
+        <div className="grid md:grid-cols-4 gap-4 mb-8">
+          <Card>
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="bg-blue-100 p-3 rounded-xl">
+                <ShoppingBag className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">إجمالي الطلبات</p>
+                <p className="text-2xl font-bold">{orders?.length || 0}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="bg-yellow-100 p-3 rounded-xl">
+                <Clock className="h-6 w-6 text-yellow-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">طلبات معلقة</p>
+                <p className="text-2xl font-bold">{pendingOrders}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="bg-green-100 p-3 rounded-xl">
+                <TrendingUp className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">إجمالي المبيعات</p>
+                <p className="text-2xl font-bold">{formatPrice(totalRevenue)} ر.ي</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="bg-purple-100 p-3 rounded-xl">
+                <Package className="h-6 w-6 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">المنتجات</p>
+                <p className="text-2xl font-bold">{products?.length || 0}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="orders" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="orders">الطلبات</TabsTrigger>
+            <TabsTrigger value="products">المنتجات</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="orders">
+            <Card>
+              <CardHeader>
+                <CardTitle>إدارة الطلبات</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {ordersLoading ? (
+                  <div className="flex justify-center py-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : orders && orders.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">رقم الطلب</TableHead>
+                          <TableHead className="text-right">العميل</TableHead>
+                          <TableHead className="text-right">المدينة</TableHead>
+                          <TableHead className="text-right">الإجمالي</TableHead>
+                          <TableHead className="text-right">طريقة الدفع</TableHead>
+                          <TableHead className="text-right">الحالة</TableHead>
+                          <TableHead className="text-right">التاريخ</TableHead>
+                          <TableHead className="text-right">إجراءات</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {orders.map((order) => {
+                          const status = statusMap[order.status] || statusMap.pending;
+                          const StatusIcon = status.icon;
+                          return (
+                            <TableRow key={order.id}>
+                              <TableCell className="font-medium">#{order.id}</TableCell>
+                              <TableCell>{order.customerPhone || '-'}</TableCell>
+                              <TableCell>{order.shippingCity || '-'}</TableCell>
+                              <TableCell className="font-bold">{formatPrice(order.total)} ر.ي</TableCell>
+                              <TableCell>
+                                {order.paymentMethod === 'karimi' && 'الكريمي'}
+                                {order.paymentMethod === 'najm' && 'النجم'}
+                                {order.paymentMethod === 'cash_on_delivery' && 'عند الاستلام'}
+                                {!order.paymentMethod && '-'}
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={`${status.color} gap-1`}>
+                                  <StatusIcon className="h-3 w-3" />
+                                  {status.label}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm">{formatDate(order.createdAt)}</TableCell>
+                              <TableCell>
+                                <div className="flex gap-2">
+                                  <Dialog>
+                                    <DialogTrigger asChild>
+                                      <Button size="icon" variant="ghost" onClick={() => setSelectedOrder(order)}>
+                                        <Eye className="h-4 w-4" />
+                                      </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="max-w-lg">
+                                      <DialogHeader>
+                                        <DialogTitle>تفاصيل الطلب #{order.id}</DialogTitle>
+                                      </DialogHeader>
+                                      <div className="space-y-4">
+                                        <div className="grid grid-cols-2 gap-4 text-sm">
+                                          <div>
+                                            <p className="text-muted-foreground">الهاتف</p>
+                                            <p className="font-medium">{order.customerPhone || '-'}</p>
+                                          </div>
+                                          <div>
+                                            <p className="text-muted-foreground">المدينة</p>
+                                            <p className="font-medium">{order.shippingCity || '-'}</p>
+                                          </div>
+                                          <div className="col-span-2">
+                                            <p className="text-muted-foreground">العنوان</p>
+                                            <p className="font-medium">{order.shippingAddress || '-'}</p>
+                                          </div>
+                                          {order.notes && (
+                                            <div className="col-span-2">
+                                              <p className="text-muted-foreground">ملاحظات</p>
+                                              <p className="font-medium">{order.notes}</p>
+                                            </div>
+                                          )}
+                                          <div>
+                                            <p className="text-muted-foreground">الإجمالي</p>
+                                            <p className="font-bold text-primary">{formatPrice(order.total)} ر.ي</p>
+                                          </div>
+                                          {order.depositAmount && (
+                                            <div>
+                                              <p className="text-muted-foreground">العربون</p>
+                                              <p className="font-medium">{formatPrice(order.depositAmount)} ر.ي</p>
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        {order.receiptImageUrl && (
+                                          <div>
+                                            <p className="text-muted-foreground mb-2">صورة الإشعار</p>
+                                            <p className="text-sm bg-gray-100 p-2 rounded">{order.receiptImageUrl}</p>
+                                          </div>
+                                        )}
+
+                                        <Separator />
+
+                                        <div>
+                                          <Label>تغيير الحالة</Label>
+                                          <Select
+                                            value={order.status}
+                                            onValueChange={(value) => updateOrderStatus.mutate({ orderId: order.id, status: value })}
+                                          >
+                                            <SelectTrigger className="mt-1">
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="pending">قيد الانتظار</SelectItem>
+                                              <SelectItem value="deposit_paid">تم دفع العربون</SelectItem>
+                                              <SelectItem value="completed">مكتمل</SelectItem>
+                                              <SelectItem value="cancelled">ملغي</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      </div>
+                                    </DialogContent>
+                                  </Dialog>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <ShoppingBag className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>لا توجد طلبات بعد</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="products">
+            <Card>
+              <CardHeader>
+                <CardTitle>إدارة المنتجات</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {productsLoading ? (
+                  <div className="flex justify-center py-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : products && products.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">المنتج</TableHead>
+                          <TableHead className="text-right">السعر (ر.ي)</TableHead>
+                          <TableHead className="text-right">السعر (ر.س)</TableHead>
+                          <TableHead className="text-right">المخزون</TableHead>
+                          <TableHead className="text-right">الفئة</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {products.map((product) => (
+                          <TableRow key={product.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
+                                  <img src={product.imageUrl} alt={product.name} className="w-full h-full object-contain" />
+                                </div>
+                                <span className="font-medium">{product.name}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>{formatPrice(product.price)}</TableCell>
+                            <TableCell>{formatPrice(product.priceSar)}</TableCell>
+                            <TableCell>
+                              <Badge variant={product.stock > 0 ? "default" : "destructive"}>
+                                {product.stock}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{product.categoryId}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>لا توجد منتجات بعد</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+}

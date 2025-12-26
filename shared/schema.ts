@@ -37,8 +37,16 @@ export const cartItems = pgTable("cart_items", {
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").references(() => users.id).notNull(),
-  status: text("status").notNull().default("pending"), // pending, completed, cancelled
+  status: text("status").notNull().default("pending"), // pending, deposit_paid, completed, cancelled
   total: numeric("total").notNull(),
+  currency: text("currency").default("YER").notNull(), // YER or SAR
+  depositAmount: numeric("deposit_amount"), // Deposit amount paid
+  paymentMethod: text("payment_method"), // karimi, najm, cash_on_delivery
+  receiptImageUrl: text("receipt_image_url"), // Receipt image for bank transfers
+  customerPhone: text("customer_phone"),
+  shippingCity: text("shipping_city"),
+  shippingAddress: text("shipping_address"),
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

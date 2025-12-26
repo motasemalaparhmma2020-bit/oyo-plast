@@ -10,8 +10,10 @@ import Home from "@/pages/Home";
 import Products from "@/pages/Products";
 import ProductDetail from "@/pages/ProductDetail";
 import Cart from "@/pages/Cart";
+import Checkout from "@/pages/Checkout";
 import Profile from "@/pages/Profile";
 import Auth from "@/pages/Auth";
+import Admin from "@/pages/Admin";
 import NotFound from "@/pages/not-found";
 
 import { BottomNav } from "@/components/BottomNav";
@@ -30,12 +32,16 @@ function Router() {
           <Route path="/cart">
             {isAuthenticated ? <Cart /> : <Auth />}
           </Route>
+          <Route path="/checkout">
+            {isAuthenticated ? <Checkout /> : <Auth />}
+          </Route>
           <Route path="/profile">
             {isAuthenticated ? <Profile /> : <Auth />}
           </Route>
           <Route path="/auth">
             {isAuthenticated ? <Home /> : <Auth />}
           </Route>
+          <Route path="/admin" component={Admin} />
           <Route component={NotFound} />
         </Switch>
       </main>
