@@ -2,105 +2,240 @@ import { useProducts, useCategories } from "@/hooks/use-products";
 import { ProductCard } from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Loader2, Filter } from "lucide-react";
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { Search, Loader2, Package, ChevronLeft } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Link, useLocation } from "wouter";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function Products() {
   const [location] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
-  const initialCategory = searchParams.get("category") || "all";
+  const initialCategory = searchParams.get("category") || "";
   
   const [selectedCategory, setSelectedCategory] = useState<string>(initialCategory);
   const [search, setSearch] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [showProducts, setShowProducts] = useState(!!initialCategory);
 
   const { data: products, isLoading } = useProducts(
-    selectedCategory === "all" ? undefined : selectedCategory,
+    selectedCategory || undefined,
     searchTerm
   );
   
   const { data: categories } = useCategories();
 
+  useEffect(() => {
+    if (initialCategory) {
+      setSelectedCategory(initialCategory);
+      setShowProducts(true);
+    }
+  }, [initialCategory]);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setSearchTerm(search);
+    setShowProducts(true);
   };
 
-  return (
-    <div className="container mx-auto px-4 py-8 pb-20">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">المنتجات</h1>
-          <p className="text-muted-foreground mt-1">تصفح تشكيلتنا الواسعة من مستلزمات التغليف</p>
-        </div>
+  const handleCategoryClick = (categoryId: string) => {
+    setSelectedCategory(categoryId);
+    setShowProducts(true);
+  };
 
-        <form onSubmit={handleSearch} className="flex w-full md:w-auto gap-2">
-          <div className="relative w-full md:w-80">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="ابحث عن منتج..." 
-              className="pr-9 h-11 rounded-xl bg-white border-border/60 focus:border-primary"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <Button type="submit" size="icon" className="h-11 w-11 rounded-xl">
-            <Search className="h-4 w-4" />
-          </Button>
-        </form>
-      </div>
+  const handleBackToCategories = () => {
+    setSelectedCategory("");
+    setShowProducts(false);
+    setSearchTerm("");
+  };
 
-      <div className="grid lg:grid-cols-[280px_1fr] gap-8">
-        {/* Sidebar Filters */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border h-fit sticky top-24">
-          <div className="flex items-center gap-2 mb-6 text-primary font-bold text-lg border-b pb-4">
-            <Filter className="h-5 w-5" />
-            التصنيفات
-          </div>
-          
-          <div className="flex flex-col gap-2">
+  if (showProducts) {
+    return (
+      <div className="pb-20 bg-gray-50 dark:bg-background min-h-screen">
+        <div className="sticky top-0 z-40 bg-white dark:bg-card border-b px-4 py-3">
+          <div className="flex items-center gap-3">
             <Button 
-              variant={selectedCategory === "all" ? "default" : "ghost"}
-              className={`justify-start text-lg h-12 rounded-xl ${selectedCategory === "all" ? "bg-primary text-white shadow-lg shadow-primary/20" : "hover:bg-gray-100"}`}
-              onClick={() => setSelectedCategory("all")}
+              variant="ghost" 
+              size="icon" 
+              onClick={handleBackToCategories}
+              data-testid="button-back-categories"
             >
-              جميع المنتجات
+              <ChevronLeft className="h-5 w-5 rotate-180" />
             </Button>
-            
-            {categories?.map((category) => (
-              <Button 
-                key={category.id}
-                variant={selectedCategory === String(category.id) ? "default" : "ghost"}
-                className={`justify-start text-lg h-12 rounded-xl ${selectedCategory === String(category.id) ? "bg-primary text-white shadow-lg shadow-primary/20" : "hover:bg-gray-100"}`}
-                onClick={() => setSelectedCategory(String(category.id))}
-              >
-                {category.name}
-              </Button>
-            ))}
+            <form onSubmit={handleSearch} className="flex-1">
+              <div className="relative">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="ابحث عن منتج..." 
+                  className="pr-9 h-10 rounded-full bg-gray-100 dark:bg-muted border-0"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  data-testid="input-search-products"
+                />
+              </div>
+            </form>
           </div>
         </div>
 
-        {/* Product Grid */}
-        <div>
+        <div className="p-4">
+          <h2 className="text-lg font-bold mb-4">
+            {categories?.find(c => c.id === Number(selectedCategory))?.name || "جميع المنتجات"}
+          </h2>
+          
           {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-80 bg-gray-100 rounded-xl animate-pulse" />
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="h-72 bg-gray-200 dark:bg-gray-800 rounded-xl animate-pulse" />
               ))}
             </div>
           ) : products && products.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {products.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-center bg-gray-50 rounded-3xl border border-dashed">
+            <div className="flex flex-col items-center justify-center py-20 text-center">
               <Package className="h-16 w-16 text-muted-foreground/30 mb-4" />
               <h3 className="text-xl font-bold text-muted-foreground">لا توجد منتجات</h3>
-              <p className="text-muted-foreground/60 mt-2">حاول تغيير خيارات البحث أو التصنيف</p>
+              <p className="text-muted-foreground/60 mt-2">حاول تغيير خيارات البحث</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pb-20 bg-white dark:bg-background min-h-screen">
+      {/* Header with horizontal category tabs */}
+      <div className="sticky top-0 z-40 bg-white dark:bg-card border-b">
+        <div className="px-4 py-3">
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="البحث" 
+              className="pr-9 h-10 rounded-lg bg-gray-100 dark:bg-muted border-0"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch(e)}
+              data-testid="input-search-main"
+            />
+          </div>
+        </div>
+        
+        <div className="flex overflow-x-auto px-2 pb-2 gap-1 scrollbar-hide">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="whitespace-nowrap font-bold text-primary border-b-2 border-primary rounded-none"
+            data-testid="button-tab-all"
+          >
+            كل
+          </Button>
+          {categories?.slice(0, 6).map((cat) => (
+            <Button 
+              key={cat.id}
+              variant="ghost" 
+              size="sm" 
+              className="whitespace-nowrap text-muted-foreground rounded-none"
+              onClick={() => handleCategoryClick(String(cat.id))}
+              data-testid={`button-tab-${cat.id}`}
+            >
+              {cat.name}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Main content with sidebar */}
+      <div className="flex">
+        {/* Right Sidebar - Category List */}
+        <div className="w-28 md:w-36 border-l bg-gray-50 dark:bg-muted/30 min-h-[calc(100vh-120px)]">
+          <ScrollArea className="h-[calc(100vh-180px)]">
+            <div className="py-2">
+              <button
+                className="w-full text-right px-3 py-3 text-sm font-bold text-primary bg-pink-50 dark:bg-primary/10 border-r-2 border-primary"
+                data-testid="sidebar-category-recommended"
+              >
+                لأجلكم فقط
+              </button>
+              <button
+                className="w-full text-right px-3 py-3 text-sm text-muted-foreground hover:bg-gray-100 dark:hover:bg-muted"
+                onClick={() => handleCategoryClick("")}
+                data-testid="sidebar-category-new"
+              >
+                جديد في
+              </button>
+              <button
+                className="w-full text-right px-3 py-3 text-sm text-muted-foreground hover:bg-gray-100 dark:hover:bg-muted"
+                data-testid="sidebar-category-sale"
+              >
+                تخفيض الأسعار
+              </button>
+              {categories?.map((cat) => (
+                <button
+                  key={cat.id}
+                  className="w-full text-right px-3 py-3 text-sm text-muted-foreground hover:bg-gray-100 dark:hover:bg-muted"
+                  onClick={() => handleCategoryClick(String(cat.id))}
+                  data-testid={`sidebar-category-${cat.id}`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+
+        {/* Main Content - Category Circles Grid */}
+        <div className="flex-1 p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-bold">مختارات من أجلك</h2>
+          </div>
+
+          {/* Category Circles Grid - 4 columns like SHEIN */}
+          <div className="grid grid-cols-4 gap-3 md:gap-4">
+            {categories?.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => handleCategoryClick(String(cat.id))}
+                className="flex flex-col items-center gap-2 group"
+                data-testid={`category-grid-${cat.id}`}
+              >
+                <div className="w-14 h-14 md:w-16 md:h-16 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700 group-hover:border-primary transition-colors bg-white dark:bg-card shadow-sm">
+                  <img 
+                    src={cat.imageUrl || ''} 
+                    alt={cat.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <span className="text-[10px] md:text-xs text-center leading-tight line-clamp-2 text-foreground max-w-[60px] md:max-w-[72px]">
+                  {cat.name}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Featured Products Section */}
+          {products && products.length > 0 && (
+            <div className="mt-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-bold">منتجات مميزة</h2>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-primary gap-1"
+                  onClick={() => setShowProducts(true)}
+                  data-testid="button-view-all-products"
+                >
+                  عرض الكل
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {products.slice(0, 6).map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
             </div>
           )}
         </div>
