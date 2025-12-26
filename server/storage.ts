@@ -117,9 +117,45 @@ export class DatabaseStorage implements IStorage {
     return item;
   }
 
-  async getOrders(userId: string): Promise<Order[]> {
-    return await db.select().from(orders).where(eq(orders.userId, userId));
+  async seedPlasticProducts(): Promise<void> {
+    const plasticCategory = await db.select().from(categories).where(eq(categories.slug, 'plastics')).limit(1);
+    if (plasticCategory.length === 0) return;
+    
+    const catId = plasticCategory[0].id;
+    const plasticProducts = [
+      {
+        name: "علب ميكرويف سوداء - طقم 50 حبة",
+        description: "علب بلاستيكية سوداء عالية الجودة آمنة للاستخدام في الميكرويف، مثالية للمطاعم والوجبات السريعة.",
+        price: "7500",
+        priceSar: "50",
+        categoryId: catId,
+        imageUrl: "https://images.unsplash.com/photo-1621252178174-2795c6c66657?w=800&q=80",
+        stock: 500,
+        bulkPricing: JSON.stringify([{ minQty: 10, price: "7000" }])
+      },
+      {
+        name: "صحون بلاستيك شفافة - مقاسات متنوعة",
+        description: "صحون بلاستيكية شفافة قوية وأنيقة لتقديم الحلويات والفواكه.",
+        price: "4500",
+        priceSar: "30",
+        categoryId: catId,
+        imageUrl: "https://images.unsplash.com/photo-1591871937573-74dbba515c4c?w=800&q=80",
+        stock: 1000
+      },
+      {
+        name: "ملاعق بلاستيك مغلفة - كرتون 1000 ملعقة",
+        description: "ملاعق بلاستيكية مغلفة فردياً لضمان النظافة والتعقيم.",
+        price: "12000",
+        priceSar: "80",
+        categoryId: catId,
+        imageUrl: "https://images.unsplash.com/photo-1591871937573-74dbba515c4c?w=800&q=80",
+        stock: 200
+      }
+    ];
+
+    for (const p of plasticProducts) {
+      await db.insert(products).values(p);
+    }
   }
-}
 
 export const storage = new DatabaseStorage();

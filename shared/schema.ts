@@ -17,10 +17,14 @@ export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description").notNull(),
-  price: numeric("price").notNull(),
+  price: numeric("price").notNull(), // Default currency price (YER)
+  priceSar: numeric("price_sar"), // Price in SAR
   categoryId: integer("category_id").references(() => categories.id).notNull(),
   imageUrl: text("image_url").notNull(),
   stock: integer("stock").default(100).notNull(),
+  colors: text("colors").array(), // For color customization
+  allowDesignUpload: boolean("allow_design_upload").default(false).notNull(),
+  bulkPricing: text("bulk_pricing"), // JSON string for quantity-based pricing
 });
 
 export const cartItems = pgTable("cart_items", {
