@@ -1,103 +1,241 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useOrders } from "@/hooks/use-orders";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Package, Clock, CheckCircle, XCircle, User } from "lucide-react";
-import { format } from "date-fns";
+import { Link } from "wouter";
+import { 
+  Loader2, 
+  Settings, 
+  ScanLine, 
+  Ticket, 
+  Star, 
+  Wallet, 
+  Gift,
+  CreditCard,
+  Package,
+  Truck,
+  MessageSquare,
+  RotateCcw,
+  Heart,
+  Users,
+  History,
+  ChevronLeft,
+  User,
+  LogOut
+} from "lucide-react";
 
 export default function Profile() {
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { user, isLoading: isAuthLoading, logout, isAuthenticated } = useAuth();
   const { data: orders, isLoading: isOrdersLoading } = useOrders();
 
-  if (isAuthLoading || isOrdersLoading) {
+  if (isAuthLoading) {
     return (
-      <div className="container mx-auto px-4 py-20 flex justify-center">
+      <div className="min-h-screen flex justify-center items-center pb-20">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
       </div>
     );
   }
 
-  const getStatusBadge = (status: string) => {
-    switch(status) {
-      case 'completed':
-        return <Badge className="bg-green-500 hover:bg-green-600 gap-1"><CheckCircle className="h-3 w-3" /> مكتمل</Badge>;
-      case 'cancelled':
-        return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" /> ملغى</Badge>;
-      default:
-        return <Badge variant="secondary" className="gap-1"><Clock className="h-3 w-3" /> قيد المعالجة</Badge>;
-    }
-  };
-
-  return (
-    <div className="container mx-auto px-4 py-8 pb-20">
-      <h1 className="text-3xl font-bold mb-8">الملف الشخصي</h1>
-
-      <div className="grid lg:grid-cols-3 gap-8">
-        {/* User Info */}
-        <div className="lg:col-span-1">
-          <Card className="border-none shadow-md">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5 text-primary" />
-                معلوماتي
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center text-center p-4">
-                <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-                  <span className="text-3xl font-bold text-primary">
-                    {user?.username?.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <h2 className="text-xl font-bold">{user?.username}</h2>
-                <p className="text-muted-foreground mt-1">عضو منذ {new Date().getFullYear()}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Orders History */}
-        <div className="lg:col-span-2">
-          <Card className="border-none shadow-md">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5 text-primary" />
-                طلباتي السابقة
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {!orders || orders.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground bg-gray-50 rounded-xl border border-dashed">
-                  <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>لا توجد طلبات سابقة</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {orders.map((order) => (
-                    <div key={order.id} className="bg-white border rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-primary/50 transition-colors">
-                      <div>
-                        <div className="flex items-center gap-3 mb-1">
-                          <span className="font-bold text-lg">طلب #{order.id}</span>
-                          {getStatusBadge(order.status)}
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {order.createdAt ? format(new Date(order.createdAt), 'yyyy-MM-dd HH:mm') : ''}
-                        </p>
-                      </div>
-                      <div className="text-left">
-                        <p className="font-bold text-lg text-primary">
-                          {Number(order.total).toFixed(2)} ريال
-                        </p>
-                        <p className="text-xs text-muted-foreground">شامل الضريبة</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-background pb-20">
+        <div className="bg-white dark:bg-card p-6 text-center">
+          <div className="w-20 h-20 bg-gray-100 dark:bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+            <User className="h-10 w-10 text-muted-foreground" />
+          </div>
+          <h2 className="text-lg font-bold mb-2">مرحباً بك</h2>
+          <p className="text-sm text-muted-foreground mb-4">سجل دخولك للوصول إلى حسابك</p>
+          <Link href="/auth">
+            <Button className="rounded-full px-8" data-testid="button-login">
+              تسجيل الدخول
+            </Button>
+          </Link>
         </div>
       </div>
+    );
+  }
+
+  const pendingOrders = orders?.filter(o => o.status === 'pending').length || 0;
+  const processingOrders = orders?.filter(o => o.status === 'processing').length || 0;
+  const shippedOrders = orders?.filter(o => o.status === 'shipped').length || 0;
+  const completedOrders = orders?.filter(o => o.status === 'completed').length || 0;
+
+  const quickActions = [
+    { icon: Ticket, label: "كوبونات", count: 0 },
+    { icon: Star, label: "نقاط", count: 0 },
+    { icon: Wallet, label: "محفظة", count: null },
+    { icon: Gift, label: "بطاقة هدية", count: null },
+  ];
+
+  const orderStatuses = [
+    { icon: CreditCard, label: "غير مدفوع", count: pendingOrders },
+    { icon: Package, label: "قيد التجهيز", count: processingOrders },
+    { icon: Truck, label: "تم الشحن", count: shippedOrders },
+    { icon: MessageSquare, label: "تعليق", count: 0 },
+    { icon: RotateCcw, label: "المنتجات المسترجعة", count: 0 },
+  ];
+
+  const bottomActions = [
+    { icon: Heart, label: "قائمة الأماني", count: 0, suffix: "منتج" },
+    { icon: Users, label: "متابع", count: 0, suffix: "متابع" },
+    { icon: History, label: "تاريخ", count: orders?.length || 0, suffix: "منتج" },
+  ];
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-background pb-20">
+      {/* Header */}
+      <div className="bg-white dark:bg-card px-4 py-3 flex items-center justify-between border-b">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" data-testid="button-settings">
+            <Settings className="h-5 w-5" />
+          </Button>
+          <Button variant="ghost" size="icon" data-testid="button-scan">
+            <ScanLine className="h-5 w-5" />
+          </Button>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>ملفي الشخصي</span>
+          <User className="h-4 w-4" />
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="bg-white dark:bg-card px-4 py-6 border-b">
+        <div className="grid grid-cols-4 gap-4">
+          {quickActions.map((action, index) => (
+            <button 
+              key={index} 
+              className="flex flex-col items-center gap-2"
+              data-testid={`quick-action-${index}`}
+            >
+              <div className="relative">
+                <action.icon className="h-7 w-7 text-foreground" strokeWidth={1.5} />
+                {action.count !== null && action.count > 0 && (
+                  <Badge className="absolute -top-2 -right-2 h-5 min-w-5 flex items-center justify-center p-0 text-[10px]">
+                    {action.count}
+                  </Badge>
+                )}
+              </div>
+              <span className="text-xs text-foreground">{action.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* My Orders Section */}
+      <div className="bg-white dark:bg-card mt-2 border-b">
+        <div className="px-4 py-3 flex items-center justify-between border-b">
+          <Link href="/orders" className="flex items-center gap-1 text-sm text-muted-foreground">
+            <span>الاراء الكاملة</span>
+            <ChevronLeft className="h-4 w-4" />
+          </Link>
+          <h3 className="font-bold">طلبي</h3>
+        </div>
+        
+        <div className="px-4 py-4">
+          <div className="grid grid-cols-5 gap-2">
+            {orderStatuses.map((status, index) => (
+              <button 
+                key={index} 
+                className="flex flex-col items-center gap-2 relative"
+                data-testid={`order-status-${index}`}
+              >
+                <div className="relative">
+                  <status.icon className="h-6 w-6 text-foreground" strokeWidth={1.5} />
+                  {status.count > 0 && (
+                    <Badge className="absolute -top-2 -right-2 h-4 min-w-4 flex items-center justify-center p-0 text-[10px] bg-red-500">
+                      {status.count}
+                    </Badge>
+                  )}
+                </div>
+                <span className="text-[10px] text-foreground text-center leading-tight">{status.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Actions */}
+      <div className="bg-white dark:bg-card mt-2 border-b">
+        <div className="grid grid-cols-3 divide-x divide-x-reverse">
+          {bottomActions.map((action, index) => (
+            <button 
+              key={index} 
+              className="flex items-center justify-center gap-2 py-4"
+              data-testid={`bottom-action-${index}`}
+            >
+              <div className="flex items-center gap-1 text-sm">
+                <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">{action.label}</span>
+                <action.icon className="h-4 w-4" />
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {action.count} {action.suffix}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* User Info & Logout */}
+      <div className="bg-white dark:bg-card mt-2 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+              <span className="text-lg font-bold text-primary">
+                {user?.firstName?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "م"}
+              </span>
+            </div>
+            <div>
+              <h3 className="font-bold">{user?.firstName || user?.email?.split('@')[0] || "مستخدم"}</h3>
+              <p className="text-xs text-muted-foreground">{user?.email || ""}</p>
+            </div>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => logout()}
+            className="gap-2 text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600"
+            data-testid="button-logout"
+          >
+            <LogOut className="h-4 w-4" />
+            خروج
+          </Button>
+        </div>
+      </div>
+
+      {/* Recent Orders */}
+      {orders && orders.length > 0 && (
+        <div className="bg-white dark:bg-card mt-2 p-4">
+          <h3 className="font-bold mb-3">آخر الطلبات</h3>
+          <div className="space-y-3">
+            {orders.slice(0, 3).map((order) => (
+              <div 
+                key={order.id} 
+                className="flex items-center justify-between p-3 bg-gray-50 dark:bg-muted rounded-lg"
+                data-testid={`order-item-${order.id}`}
+              >
+                <div className="flex items-center gap-3">
+                  <Package className="h-8 w-8 text-primary" />
+                  <div>
+                    <p className="font-bold text-sm">طلب #{order.id}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {order.status === 'pending' && 'في الانتظار'}
+                      {order.status === 'processing' && 'قيد التجهيز'}
+                      {order.status === 'shipped' && 'تم الشحن'}
+                      {order.status === 'completed' && 'مكتمل'}
+                      {order.status === 'cancelled' && 'ملغي'}
+                    </p>
+                  </div>
+                </div>
+                <span className="font-bold text-primary text-sm">
+                  {Number(order.total).toLocaleString()} ر.ي
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
