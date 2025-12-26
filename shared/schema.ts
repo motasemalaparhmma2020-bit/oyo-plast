@@ -26,6 +26,8 @@ export const products = pgTable("products", {
   sizes: text("sizes").array(), // For size customization (e.g., "صغير", "وسط", "كبير")
   allowDesignUpload: boolean("allow_design_upload").default(false).notNull(),
   bulkPricing: text("bulk_pricing"), // JSON string for quantity-based pricing
+  rating: numeric("rating").default("4.5"), // Product rating (1-5)
+  reviewCount: integer("review_count").default(0), // Number of reviews
 });
 
 export const settings = pgTable("settings", {

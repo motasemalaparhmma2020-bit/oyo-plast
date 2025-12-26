@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAddToCart } from "@/hooks/use-cart";
-import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check } from "lucide-react";
+import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -158,6 +158,31 @@ export default function ProductDetail() {
             <h1 className="text-2xl md:text-3xl font-extrabold text-foreground mb-2" data-testid="text-product-name">
               {product.name}
             </h1>
+            
+            {/* Product Rating */}
+            {product.rating && (
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-0.5">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star 
+                      key={star}
+                      className={`h-5 w-5 ${
+                        star <= Math.floor(Number(product.rating))
+                          ? 'text-yellow-400 fill-yellow-400' 
+                          : star - 0.5 <= Number(product.rating)
+                            ? 'text-yellow-400 fill-yellow-400/50'
+                            : 'text-gray-300'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span className="text-lg font-bold text-foreground">{product.rating}</span>
+                <span className="text-sm text-muted-foreground">
+                  ({product.reviewCount || 0} تقييم)
+                </span>
+              </div>
+            )}
+            
             <p className="text-muted-foreground leading-relaxed" data-testid="text-product-description">
               {product.description}
             </p>

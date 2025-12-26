@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAddToCart } from "@/hooks/use-cart";
-import { ShoppingCart, Loader2, Eye } from "lucide-react";
+import { ShoppingCart, Loader2, Eye, Star } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface ProductCardProps {
@@ -54,10 +54,33 @@ export function ProductCard({ product }: ProductCardProps) {
       
       <CardContent className="p-3 md:p-4 flex-grow">
         <Link href={`/product/${product.id}`}>
-          <h3 className="font-extrabold text-sm md:text-base mb-3 text-foreground line-clamp-2 leading-tight min-h-[2.5rem] cursor-pointer hover:text-primary transition-colors">
+          <h3 className="font-extrabold text-sm md:text-base mb-2 text-foreground line-clamp-2 leading-tight min-h-[2.5rem] cursor-pointer hover:text-primary transition-colors">
             {product.name}
           </h3>
         </Link>
+        
+        {/* Rating Stars */}
+        {product.rating && (
+          <div className="flex items-center gap-1 mb-2">
+            <div className="flex items-center">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Star 
+                  key={star}
+                  className={`h-3 w-3 ${
+                    star <= Math.floor(Number(product.rating))
+                      ? 'text-yellow-400 fill-yellow-400' 
+                      : star - 0.5 <= Number(product.rating)
+                        ? 'text-yellow-400 fill-yellow-400/50'
+                        : 'text-gray-300'
+                  }`}
+                />
+              ))}
+            </div>
+            <span className="text-xs text-muted-foreground">
+              ({product.reviewCount || 0})
+            </span>
+          </div>
+        )}
         
         <div className="space-y-1">
           <div className="flex items-baseline gap-2 flex-wrap">
