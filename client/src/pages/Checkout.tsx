@@ -150,10 +150,7 @@ export default function Checkout() {
         receiptImageUrl: receiptFile ? receiptFile.name : null
       };
 
-      await apiRequest('/api/orders', {
-        method: 'POST',
-        body: JSON.stringify(orderData)
-      });
+      await apiRequest('POST', '/api/orders', orderData);
 
       await queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
       
