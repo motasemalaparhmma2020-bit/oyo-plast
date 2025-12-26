@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, List, TrendingUp, ShoppingCart, User } from "lucide-react";
+import { Home, Grid3X3, Printer, ShoppingCart, User } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
 import { cn } from "@/lib/utils";
@@ -13,8 +13,8 @@ export function BottomNav() {
 
   const items = [
     { id: 'home', label: 'متجر', icon: Home, href: '/' },
-    { id: 'categories', label: 'الفئات', icon: List, href: '/products' },
-    { id: 'trending', label: 'ترندات', icon: TrendingUp, href: '/trending' },
+    { id: 'categories', label: 'الفئات', icon: Grid3X3, href: '/products' },
+    { id: 'printing', label: 'طباعة وتصميم', icon: Printer, href: '/products?category=6' },
     { id: 'cart', label: 'حقيبة التسوق', icon: ShoppingCart, href: '/cart', count: cartCount },
     { id: 'profile', label: 'أنا', icon: User, href: isAuthenticated ? '/profile' : '/auth' },
   ];
