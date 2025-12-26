@@ -16,7 +16,7 @@ export function BottomNav() {
     { id: 'categories', label: 'الفئات', icon: Grid3X3, href: '/products' },
     { id: 'printing', label: 'طباعة وتصميم', icon: Printer, href: '/products?category=6' },
     { id: 'cart', label: 'حقيبة التسوق', icon: ShoppingCart, href: '/cart', count: cartCount },
-    { id: 'profile', label: 'أنا', icon: User, href: isAuthenticated ? '/profile' : '/auth' },
+    { id: 'profile', label: 'أنا', icon: User, href: '/profile' },
   ];
 
   return (

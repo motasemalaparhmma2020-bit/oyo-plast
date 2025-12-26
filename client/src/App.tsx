@@ -35,9 +35,7 @@ function Router() {
           <Route path="/checkout">
             {isAuthenticated ? <Checkout /> : <Auth />}
           </Route>
-          <Route path="/profile">
-            {isAuthenticated ? <Profile /> : <Auth />}
-          </Route>
+          <Route path="/profile" component={Profile} />
           <Route path="/auth">
             {isAuthenticated ? <Home /> : <Auth />}
           </Route>
