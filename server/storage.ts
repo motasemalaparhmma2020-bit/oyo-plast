@@ -129,7 +129,7 @@ export class DatabaseStorage implements IStorage {
         price: "7500",
         priceSar: "50",
         categoryId: catId,
-        imageUrl: "attached_assets/stock_images/professional_plastic_a2627506.jpg",
+        imageUrl: "attached_assets/generated_images/high-quality_plastic_container_product_photography.png",
         stock: 500,
         bulkPricing: JSON.stringify([{ minQty: 10, price: "7000" }])
       },
@@ -197,7 +197,7 @@ export class DatabaseStorage implements IStorage {
         price: "2500",
         priceSar: "15",
         categoryId: catId,
-        imageUrl: "attached_assets/stock_images/disposable_paper_cof_3fb018e5.jpg",
+        imageUrl: "attached_assets/generated_images/high-quality_paper_coffee_cup_product_photography.png",
         stock: 1000
       },
       {
@@ -220,7 +220,24 @@ export class DatabaseStorage implements IStorage {
       }
     ];
 
-    for (const p of paperProducts) {
+  async seedCleaningProducts(): Promise<void> {
+    const cleaningCategory = await db.select().from(categories).where(eq(categories.slug, 'cleaning')).limit(1);
+    if (cleaningCategory.length === 0) return;
+    
+    const catId = cleaningCategory[0].id;
+    const cleaningProducts = [
+      {
+        name: "منظف زجاج برائحة الليمون - 1 لتر",
+        description: "سائل منظف للزجاج يمنحك لمعاناً مثالياً دون ترك أي أثر.",
+        price: "1800",
+        priceSar: "12",
+        categoryId: catId,
+        imageUrl: "attached_assets/generated_images/high-quality_cleaning_detergent_bottle_product_photography.png",
+        stock: 450
+      }
+    ];
+
+    for (const p of cleaningProducts) {
       await db.insert(products).values(p);
     }
   }
