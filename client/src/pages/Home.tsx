@@ -15,29 +15,10 @@ import foodBags from "@assets/generated_images/wholesale_containers_banner_wide.
 import ecoBags from "@assets/generated_images/eco-friendly_packaging_banner.png";
 import containerOffer from "@assets/generated_images/plastic_containers_product_photo.png";
 import bagOffer from "@assets/generated_images/paper_cups_product_photo.png";
-import fabricBagsIcon from "@assets/generated_images/fabric_bags_category_icon.png";
-import printingIcon from "@assets/generated_images/printing_design_category_icon.png";
-import commercialBagsIcon from "@assets/generated_images/commercial_bags_category_icon.png";
-import carrierBagsIcon from "@assets/generated_images/printed_carrier_bags_icon.png";
-import hangingBagsIcon from "@assets/generated_images/hanging_bags_category_icon.png";
-import garbageBagsIcon from "@assets/generated_images/garbage_food_bags_icon.png";
-import packagingBoxesIcon from "@assets/generated_images/packaging_boxes_category_icon.png";
-import spicesNutsIcon from "@assets/generated_images/spices_nuts_bags_icon.png";
 
 export default function Home() {
   const { data: products, isLoading } = useProducts();
   const { data: categories } = useCategories();
-
-  const categoryCircles = [
-    { id: 5, name: "أكياس قماشية", icon: fabricBagsIcon, slug: "fabric-bags" },
-    { id: 6, name: "طباعة وتصميم", icon: printingIcon, slug: "printing-design" },
-    { id: 7, name: "أكياس دعاية", icon: commercialBagsIcon, slug: "commercial-bags" },
-    { id: 8, name: "شيال مطبوع", icon: carrierBagsIcon, slug: "printed-carrier-bags" },
-    { id: 9, name: "أكياس علاقي", icon: hangingBagsIcon, slug: "hanging-bags" },
-    { id: 10, name: "نفايات وسفر", icon: garbageBagsIcon, slug: "garbage-food-bags" },
-    { id: 11, name: "علب تغليف", icon: packagingBoxesIcon, slug: "packaging-boxes" },
-    { id: 12, name: "بهارات ومكسرات", icon: spicesNutsIcon, slug: "spices-nuts-bags" },
-  ];
 
   const offers = [
     {
@@ -84,21 +65,21 @@ export default function Home() {
       {/* Category Circles - SHEIN Style */}
       <section className="bg-white py-4 border-b">
         <div className="container mx-auto px-4">
-          <div className="flex justify-around items-center gap-2 overflow-x-auto pb-2">
-            {categoryCircles.map((cat) => (
+          <div className="flex justify-start items-center gap-4 overflow-x-auto pb-2 scrollbar-hide">
+            {categories?.map((cat) => (
               <Link 
                 key={cat.id} 
                 href={`/products?category=${cat.id}`}
-                className="flex flex-col items-center gap-2 min-w-[72px]"
+                className="flex flex-col items-center gap-2 min-w-[72px] shrink-0"
               >
                 <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-primary/20 shadow-md hover:border-primary hover:scale-105 transition-all duration-300 bg-gradient-to-br from-blue-50 to-white p-1">
                   <img 
-                    src={cat.icon} 
+                    src={cat.imageUrl || ''} 
                     alt={cat.name}
                     className="w-full h-full object-cover rounded-full"
                   />
                 </div>
-                <span className="text-xs md:text-sm font-bold text-foreground text-center">{cat.name}</span>
+                <span className="text-xs md:text-sm font-bold text-foreground text-center line-clamp-1">{cat.name}</span>
               </Link>
             ))}
           </div>
