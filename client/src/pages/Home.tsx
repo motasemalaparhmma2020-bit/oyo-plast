@@ -13,10 +13,31 @@ import {
 import premiumBags from "@assets/generated_images/premium_shopping_plastic_bags_collection.png";
 import foodBags from "@assets/generated_images/food_preservation_plastic_bags_display.png";
 import ecoBags from "@assets/generated_images/eco-friendly_recycled_plastic_bags.png";
+import containerOffer from "@assets/generated_images/bulk_plastic_containers_offer_display.png";
+import bagOffer from "@assets/generated_images/bulk_plastic_bags_wholesale_offer.png";
 
 export default function Home() {
   const { data: products, isLoading } = useProducts();
   const { data: categories } = useCategories();
+
+  const offers = [
+    {
+      image: containerOffer,
+      title: "خصم الجملة",
+      discount: "15%",
+      desc: "على جميع علب البلاستيك",
+      bgColor: "bg-blue-50",
+      textColor: "text-blue-600"
+    },
+    {
+      image: bagOffer,
+      title: "عروض الأكياس",
+      discount: "10%",
+      desc: "عند طلب أكثر من 10 شدات",
+      bgColor: "bg-pink-50",
+      textColor: "text-pink-600"
+    }
+  ];
 
   const carouselItems = [
     {
