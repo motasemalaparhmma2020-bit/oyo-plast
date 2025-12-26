@@ -3,32 +3,92 @@ import { ProductCard } from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { ArrowLeft, ArrowRight, Package, Box, ShieldCheck, Truck } from "lucide-react";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
+import premiumBags from "@assets/generated_images/premium_shopping_plastic_bags_collection.png";
+import foodBags from "@assets/generated_images/food_preservation_plastic_bags_display.png";
+import ecoBags from "@assets/generated_images/eco-friendly_recycled_plastic_bags.png";
 
 export default function Home() {
   const { data: products, isLoading } = useProducts();
   const { data: categories } = useCategories();
 
+  const carouselItems = [
+    {
+      image: premiumBags,
+      title: "حلول التغليف الذكية",
+      subtitle: "أكياس تسوق راقية لجميع احتياجاتك",
+    },
+    {
+      image: foodBags,
+      title: "حفظ أطول للطعام",
+      subtitle: "أكياس حفظ الأطعمة بجودة عالية",
+    },
+    {
+      image: ecoBags,
+      title: "صديقة للبيئة",
+      subtitle: "خيارات مستدامة وعصرية",
+    },
+  ];
+
   // Show only first 8 products for featured section
   const featuredProducts = products?.slice(0, 8);
 
   return (
-    <div className="flex flex-col gap-12 pb-20">
+    <div className="flex flex-col gap-8 pb-20">
       {/* Welcome Banner */}
-      <section className="relative overflow-hidden bg-gradient-to-r from-primary via-blue-500 to-primary py-8 lg:py-10">
+      <section className="relative overflow-hidden bg-gradient-to-r from-primary via-blue-500 to-primary py-4 lg:py-6">
         <div className="container mx-auto px-4">
           <div className="text-center">
-            <h2 className="text-3xl lg:text-4xl font-extrabold text-white drop-shadow-lg">
+            <h2 className="text-xl lg:text-2xl font-extrabold text-white drop-shadow-lg">
               أويو بلاست - حلول التغليف المتكاملة في اليمن
             </h2>
-            <p className="text-white/90 text-lg mt-2 font-medium drop-shadow-md">
-              خدمة متوفرة فقط في الجمهورية اليمنية
-            </p>
           </div>
         </div>
       </section>
 
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-primary/5 py-20 lg:py-32">
+      {/* Image Carousel */}
+      <section className="container mx-auto px-4">
+        <Carousel
+          opts={{
+            align: "start",
+            loop: true,
+          }}
+          className="w-full relative group"
+        >
+          <CarouselContent>
+            {carouselItems.map((item, index) => (
+              <CarouselItem key={index}>
+                <div className="relative aspect-[21/9] overflow-hidden rounded-2xl md:rounded-3xl border shadow-lg">
+                  <img
+                    src={item.image}
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/30 flex flex-col justify-center px-8 md:px-16 text-right">
+                    <h2 className="text-2xl md:text-5xl font-extrabold text-white mb-2 md:mb-4 drop-shadow-lg">
+                      {item.title}
+                    </h2>
+                    <p className="text-lg md:text-2xl text-white/90 font-medium drop-shadow-md">
+                      {item.subtitle}
+                    </p>
+                  </div>
+                </div>
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+          <CarouselPrevious className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 text-white border-none" />
+          <CarouselNext className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 text-white border-none" />
+        </Carousel>
+      </section>
+
+      {/* Hero Section (Hidden on mobile if carousel is enough, but keeping for desktop) */}
+      <section className="relative overflow-hidden bg-primary/5 py-12 lg:py-24">
         <div className="container mx-auto px-4 relative z-10">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="text-right space-y-6">
