@@ -184,5 +184,6 @@ export class DatabaseStorage implements IStorage {
       await db.insert(products).values(p);
     }
   }
+}
 
 export const storage = new DatabaseStorage();

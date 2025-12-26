@@ -27,6 +27,16 @@ export function Navbar() {
   const { data: cart } = useCart();
   const [isOpen, setIsOpen] = useState(false);
   const [location] = useLocation();
+  const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
+    return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
+  });
+
+  const toggleCurrency = () => {
+    const newCurrency = currency === 'YER' ? 'SAR' : 'YER';
+    setCurrency(newCurrency);
+    localStorage.setItem('currency', newCurrency);
+    window.dispatchEvent(new Event('currencyChange'));
+  };
 
   const cartCount = cart?.reduce((acc, item) => acc + item.quantity, 0) || 0;
 
@@ -86,6 +96,15 @@ export function Navbar() {
 
         {/* Actions */}
         <div className="flex items-center gap-4">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={toggleCurrency}
+            className="font-bold border-2 hover:bg-primary hover:text-white transition-all"
+          >
+            {currency === 'YER' ? 'SAR' : 'YER'}
+          </Button>
+
           <Button variant="ghost" size="icon" className="hidden sm:flex">
             <Search className="h-5 w-5 text-muted-foreground" />
           </Button>

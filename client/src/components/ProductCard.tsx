@@ -10,8 +10,25 @@ interface ProductCardProps {
   product: Product;
 }
 
+import { useState, useEffect } from "react";
+
 export function ProductCard({ product }: ProductCardProps) {
   const { mutate: addToCart, isPending } = useAddToCart();
+  const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
+    return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
+  });
+
+  useEffect(() => {
+    const handleCurrencyChange = () => {
+      setCurrency((localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER');
+    };
+    window.addEventListener('currencyChange', handleCurrencyChange);
+    return () => window.removeEventListener('currencyChange', handleCurrencyChange);
+  }, []);
+
+  const displayPrice = currency === 'SAR' && product.priceSar 
+    ? product.priceSar 
+    : product.price;
 
   return (
     <Card className="group overflow-hidden border-none shadow-md hover:shadow-2xl transition-all duration-300 rounded-2xl bg-white flex flex-col h-full">
@@ -34,7 +51,7 @@ export function ProductCard({ product }: ProductCardProps) {
           {product.name}
         </h3>
         <p className="text-xl md:text-2xl font-extrabold text-primary mb-1 font-display">
-          {Number(product.price).toFixed(0)} <span className="text-xs md:text-sm font-normal text-muted-foreground">ريال</span>
+          {Number(displayPrice).toFixed(0)} <span className="text-xs md:text-sm font-normal text-muted-foreground">{currency === 'YER' ? 'ريال' : 'ر.س'}</span>
         </p>
       </CardContent>
 
