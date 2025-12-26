@@ -24,7 +24,9 @@ import {
   XCircle,
   TrendingUp,
   DollarSign,
-  Users
+  Users,
+  Settings,
+  Save
 } from "lucide-react";
 
 const statusMap: Record<string, { label: string; color: string; icon: any }> = {
@@ -39,6 +41,7 @@ export default function Admin() {
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [exchangeRate, setExchangeRate] = useState("140");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -48,6 +51,53 @@ export default function Admin() {
       setIsAuthenticated(true);
     }
   }, []);
+
+  const { data: adminSettings, refetch: refetchSettings } = useQuery({
+    queryKey: ['/api/admin/settings'],
+    enabled: isAuthenticated && !!adminToken,
+    queryFn: async () => {
+      const res = await fetch('/api/admin/settings', {
+        headers: { 'x-admin-token': adminToken || '' }
+      });
+      if (!res.ok) throw new Error('Failed to fetch settings');
+      return res.json();
+    }
+  });
+
+  useEffect(() => {
+    if (adminSettings) {
+      const rateSetting = adminSettings.find((s: any) => s.key === 'exchange_rate');
+      if (rateSetting) {
+        setExchangeRate(rateSetting.value);
+      }
+    }
+  }, [adminSettings]);
+
+  const saveSettingsMutation = useMutation({
+    mutationFn: async ({ key, value }: { key: string; value: string }) => {
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken || '' 
+        },
+        body: JSON.stringify({ key, value })
+      });
+      if (!res.ok) throw new Error('Failed to save settings');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/settings'] });
+      toast({ title: "تم حفظ سعر الصرف بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "حدث خطأ أثناء الحفظ", variant: "destructive" });
+    }
+  });
+
+  const saveExchangeRate = () => {
+    saveSettingsMutation.mutate({ key: 'exchange_rate', value: exchangeRate });
+  };
 
   const { data: orders, isLoading: ordersLoading } = useQuery<Order[]>({
     queryKey: ['/api/admin/orders'],
@@ -223,6 +273,7 @@ export default function Admin() {
           <TabsList>
             <TabsTrigger value="orders">الطلبات</TabsTrigger>
             <TabsTrigger value="products">المنتجات</TabsTrigger>
+            <TabsTrigger value="settings">الإعدادات</TabsTrigger>
           </TabsList>
 
           <TabsContent value="orders">
@@ -416,6 +467,65 @@ export default function Admin() {
                     <p>لا توجد منتجات بعد</p>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="settings">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  إعدادات المتجر
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-base font-semibold mb-2 block">سعر صرف الريال اليمني</Label>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      قيمة الريال السعودي الواحد بالريال اليمني
+                    </p>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1 max-w-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">1 ر.س =</span>
+                          <Input
+                            type="number"
+                            value={exchangeRate}
+                            onChange={(e) => setExchangeRate(e.target.value)}
+                            className="w-32 text-center font-bold"
+                            data-testid="input-exchange-rate"
+                          />
+                          <span className="text-muted-foreground">ر.ي</span>
+                        </div>
+                      </div>
+                      <Button 
+                        onClick={saveExchangeRate} 
+                        disabled={saveSettingsMutation.isPending}
+                        className="gap-2"
+                        data-testid="button-save-settings"
+                      >
+                        {saveSettingsMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="h-4 w-4" />
+                        )}
+                        حفظ
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                    <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">معلومات البنوك</h4>
+                    <div className="space-y-2 text-sm">
+                      <p><strong>بنك الكريمي:</strong> حساب رقم 0010203040 باسم اويو بلاست</p>
+                      <p><strong>بنك النجم:</strong> حساب رقم 9876543210 باسم اويو بلاست</p>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

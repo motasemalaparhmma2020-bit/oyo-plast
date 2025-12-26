@@ -23,8 +23,15 @@ export const products = pgTable("products", {
   imageUrl: text("image_url").notNull(),
   stock: integer("stock").default(100).notNull(),
   colors: text("colors").array(), // For color customization
+  sizes: text("sizes").array(), // For size customization (e.g., "صغير", "وسط", "كبير")
   allowDesignUpload: boolean("allow_design_upload").default(false).notNull(),
   bulkPricing: text("bulk_pricing"), // JSON string for quantity-based pricing
+});
+
+export const settings = pgTable("settings", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  value: text("value").notNull(),
 });
 
 export const cartItems = pgTable("cart_items", {
@@ -94,6 +101,7 @@ export const insertCategorySchema = createInsertSchema(categories).omit({ id: tr
 export const insertCartItemSchema = createInsertSchema(cartItems).omit({ id: true });
 export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true });
 export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
+export const insertSettingSchema = createInsertSchema(settings).omit({ id: true });
 
 // Types
 export type Product = typeof products.$inferSelect;
@@ -101,3 +109,4 @@ export type Category = typeof categories.$inferSelect;
 export type CartItem = typeof cartItems.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
+export type Setting = typeof settings.$inferSelect;

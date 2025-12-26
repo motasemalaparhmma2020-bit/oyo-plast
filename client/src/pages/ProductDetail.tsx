@@ -29,6 +29,7 @@ export default function ProductDetail() {
   
   const [quantity, setQuantity] = useState(1);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
     return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
@@ -96,6 +97,7 @@ export default function ProductDetail() {
   };
 
   const colors = product?.colors || [];
+  const sizes = product?.sizes || [];
 
   if (isLoading) {
     return (
@@ -259,6 +261,28 @@ export default function ProductDetail() {
                       {selectedColor === color && (
                         <Check className="h-5 w-5 text-white drop-shadow-md" />
                       )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {sizes.length > 0 && (
+              <div>
+                <Label className="text-base font-semibold mb-3 block">اختر المقاس</Label>
+                <div className="flex flex-wrap gap-2">
+                  {sizes.map((size) => (
+                    <button
+                      key={size}
+                      onClick={() => setSelectedSize(size)}
+                      className={`px-4 py-2 rounded-lg border-2 transition-all font-medium ${
+                        selectedSize === size 
+                          ? 'border-primary bg-primary/10 text-primary' 
+                          : 'border-gray-200 hover:border-gray-400 text-foreground'
+                      }`}
+                      data-testid={`button-size-${size}`}
+                    >
+                      {size}
                     </button>
                   ))}
                 </div>

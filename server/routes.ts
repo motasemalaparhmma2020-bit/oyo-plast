@@ -195,6 +195,27 @@ export async function registerRoutes(
     }
   });
 
+  // Admin Settings
+  app.get("/api/admin/settings", requireAdmin, async (req, res) => {
+    const settings = await storage.getAllSettings();
+    res.json(settings);
+  });
+
+  app.post("/api/admin/settings", requireAdmin, async (req, res) => {
+    const { key, value } = req.body;
+    if (!key || value === undefined) {
+      return res.status(400).json({ error: "Key and value are required" });
+    }
+    const setting = await storage.setSetting(key, value);
+    res.json(setting);
+  });
+
+  // Public settings (exchange rate)
+  app.get("/api/settings/exchange-rate", async (req, res) => {
+    const setting = await storage.getSetting("exchange_rate");
+    res.json({ rate: setting?.value || "140" });
+  });
+
 
   // Seed Data
   if ((await storage.getCategories()).length === 0) {
