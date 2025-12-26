@@ -148,8 +148,35 @@ export class DatabaseStorage implements IStorage {
         price: "12000",
         priceSar: "80",
         categoryId: catId,
-        imageUrl: "https://images.unsplash.com/photo-1591871937573-74dbba515c4c?w=800&q=80",
+        imageUrl: "https://images.unsplash.com/photo-1581009137042-c552e485697a?w=800&q=80",
         stock: 200
+      },
+      {
+        name: "أكواب عصير بلاستيك مع غطاء - 50 حبة",
+        description: "أكواب بلاستيكية متينة للعصائر الباردة مع أغطية محكمة الإغلاق.",
+        price: "3500",
+        priceSar: "25",
+        categoryId: catId,
+        imageUrl: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=800&q=80",
+        stock: 300
+      },
+      {
+        name: "قفازات بلاستيك شفافة - ربطة 100 حبة",
+        description: "قفازات استخدام لمرة واحدة، خفيفة ومناسبة للتعامل مع الأطعمة.",
+        price: "1500",
+        priceSar: "10",
+        categoryId: catId,
+        imageUrl: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=800&q=80",
+        stock: 1000
+      },
+      {
+        name: "مفارش سفرة بلاستيك - رول كبير",
+        description: "مفارش طاولة بلاستيكية عملية وسهلة الاستخدام للمناسبات والمنزل.",
+        price: "5500",
+        priceSar: "35",
+        categoryId: catId,
+        imageUrl: "https://images.unsplash.com/photo-1605623081914-9964523c14f5?w=800&q=80",
+        stock: 150
       }
     ];
 
