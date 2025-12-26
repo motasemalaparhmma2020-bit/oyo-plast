@@ -220,6 +220,11 @@ export class DatabaseStorage implements IStorage {
       }
     ];
 
+    for (const p of paperProducts) {
+      await db.insert(products).values(p);
+    }
+  }
+
   async seedCleaningProducts(): Promise<void> {
     const cleaningCategory = await db.select().from(categories).where(eq(categories.slug, 'cleaning')).limit(1);
     if (cleaningCategory.length === 0) return;
