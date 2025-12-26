@@ -10,11 +10,11 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import premiumBags from "@assets/generated_images/premium_shopping_plastic_bags_collection.png";
-import foodBags from "@assets/generated_images/food_preservation_plastic_bags_display.png";
-import ecoBags from "@assets/generated_images/eco-friendly_recycled_plastic_bags.png";
-import containerOffer from "@assets/generated_images/bulk_plastic_containers_offer_display.png";
-import bagOffer from "@assets/generated_images/bulk_plastic_bags_wholesale_offer.png";
+import premiumBags from "@assets/generated_images/premium_packaging_banner_wide.png";
+import foodBags from "@assets/generated_images/wholesale_containers_banner_wide.png";
+import ecoBags from "@assets/generated_images/eco-friendly_packaging_banner.png";
+import containerOffer from "@assets/generated_images/plastic_containers_product_photo.png";
+import bagOffer from "@assets/generated_images/paper_cups_product_photo.png";
 import plasticIcon from "@assets/generated_images/circular_icon_for_plastic_packaging_category.png";
 import paperIcon from "@assets/generated_images/circular_icon_for_paper_products_category.png";
 import cleaningIcon from "@assets/generated_images/circular_icon_for_cleaning_supplies_category.png";
