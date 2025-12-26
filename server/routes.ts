@@ -201,9 +201,10 @@ export async function registerRoutes(
     console.log("Seeding OYO PLAST data...");
     // @ts-ignore
     await db.insert(schema.categories).values([
-      { name: "بلاستيكيات", slug: "plastics", imageUrl: "https://images.unsplash.com/photo-1623366302587-bca291d2d398?w=800" },
-      { name: "ورقيات", slug: "paper", imageUrl: "https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=800" },
-      { name: "منظفات", slug: "cleaning", imageUrl: "https://images.unsplash.com/photo-1584634731339-252c581abfc5?w=800" },
+      { name: "بلاستيكيات", slug: "plastics", imageUrl: "/assets/generated_images/circular_icon_for_plastic_packaging_category.png" },
+      { name: "ورقيات", slug: "paper", imageUrl: "/assets/generated_images/circular_icon_for_paper_products_category.png" },
+      { name: "منظفات", slug: "cleaning", imageUrl: "/assets/generated_images/circular_icon_for_cleaning_supplies_category.png" },
+      { name: "أدوات مائدة", slug: "tableware", imageUrl: "/assets/generated_images/circular_icon_for_tableware_supplies_category.png" },
     ]);
     
     // Get seeded categories to link products
@@ -211,23 +212,23 @@ export async function registerRoutes(
     
     // @ts-ignore
     await db.insert(schema.products).values([
-      { name: "علب بلاستيك 500مل", description: "علب بلاستيك عالية الجودة لحفظ المواد الغذائية", price: "1500", categoryId: cats[0].id, imageUrl: "https://images.unsplash.com/photo-1595246140625-573b715d1128?w=800" },
-      { name: "علب بلاستيك شفافة 1لتر", description: "علب بلاستيك شفافة مع غطاء آمن", price: "2000", categoryId: cats[0].id, imageUrl: "https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=800" },
-      { name: "أكياس بلاستيك قوية", description: "أكياس بلاستيك متعددة الاستخدام", price: "500", categoryId: cats[0].id, imageUrl: "https://images.unsplash.com/photo-1563861826100-9cb868fdbe1e?w=800" },
-      { name: "صناديق بلاستيك للتخزين", description: "صناديق منظمة للتخزين المنزلي", price: "3500", categoryId: cats[0].id, imageUrl: "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=800" },
-      { name: "ملاعق بلاستيك حزمة 100", description: "ملاعق بلاستيك عملية وخفيفة الوزن", price: "800", categoryId: cats[0].id, imageUrl: "https://images.unsplash.com/photo-1585848773950-8b1d9c792942?w=800" },
+      // Plastics - category 1
+      { name: "أكياس تسوق ملونة", description: "أكياس بلاستيك عالية الجودة بألوان متعددة للتسوق والتغليف", price: "800", priceSar: "8", categoryId: cats[0].id, imageUrl: "/assets/generated_images/colorful_plastic_shopping_bags.png", colors: ["أزرق", "وردي", "أصفر", "أخضر"], allowDesignUpload: true, bulkPricing: JSON.stringify([{qty: 10, discount: 10}, {qty: 50, discount: 20}]) },
+      { name: "علب حفظ الطعام", description: "علب بلاستيك شفافة عالية الجودة لحفظ المواد الغذائية", price: "1500", priceSar: "15", categoryId: cats[0].id, imageUrl: "/assets/generated_images/plastic_food_containers_set.png", bulkPricing: JSON.stringify([{qty: 20, discount: 15}]) },
+      { name: "أكياس قمامة سوداء", description: "أكياس قمامة قوية وثقيلة الواجب للاستخدام المنزلي والتجاري", price: "1200", priceSar: "12", categoryId: cats[0].id, imageUrl: "/assets/generated_images/garbage_bags_roll_black.png", bulkPricing: JSON.stringify([{qty: 10, discount: 10}]) },
+      { name: "علب بلاستيك شفافة 1لتر", description: "علب بلاستيك شفافة مع غطاء آمن", price: "2000", priceSar: "20", categoryId: cats[0].id, imageUrl: "/assets/generated_images/high-quality_plastic_container_product_photography.png" },
       
-      { name: "أكواب ورقية 8 أونصة", description: "أكواب ورقية مزدوجة الجدار للمشروبات الساخنة", price: "1200", categoryId: cats[1].id, imageUrl: "https://images.unsplash.com/photo-1517080226388-34f783305416?w=800" },
-      { name: "أطباق ورقية بيضاء", description: "أطباق ورقية قوية وآمنة للطعام", price: "1800", categoryId: cats[1].id, imageUrl: "https://images.unsplash.com/photo-1610707856921-e4e13ef14642?w=800" },
-      { name: "أكياس ورقية مقاس كبير", description: "أكياس ورقية صديقة للبيئة", price: "2500", categoryId: cats[1].id, imageUrl: "https://images.unsplash.com/photo-1589985643542-5132ca15b229?w=800" },
-      { name: "علب ورقية للطعام", description: "علب ورقية عازلة للحرارة للوجبات", price: "3000", categoryId: cats[1].id, imageUrl: "https://images.unsplash.com/photo-1638789469229-e7c6ad34e57e?w=800" },
-      { name: "ورق تغليف ورقي", description: "ورق تغليف قوي وآمن للطعام", price: "1000", categoryId: cats[1].id, imageUrl: "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=800" },
+      // Paper - category 2
+      { name: "أكياس ورقية كرافت", description: "أكياس ورقية صديقة للبيئة بأحجام مختلفة للتسوق والتغليف", price: "1000", priceSar: "10", categoryId: cats[1].id, imageUrl: "/assets/generated_images/paper_bags_collection.png", colors: ["بني", "أبيض"], allowDesignUpload: true },
+      { name: "أكواب ورقية 8 أونصة", description: "أكواب ورقية مزدوجة الجدار للمشروبات الساخنة", price: "1200", priceSar: "12", categoryId: cats[1].id, imageUrl: "/assets/generated_images/high-quality_paper_coffee_cup_product_photography.png" },
+      { name: "أطباق ورقية بيضاء", description: "أطباق ورقية قوية وآمنة للطعام", price: "1800", priceSar: "18", categoryId: cats[1].id, imageUrl: "https://images.unsplash.com/photo-1610707856921-e4e13ef14642?w=800" },
       
-      { name: "سائل تنظيف متعدد الأغراض", description: "منظف فعال وآمن للأسطح", price: "2000", categoryId: cats[2].id, imageUrl: "https://images.unsplash.com/photo-1584622181563-430f63602d4b?w=800" },
-      { name: "مسحوق غسيل الصحون", description: "مسحوق فعال لتنظيف الأطباق", price: "1500", categoryId: cats[2].id, imageUrl: "https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=800" },
-      { name: "معقم سطح الطاولة", description: "معقم آمن وفعال 500مل", price: "1800", categoryId: cats[2].id, imageUrl: "https://images.unsplash.com/photo-1583421668794-c5c89f992941?w=800" },
-      { name: "مناديل تنظيف", description: "مناديل ورقية قوية وماصة", price: "1200", categoryId: cats[2].id, imageUrl: "https://images.unsplash.com/photo-1584308666744-24d5f69f8dd7?w=800" },
-      { name: "فرشاة أرضية", description: "فرشاة تنظيف قوية مع مقبض", price: "2500", categoryId: cats[2].id, imageUrl: "https://images.unsplash.com/photo-1584622181563-430f63602d4b?w=800" },
+      // Cleaning - category 3
+      { name: "طقم منظفات متعددة", description: "مجموعة متكاملة من مواد التنظيف للمنزل والمكتب", price: "3500", priceSar: "35", categoryId: cats[2].id, imageUrl: "/assets/generated_images/cleaning_supplies_set.png" },
+      { name: "سائل تنظيف متعدد الأغراض", description: "منظف فعال وآمن للأسطح", price: "2000", priceSar: "20", categoryId: cats[2].id, imageUrl: "/assets/generated_images/high-quality_cleaning_detergent_bottle_product_photography.png" },
+      
+      // Tableware - category 4
+      { name: "أكواب وأدوات مائدة", description: "طقم أكواب بلاستيكية وأدوات مائدة للحفلات والمناسبات", price: "2500", priceSar: "25", categoryId: cats[3].id, imageUrl: "/assets/generated_images/disposable_cups_and_tableware.png", colors: ["شفاف", "أبيض", "ملون"] },
     ]);
   }
 

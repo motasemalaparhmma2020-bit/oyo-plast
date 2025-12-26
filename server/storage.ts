@@ -147,6 +147,10 @@ export class DatabaseStorage implements IStorage {
     return order;
   }
 
+  async getOrders(userId: string): Promise<Order[]> {
+    return await db.select().from(orders).where(eq(orders.userId, userId)).orderBy(orders.createdAt);
+  }
+
   async getAllOrders(): Promise<Order[]> {
     return await db.select().from(orders).orderBy(orders.createdAt);
   }

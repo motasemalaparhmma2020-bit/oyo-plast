@@ -128,7 +128,7 @@ export function Navbar() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>مرحباً، {user?.username || "مستخدم"}</DropdownMenuLabel>
+                <DropdownMenuLabel>مرحباً، {user?.firstName || user?.email || "مستخدم"}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href="/profile" className="cursor-pointer">ملفي الشخصي</Link>
