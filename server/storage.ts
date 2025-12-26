@@ -129,17 +129,17 @@ export class DatabaseStorage implements IStorage {
         price: "7500",
         priceSar: "50",
         categoryId: catId,
-        imageUrl: "https://images.unsplash.com/photo-1621252178174-2795c6c66657?w=800&q=80",
+        imageUrl: "attached_assets/stock_images/professional_plastic_a2627506.jpg",
         stock: 500,
         bulkPricing: JSON.stringify([{ minQty: 10, price: "7000" }])
       },
       {
-        name: "صحون بلاستيك شفافة - مقاسات متنوعة",
+        name: "صحون بلاستيك شفافة - طقم 25 حبة",
         description: "صحون بلاستيكية شفافة قوية وأنيقة لتقديم الحلويات والفواكه.",
         price: "4500",
         priceSar: "30",
         categoryId: catId,
-        imageUrl: "https://images.unsplash.com/photo-1591871937573-74dbba515c4c?w=800&q=80",
+        imageUrl: "attached_assets/stock_images/clear_plastic_dispos_fe5138c3.jpg",
         stock: 1000
       },
       {
@@ -148,7 +148,7 @@ export class DatabaseStorage implements IStorage {
         price: "12000",
         priceSar: "80",
         categoryId: catId,
-        imageUrl: "https://images.unsplash.com/photo-1581009137042-c552e485697a?w=800&q=80",
+        imageUrl: "attached_assets/stock_images/individually_wrapped_a3e843cf.jpg",
         stock: 200
       },
       {
@@ -181,6 +181,46 @@ export class DatabaseStorage implements IStorage {
     ];
 
     for (const p of plasticProducts) {
+      await db.insert(products).values(p);
+    }
+  }
+
+  async seedPaperProducts(): Promise<void> {
+    const paperCategory = await db.select().from(categories).where(eq(categories.slug, 'paper')).limit(1);
+    if (paperCategory.length === 0) return;
+    
+    const catId = paperCategory[0].id;
+    const paperProducts = [
+      {
+        name: "أكواب ورقية للقهوة - 8 أونصة 50 حبة",
+        description: "أكواب ورقية فاخرة مع غطاء، مثالية للقهوة والشاي الساخن.",
+        price: "2500",
+        priceSar: "15",
+        categoryId: catId,
+        imageUrl: "attached_assets/stock_images/disposable_paper_cof_3fb018e5.jpg",
+        stock: 1000
+      },
+      {
+        name: "أكياس ورقية بنية - ربطة 100 كيس",
+        description: "أكياس كرافت ورقية قوية وصديقة للبيئة للتسوق والتغليف.",
+        price: "3500",
+        priceSar: "20",
+        categoryId: catId,
+        imageUrl: "attached_assets/stock_images/brown_kraft_paper_sh_1892aa34.jpg",
+        stock: 500
+      },
+      {
+        name: "علب برجر ورقية - 50 علبة",
+        description: "علب ورقية عالية الجودة للبرجر، تحافظ على السخونة والقوام.",
+        price: "4000",
+        priceSar: "25",
+        categoryId: catId,
+        imageUrl: "attached_assets/stock_images/paper_burger_boxes_p_65591726.jpg",
+        stock: 800
+      }
+    ];
+
+    for (const p of paperProducts) {
       await db.insert(products).values(p);
     }
   }
