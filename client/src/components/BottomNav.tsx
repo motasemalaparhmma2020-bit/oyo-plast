@@ -27,24 +27,26 @@ export function BottomNav() {
           const Icon = item.icon;
           
           return (
-            <Link key={item.id} href={item.href}>
-              <a className={cn(
+            <Link 
+              key={item.id} 
+              href={item.href}
+              className={cn(
                 "flex flex-col items-center gap-1 p-2 transition-all duration-300 relative",
                 isActive ? "text-[#E91E63]" : "text-gray-400"
-              )}>
-                <div className="relative">
-                  <Icon className={cn("h-6 w-6", isActive && "fill-current")} />
-                  {item.count ? (
-                    <span className="absolute -top-1 -right-1 bg-[#E91E63] text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center">
-                      {item.count}
-                    </span>
-                  ) : null}
-                </div>
-                <span className="text-[10px] font-bold">{item.label}</span>
-                {isActive && (
-                  <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#E91E63] rounded-full" />
-                )}
-              </a>
+              )}
+            >
+              <div className="relative">
+                <Icon className={cn("h-6 w-6", isActive && "fill-current")} />
+                {item.count ? (
+                  <span className="absolute -top-1 -right-1 bg-[#E91E63] text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center">
+                    {item.count}
+                  </span>
+                ) : null}
+              </div>
+              <span className="text-[10px] font-bold">{item.label}</span>
+              {isActive && (
+                <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#E91E63] rounded-full" />
+              )}
             </Link>
           );
         })}
