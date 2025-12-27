@@ -25,17 +25,17 @@ export async function registerRoutes(
     res.json(products);
   });
 
-  app.get(api.products.get.path, async (req, res) => {
-    const product = await storage.getProduct(Number(req.params.id));
-    if (!product) return res.status(404).json({ message: "Product not found" });
-    res.json(product);
-  });
-
-  // Bestselling products
+  // Bestselling products (must be before :id route)
   app.get("/api/products/bestselling", async (req, res) => {
     const limit = req.query.limit ? Number(req.query.limit) : 8;
     const products = await storage.getBestsellingProducts(limit);
     res.json(products);
+  });
+
+  app.get(api.products.get.path, async (req, res) => {
+    const product = await storage.getProduct(Number(req.params.id));
+    if (!product) return res.status(404).json({ message: "Product not found" });
+    res.json(product);
   });
 
   // Categories
