@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import oyoLogo from "@assets/InShot_٢٠٢٥٠٧٢٠_٢٣٢٣١٤٠٤٨_1766870256591.jpg";
+import oyoLogo from "@assets/FB_IMG_1748731871206_1766870523968.jpg";
 
 interface SplashScreenProps {
   onComplete: () => void;
