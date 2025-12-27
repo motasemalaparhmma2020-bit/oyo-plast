@@ -22,8 +22,14 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   phone: varchar("phone"),
-  address: varchar("address"),
-  city: varchar("city"),
+  // Address fields
+  country: varchar("country").default("اليمن"),
+  governorate: varchar("governorate"), // المحافظة
+  district: varchar("district"), // المديرية
+  city: varchar("city"), // المدينة
+  neighborhood: varchar("neighborhood"), // المنطقة أو الحي
+  street: varchar("street"), // الشارع
+  landmark: varchar("landmark"), // بجوار/أمام/بجانب
   businessType: varchar("business_type"), // نوع النشاط التجاري
   isPhoneVerified: varchar("is_phone_verified").default("false"),
   createdAt: timestamp("created_at").defaultNow(),

@@ -9,12 +9,31 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
-import { User, Phone, MapPin, Building2, ArrowLeft } from "lucide-react";
+import { User, Phone, MapPin, Building2, ArrowLeft, Globe, Map } from "lucide-react";
 import oyoLogo from "@assets/generated_images/oyo_plast_company_logo.png";
 
-const YEMENI_CITIES = [
-  "صنعاء", "عدن", "تعز", "الحديدة", "إب", "ذمار", "المكلا", "سيئون",
-  "زنجبار", "لحج", "البيضاء", "مأرب", "صعدة", "عمران", "حجة", "المحويت", "ريمة", "الضالع"
+const YEMENI_GOVERNORATES = [
+  "أمانة العاصمة",
+  "عدن",
+  "تعز",
+  "الحديدة",
+  "إب",
+  "ذمار",
+  "حضرموت",
+  "المهرة",
+  "أبين",
+  "لحج",
+  "البيضاء",
+  "مأرب",
+  "صعدة",
+  "عمران",
+  "حجة",
+  "المحويت",
+  "ريمة",
+  "الضالع",
+  "شبوة",
+  "الجوف",
+  "صنعاء"
 ];
 
 const BUSINESS_TYPES = [
@@ -43,8 +62,13 @@ export default function Register() {
     firstName: user?.firstName || "",
     lastName: user?.lastName || "",
     phone: user?.phone || "",
-    address: user?.address || "",
+    country: user?.country || "اليمن",
+    governorate: user?.governorate || "",
+    district: user?.district || "",
     city: user?.city || "",
+    neighborhood: user?.neighborhood || "",
+    street: user?.street || "",
+    landmark: user?.landmark || "",
     businessType: user?.businessType || "",
   });
 
@@ -73,7 +97,7 @@ export default function Register() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.firstName || !formData.phone || !formData.city) {
+    if (!formData.firstName || !formData.phone || !formData.governorate) {
       toast({
         title: "خطأ",
         description: "يرجى ملء جميع الحقول المطلوبة",
@@ -112,7 +136,7 @@ export default function Register() {
 
   return (
     <div className="min-h-screen p-4 bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-background">
-      <div className="max-w-md mx-auto">
+      <div className="max-w-lg mx-auto">
         <Button
           variant="ghost"
           className="mb-4"
@@ -177,58 +201,130 @@ export default function Register() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="city">المدينة *</Label>
-                <Select
-                  value={formData.city}
-                  onValueChange={(value) => setFormData({ ...formData, city: value })}
-                >
-                  <SelectTrigger data-testid="select-city">
-                    <SelectValue placeholder="اختر المدينة" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {YEMENI_CITIES.map((city) => (
-                      <SelectItem key={city} value={city}>
-                        {city}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <div className="border-t pt-4 mt-4">
+                <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-sky-500" />
+                  العنوان
+                </h3>
+                
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="country">الدولة</Label>
+                    <div className="relative">
+                      <Globe className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="country"
+                        value={formData.country}
+                        onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                        className="pr-10"
+                        placeholder="اليمن"
+                        data-testid="input-country"
+                      />
+                    </div>
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="address">العنوان التفصيلي</Label>
-                <div className="relative">
-                  <MapPin className="absolute right-3 top-3 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="address"
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="pr-10"
-                    placeholder="الحي، الشارع، رقم المبنى"
-                    data-testid="input-address"
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="governorate">المحافظة *</Label>
+                    <Select
+                      value={formData.governorate}
+                      onValueChange={(value) => setFormData({ ...formData, governorate: value })}
+                    >
+                      <SelectTrigger data-testid="select-governorate">
+                        <SelectValue placeholder="اختر المحافظة" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {YEMENI_GOVERNORATES.map((gov) => (
+                          <SelectItem key={gov} value={gov}>
+                            {gov}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="district">المديرية</Label>
+                      <Input
+                        id="district"
+                        value={formData.district}
+                        onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                        placeholder="المديرية"
+                        data-testid="input-district"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="city">المدينة</Label>
+                      <Input
+                        id="city"
+                        value={formData.city}
+                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                        placeholder="المدينة"
+                        data-testid="input-city"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="neighborhood">المنطقة / الحي</Label>
+                      <Input
+                        id="neighborhood"
+                        value={formData.neighborhood}
+                        onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
+                        placeholder="اسم الحي"
+                        data-testid="input-neighborhood"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="street">الشارع</Label>
+                      <Input
+                        id="street"
+                        value={formData.street}
+                        onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+                        placeholder="اسم الشارع"
+                        data-testid="input-street"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="landmark">علامة مميزة (اختياري)</Label>
+                    <div className="relative">
+                      <Map className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="landmark"
+                        value={formData.landmark}
+                        onChange={(e) => setFormData({ ...formData, landmark: e.target.value })}
+                        className="pr-10"
+                        placeholder="بجوار محل... أو أمام مسجد..."
+                        data-testid="input-landmark"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="businessType">نوع النشاط التجاري</Label>
-                <Select
-                  value={formData.businessType}
-                  onValueChange={(value) => setFormData({ ...formData, businessType: value })}
-                >
-                  <SelectTrigger data-testid="select-business-type">
-                    <Building2 className="w-4 h-4 ml-2 text-muted-foreground" />
-                    <SelectValue placeholder="اختر نوع النشاط" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BUSINESS_TYPES.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="border-t pt-4 mt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="businessType">نوع النشاط التجاري</Label>
+                  <Select
+                    value={formData.businessType}
+                    onValueChange={(value) => setFormData({ ...formData, businessType: value })}
+                  >
+                    <SelectTrigger data-testid="select-business-type">
+                      <Building2 className="w-4 h-4 ml-2 text-muted-foreground" />
+                      <SelectValue placeholder="اختر نوع النشاط" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BUSINESS_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <Button

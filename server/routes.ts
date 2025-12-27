@@ -301,15 +301,24 @@ export async function registerRoutes(
     if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
     const userId = getUserId(req);
     
-    const { firstName, lastName, phone, address, city, businessType } = req.body;
+    const { 
+      firstName, lastName, phone, 
+      country, governorate, district, city, neighborhood, street, landmark,
+      businessType 
+    } = req.body;
     
     try {
       await db.update(schema.users).set({
         firstName,
         lastName,
         phone,
-        address,
+        country,
+        governorate,
+        district,
         city,
+        neighborhood,
+        street,
+        landmark,
         businessType,
         updatedAt: new Date()
       }).where(eq(schema.users.id, userId));
