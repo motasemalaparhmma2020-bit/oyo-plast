@@ -7,8 +7,11 @@ import path from "path";
 const app = express();
 const httpServer = createServer(app);
 
+// Get directory name - use process.cwd() for production compatibility
+const rootDir = process.cwd();
+
 // Serve attached_assets for product images
-app.use('/assets', express.static(path.resolve(import.meta.dirname, '..', 'attached_assets')));
+app.use('/assets', express.static(path.resolve(rootDir, 'attached_assets')));
 
 declare module "http" {
   interface IncomingMessage {
