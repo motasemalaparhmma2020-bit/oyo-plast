@@ -73,7 +73,8 @@ npm run db:push # Push schema changes
 ```
 
 ## Design Guidelines
-- Primary color: Sky blue (#0A7CFF)
+- Primary color: Sky blue (#2196F3)
 - RTL Arabic layout
 - Mobile-first responsive design
-- IBM Plex Sans Arabic font
+- Cairo Arabic font (خط كايرو)
+- Commercial registration: 139688

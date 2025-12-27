@@ -1,14 +1,26 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { Shield, Lock, Eye, UserCheck, FileText, AlertCircle } from "lucide-react";
+import { Shield, Lock, Eye, UserCheck, FileText, AlertCircle, ArrowRight, CreditCard, Smartphone } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
 
 export default function Privacy() {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-background">
+    <div className="min-h-screen bg-gray-50 dark:bg-background" dir="rtl">
       <div className="bg-gradient-to-l from-[#1976D2] to-[#2196F3] text-white py-12 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <Shield className="h-16 w-16 mx-auto mb-4" />
-          <h1 className="text-3xl font-bold mb-2">سياسة الخصوصية</h1>
-          <p className="text-lg opacity-90">حماية بياناتك أولويتنا</p>
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center gap-2 mb-6">
+            <Link href="/">
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" data-testid="button-back-home">
+                <ArrowRight className="h-5 w-5" />
+              </Button>
+            </Link>
+            <span className="text-white/80">العودة للرئيسية</span>
+          </div>
+          <div className="text-center">
+            <Shield className="h-16 w-16 mx-auto mb-4" />
+            <h1 className="text-3xl font-bold mb-2" data-testid="text-privacy-title">سياسة الخصوصية</h1>
+            <p className="text-lg opacity-90">حماية بياناتك أولويتنا</p>
+          </div>
         </div>
       </div>
 
@@ -16,11 +28,85 @@ export default function Privacy() {
         <Card className="mb-6">
           <CardContent className="p-6">
             <p className="text-muted-foreground leading-relaxed">
-              نحن في أويو بلاست نلتزم بحماية خصوصية عملائنا. توضح هذه السياسة كيفية جمع واستخدام 
-              وحماية معلوماتك الشخصية عند استخدام موقعنا وخدماتنا.
+              نحن في <strong className="text-primary">أويو بلاست</strong> نلتزم التزاماً تاماً بحماية خصوصية عملائنا وتأمين بياناتهم الشخصية. 
+              توضح هذه السياسة كيفية جمع واستخدام وحماية معلوماتك الشخصية عند استخدام موقعنا وخدماتنا.
             </p>
+            <div className="mt-4 p-4 bg-primary/5 border border-primary/20 rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                <strong>رقم توثيق الاسم التجاري:</strong> 139688
+              </p>
+            </div>
           </CardContent>
         </Card>
+
+        {/* أمان الدفع الإلكتروني */}
+        <section className="mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="bg-green-500/10 p-2 rounded-full">
+              <CreditCard className="h-5 w-5 text-green-600" />
+            </div>
+            <h2 className="text-xl font-bold">أمان المدفوعات الإلكترونية</h2>
+          </div>
+          <Card>
+            <CardContent className="p-6">
+              <p className="text-muted-foreground leading-relaxed mb-4">
+                نلتزم بأعلى معايير الأمان لحماية عمليات الدفع الإلكتروني عبر المحافظ الإلكترونية:
+              </p>
+              <ul className="space-y-3 text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600 mt-1">✓</span>
+                  <span><strong>تشفير كامل:</strong> جميع عمليات الدفع عبر المحافظ الإلكترونية (جوالي، جيب، ون كاش، فلوسك، بنك الكريمي) مشفرة بالكامل</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600 mt-1">✓</span>
+                  <span><strong>عدم تخزين بيانات الدفع:</strong> لا نحتفظ بأي بيانات حساسة لحسابات المحافظ الإلكترونية</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600 mt-1">✓</span>
+                  <span><strong>التحقق الآمن:</strong> نستخدم نظام تحقق متعدد المراحل لحماية المعاملات</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600 mt-1">✓</span>
+                  <span><strong>حماية إشعارات التحويل:</strong> صور الإشعارات المرفوعة محمية ولا يمكن الوصول إليها من قبل أطراف ثالثة</span>
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* المحافظ الإلكترونية المعتمدة */}
+        <section className="mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="bg-[#2196F3]/10 p-2 rounded-full">
+              <Smartphone className="h-5 w-5 text-[#2196F3]" />
+            </div>
+            <h2 className="text-xl font-bold">المحافظ الإلكترونية المعتمدة</h2>
+          </div>
+          <Card>
+            <CardContent className="p-6">
+              <p className="text-muted-foreground leading-relaxed mb-4">
+                نتعامل حصرياً مع المحافظ الإلكترونية المرخصة والموثوقة في اليمن:
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <span className="font-medium text-sm">جوالي</span>
+                </div>
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <span className="font-medium text-sm">جيب</span>
+                </div>
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <span className="font-medium text-sm">ون كاش</span>
+                </div>
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <span className="font-medium text-sm">فلوسك</span>
+                </div>
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <span className="font-medium text-sm">بنك الكريمي</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
 
         <div className="space-y-6">
           <section>
@@ -170,9 +256,12 @@ export default function Privacy() {
           </section>
         </div>
 
-        <div className="mt-8 text-center text-muted-foreground">
-          <p>للاستفسارات حول سياسة الخصوصية، تواصل معنا:</p>
-          <p className="font-semibold mt-2" dir="ltr">+967 774 997 589</p>
+        <div className="mt-8 text-center text-muted-foreground pb-20">
+          <p>للاستفسارات حول سياسة الخصوصية، تواصل معنا عبر الرقم الرسمي:</p>
+          <p className="font-semibold mt-2 text-lg text-primary" dir="ltr">+967 774 997 589</p>
+          <p className="text-sm mt-4">
+            رقم توثيق الاسم التجاري: <strong>139688</strong>
+          </p>
         </div>
       </div>
     </div>
