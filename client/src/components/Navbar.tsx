@@ -7,7 +7,6 @@ import {
   Menu, 
   User as UserIcon, 
   Search, 
-  Package, 
   LogOut 
 } from "lucide-react";
 import {
@@ -21,6 +20,7 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import oyoLogo from "@assets/oyo_plast_logo.jpg";
 
 export function Navbar() {
   const { user, logout, isAuthenticated } = useAuth();
@@ -53,36 +53,42 @@ export function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+    <header className="sticky top-0 z-50 w-full border-b bg-white dark:bg-background shadow-sm">
+      <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
         {/* Mobile Menu */}
         <div className="flex items-center md:hidden">
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
+              <Button variant="ghost" size="icon" className="md:hidden" data-testid="button-mobile-menu">
                 <Menu className="h-5 w-5" />
                 <span className="sr-only">Toggle menu</span>
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
-              <div className="flex flex-col space-y-4 mt-8">
+              <div className="flex flex-col items-center pt-4 mb-6">
+                <img src={oyoLogo} alt="OYO PLAST" className="w-24 h-24 object-contain" />
+              </div>
+              <div className="flex flex-col space-y-4">
                 <Link href="/" onClick={() => setIsOpen(false)} className="text-lg font-medium">الرئيسية</Link>
                 <Link href="/products" onClick={() => setIsOpen(false)} className="text-lg font-medium">المنتجات</Link>
+                <Link href="/orders" onClick={() => setIsOpen(false)} className="text-lg font-medium">طلباتي</Link>
                 <Link href="/about" onClick={() => setIsOpen(false)} className="text-lg font-medium">من نحن</Link>
               </div>
             </SheetContent>
           </Sheet>
         </div>
 
-        {/* Logo */}
-        <div className="flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="bg-primary p-2 rounded-lg shadow-lg shadow-primary/30">
-              <Package className="h-6 w-6 text-white" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-lg font-extrabold text-primary">اويو بلاست</span>
-              <span className="text-xs text-muted-foreground font-medium">أويو بلاست</span>
+        {/* Logo - Prominent and Clear */}
+        <div className="flex items-center">
+          <Link href="/" className="flex items-center gap-2" data-testid="link-logo">
+            <img 
+              src={oyoLogo} 
+              alt="OYO PLAST" 
+              className="h-12 w-12 md:h-14 md:w-14 object-contain rounded-lg shadow-md"
+            />
+            <div className="hidden sm:flex flex-col">
+              <span className="text-xl font-extrabold text-[#2196F3]">OYO PLAST</span>
+              <span className="text-xs text-muted-foreground font-medium">مستلزمات التغليف</span>
             </div>
           </Link>
         </div>
@@ -91,16 +97,18 @@ export function Navbar() {
         <nav className="hidden md:flex items-center gap-8">
           <NavLink href="/">الرئيسية</NavLink>
           <NavLink href="/products">المنتجات</NavLink>
+          <NavLink href="/orders">طلباتي</NavLink>
           <NavLink href="/about">من نحن</NavLink>
         </nav>
 
         {/* Actions */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
           <Button 
             variant="outline" 
             size="sm" 
             onClick={toggleCurrency}
-            className="font-bold border-2 hover:bg-primary hover:text-white transition-all"
+            className="font-bold border-2 border-[#2196F3] text-[#2196F3] hover:bg-[#2196F3] hover:text-white transition-all"
+            data-testid="button-toggle-currency"
           >
             {currency === 'YER' ? 'SAR' : 'YER'}
           </Button>
@@ -110,10 +118,10 @@ export function Navbar() {
           </Button>
 
           <Link href="/cart">
-            <Button variant="ghost" size="icon" className="relative">
-              <ShoppingCart className="h-5 w-5 text-muted-foreground" />
+            <Button variant="ghost" size="icon" className="relative" data-testid="button-cart">
+              <ShoppingCart className="h-5 w-5 text-[#2196F3]" />
               {cartCount > 0 && (
-                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-accent text-white rounded-full text-xs">
+                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-[#2196F3] text-white rounded-full text-xs">
                   {cartCount}
                 </Badge>
               )}
@@ -123,15 +131,18 @@ export function Navbar() {
           {isAuthenticated ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full">
-                  <UserIcon className="h-5 w-5 text-muted-foreground" />
+                <Button variant="ghost" size="icon" className="rounded-full" data-testid="button-user-menu">
+                  <UserIcon className="h-5 w-5 text-[#2196F3]" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>مرحباً، {user?.firstName || user?.email || "مستخدم"}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/profile" className="cursor-pointer">ملفي الشخصي</Link>
+                  <Link href="/register" className="cursor-pointer">ملفي الشخصي</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/orders" className="cursor-pointer">طلباتي</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => logout()} className="text-red-500 cursor-pointer">
                   <LogOut className="ml-2 h-4 w-4" />
@@ -141,7 +152,7 @@ export function Navbar() {
             </DropdownMenu>
           ) : (
             <Link href="/auth">
-              <Button size="sm" className="hidden md:flex font-bold bg-primary hover:bg-primary/90">
+              <Button size="sm" className="hidden md:flex font-bold bg-[#2196F3] hover:bg-[#1976D2]" data-testid="button-login">
                 تسجيل الدخول
               </Button>
             </Link>

@@ -163,10 +163,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Small Promotional Banners */}
+      {/* Small Promotional Banners - OYO PLAST Blue Theme */}
       <section className="px-3 py-3 grid grid-cols-2 gap-2">
         {/* Banner 1: Free Shipping + Cash on Delivery */}
-        <div className="bg-gradient-to-l from-sky-500 to-sky-600 rounded-xl p-3 overflow-hidden relative">
+        <div className="bg-gradient-to-l from-[#2196F3] to-[#1976D2] rounded-xl p-3 overflow-hidden relative shadow-md">
           <div className="animate-bounce-slow flex flex-col items-center text-white text-center">
             <div className="flex items-center gap-2 mb-1">
               <Truck className="h-5 w-5" />
@@ -180,7 +180,7 @@ export default function Home() {
         </div>
 
         {/* Banner 2: Exclusive Discounts + On-time Delivery */}
-        <div className="bg-gradient-to-l from-pink-500 to-rose-500 rounded-xl p-3 overflow-hidden relative">
+        <div className="bg-gradient-to-l from-[#42A5F5] to-[#2196F3] rounded-xl p-3 overflow-hidden relative shadow-md">
           <div className="animate-bounce-slow flex flex-col items-center text-white text-center" style={{ animationDelay: '0.5s' }}>
             <div className="flex items-center gap-2 mb-1">
               <Tag className="h-5 w-5" />
@@ -194,9 +194,9 @@ export default function Home() {
         </div>
       </section>
 
-      {/* New Users Gift Section - SHEIN Style */}
-      <section className="mx-3 -mt-4 relative z-10">
-        <div className="bg-gradient-to-l from-pink-400 to-pink-500 rounded-2xl p-3 shadow-lg">
+      {/* New Users Gift Section - OYO PLAST Blue Theme */}
+      <section className="mx-3 mt-2 relative z-10">
+        <div className="bg-gradient-to-l from-[#1976D2] to-[#2196F3] rounded-2xl p-3 shadow-lg">
           <div className="flex items-center justify-between gap-2 mb-2">
             <div className="flex items-center gap-2 text-white">
               <Gift className="h-4 w-4" />
@@ -213,7 +213,7 @@ export default function Home() {
             <Link href="/products" className="w-full">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="bg-yellow-400 text-black font-bold px-3 py-2 rounded-lg text-center">
+                  <div className="bg-[#2196F3] text-white font-bold px-3 py-2 rounded-lg text-center">
                     <div className="text-lg">خصم</div>
                     <div className="text-2xl">15%</div>
                   </div>
@@ -222,7 +222,7 @@ export default function Home() {
                     <p className="text-xs text-muted-foreground">لفترة محدودة</p>
                   </div>
                 </div>
-                <Button className="bg-green-500 hover:bg-green-600 text-white rounded-full px-4 text-sm" data-testid="button-promo-get-now">
+                <Button className="bg-[#2196F3] hover:bg-[#1976D2] text-white rounded-full px-4 text-sm" data-testid="button-promo-get-now">
                   احصل عليها الآن
                 </Button>
               </div>
