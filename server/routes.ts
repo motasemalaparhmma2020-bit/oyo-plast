@@ -176,22 +176,56 @@ export async function registerRoutes(
   });
 
   app.patch("/api/admin/orders/:id/status", requireAdmin, async (req, res) => {
-    const { status } = req.body;
+    const { status, trackingNumber } = req.body;
     const orderId = Number(req.params.id);
     
-    const validStatuses = ['pending', 'deposit_paid', 'completed', 'cancelled'];
+    const validStatuses = ['pending', 'deposit_paid', 'processing', 'shipped', 'delivered', 'completed', 'cancelled'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: "Invalid status" });
     }
     
     try {
-      const [updated] = await db.update(orders)
-        .set({ status })
-        .where(eq(orders.id, orderId))
-        .returning();
+      const updated = await storage.updateOrderStatus(orderId, status, trackingNumber);
       res.json(updated);
     } catch (error) {
       res.status(500).json({ error: "Failed to update order" });
+    }
+  });
+
+  // Admin: Update product stock
+  app.patch("/api/admin/products/:id/stock", requireAdmin, async (req, res) => {
+    const { stock } = req.body;
+    const productId = Number(req.params.id);
+    
+    try {
+      const updated = await storage.updateProductStock(productId, stock);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update stock" });
+    }
+  });
+
+  // Admin: Get sales statistics
+  app.get("/api/admin/stats", requireAdmin, async (req, res) => {
+    try {
+      const stats = await storage.getSalesStats();
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch stats" });
+    }
+  });
+
+  // Admin: Get orders by date range
+  app.get("/api/admin/orders/range", requireAdmin, async (req, res) => {
+    const { startDate, endDate } = req.query;
+    try {
+      const orders = await storage.getOrdersByDateRange(
+        new Date(startDate as string),
+        new Date(endDate as string)
+      );
+      res.json(orders);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch orders" });
     }
   });
 
@@ -214,6 +248,52 @@ export async function registerRoutes(
   app.get("/api/settings/exchange-rate", async (req, res) => {
     const setting = await storage.getSetting("exchange_rate");
     res.json({ rate: setting?.value || "140" });
+  });
+
+  // Reviews
+  app.get("/api/products/:id/reviews", async (req, res) => {
+    const reviews = await storage.getProductReviews(Number(req.params.id));
+    res.json(reviews);
+  });
+
+  app.post("/api/products/:id/reviews", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    const { rating, comment } = req.body;
+    
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: "Rating must be between 1 and 5" });
+    }
+    
+    try {
+      const review = await storage.addReview({
+        productId: Number(req.params.id),
+        userId,
+        rating,
+        comment
+      });
+      res.status(201).json(review);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add review" });
+    }
+  });
+
+  // Order tracking (public for customer)
+  app.get("/api/orders/:id/track", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    const orderId = Number(req.params.id);
+    
+    try {
+      const userOrders = await storage.getOrders(userId);
+      const order = userOrders.find(o => o.id === orderId);
+      if (!order) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      res.json(order);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch order" });
+    }
   });
 
 

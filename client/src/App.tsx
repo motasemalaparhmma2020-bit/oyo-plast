@@ -11,6 +11,7 @@ import Products from "@/pages/Products";
 import ProductDetail from "@/pages/ProductDetail";
 import Cart from "@/pages/Cart";
 import Checkout from "@/pages/Checkout";
+import Orders from "@/pages/Orders";
 import Profile from "@/pages/Profile";
 import Auth from "@/pages/Auth";
 import Admin from "@/pages/Admin";
@@ -34,6 +35,9 @@ function Router() {
           </Route>
           <Route path="/checkout">
             {isAuthenticated ? <Checkout /> : <Auth />}
+          </Route>
+          <Route path="/orders">
+            {isAuthenticated ? <Orders /> : <Auth />}
           </Route>
           <Route path="/profile" component={Profile} />
           <Route path="/auth">

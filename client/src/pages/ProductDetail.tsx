@@ -1,15 +1,18 @@
 import { useParams, Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
-import { Product } from "@shared/schema";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Product, Review } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 import { useAddToCart } from "@/hooks/use-cart";
-import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star } from "lucide-react";
+import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star, User } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface BulkPricing {
   minQty: number;
@@ -25,7 +28,32 @@ export default function ProductDetail() {
     queryKey: ['/api/products', id],
   });
 
+  const { data: reviews = [] } = useQuery<Review[]>({
+    queryKey: ['/api/products', id, 'reviews'],
+    enabled: !!id,
+  });
+
   const { mutate: addToCart, isPending } = useAddToCart();
+
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  const submitReviewMutation = useMutation({
+    mutationFn: async ({ rating, comment }: { rating: number; comment: string }) => {
+      return apiRequest('POST', `/api/products/${id}/reviews`, { rating, comment });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/products', id, 'reviews'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/products', id] });
+      setReviewComment("");
+      setReviewRating(5);
+      toast({ title: "تم إضافة تقييمك بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "حدث خطأ أثناء إضافة التقييم", variant: "destructive" });
+    }
+  });
   
   const [quantity, setQuantity] = useState(1);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
@@ -361,6 +389,109 @@ export default function ProductDetail() {
             {product.stock <= 0 ? "غير متوفر حالياً" : "أضف إلى السلة"}
           </Button>
         </div>
+      </div>
+
+      {/* Reviews Section */}
+      <Separator className="my-8" />
+      
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold">التقييمات والمراجعات</h2>
+        
+        {/* Add Review Form */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">أضف تقييمك</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label className="mb-2 block">التقييم</Label>
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setReviewRating(star)}
+                    className="p-1"
+                    data-testid={`button-rating-${star}`}
+                  >
+                    <Star 
+                      className={`h-8 w-8 transition-colors ${
+                        star <= reviewRating
+                          ? 'text-yellow-400 fill-yellow-400' 
+                          : 'text-gray-300'
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="review-comment" className="mb-2 block">تعليقك (اختياري)</Label>
+              <Textarea
+                id="review-comment"
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                placeholder="شاركنا رأيك في هذا المنتج..."
+                className="resize-none"
+                rows={3}
+                data-testid="input-review-comment"
+              />
+            </div>
+            <Button
+              onClick={() => submitReviewMutation.mutate({ rating: reviewRating, comment: reviewComment })}
+              disabled={submitReviewMutation.isPending}
+              data-testid="button-submit-review"
+            >
+              {submitReviewMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin ml-2" />
+              ) : null}
+              إرسال التقييم
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Reviews List */}
+        {reviews.length > 0 ? (
+          <div className="space-y-4">
+            {reviews.map((review) => (
+              <Card key={review.id}>
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center shrink-0">
+                      <User className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star 
+                              key={star}
+                              className={`h-4 w-4 ${
+                                star <= review.rating
+                                  ? 'text-yellow-400 fill-yellow-400' 
+                                  : 'text-gray-300'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-sm text-muted-foreground">
+                          {review.createdAt ? new Date(review.createdAt).toLocaleDateString('ar-YE') : ''}
+                        </span>
+                      </div>
+                      {review.comment && (
+                        <p className="text-foreground">{review.comment}</p>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <p className="text-center text-muted-foreground py-8">
+            لا توجد تقييمات بعد. كن أول من يقيّم هذا المنتج!
+          </p>
+        )}
       </div>
     </div>
   );

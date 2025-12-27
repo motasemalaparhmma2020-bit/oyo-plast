@@ -1,9 +1,9 @@
 import { db } from "./db";
 import {
-  users, products, categories, cartItems, orders, orderItems, settings,
-  type User, type Product, type Category, type CartItem, type Order, type OrderItem, type Setting
+  users, products, categories, cartItems, orders, orderItems, settings, reviews,
+  type User, type Product, type Category, type CartItem, type Order, type OrderItem, type Setting, type Review
 } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -39,6 +39,20 @@ export interface IStorage {
   getSetting(key: string): Promise<Setting | undefined>;
   setSetting(key: string, value: string): Promise<Setting>;
   getAllSettings(): Promise<Setting[]>;
+  
+  // Reviews
+  getProductReviews(productId: number): Promise<Review[]>;
+  addReview(review: { productId: number; userId: string; rating: number; comment?: string }): Promise<Review>;
+  
+  // Inventory
+  updateProductStock(productId: number, stock: number): Promise<Product>;
+  
+  // Order tracking
+  updateOrderStatus(orderId: number, status: string, trackingNumber?: string): Promise<Order>;
+  
+  // Analytics
+  getSalesStats(): Promise<{ totalSales: number; totalOrders: number; averageOrderValue: number }>;
+  getOrdersByDateRange(startDate: Date, endDate: Date): Promise<Order[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -314,6 +328,74 @@ export class DatabaseStorage implements IStorage {
 
   async getAllSettings(): Promise<Setting[]> {
     return await db.select().from(settings);
+  }
+
+  // Reviews
+  async getProductReviews(productId: number): Promise<Review[]> {
+    return await db.select().from(reviews)
+      .where(eq(reviews.productId, productId))
+      .orderBy(desc(reviews.createdAt));
+  }
+
+  async addReview(review: { productId: number; userId: string; rating: number; comment?: string }): Promise<Review> {
+    const [newReview] = await db.insert(reviews).values({
+      productId: review.productId,
+      userId: review.userId,
+      rating: review.rating,
+      comment: review.comment || null,
+    }).returning();
+    
+    // Update product rating average
+    const productReviews = await this.getProductReviews(review.productId);
+    const avgRating = productReviews.reduce((sum, r) => sum + r.rating, 0) / productReviews.length;
+    await db.update(products)
+      .set({ rating: avgRating.toFixed(1), reviewCount: productReviews.length })
+      .where(eq(products.id, review.productId));
+    
+    return newReview;
+  }
+
+  // Inventory
+  async updateProductStock(productId: number, stock: number): Promise<Product> {
+    const [updated] = await db.update(products)
+      .set({ stock })
+      .where(eq(products.id, productId))
+      .returning();
+    return updated;
+  }
+
+  // Order tracking
+  async updateOrderStatus(orderId: number, status: string, trackingNumber?: string): Promise<Order> {
+    const updateData: { status: string; trackingNumber?: string } = { status };
+    if (trackingNumber) {
+      updateData.trackingNumber = trackingNumber;
+    }
+    const [updated] = await db.update(orders)
+      .set(updateData)
+      .where(eq(orders.id, orderId))
+      .returning();
+    return updated;
+  }
+
+  // Analytics
+  async getSalesStats(): Promise<{ totalSales: number; totalOrders: number; averageOrderValue: number }> {
+    const allOrders = await db.select().from(orders);
+    const completedOrders = allOrders.filter(o => o.status !== 'cancelled');
+    const totalSales = completedOrders.reduce((sum, o) => sum + Number(o.total), 0);
+    const totalOrders = completedOrders.length;
+    const averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
+    return { totalSales, totalOrders, averageOrderValue };
+  }
+
+  async getOrdersByDateRange(startDate: Date, endDate: Date): Promise<Order[]> {
+    return await db.select().from(orders)
+      .where(
+        and(
+          sql`${orders.createdAt} >= ${startDate}`,
+          sql`${orders.createdAt} <= ${endDate}`
+        )
+      )
+      .orderBy(orders.createdAt);
   }
 }
 

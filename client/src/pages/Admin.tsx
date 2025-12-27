@@ -32,6 +32,9 @@ import {
 const statusMap: Record<string, { label: string; color: string; icon: any }> = {
   pending: { label: "قيد الانتظار", color: "bg-yellow-100 text-yellow-800", icon: Clock },
   deposit_paid: { label: "تم دفع العربون", color: "bg-blue-100 text-blue-800", icon: DollarSign },
+  processing: { label: "قيد التجهيز", color: "bg-orange-100 text-orange-800", icon: Package },
+  shipped: { label: "تم الشحن", color: "bg-indigo-100 text-indigo-800", icon: TrendingUp },
+  delivered: { label: "تم التوصيل", color: "bg-teal-100 text-teal-800", icon: CheckCircle },
   completed: { label: "مكتمل", color: "bg-green-100 text-green-800", icon: CheckCircle },
   cancelled: { label: "ملغي", color: "bg-red-100 text-red-800", icon: XCircle },
 };
@@ -117,14 +120,14 @@ export default function Admin() {
   });
 
   const updateOrderStatus = useMutation({
-    mutationFn: async ({ orderId, status }: { orderId: number; status: string }) => {
+    mutationFn: async ({ orderId, status, trackingNumber }: { orderId: number; status: string; trackingNumber?: string }) => {
       const res = await fetch(`/api/admin/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',
           'x-admin-token': adminToken || '' 
         },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ status, trackingNumber })
       });
       if (!res.ok) throw new Error('Failed to update order');
       return res.json();
@@ -132,6 +135,37 @@ export default function Admin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
       toast({ title: "تم تحديث حالة الطلب" });
+    }
+  });
+
+  const updateProductStock = useMutation({
+    mutationFn: async ({ productId, stock }: { productId: number; stock: number }) => {
+      const res = await fetch(`/api/admin/products/${productId}/stock`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken || '' 
+        },
+        body: JSON.stringify({ stock })
+      });
+      if (!res.ok) throw new Error('Failed to update stock');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      toast({ title: "تم تحديث المخزون" });
+    }
+  });
+
+  const { data: salesStats } = useQuery<{ totalSales: number; totalOrders: number; averageOrderValue: number }>({
+    queryKey: ['/api/admin/stats'],
+    enabled: isAuthenticated && !!adminToken,
+    queryFn: async () => {
+      const res = await fetch('/api/admin/stats', {
+        headers: { 'x-admin-token': adminToken || '' }
+      });
+      if (!res.ok) throw new Error('Failed to fetch stats');
+      return res.json();
     }
   });
 
@@ -272,7 +306,8 @@ export default function Admin() {
         <Tabs defaultValue="orders" className="space-y-4">
           <TabsList>
             <TabsTrigger value="orders">الطلبات</TabsTrigger>
-            <TabsTrigger value="products">المنتجات</TabsTrigger>
+            <TabsTrigger value="products">المخزون</TabsTrigger>
+            <TabsTrigger value="reports">التقارير</TabsTrigger>
             <TabsTrigger value="settings">الإعدادات</TabsTrigger>
           </TabsList>
 
@@ -389,6 +424,9 @@ export default function Admin() {
                                             <SelectContent>
                                               <SelectItem value="pending">قيد الانتظار</SelectItem>
                                               <SelectItem value="deposit_paid">تم دفع العربون</SelectItem>
+                                              <SelectItem value="processing">قيد التجهيز</SelectItem>
+                                              <SelectItem value="shipped">تم الشحن</SelectItem>
+                                              <SelectItem value="delivered">تم التوصيل</SelectItem>
                                               <SelectItem value="completed">مكتمل</SelectItem>
                                               <SelectItem value="cancelled">ملغي</SelectItem>
                                             </SelectContent>
@@ -418,7 +456,7 @@ export default function Admin() {
           <TabsContent value="products">
             <Card>
               <CardHeader>
-                <CardTitle>إدارة المنتجات</CardTitle>
+                <CardTitle>إدارة المخزون</CardTitle>
               </CardHeader>
               <CardContent>
                 {productsLoading ? (
@@ -434,7 +472,7 @@ export default function Admin() {
                           <TableHead className="text-right">السعر (ر.ي)</TableHead>
                           <TableHead className="text-right">السعر (ر.س)</TableHead>
                           <TableHead className="text-right">المخزون</TableHead>
-                          <TableHead className="text-right">الفئة</TableHead>
+                          <TableHead className="text-right">تعديل المخزون</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -451,11 +489,27 @@ export default function Admin() {
                             <TableCell>{formatPrice(product.price)}</TableCell>
                             <TableCell>{formatPrice(product.priceSar)}</TableCell>
                             <TableCell>
-                              <Badge variant={product.stock > 0 ? "default" : "destructive"}>
-                                {product.stock}
+                              <Badge variant={product.stock > 10 ? "default" : product.stock > 0 ? "secondary" : "destructive"}>
+                                {product.stock > 0 ? `${product.stock} قطعة` : 'نفذ'}
                               </Badge>
                             </TableCell>
-                            <TableCell>{product.categoryId}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  defaultValue={product.stock}
+                                  className="w-20"
+                                  onBlur={(e) => {
+                                    const newStock = parseInt(e.target.value);
+                                    if (newStock !== product.stock) {
+                                      updateProductStock.mutate({ productId: product.id, stock: newStock });
+                                    }
+                                  }}
+                                  data-testid={`input-stock-${product.id}`}
+                                />
+                              </div>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -467,6 +521,61 @@ export default function Admin() {
                     <p>لا توجد منتجات بعد</p>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="reports">
+            <div className="grid md:grid-cols-3 gap-4 mb-6">
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <DollarSign className="h-12 w-12 mx-auto mb-4 text-green-600" />
+                  <p className="text-sm text-muted-foreground mb-2">إجمالي المبيعات</p>
+                  <p className="text-3xl font-bold text-green-600">
+                    {formatPrice(salesStats?.totalSales || 0)} ر.ي
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <ShoppingBag className="h-12 w-12 mx-auto mb-4 text-blue-600" />
+                  <p className="text-sm text-muted-foreground mb-2">عدد الطلبات</p>
+                  <p className="text-3xl font-bold text-blue-600">
+                    {salesStats?.totalOrders || 0}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <TrendingUp className="h-12 w-12 mx-auto mb-4 text-purple-600" />
+                  <p className="text-sm text-muted-foreground mb-2">متوسط قيمة الطلب</p>
+                  <p className="text-3xl font-bold text-purple-600">
+                    {formatPrice(salesStats?.averageOrderValue || 0)} ر.ي
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>ملخص الطلبات حسب الحالة</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {Object.entries(statusMap).map(([key, value]) => {
+                    const count = orders?.filter(o => o.status === key).length || 0;
+                    const StatusIcon = value.icon;
+                    return (
+                      <div key={key} className={`p-4 rounded-lg ${value.color}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <StatusIcon className="h-5 w-5" />
+                          <span className="font-medium">{value.label}</span>
+                        </div>
+                        <p className="text-2xl font-bold">{count}</p>
+                      </div>
+                    );
+                  })}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

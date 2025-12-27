@@ -46,7 +46,8 @@ export const cartItems = pgTable("cart_items", {
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").references(() => users.id).notNull(),
-  status: text("status").notNull().default("pending"), // pending, deposit_paid, completed, cancelled
+  status: text("status").notNull().default("pending"), // pending, deposit_paid, processing, shipped, delivered, completed, cancelled
+  trackingNumber: text("tracking_number"), // For shipping tracking
   total: numeric("total").notNull(),
   currency: text("currency").default("YER").notNull(), // YER or SAR
   depositAmount: numeric("deposit_amount"), // Deposit amount paid
@@ -65,6 +66,16 @@ export const orderItems = pgTable("order_items", {
   productId: integer("product_id").references(() => products.id).notNull(),
   quantity: integer("quantity").notNull(),
   price: numeric("price").notNull(),
+});
+
+// Product Reviews
+export const reviews = pgTable("reviews", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").references(() => products.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  rating: integer("rating").notNull(), // 1-5
+  comment: text("comment"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Relations
@@ -97,6 +108,13 @@ export const ordersRelations = relations(orders, ({ many }) => ({
   items: many(orderItems),
 }));
 
+export const reviewsRelations = relations(reviews, ({ one }) => ({
+  product: one(products, {
+    fields: [reviews.productId],
+    references: [products.id],
+  }),
+}));
+
 // Schemas
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true });
@@ -104,6 +122,7 @@ export const insertCartItemSchema = createInsertSchema(cartItems).omit({ id: tru
 export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true });
 export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
 export const insertSettingSchema = createInsertSchema(settings).omit({ id: true });
+export const insertReviewSchema = createInsertSchema(reviews).omit({ id: true, createdAt: true });
 
 // Types
 export type Product = typeof products.$inferSelect;
@@ -112,3 +131,4 @@ export type CartItem = typeof cartItems.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
 export type Setting = typeof settings.$inferSelect;
+export type Review = typeof reviews.$inferSelect;
