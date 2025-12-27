@@ -49,7 +49,7 @@ const PAYMENT_METHODS = [
     description: "حول عربون 30% ثم الباقي عند الاستلام",
     icon: Building2,
     requiresDeposit: true,
-    accountInfo: "حساب الكريمي: 0010203040 باسم: اويو بلاست"
+    accountInfo: "الاسم: معتصم محمد احمد الاهدل | حساب الريال اليمني: 3002724617 | حساب الريال السعودي: 3020971273"
   },
   {
     id: "jawali",
