@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
-import { ArrowRight, Upload, Check, Loader2, Banknote, Building2, CreditCard } from "lucide-react";
+import { ArrowRight, Upload, Check, Loader2, Banknote, Building2, CreditCard, Wallet, Smartphone } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -52,12 +52,36 @@ const PAYMENT_METHODS = [
     accountInfo: "حساب الكريمي: 0010203040 باسم: اويو بلاست"
   },
   {
-    id: "najm",
-    name: "تحويل بنك النجم",
-    description: "حول عربون 30% ثم الباقي عند الاستلام",
-    icon: CreditCard,
+    id: "jawali",
+    name: "محفظة جوالي",
+    description: "حول عربون 30% عبر جوالي",
+    icon: Wallet,
     requiresDeposit: true,
-    accountInfo: "حساب النجم: 9876543210 باسم: اويو بلاست"
+    accountInfo: "رقم جوالي: 774997589 باسم: اويو بلاست"
+  },
+  {
+    id: "onecash",
+    name: "محفظة ون كاش",
+    description: "حول عربون 30% عبر ون كاش",
+    icon: Smartphone,
+    requiresDeposit: true,
+    accountInfo: "رقم ون كاش: 774997589 باسم: اويو بلاست"
+  },
+  {
+    id: "jeeb",
+    name: "محفظة جيب",
+    description: "حول عربون 30% عبر جيب",
+    icon: Wallet,
+    requiresDeposit: true,
+    accountInfo: "رقم جيب: 774997589 باسم: اويو بلاست"
+  },
+  {
+    id: "mobilemoney",
+    name: "موبايل موني",
+    description: "حول عربون 30% عبر موبايل موني",
+    icon: Smartphone,
+    requiresDeposit: true,
+    accountInfo: "رقم موبايل موني: 774997589 باسم: اويو بلاست"
   }
 ];
 
