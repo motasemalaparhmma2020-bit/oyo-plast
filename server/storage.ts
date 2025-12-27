@@ -69,6 +69,14 @@ export interface IStorage {
   
   // Bestselling products
   getBestsellingProducts(limit?: number): Promise<Product[]>;
+  
+  // Product management
+  createProduct(product: Omit<Product, 'id'>): Promise<Product>;
+  updateProduct(id: number, product: Partial<Product>): Promise<Product>;
+  deleteProduct(id: number): Promise<void>;
+  
+  // Category management
+  createCategory(category: Omit<Category, 'id'>): Promise<Category>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -513,6 +521,30 @@ export class DatabaseStorage implements IStorage {
     return bestProducts.sort((a, b) => {
       return productIds.indexOf(a.id) - productIds.indexOf(b.id);
     });
+  }
+
+  // Product management
+  async createProduct(product: Omit<Product, 'id'>): Promise<Product> {
+    const [newProduct] = await db.insert(products).values(product).returning();
+    return newProduct;
+  }
+
+  async updateProduct(id: number, product: Partial<Product>): Promise<Product> {
+    const [updated] = await db.update(products)
+      .set(product)
+      .where(eq(products.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteProduct(id: number): Promise<void> {
+    await db.delete(products).where(eq(products.id, id));
+  }
+
+  // Category management
+  async createCategory(category: Omit<Category, 'id'>): Promise<Category> {
+    const [newCategory] = await db.insert(categories).values(category).returning();
+    return newCategory;
   }
 }
 

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
-import { ArrowRight, Upload, Check, Loader2, Banknote } from "lucide-react";
+import { ArrowRight, Upload, Check, Loader2, Banknote, MapPin } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -56,10 +56,12 @@ export default function Checkout() {
     shippingCity: "",
     shippingAddress: "",
     paymentMethod: "cash_on_delivery",
-    notes: ""
+    notes: "",
+    gpsCoordinates: ""
   });
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
   
   const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
     return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
@@ -101,6 +103,59 @@ export default function Checkout() {
         description: "تم رفع صورة إشعار التحويل بنجاح",
       });
     }
+  };
+
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast({
+        title: "غير متاح",
+        description: "المتصفح لا يدعم تحديد الموقع",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const coordinates = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        setFormData(prev => ({
+          ...prev,
+          gpsCoordinates: coordinates
+        }));
+        toast({
+          title: "تم تحديد الموقع",
+          description: "تم الحصول على إحداثيات موقعك بنجاح"
+        });
+        setIsGettingLocation(false);
+      },
+      (error) => {
+        let errorMessage = "حدث خطأ في تحديد الموقع";
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "تم رفض الإذن بتحديد الموقع";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "معلومات الموقع غير متاحة";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "انتهت مهلة تحديد الموقع";
+            break;
+        }
+        toast({
+          title: "فشل تحديد الموقع",
+          description: errorMessage,
+          variant: "destructive"
+        });
+        setIsGettingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -233,6 +288,44 @@ export default function Checkout() {
                     className="mt-1"
                     data-testid="input-address"
                   />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label htmlFor="gps">إحداثيات الموقع (GPS)</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={getCurrentLocation}
+                      disabled={isGettingLocation}
+                      className="gap-2"
+                      data-testid="button-get-location"
+                    >
+                      {isGettingLocation ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <MapPin className="h-4 w-4" />
+                      )}
+                      {isGettingLocation ? 'جارٍ التحديد...' : 'تحديد موقعي'}
+                    </Button>
+                  </div>
+                  <Input
+                    id="gps"
+                    type="text"
+                    placeholder="سيتم تعبئتها تلقائياً عند الضغط على الزر"
+                    value={formData.gpsCoordinates}
+                    onChange={(e) => setFormData({...formData, gpsCoordinates: e.target.value})}
+                    className="mt-1"
+                    readOnly
+                    data-testid="input-gps"
+                  />
+                  {formData.gpsCoordinates && (
+                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                      <Check className="h-3 w-3 text-green-600" />
+                      تم تحديد الموقع بنجاح
+                    </p>
+                  )}
                 </div>
 
                 <div>

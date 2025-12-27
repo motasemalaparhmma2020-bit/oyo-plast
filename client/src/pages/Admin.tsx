@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
 import { 
   ShoppingBag, 
   Package, 
@@ -26,7 +27,12 @@ import {
   DollarSign,
   Users,
   Settings,
-  Save
+  Save,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+  ImagePlus
 } from "lucide-react";
 
 const statusMap: Record<string, { label: string; color: string; icon: any }> = {
@@ -39,12 +45,48 @@ const statusMap: Record<string, { label: string; color: string; icon: any }> = {
   cancelled: { label: "ملغي", color: "bg-red-100 text-red-800", icon: XCircle },
 };
 
+interface Category {
+  id: number;
+  name: string;
+  slug: string;
+  imageUrl: string;
+}
+
+interface ProductFormData {
+  name: string;
+  description: string;
+  price: string;
+  priceSar: string;
+  categoryId: number;
+  imageUrl: string;
+  stock: number;
+  colors: string;
+  sizes: string;
+  allowDesignUpload: boolean;
+}
+
+const emptyProductForm: ProductFormData = {
+  name: "",
+  description: "",
+  price: "",
+  priceSar: "",
+  categoryId: 0,
+  imageUrl: "",
+  stock: 100,
+  colors: "",
+  sizes: "",
+  allowDesignUpload: false
+};
+
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [exchangeRate, setExchangeRate] = useState("140");
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [productForm, setProductForm] = useState<ProductFormData>(emptyProductForm);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -168,6 +210,111 @@ export default function Admin() {
       return res.json();
     }
   });
+
+  const { data: categories } = useQuery<Category[]>({
+    queryKey: ['/api/categories'],
+    enabled: isAuthenticated,
+  });
+
+  const createProductMutation = useMutation({
+    mutationFn: async (data: ProductFormData) => {
+      const res = await fetch('/api/admin/products', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken || '' 
+        },
+        body: JSON.stringify({
+          ...data,
+          colors: data.colors ? data.colors.split(',').map(c => c.trim()) : null,
+          sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()) : null
+        })
+      });
+      if (!res.ok) throw new Error('Failed to create product');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      toast({ title: "تم إضافة المنتج بنجاح" });
+      setShowProductForm(false);
+      setProductForm(emptyProductForm);
+    },
+    onError: () => {
+      toast({ title: "حدث خطأ أثناء إضافة المنتج", variant: "destructive" });
+    }
+  });
+
+  const updateProductMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<ProductFormData> }) => {
+      const res = await fetch(`/api/admin/products/${id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken || '' 
+        },
+        body: JSON.stringify({
+          ...data,
+          colors: data.colors ? (data.colors as string).split(',').map(c => c.trim()) : null,
+          sizes: data.sizes ? (data.sizes as string).split(',').map(s => s.trim()) : null
+        })
+      });
+      if (!res.ok) throw new Error('Failed to update product');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      toast({ title: "تم تحديث المنتج بنجاح" });
+      setShowProductForm(false);
+      setEditingProduct(null);
+      setProductForm(emptyProductForm);
+    },
+    onError: () => {
+      toast({ title: "حدث خطأ أثناء تحديث المنتج", variant: "destructive" });
+    }
+  });
+
+  const deleteProductMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/admin/products/${id}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-token': adminToken || '' }
+      });
+      if (!res.ok) throw new Error('Failed to delete product');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      toast({ title: "تم حذف المنتج بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "حدث خطأ أثناء حذف المنتج", variant: "destructive" });
+    }
+  });
+
+  const openEditProduct = (product: Product) => {
+    setEditingProduct(product);
+    setProductForm({
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      priceSar: product.priceSar || "",
+      categoryId: product.categoryId,
+      imageUrl: product.imageUrl,
+      stock: product.stock,
+      colors: product.colors ? product.colors.join(', ') : "",
+      sizes: product.sizes ? product.sizes.join(', ') : "",
+      allowDesignUpload: product.allowDesignUpload || false
+    });
+    setShowProductForm(true);
+  };
+
+  const handleProductSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingProduct) {
+      updateProductMutation.mutate({ id: editingProduct.id, data: productForm });
+    } else {
+      createProductMutation.mutate(productForm);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -304,8 +451,9 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="orders" className="space-y-4">
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="orders">الطلبات</TabsTrigger>
+            <TabsTrigger value="manage-products">المنتجات</TabsTrigger>
             <TabsTrigger value="products">المخزون</TabsTrigger>
             <TabsTrigger value="reports">التقارير</TabsTrigger>
             <TabsTrigger value="settings">الإعدادات</TabsTrigger>
@@ -447,6 +595,295 @@ export default function Admin() {
                   <div className="text-center py-10 text-muted-foreground">
                     <ShoppingBag className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>لا توجد طلبات بعد</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="manage-products">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-4">
+                <CardTitle>إدارة المنتجات</CardTitle>
+                <Button 
+                  onClick={() => {
+                    setEditingProduct(null);
+                    setProductForm(emptyProductForm);
+                    setShowProductForm(true);
+                  }}
+                  className="gap-2"
+                  data-testid="button-add-product"
+                >
+                  <Plus className="h-4 w-4" />
+                  إضافة منتج
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {showProductForm && (
+                  <div className="mb-6 p-4 border rounded-lg bg-muted/30">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-semibold text-lg">
+                        {editingProduct ? 'تعديل المنتج' : 'إضافة منتج جديد'}
+                      </h3>
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        onClick={() => {
+                          setShowProductForm(false);
+                          setEditingProduct(null);
+                          setProductForm(emptyProductForm);
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <form onSubmit={handleProductSubmit} className="space-y-4">
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="product-name">اسم المنتج *</Label>
+                          <Input
+                            id="product-name"
+                            value={productForm.name}
+                            onChange={(e) => setProductForm({...productForm, name: e.target.value})}
+                            placeholder="مثال: أكياس بلاستيك شفافة"
+                            required
+                            data-testid="input-product-name"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="product-category">القسم *</Label>
+                          <Select
+                            value={productForm.categoryId.toString()}
+                            onValueChange={(value) => setProductForm({...productForm, categoryId: parseInt(value)})}
+                          >
+                            <SelectTrigger data-testid="select-product-category">
+                              <SelectValue placeholder="اختر القسم" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {categories?.map((cat) => (
+                                <SelectItem key={cat.id} value={cat.id.toString()}>
+                                  {cat.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="product-description">الوصف *</Label>
+                        <Textarea
+                          id="product-description"
+                          value={productForm.description}
+                          onChange={(e) => setProductForm({...productForm, description: e.target.value})}
+                          placeholder="وصف تفصيلي للمنتج"
+                          rows={3}
+                          required
+                          data-testid="input-product-description"
+                        />
+                      </div>
+
+                      <div className="grid md:grid-cols-3 gap-4">
+                        <div>
+                          <Label htmlFor="product-price">السعر بالريال اليمني *</Label>
+                          <Input
+                            id="product-price"
+                            type="number"
+                            value={productForm.price}
+                            onChange={(e) => setProductForm({...productForm, price: e.target.value})}
+                            placeholder="5000"
+                            required
+                            data-testid="input-product-price"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="product-price-sar">السعر بالريال السعودي</Label>
+                          <Input
+                            id="product-price-sar"
+                            type="number"
+                            value={productForm.priceSar}
+                            onChange={(e) => setProductForm({...productForm, priceSar: e.target.value})}
+                            placeholder="35"
+                            data-testid="input-product-price-sar"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="product-stock">المخزون</Label>
+                          <Input
+                            id="product-stock"
+                            type="number"
+                            value={productForm.stock}
+                            onChange={(e) => setProductForm({...productForm, stock: parseInt(e.target.value) || 0})}
+                            placeholder="100"
+                            data-testid="input-product-stock"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="product-image">رابط الصورة *</Label>
+                        <Input
+                          id="product-image"
+                          value={productForm.imageUrl}
+                          onChange={(e) => setProductForm({...productForm, imageUrl: e.target.value})}
+                          placeholder="https://example.com/image.jpg"
+                          required
+                          data-testid="input-product-image"
+                        />
+                        {productForm.imageUrl && (
+                          <div className="mt-2 w-20 h-20 rounded-lg overflow-hidden border">
+                            <img 
+                              src={productForm.imageUrl} 
+                              alt="معاينة" 
+                              className="w-full h-full object-cover"
+                              onError={(e) => (e.target as HTMLImageElement).src = '/placeholder.jpg'}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="product-colors">الألوان المتاحة (مفصولة بفاصلة)</Label>
+                          <Input
+                            id="product-colors"
+                            value={productForm.colors}
+                            onChange={(e) => setProductForm({...productForm, colors: e.target.value})}
+                            placeholder="أبيض, أسود, أحمر"
+                            data-testid="input-product-colors"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="product-sizes">المقاسات المتاحة (مفصولة بفاصلة)</Label>
+                          <Input
+                            id="product-sizes"
+                            value={productForm.sizes}
+                            onChange={(e) => setProductForm({...productForm, sizes: e.target.value})}
+                            placeholder="صغير, وسط, كبير"
+                            data-testid="input-product-sizes"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="product-design-upload"
+                          checked={productForm.allowDesignUpload}
+                          onChange={(e) => setProductForm({...productForm, allowDesignUpload: e.target.checked})}
+                          className="rounded border-gray-300"
+                          data-testid="checkbox-design-upload"
+                        />
+                        <Label htmlFor="product-design-upload">السماح برفع ملف التصميم</Label>
+                      </div>
+
+                      <div className="flex gap-2 pt-4">
+                        <Button 
+                          type="submit" 
+                          disabled={createProductMutation.isPending || updateProductMutation.isPending}
+                          className="gap-2"
+                          data-testid="button-save-product"
+                        >
+                          {(createProductMutation.isPending || updateProductMutation.isPending) ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4" />
+                          )}
+                          {editingProduct ? 'حفظ التعديلات' : 'إضافة المنتج'}
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant="outline"
+                          onClick={() => {
+                            setShowProductForm(false);
+                            setEditingProduct(null);
+                            setProductForm(emptyProductForm);
+                          }}
+                        >
+                          إلغاء
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {productsLoading ? (
+                  <div className="flex justify-center py-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : products && products.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">المنتج</TableHead>
+                          <TableHead className="text-right">القسم</TableHead>
+                          <TableHead className="text-right">السعر (ر.ي)</TableHead>
+                          <TableHead className="text-right">المخزون</TableHead>
+                          <TableHead className="text-right">إجراءات</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {products.map((product) => (
+                          <TableRow key={product.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
+                                  <img src={product.imageUrl} alt={product.name} className="w-full h-full object-contain" />
+                                </div>
+                                <span className="font-medium">{product.name}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {categories?.find(c => c.id === product.categoryId)?.name || '-'}
+                            </TableCell>
+                            <TableCell>{formatPrice(product.price)}</TableCell>
+                            <TableCell>
+                              <Badge variant={product.stock > 10 ? "default" : product.stock > 0 ? "secondary" : "destructive"}>
+                                {product.stock > 0 ? `${product.stock} قطعة` : 'نفذ'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost"
+                                  onClick={() => openEditProduct(product)}
+                                  data-testid={`button-edit-product-${product.id}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost"
+                                  className="text-destructive"
+                                  onClick={() => {
+                                    if (confirm('هل أنت متأكد من حذف هذا المنتج؟')) {
+                                      deleteProductMutation.mutate(product.id);
+                                    }
+                                  }}
+                                  data-testid={`button-delete-product-${product.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>لا توجد منتجات بعد</p>
+                    <Button 
+                      className="mt-4 gap-2"
+                      onClick={() => setShowProductForm(true)}
+                    >
+                      <Plus className="h-4 w-4" />
+                      إضافة أول منتج
+                    </Button>
                   </div>
                 )}
               </CardContent>

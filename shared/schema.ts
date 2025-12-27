@@ -56,6 +56,7 @@ export const orders = pgTable("orders", {
   customerPhone: text("customer_phone"),
   shippingCity: text("shipping_city"),
   shippingAddress: text("shipping_address"),
+  gpsCoordinates: text("gps_coordinates"), // GPS coordinates for delivery location
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });

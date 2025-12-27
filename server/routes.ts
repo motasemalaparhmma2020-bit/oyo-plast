@@ -263,6 +263,91 @@ export async function registerRoutes(
     }
   });
 
+  // Admin: Product management
+  app.get("/api/admin/products", requireAdmin, async (req, res) => {
+    try {
+      const allProducts = await storage.getProducts();
+      res.json(allProducts);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch products" });
+    }
+  });
+
+  app.post("/api/admin/products", requireAdmin, async (req, res) => {
+    try {
+      const { name, description, price, priceSar, categoryId, imageUrl, stock, colors, sizes, allowDesignUpload, bulkPricing } = req.body;
+      
+      if (!name || !description || !price || !categoryId || !imageUrl) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      
+      const product = await storage.createProduct({
+        name,
+        description,
+        price,
+        priceSar: priceSar || null,
+        categoryId,
+        imageUrl,
+        stock: stock || 100,
+        colors: colors || null,
+        sizes: sizes || null,
+        allowDesignUpload: allowDesignUpload || false,
+        bulkPricing: bulkPricing || null,
+        rating: "4.5",
+        reviewCount: 0
+      });
+      res.status(201).json(product);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create product" });
+    }
+  });
+
+  app.patch("/api/admin/products/:id", requireAdmin, async (req, res) => {
+    try {
+      const productId = Number(req.params.id);
+      const updates = req.body;
+      const product = await storage.updateProduct(productId, updates);
+      res.json(product);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update product" });
+    }
+  });
+
+  app.delete("/api/admin/products/:id", requireAdmin, async (req, res) => {
+    try {
+      const productId = Number(req.params.id);
+      await storage.deleteProduct(productId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete product" });
+    }
+  });
+
+  // Admin: Category management
+  app.get("/api/admin/categories", requireAdmin, async (req, res) => {
+    try {
+      const allCategories = await storage.getCategories();
+      res.json(allCategories);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch categories" });
+    }
+  });
+
+  app.post("/api/admin/categories", requireAdmin, async (req, res) => {
+    try {
+      const { name, slug, imageUrl } = req.body;
+      
+      if (!name || !slug || !imageUrl) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      
+      const category = await storage.createCategory({ name, slug, imageUrl });
+      res.status(201).json(category);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create category" });
+    }
+  });
+
   // Admin Settings
   app.get("/api/admin/settings", requireAdmin, async (req, res) => {
     const settings = await storage.getAllSettings();
