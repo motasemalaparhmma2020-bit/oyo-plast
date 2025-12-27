@@ -216,43 +216,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* New Users Gift Section - OYO PLAST Blue Theme */}
-      <section className="mx-3 mt-2 relative z-10">
-        <div className="bg-gradient-to-l from-[#1976D2] to-[#2196F3] rounded-2xl p-3 shadow-lg">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <div className="flex items-center gap-2 text-white">
-              <Gift className="h-4 w-4" />
-              <span className="text-xs">شحن مجاني</span>
-              <span className="text-xs">التسليم في الموعد</span>
-            </div>
-            <div className="text-white font-bold text-sm flex items-center gap-1">
-              <Sparkles className="h-4 w-4" />
-              هدايا للمستخدمين الجدد
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-xl p-3 flex items-center justify-between">
-            <Link href="/products" className="w-full">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-[#2196F3] text-white font-bold px-3 py-2 rounded-lg text-center">
-                    <div className="text-lg">خصم</div>
-                    <div className="text-2xl">15%</div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-sm">هدية للمستخدمين الجدد</p>
-                    <p className="text-xs text-muted-foreground">لفترة محدودة</p>
-                  </div>
-                </div>
-                <Button className="bg-[#2196F3] hover:bg-[#1976D2] text-white rounded-full px-4 text-sm" data-testid="button-promo-get-now">
-                  احصل عليها الآن
-                </Button>
-              </div>
-            </Link>
-          </div>
-        </div>
-      </section>
-
       {/* Category Circles Grid - OYO PLAST Style */}
       <section className="py-6 px-3">
         <div className="flex items-center gap-2 mb-4">
