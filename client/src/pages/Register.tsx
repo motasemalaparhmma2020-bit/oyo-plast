@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
 import { User, Phone, MapPin, Building2, ArrowLeft, Globe, Map } from "lucide-react";
-import oyoLogo from "@assets/generated_images/oyo_plast_company_logo.png";
+import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
 
 const YEMENI_GOVERNORATES = [
   "أمانة العاصمة",

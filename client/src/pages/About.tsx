@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Package, Truck, CreditCard, Shield, Phone, MapPin, Clock, Award, FileText, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import oyoLogo from "@assets/FB_IMG_1748731871206_1766870523968.jpg";
+import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
 
 export default function About() {
   return (
@@ -25,7 +25,7 @@ export default function About() {
               data-testid="img-oyo-logo"
             />
             <h1 className="text-3xl font-bold mb-2" data-testid="text-about-title">أويو بلاست</h1>
-            <p className="text-lg opacity-90">وجهتك الأولى لمستلزمات التغليف والبلاستيك في اليمن</p>
+            <p className="text-lg opacity-90">لطباعة ومستلزمات البلاستيك</p>
           </div>
         </div>
       </div>

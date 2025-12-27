@@ -23,7 +23,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
-import oyoLogo from "@assets/oyo_plast_logo.jpg";
+import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
 
 export function Navbar() {
   const { user, logout, isAuthenticated } = useAuth();

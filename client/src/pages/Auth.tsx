@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserPlus, LogIn } from "lucide-react";
 import { Link } from "wouter";
-import oyoLogo from "@assets/FB_IMG_1748731871206_1766870523968.jpg";
+import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
 
 export default function Auth() {
   const handleLogin = () => {
@@ -17,7 +17,7 @@ export default function Auth() {
             <img src={oyoLogo} alt="OYO PLAST" className="w-full h-full object-contain rounded-2xl shadow-lg" />
           </div>
           <h1 className="text-3xl font-extrabold text-foreground">أويو بلاست</h1>
-          <p className="text-muted-foreground mt-2">مستلزمات التغليف والبلاستيك في اليمن</p>
+          <p className="text-muted-foreground mt-2">لطباعة ومستلزمات البلاستيك</p>
         </div>
         
         <Card className="border-none shadow-xl">
