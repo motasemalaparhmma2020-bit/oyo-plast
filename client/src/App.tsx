@@ -22,6 +22,7 @@ import Wishlist from "@/pages/Wishlist";
 import Notifications from "@/pages/Notifications";
 import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
+import Terms from "@/pages/Terms";
 import NotFound from "@/pages/not-found";
 
 import { BottomNav } from "@/components/BottomNav";
@@ -61,6 +62,7 @@ function Router() {
           </Route>
           <Route path="/about" component={About} />
           <Route path="/privacy" component={Privacy} />
+          <Route path="/terms" component={Terms} />
           <Route component={NotFound} />
         </Switch>
       </main>
