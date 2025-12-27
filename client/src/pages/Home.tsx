@@ -12,6 +12,28 @@ import groceryBagsImg from "@assets/generated_images/grocery_store_plastic_bags.
 import garbageBagsImg from "@assets/generated_images/black_garbage_trash_bags.png";
 import foodContainersImg from "@assets/generated_images/food_takeaway_containers_packaging.png";
 
+import catHangerBags from "@assets/generated_images/plastic_hanger_grocery_bags.png";
+import catCommercialBags from "@assets/generated_images/commercial_advertising_bags.png";
+import catWeddingBags from "@assets/generated_images/wedding_celebration_gift_bags.png";
+import catFabricBags from "@assets/generated_images/colorful_fabric_tote_bags.png";
+import catFoodContainers from "@assets/generated_images/food_takeaway_containers.png";
+import catGarbageBags from "@assets/generated_images/black_garbage_trash_bags.png";
+import catWelcomeBags from "@assets/generated_images/welcome_printed_bags_arabic.png";
+import catSpiceBags from "@assets/generated_images/spice_packaging_clear_bags.png";
+import catPrintingDesign from "@assets/generated_images/custom_bag_printing_design.png";
+
+const CATEGORY_CIRCLES = [
+  { id: 1, name: "أكياس علاقي", image: catHangerBags, link: "/products?category=1" },
+  { id: 2, name: "أكياس دعاية تجاري", image: catCommercialBags, link: "/products" },
+  { id: 3, name: "أكياس أعراس", image: catWeddingBags, link: "/products" },
+  { id: 4, name: "أكياس قماشية", image: catFabricBags, link: "/products?category=6" },
+  { id: 5, name: "سفر طعام", image: catFoodContainers, link: "/products?category=2" },
+  { id: 6, name: "أكياس نفايات", image: catGarbageBags, link: "/products?category=3" },
+  { id: 7, name: "أكياس أهلاً وسهلاً", image: catWelcomeBags, link: "/products" },
+  { id: 8, name: "أكياس تغليف بهارات", image: catSpiceBags, link: "/products" },
+  { id: 9, name: "طباعة وتصميم", image: catPrintingDesign, link: "/products?category=6" },
+];
+
 const BANNER_SLIDES = [
   {
     id: 1,
@@ -231,24 +253,30 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Category Circles Grid - SHEIN Style */}
+      {/* Category Circles Grid - OYO PLAST Style */}
       <section className="py-6 px-3">
-        <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 md:gap-4">
-          {categories?.map((cat) => (
+        <div className="flex items-center gap-2 mb-4">
+          <div className="bg-[#2196F3] text-white px-3 py-1 rounded-full">
+            <span className="text-sm font-bold">الأقسام</span>
+          </div>
+          <div className="flex-1 h-[1px] bg-gradient-to-l from-transparent to-[#2196F3]/30"></div>
+        </div>
+        <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-4 md:gap-6">
+          {CATEGORY_CIRCLES.map((cat) => (
             <Link 
               key={cat.id} 
-              href={`/products?category=${cat.id}`}
-              className="flex flex-col items-center gap-2"
+              href={cat.link}
+              className="flex flex-col items-center gap-2 group"
               data-testid={`category-circle-${cat.id}`}
             >
-              <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-gray-100 shadow-sm hover:shadow-md hover:border-primary/50 transition-all duration-300 bg-white">
+              <div className="w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-3 border-[#2196F3]/20 shadow-lg group-hover:shadow-xl group-hover:border-[#2196F3] transition-all duration-300 bg-white p-1">
                 <img 
-                  src={cat.imageUrl || ''} 
+                  src={cat.image} 
                   alt={cat.name}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover rounded-full"
                 />
               </div>
-              <span className="text-[10px] md:text-xs font-medium text-foreground text-center leading-tight line-clamp-2 max-w-[72px]">
+              <span className="text-xs md:text-sm font-semibold text-foreground text-center leading-tight line-clamp-2 max-w-[80px] group-hover:text-[#2196F3] transition-colors">
                 {cat.name}
               </span>
             </Link>
