@@ -2,7 +2,7 @@ import { useProducts, useCategories } from "@/hooks/use-products";
 import { ProductCard } from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { ArrowLeft, Gift, Percent, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Gift, Percent, Sparkles, ChevronLeft, ChevronRight, Truck, CreditCard, Clock, Tag } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 
@@ -160,6 +160,37 @@ export default function Home() {
               data-testid={`button-dot-${index}`}
             />
           ))}
+        </div>
+      </section>
+
+      {/* Small Promotional Banners */}
+      <section className="px-3 py-3 grid grid-cols-2 gap-2">
+        {/* Banner 1: Free Shipping + Cash on Delivery */}
+        <div className="bg-gradient-to-l from-sky-500 to-sky-600 rounded-xl p-3 overflow-hidden relative">
+          <div className="animate-bounce-slow flex flex-col items-center text-white text-center">
+            <div className="flex items-center gap-2 mb-1">
+              <Truck className="h-5 w-5" />
+              <span className="font-bold text-sm">شحن مجاني</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4" />
+              <span className="text-xs">الدفع عند الاستلام</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Banner 2: Exclusive Discounts + On-time Delivery */}
+        <div className="bg-gradient-to-l from-pink-500 to-rose-500 rounded-xl p-3 overflow-hidden relative">
+          <div className="animate-bounce-slow flex flex-col items-center text-white text-center" style={{ animationDelay: '0.5s' }}>
+            <div className="flex items-center gap-2 mb-1">
+              <Tag className="h-5 w-5" />
+              <span className="font-bold text-sm">خصومات حصرية</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              <span className="text-xs">التسليم في الموعد</span>
+            </div>
+          </div>
         </div>
       </section>
 
