@@ -1,7 +1,7 @@
 import { db } from "./db";
 import {
-  users, products, categories, cartItems, orders, orderItems, settings, reviews,
-  type User, type Product, type Category, type CartItem, type Order, type OrderItem, type Setting, type Review
+  users, products, categories, cartItems, orders, orderItems, settings, reviews, wishlist, notifications,
+  type User, type Product, type Category, type CartItem, type Order, type OrderItem, type Setting, type Review, type WishlistItem, type Notification
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
@@ -53,6 +53,19 @@ export interface IStorage {
   // Analytics
   getSalesStats(): Promise<{ totalSales: number; totalOrders: number; averageOrderValue: number }>;
   getOrdersByDateRange(startDate: Date, endDate: Date): Promise<Order[]>;
+  
+  // Wishlist
+  getWishlist(userId: string): Promise<(WishlistItem & { product: Product })[]>;
+  addToWishlist(userId: string, productId: number): Promise<WishlistItem>;
+  removeFromWishlist(userId: string, productId: number): Promise<void>;
+  isInWishlist(userId: string, productId: number): Promise<boolean>;
+  
+  // Notifications
+  getNotifications(userId: string): Promise<Notification[]>;
+  createNotification(userId: string, title: string, message: string, type?: string, orderId?: number): Promise<Notification>;
+  markNotificationRead(notificationId: number): Promise<void>;
+  markAllNotificationsRead(userId: string): Promise<void>;
+  getUnreadCount(userId: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -396,6 +409,80 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(orders.createdAt);
+  }
+
+  // Wishlist
+  async getWishlist(userId: string): Promise<(WishlistItem & { product: Product })[]> {
+    const items = await db.select({
+      wishlistItem: wishlist,
+      product: products,
+    })
+    .from(wishlist)
+    .innerJoin(products, eq(wishlist.productId, products.id))
+    .where(eq(wishlist.userId, userId))
+    .orderBy(desc(wishlist.createdAt));
+    
+    return items.map(item => ({ ...item.wishlistItem, product: item.product }));
+  }
+
+  async addToWishlist(userId: string, productId: number): Promise<WishlistItem> {
+    const existing = await db.select()
+      .from(wishlist)
+      .where(and(eq(wishlist.userId, userId), eq(wishlist.productId, productId)));
+    
+    if (existing.length > 0) {
+      return existing[0];
+    }
+
+    const [item] = await db.insert(wishlist)
+      .values({ userId, productId })
+      .returning();
+    return item;
+  }
+
+  async removeFromWishlist(userId: string, productId: number): Promise<void> {
+    await db.delete(wishlist)
+      .where(and(eq(wishlist.userId, userId), eq(wishlist.productId, productId)));
+  }
+
+  async isInWishlist(userId: string, productId: number): Promise<boolean> {
+    const [item] = await db.select()
+      .from(wishlist)
+      .where(and(eq(wishlist.userId, userId), eq(wishlist.productId, productId)));
+    return !!item;
+  }
+
+  // Notifications
+  async getNotifications(userId: string): Promise<Notification[]> {
+    return await db.select().from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async createNotification(userId: string, title: string, message: string, type: string = 'order', orderId?: number): Promise<Notification> {
+    const [notification] = await db.insert(notifications)
+      .values({ userId, title, message, type, orderId })
+      .returning();
+    return notification;
+  }
+
+  async markNotificationRead(notificationId: number): Promise<void> {
+    await db.update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.id, notificationId));
+  }
+
+  async markAllNotificationsRead(userId: string): Promise<void> {
+    await db.update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.userId, userId));
+  }
+
+  async getUnreadCount(userId: string): Promise<number> {
+    const result = await db.select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+    return result.length;
   }
 }
 

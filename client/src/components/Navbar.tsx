@@ -7,7 +7,9 @@ import {
   Menu, 
   User as UserIcon, 
   Search, 
-  LogOut 
+  LogOut,
+  Heart,
+  Bell
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -20,6 +22,7 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
 import oyoLogo from "@assets/oyo_plast_logo.jpg";
 
 export function Navbar() {
@@ -39,6 +42,12 @@ export function Navbar() {
   };
 
   const cartCount = cart?.reduce((acc, item) => acc + item.quantity, 0) || 0;
+
+  const { data: unreadCount } = useQuery<{ count: number }>({
+    queryKey: ["/api/notifications/unread-count"],
+    enabled: isAuthenticated,
+    refetchInterval: 30000,
+  });
 
   const NavLink = ({ href, children }: { href: string; children: React.ReactNode }) => {
     const isActive = location === href;
@@ -72,6 +81,17 @@ export function Navbar() {
                 <Link href="/" onClick={() => setIsOpen(false)} className="text-lg font-medium">الرئيسية</Link>
                 <Link href="/products" onClick={() => setIsOpen(false)} className="text-lg font-medium">المنتجات</Link>
                 <Link href="/orders" onClick={() => setIsOpen(false)} className="text-lg font-medium">طلباتي</Link>
+                <Link href="/wishlist" onClick={() => setIsOpen(false)} className="text-lg font-medium flex items-center gap-2">
+                  <Heart className="h-5 w-5" />
+                  المفضلة
+                </Link>
+                <Link href="/notifications" onClick={() => setIsOpen(false)} className="text-lg font-medium flex items-center gap-2">
+                  <Bell className="h-5 w-5" />
+                  الإشعارات
+                  {unreadCount && unreadCount.count > 0 && (
+                    <Badge className="bg-red-500 text-white text-xs">{unreadCount.count}</Badge>
+                  )}
+                </Link>
                 <Link href="/about" onClick={() => setIsOpen(false)} className="text-lg font-medium">من نحن</Link>
               </div>
             </SheetContent>
@@ -117,6 +137,27 @@ export function Navbar() {
             <Search className="h-5 w-5 text-muted-foreground" />
           </Button>
 
+          {isAuthenticated && (
+            <>
+              <Link href="/wishlist">
+                <Button variant="ghost" size="icon" className="relative" data-testid="button-wishlist">
+                  <Heart className="h-5 w-5 text-[#2196F3]" />
+                </Button>
+              </Link>
+
+              <Link href="/notifications">
+                <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
+                  <Bell className="h-5 w-5 text-[#2196F3]" />
+                  {unreadCount && unreadCount.count > 0 && (
+                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-500 text-white rounded-full text-xs">
+                      {unreadCount.count}
+                    </Badge>
+                  )}
+                </Button>
+              </Link>
+            </>
+          )}
+
           <Link href="/cart">
             <Button variant="ghost" size="icon" className="relative" data-testid="button-cart">
               <ShoppingCart className="h-5 w-5 text-[#2196F3]" />
@@ -144,6 +185,22 @@ export function Navbar() {
                 <DropdownMenuItem asChild>
                   <Link href="/orders" className="cursor-pointer">طلباتي</Link>
                 </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/wishlist" className="cursor-pointer flex items-center gap-2">
+                    <Heart className="h-4 w-4" />
+                    المفضلة
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/notifications" className="cursor-pointer flex items-center gap-2">
+                    <Bell className="h-4 w-4" />
+                    الإشعارات
+                    {unreadCount && unreadCount.count > 0 && (
+                      <Badge className="bg-red-500 text-white text-xs mr-auto">{unreadCount.count}</Badge>
+                    )}
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => logout()} className="text-red-500 cursor-pointer">
                   <LogOut className="ml-2 h-4 w-4" />
                   تسجيل خروج

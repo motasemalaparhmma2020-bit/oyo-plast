@@ -1,5 +1,6 @@
 import { Phone, MapPin, CreditCard, Building2, Wallet, Banknote } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
+import { Link } from "wouter";
 
 export function Footer() {
   const phoneNumber = "+967774997589";
@@ -97,14 +98,30 @@ export function Footer() {
           </div>
         </div>
 
-        {/* Copyright */}
-        <div className="border-t mt-8 pt-6 text-center">
-          <p className="text-muted-foreground">
-            © {new Date().getFullYear()} <span className="font-bold text-primary">اويو بلاست</span> - جميع الحقوق محفوظة
-          </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            أفضل حلول التغليف والبلاستيك لمشروعك التجاري في اليمن
-          </p>
+        {/* روابط سريعة */}
+        <div className="border-t mt-8 pt-6">
+          <div className="flex justify-center gap-6 mb-4">
+            <Link href="/about" className="text-muted-foreground hover:text-primary transition-colors" data-testid="link-about">
+              من نحن
+            </Link>
+            <Link href="/privacy" className="text-muted-foreground hover:text-primary transition-colors" data-testid="link-privacy">
+              سياسة الخصوصية
+            </Link>
+            <Link href="/products" className="text-muted-foreground hover:text-primary transition-colors" data-testid="link-products-footer">
+              المنتجات
+            </Link>
+            <Link href="/cart" className="text-muted-foreground hover:text-primary transition-colors" data-testid="link-cart-footer">
+              السلة
+            </Link>
+          </div>
+          <div className="text-center">
+            <p className="text-muted-foreground">
+              © {new Date().getFullYear()} <span className="font-bold text-primary">اويو بلاست</span> - جميع الحقوق محفوظة
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              أفضل حلول التغليف والبلاستيك لمشروعك التجاري في اليمن
+            </p>
+          </div>
         </div>
       </div>
     </footer>
@@ -169,6 +186,16 @@ export function MobileFooter() {
               </span>
             ))}
           </div>
+        </div>
+
+        {/* روابط سريعة */}
+        <div className="flex justify-center gap-4 mb-4">
+          <Link href="/about" className="text-sm text-muted-foreground hover:text-primary" data-testid="mobile-link-about">
+            من نحن
+          </Link>
+          <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary" data-testid="mobile-link-privacy">
+            سياسة الخصوصية
+          </Link>
         </div>
 
         {/* Copyright */}

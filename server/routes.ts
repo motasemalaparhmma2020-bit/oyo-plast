@@ -137,6 +137,16 @@ export async function registerRoutes(
     }
 
     await storage.clearCart(userId);
+
+    // Create notification for new order
+    await storage.createNotification(
+      userId,
+      "تم استلام طلبك",
+      `طلب جديد برقم #${order.id} بقيمة ${total} ${currency === 'SAR' ? 'ر.س' : 'ر.ي'}`,
+      "order",
+      order.id
+    );
+
     res.status(201).json(order);
   });
 
@@ -186,6 +196,28 @@ export async function registerRoutes(
     
     try {
       const updated = await storage.updateOrderStatus(orderId, status, trackingNumber);
+      
+      // Create notification for status update
+      const statusMessages: Record<string, string> = {
+        'processing': 'جاري تجهيز طلبك',
+        'shipped': 'تم شحن طلبك',
+        'delivered': 'تم توصيل طلبك',
+        'completed': 'تم إكمال طلبك بنجاح',
+        'cancelled': 'تم إلغاء طلبك'
+      };
+      
+      if (statusMessages[status]) {
+        await storage.createNotification(
+          updated.userId,
+          statusMessages[status],
+          trackingNumber 
+            ? `طلب #${orderId}: ${statusMessages[status]}. رقم التتبع: ${trackingNumber}`
+            : `طلب #${orderId}: ${statusMessages[status]}`,
+          "order",
+          orderId
+        );
+      }
+      
       res.json(updated);
     } catch (error) {
       res.status(500).json({ error: "Failed to update order" });
@@ -329,6 +361,66 @@ export async function registerRoutes(
       console.error("Error updating profile:", error);
       res.status(500).json({ error: "Failed to update profile" });
     }
+  });
+
+  // Wishlist
+  app.get("/api/wishlist", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    const items = await storage.getWishlist(userId);
+    res.json(items);
+  });
+
+  app.post("/api/wishlist/:productId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    const productId = Number(req.params.productId);
+    const item = await storage.addToWishlist(userId, productId);
+    res.status(201).json(item);
+  });
+
+  app.delete("/api/wishlist/:productId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    const productId = Number(req.params.productId);
+    await storage.removeFromWishlist(userId, productId);
+    res.status(204).send();
+  });
+
+  app.get("/api/wishlist/:productId/check", async (req, res) => {
+    if (!req.isAuthenticated()) return res.json({ isInWishlist: false });
+    const userId = getUserId(req);
+    const productId = Number(req.params.productId);
+    const isInWishlist = await storage.isInWishlist(userId, productId);
+    res.json({ isInWishlist });
+  });
+
+  // Notifications
+  app.get("/api/notifications", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    const notifications = await storage.getNotifications(userId);
+    res.json(notifications);
+  });
+
+  app.get("/api/notifications/unread-count", async (req, res) => {
+    if (!req.isAuthenticated()) return res.json({ count: 0 });
+    const userId = getUserId(req);
+    const count = await storage.getUnreadCount(userId);
+    res.json({ count });
+  });
+
+  app.patch("/api/notifications/:id/read", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    await storage.markNotificationRead(Number(req.params.id));
+    res.status(204).send();
+  });
+
+  app.patch("/api/notifications/read-all", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    await storage.markAllNotificationsRead(userId);
+    res.status(204).send();
   });
 
   // Seed Data

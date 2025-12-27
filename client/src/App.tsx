@@ -18,6 +18,10 @@ import Profile from "@/pages/Profile";
 import Auth from "@/pages/Auth";
 import Register from "@/pages/Register";
 import Admin from "@/pages/Admin";
+import Wishlist from "@/pages/Wishlist";
+import Notifications from "@/pages/Notifications";
+import About from "@/pages/About";
+import Privacy from "@/pages/Privacy";
 import NotFound from "@/pages/not-found";
 
 import { BottomNav } from "@/components/BottomNav";
@@ -49,6 +53,14 @@ function Router() {
           </Route>
           <Route path="/register" component={Register} />
           <Route path="/admin" component={Admin} />
+          <Route path="/wishlist">
+            {isAuthenticated ? <Wishlist /> : <Auth />}
+          </Route>
+          <Route path="/notifications">
+            {isAuthenticated ? <Notifications /> : <Auth />}
+          </Route>
+          <Route path="/about" component={About} />
+          <Route path="/privacy" component={Privacy} />
           <Route component={NotFound} />
         </Switch>
       </main>
