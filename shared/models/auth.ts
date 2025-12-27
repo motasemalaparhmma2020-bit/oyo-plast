@@ -21,6 +21,11 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
+  phone: varchar("phone"),
+  address: varchar("address"),
+  city: varchar("city"),
+  businessType: varchar("business_type"), // نوع النشاط التجاري
+  isPhoneVerified: varchar("is_phone_verified").default("false"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -296,6 +296,31 @@ export async function registerRoutes(
     }
   });
 
+  // Update user profile
+  app.patch("/api/user/profile", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    
+    const { firstName, lastName, phone, address, city, businessType } = req.body;
+    
+    try {
+      await db.update(schema.users).set({
+        firstName,
+        lastName,
+        phone,
+        address,
+        city,
+        businessType,
+        updatedAt: new Date()
+      }).where(eq(schema.users.id, userId));
+      
+      const updatedUser = await db.select().from(schema.users).where(eq(schema.users.id, userId));
+      res.json(updatedUser[0]);
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
 
   // Seed Data
   if ((await storage.getCategories()).length === 0) {
