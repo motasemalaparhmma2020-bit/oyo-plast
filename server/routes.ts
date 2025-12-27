@@ -158,6 +158,28 @@ export async function registerRoutes(
     res.json(orders);
   });
 
+  // Get order items with product names (user must own the order)
+  app.get("/api/orders/:id/items", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const orderId = Number(req.params.id);
+    const userId = getUserId(req);
+    
+    try {
+      // First verify the order belongs to this user
+      const userOrders = await storage.getOrders(userId);
+      const orderBelongsToUser = userOrders.some(order => order.id === orderId);
+      
+      if (!orderBelongsToUser) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      const items = await storage.getOrderItems(orderId);
+      res.json(items);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch order items" });
+    }
+  });
+
   // Admin authentication with session token
   const adminSessions = new Set<string>();
   
@@ -185,6 +207,17 @@ export async function registerRoutes(
   app.get("/api/admin/orders", requireAdmin, async (req, res) => {
     const allOrders = await storage.getAllOrders();
     res.json(allOrders);
+  });
+
+  // Admin get order items
+  app.get("/api/admin/orders/:id/items", requireAdmin, async (req, res) => {
+    const orderId = Number(req.params.id);
+    try {
+      const items = await storage.getOrderItems(orderId);
+      res.json(items);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch order items" });
+    }
   });
 
   app.patch("/api/admin/orders/:id/status", requireAdmin, async (req, res) => {

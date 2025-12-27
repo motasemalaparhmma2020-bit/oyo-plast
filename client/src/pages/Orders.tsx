@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Order } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,8 +15,10 @@ import {
   MapPin,
   Phone,
   Loader2,
-  ShoppingBag
+  ShoppingBag,
+  Printer
 } from "lucide-react";
+import PrintableInvoice from "@/components/PrintableInvoice";
 
 const statusSteps = [
   { key: 'pending', label: 'قيد الانتظار', icon: Clock },
@@ -50,10 +53,38 @@ function getStatusIndex(status: string): number {
   return index >= 0 ? index : -1;
 }
 
+interface OrderItemWithName {
+  id: number;
+  orderId: number;
+  productId: number;
+  quantity: number;
+  price: string;
+  productName: string;
+}
+
 export default function Orders() {
+  const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
+  const [orderItems, setOrderItems] = useState<OrderItemWithName[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
+  
   const { data: orders, isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders'],
   });
+
+  const handlePrintInvoice = async (order: Order) => {
+    setLoadingItems(true);
+    try {
+      const res = await fetch(`/api/orders/${order.id}/items`);
+      if (res.ok) {
+        const items = await res.json();
+        setOrderItems(items);
+      }
+    } catch (error) {
+      console.error("Failed to fetch order items:", error);
+    }
+    setLoadingItems(false);
+    setSelectedOrderForInvoice(order);
+  };
 
   const formatPrice = (price: string | number | null) => {
     if (!price) return '0';
@@ -188,11 +219,37 @@ export default function Orders() {
                     {formatPrice(order.total)} {order.currency === 'SAR' ? 'ر.س' : 'ر.ي'}
                   </span>
                 </div>
+
+                <Button 
+                  variant="outline" 
+                  className="w-full gap-2 mt-2"
+                  onClick={() => handlePrintInvoice(order)}
+                  disabled={loadingItems}
+                  data-testid={`button-print-invoice-${order.id}`}
+                >
+                  {loadingItems ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Printer className="h-4 w-4" />
+                  )}
+                  طباعة الفاتورة
+                </Button>
               </CardContent>
             </Card>
           );
         })}
       </div>
+
+      {selectedOrderForInvoice && (
+        <PrintableInvoice
+          order={selectedOrderForInvoice}
+          orderItems={orderItems}
+          onClose={() => {
+            setSelectedOrderForInvoice(null);
+            setOrderItems([]);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -32,8 +32,10 @@ import {
   Pencil,
   Trash2,
   X,
-  ImagePlus
+  ImagePlus,
+  Printer
 } from "lucide-react";
+import PrintableInvoice from "@/components/PrintableInvoice";
 
 const statusMap: Record<string, { label: string; color: string; icon: any }> = {
   pending: { label: "قيد الانتظار", color: "bg-yellow-100 text-yellow-800", icon: Clock },
@@ -78,16 +80,46 @@ const emptyProductForm: ProductFormData = {
   allowDesignUpload: false
 };
 
+interface OrderItemWithName {
+  id: number;
+  orderId: number;
+  productId: number;
+  quantity: number;
+  price: string;
+  productName: string;
+}
+
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
+  const [orderItems, setOrderItems] = useState<OrderItemWithName[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
   const [exchangeRate, setExchangeRate] = useState("140");
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productForm, setProductForm] = useState<ProductFormData>(emptyProductForm);
   const { toast } = useToast();
+
+  const handlePrintDeliveryInvoice = async (order: Order) => {
+    if (!adminToken) return;
+    setLoadingItems(true);
+    try {
+      const res = await fetch(`/api/admin/orders/${order.id}/items`, {
+        headers: { 'x-admin-token': adminToken }
+      });
+      if (res.ok) {
+        const items = await res.json();
+        setOrderItems(items);
+      }
+    } catch (error) {
+      console.error("Failed to fetch order items:", error);
+    }
+    setLoadingItems(false);
+    setSelectedOrderForInvoice(order);
+  };
 
   useEffect(() => {
     const savedToken = sessionStorage.getItem("admin_token");
@@ -509,6 +541,20 @@ export default function Admin() {
                               <TableCell className="text-sm">{formatDate(order.createdAt)}</TableCell>
                               <TableCell>
                                 <div className="flex gap-2">
+                                  <Button 
+                                    size="icon" 
+                                    variant="ghost" 
+                                    onClick={() => handlePrintDeliveryInvoice(order)}
+                                    disabled={loadingItems}
+                                    title="طباعة فاتورة التوصيل"
+                                    data-testid={`button-admin-print-invoice-${order.id}`}
+                                  >
+                                    {loadingItems ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Printer className="h-4 w-4" />
+                                    )}
+                                  </Button>
                                   <Dialog>
                                     <DialogTrigger asChild>
                                       <Button size="icon" variant="ghost" onClick={() => setSelectedOrder(order)}>
@@ -1077,6 +1123,18 @@ export default function Admin() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {selectedOrderForInvoice && (
+        <PrintableInvoice
+          order={selectedOrderForInvoice}
+          orderItems={orderItems}
+          isDeliveryInvoice={true}
+          onClose={() => {
+            setSelectedOrderForInvoice(null);
+            setOrderItems([]);
+          }}
+        />
+      )}
     </div>
   );
 }

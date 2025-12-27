@@ -33,6 +33,7 @@ export interface IStorage {
     status?: string;
   }): Promise<Order>;
   createOrderItem(orderItem: typeof orderItems.$inferInsert): Promise<OrderItem>;
+  getOrderItems(orderId: number): Promise<(OrderItem & { productName: string })[]>;
   getOrders(userId: string): Promise<Order[]>;
   getAllOrders(): Promise<Order[]>;
   
@@ -200,6 +201,21 @@ export class DatabaseStorage implements IStorage {
   async createOrderItem(orderItem: typeof orderItems.$inferInsert): Promise<OrderItem> {
     const [item] = await db.insert(orderItems).values(orderItem).returning();
     return item;
+  }
+
+  async getOrderItems(orderId: number): Promise<(OrderItem & { productName: string })[]> {
+    const items = await db.select({
+      orderItem: orderItems,
+      productName: products.name,
+    })
+    .from(orderItems)
+    .innerJoin(products, eq(orderItems.productId, products.id))
+    .where(eq(orderItems.orderId, orderId));
+    
+    return items.map(item => ({
+      ...item.orderItem,
+      productName: item.productName,
+    }));
   }
 
   async seedPlasticProducts(): Promise<void> {
