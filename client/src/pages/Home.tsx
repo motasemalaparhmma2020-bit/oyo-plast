@@ -2,7 +2,7 @@ import { useProducts, useCategories } from "@/hooks/use-products";
 import { ProductCard } from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { ArrowLeft, Gift, Percent, Sparkles, ChevronLeft, ChevronRight, Truck, CreditCard, Clock, Tag } from "lucide-react";
+import { ArrowLeft, Gift, Percent, Sparkles, ChevronLeft, ChevronRight, Truck, CreditCard, Clock, Tag, ShoppingCart } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 
@@ -281,6 +281,16 @@ export default function Home() {
               </span>
             </Link>
           ))}
+        </div>
+        
+        {/* Add to Cart Button */}
+        <div className="mt-6 text-center">
+          <Link href="/cart">
+            <Button size="lg" className="bg-[#2196F3] hover:bg-[#1976D2] text-white px-8 rounded-full shadow-lg gap-2">
+              <ShoppingCart className="h-5 w-5" />
+              إضافة إلى السلة
+            </Button>
+          </Link>
         </div>
       </section>
 
