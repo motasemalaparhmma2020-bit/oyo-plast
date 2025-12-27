@@ -18,12 +18,13 @@ import Admin from "@/pages/Admin";
 import NotFound from "@/pages/not-found";
 
 import { BottomNav } from "@/components/BottomNav";
+import { Footer, MobileFooter } from "@/components/Footer";
 
 function Router() {
   const { isAuthenticated } = useAuth();
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans flex flex-col pb-16 md:pb-0">
+    <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16 md:pb-0">
       <Navbar />
       <main className="flex-grow">
         <Switch>
@@ -47,13 +48,9 @@ function Router() {
           <Route component={NotFound} />
         </Switch>
       </main>
+      <MobileFooter />
+      <Footer />
       <BottomNav />
-      <footer className="bg-white border-t py-12 mt-auto hidden md:block">
-        <div className="container mx-auto px-4 text-center text-muted-foreground">
-          <p className="font-medium mb-2">© {new Date().getFullYear()} اويو بلاست - جميع الحقوق محفوظة</p>
-          <p className="text-sm">أفضل حلول التغليف والبلاستيك لمشروعك التجاري في اليمن</p>
-        </div>
-      </footer>
     </div>
   );
 }
