@@ -1,4 +1,4 @@
-import { useProducts, useCategories } from "@/hooks/use-products";
+import { useProducts, useCategories, useBestsellingProducts } from "@/hooks/use-products";
 import { ProductCard } from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -74,6 +74,7 @@ const BANNER_SLIDES = [
 
 export default function Home() {
   const { data: products, isLoading } = useProducts();
+  const { data: bestselling, isLoading: isBestsellingLoading } = useBestsellingProducts(8);
   const { data: categories } = useCategories();
   const [currentSlide, setCurrentSlide] = useState(0);
 
@@ -109,8 +110,6 @@ export default function Home() {
       emblaApi.off('select', onSelect);
     };
   }, [emblaApi, onSelect]);
-
-  const featuredProducts = products?.slice(0, 8);
 
   return (
     <div className="flex flex-col pb-20 bg-gray-50 dark:bg-background">
@@ -301,7 +300,7 @@ export default function Home() {
           </Link>
         </div>
         
-        {isLoading ? (
+        {isBestsellingLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="h-72 bg-gray-200 dark:bg-gray-800 rounded-xl animate-pulse" />
@@ -309,7 +308,7 @@ export default function Home() {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {featuredProducts?.map((product) => (
+            {bestselling?.map((product: any) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>

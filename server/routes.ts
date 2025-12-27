@@ -31,6 +31,13 @@ export async function registerRoutes(
     res.json(product);
   });
 
+  // Bestselling products
+  app.get("/api/products/bestselling", async (req, res) => {
+    const limit = req.query.limit ? Number(req.query.limit) : 8;
+    const products = await storage.getBestsellingProducts(limit);
+    res.json(products);
+  });
+
   // Categories
   app.get(api.categories.list.path, async (req, res) => {
     const categories = await storage.getCategories();

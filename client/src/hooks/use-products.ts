@@ -42,3 +42,15 @@ export function useCategories() {
     },
   });
 }
+
+// GET /api/products/bestselling
+export function useBestsellingProducts(limit: number = 8) {
+  return useQuery({
+    queryKey: ["/api/products/bestselling", limit],
+    queryFn: async () => {
+      const res = await fetch(`/api/products/bestselling?limit=${limit}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch bestselling products");
+      return res.json();
+    },
+  });
+}

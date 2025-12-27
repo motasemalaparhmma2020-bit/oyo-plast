@@ -66,6 +66,9 @@ export interface IStorage {
   markNotificationRead(notificationId: number): Promise<void>;
   markAllNotificationsRead(userId: string): Promise<void>;
   getUnreadCount(userId: string): Promise<number>;
+  
+  // Bestselling products
+  getBestsellingProducts(limit?: number): Promise<Product[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -483,6 +486,33 @@ export class DatabaseStorage implements IStorage {
       .from(notifications)
       .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
     return result.length;
+  }
+
+  async getBestsellingProducts(limit: number = 8): Promise<Product[]> {
+    // Get products ordered by total quantity sold
+    const bestsellers = await db.select({
+      productId: orderItems.productId,
+      totalSold: sql<number>`SUM(${orderItems.quantity})`.as('total_sold')
+    })
+    .from(orderItems)
+    .groupBy(orderItems.productId)
+    .orderBy(sql`SUM(${orderItems.quantity}) DESC`)
+    .limit(limit);
+
+    if (bestsellers.length === 0) {
+      // If no orders yet, return newest products
+      return await db.select().from(products).limit(limit);
+    }
+
+    const productIds = bestsellers.map(b => b.productId);
+    const bestProducts = await db.select()
+      .from(products)
+      .where(sql`${products.id} IN (${sql.join(productIds.map(id => sql`${id}`), sql`, `)})`);
+
+    // Sort by sales order
+    return bestProducts.sort((a, b) => {
+      return productIds.indexOf(a.id) - productIds.indexOf(b.id);
+    });
   }
 }
 
