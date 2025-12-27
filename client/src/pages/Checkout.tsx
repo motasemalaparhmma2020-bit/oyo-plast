@@ -57,7 +57,7 @@ const PAYMENT_METHODS = [
     description: "حول عربون 30% عبر جوالي",
     icon: Wallet,
     requiresDeposit: true,
-    accountInfo: "رقم جوالي: 774997589 باسم: اويو بلاست"
+    accountInfo: "الاسم: معتصم محمد احمد الاهدل | رقم الجوال: 774997589"
   },
   {
     id: "onecash",
@@ -65,7 +65,7 @@ const PAYMENT_METHODS = [
     description: "حول عربون 30% عبر ون كاش",
     icon: Smartphone,
     requiresDeposit: true,
-    accountInfo: "رقم ون كاش: 774997589 باسم: اويو بلاست"
+    accountInfo: "الاسم: معتصم محمد احمد الاهدل | رقم الجوال: 774997589"
   },
   {
     id: "jeeb",
@@ -73,7 +73,7 @@ const PAYMENT_METHODS = [
     description: "حول عربون 30% عبر جيب",
     icon: Wallet,
     requiresDeposit: true,
-    accountInfo: "رقم جيب: 774997589 باسم: اويو بلاست"
+    accountInfo: "الاسم: معتصم محمد احمد الاهدل | رقم الجوال: 774997589"
   },
   {
     id: "mobilemoney",
@@ -81,7 +81,7 @@ const PAYMENT_METHODS = [
     description: "حول عربون 30% عبر موبايل موني",
     icon: Smartphone,
     requiresDeposit: true,
-    accountInfo: "رقم موبايل موني: 774997589 باسم: اويو بلاست"
+    accountInfo: "الاسم: معتصم محمد احمد الاهدل | رقم الجوال: 774997589"
   }
 ];
 
