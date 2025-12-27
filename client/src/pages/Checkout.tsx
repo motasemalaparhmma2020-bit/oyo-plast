@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
-import { ArrowRight, Upload, Check, Loader2, Banknote, Building2, CreditCard, Wallet, Smartphone } from "lucide-react";
+import { ArrowRight, Upload, Check, Loader2, Banknote } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -39,49 +39,9 @@ const PAYMENT_METHODS = [
   {
     id: "cash_on_delivery",
     name: "الدفع عند الاستلام",
-    description: "ادفع المبلغ كاملاً عند استلام الطلب",
+    description: "ادفع المبلغ كاملاً لمندوب التوصيل عند استلام الطلب",
     icon: Banknote,
     requiresDeposit: false
-  },
-  {
-    id: "karimi",
-    name: "تحويل بنك الكريمي",
-    description: "حول عربون 30% ثم الباقي عند الاستلام",
-    icon: Building2,
-    requiresDeposit: true,
-    accountInfo: "الاسم: معتصم محمد احمد الاهدل | حساب الريال اليمني: 3002724617 | حساب الريال السعودي: 3020971273"
-  },
-  {
-    id: "jawali",
-    name: "محفظة جوالي",
-    description: "حول عربون 30% عبر جوالي",
-    icon: Wallet,
-    requiresDeposit: true,
-    accountInfo: "الاسم: معتصم محمد احمد الاهدل | رقم الجوال: 774997589"
-  },
-  {
-    id: "onecash",
-    name: "محفظة ون كاش",
-    description: "حول عربون 30% عبر ون كاش",
-    icon: Smartphone,
-    requiresDeposit: true,
-    accountInfo: "الاسم: معتصم محمد احمد الاهدل | رقم الجوال: 774997589"
-  },
-  {
-    id: "jeeb",
-    name: "محفظة جيب",
-    description: "حول عربون 30% عبر جيب",
-    icon: Wallet,
-    requiresDeposit: true,
-    accountInfo: "الاسم: معتصم محمد احمد الاهدل | رقم الجوال: 774997589"
-  },
-  {
-    id: "mobilemoney",
-    name: "موبايل موني",
-    description: "حول عربون 30% عبر موبايل موني",
-    icon: Smartphone,
-    requiresDeposit: true,
-    accountInfo: "الاسم: معتصم محمد احمد الاهدل | رقم الجوال: 774997589"
   }
 ];
 
@@ -321,11 +281,6 @@ export default function Checkout() {
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground">{method.description}</p>
-                        {method.accountInfo && formData.paymentMethod === method.id && (
-                          <div className="mt-3 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                            <p className="text-sm font-medium">{method.accountInfo}</p>
-                          </div>
-                        )}
                       </div>
                     </div>
                   ))}

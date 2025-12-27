@@ -84,15 +84,10 @@ export async function registerRoutes(
       currency = 'YER'
     } = req.body;
 
-    // Validate payment method
-    const validPaymentMethods = ['cash_on_delivery', 'karimi', 'najm'];
+    // Validate payment method - currently only cash on delivery
+    const validPaymentMethods = ['cash_on_delivery'];
     if (!validPaymentMethods.includes(paymentMethod)) {
       return res.status(400).json({ message: "Invalid payment method" });
-    }
-
-    // Validate required fields for bank transfer
-    if ((paymentMethod === 'karimi' || paymentMethod === 'najm') && !receiptImageUrl) {
-      return res.status(400).json({ message: "Receipt image required for bank transfer" });
     }
 
     // Calculate total server-side based on currency
