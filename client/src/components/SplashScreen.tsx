@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import oyoLogo from "@assets/generated_images/oyo_plast_company_logo.png";
+import oyoLogo from "@assets/InShot_٢٠٢٥٠٧٢٠_٢٣٢٣١٤٠٤٨_1766870256591.jpg";
 
 interface SplashScreenProps {
   onComplete: () => void;
@@ -22,24 +22,24 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
     <AnimatePresence>
       {show && (
         <motion.div
-          initial={{ opacity: 1 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.5 }}
-          className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-gradient-to-b from-sky-500 to-sky-600"
+          transition={{ duration: 0.6, ease: "easeInOut" }}
+          className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white"
           data-testid="splash-screen"
         >
           <motion.div
-            initial={{ scale: 0.5, opacity: 0 }}
+            initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ 
-              type: "spring",
-              stiffness: 260,
-              damping: 20,
-              delay: 0.2
+              duration: 0.8,
+              ease: "easeOut",
+              delay: 0.3
             }}
-            className="flex flex-col items-center gap-6"
+            className="flex flex-col items-center gap-4"
           >
-            <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-white p-4 shadow-2xl">
+            <div className="w-48 h-48 md:w-64 md:h-64 rounded-3xl overflow-hidden p-6 flex items-center justify-center">
               <img 
                 src={oyoLogo} 
                 alt="OYO PLAST" 
@@ -51,13 +51,10 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
             <motion.div
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              className="text-center"
+              transition={{ delay: 0.8, duration: 0.5 }}
+              className="text-center mt-4"
             >
-              <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
-                أويو بلاست
-              </h1>
-              <p className="text-white/80 text-lg">
+              <p className="text-[#2196F3] text-lg font-medium">
                 مستلزمات التغليف والبلاستيك
               </p>
             </motion.div>
@@ -65,22 +62,22 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 1 }}
+              transition={{ delay: 1.2 }}
               className="mt-8"
             >
-              <div className="flex gap-1">
+              <div className="flex gap-2">
                 {[0, 1, 2].map((i) => (
                   <motion.div
                     key={i}
-                    className="w-3 h-3 rounded-full bg-white"
+                    className="w-2.5 h-2.5 rounded-full bg-[#2196F3]"
                     animate={{
-                      scale: [1, 1.2, 1],
-                      opacity: [0.5, 1, 0.5],
+                      scale: [1, 1.3, 1],
+                      opacity: [0.4, 1, 0.4],
                     }}
                     transition={{
                       duration: 1,
                       repeat: Infinity,
-                      delay: i * 0.2,
+                      delay: i * 0.15,
                     }}
                   />
                 ))}
