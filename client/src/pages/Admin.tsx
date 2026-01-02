@@ -67,6 +67,10 @@ interface ProductFormData {
   colors: string;
   sizes: string;
   allowDesignUpload: boolean;
+  hasPrintingOptions: boolean;
+  baseBagPrice: string;
+  singleColorPrintPrice: string;
+  availableBagColors: string;
 }
 
 const emptyProductForm: ProductFormData = {
@@ -79,7 +83,11 @@ const emptyProductForm: ProductFormData = {
   stock: 100,
   colors: "",
   sizes: "",
-  allowDesignUpload: false
+  allowDesignUpload: false,
+  hasPrintingOptions: false,
+  baseBagPrice: "",
+  singleColorPrintPrice: "",
+  availableBagColors: ""
 };
 
 interface CategoryFormData {
@@ -911,7 +919,8 @@ export default function Admin() {
         body: JSON.stringify({
           ...data,
           colors: data.colors ? data.colors.split(',').map(c => c.trim()) : null,
-          sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()) : null
+          sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()) : null,
+          availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()) : null
         })
       });
       if (!res.ok) throw new Error('Failed to create product');
@@ -939,7 +948,8 @@ export default function Admin() {
         body: JSON.stringify({
           ...data,
           colors: data.colors ? (data.colors as string).split(',').map(c => c.trim()) : null,
-          sizes: data.sizes ? (data.sizes as string).split(',').map(s => s.trim()) : null
+          sizes: data.sizes ? (data.sizes as string).split(',').map(s => s.trim()) : null,
+          availableBagColors: data.availableBagColors ? (data.availableBagColors as string).split(',').map(c => c.trim()) : null
         })
       });
       if (!res.ok) throw new Error('Failed to update product');
@@ -1009,13 +1019,17 @@ export default function Admin() {
       name: product.name,
       description: product.description,
       price: product.price,
-      priceSar: product.priceSar || "",
+      priceSar: product.priceSar ?? "",
       categoryId: product.categoryId,
       imageUrl: product.imageUrl,
       stock: product.stock,
       colors: product.colors ? product.colors.join(', ') : "",
       sizes: product.sizes ? product.sizes.join(', ') : "",
-      allowDesignUpload: product.allowDesignUpload || false
+      allowDesignUpload: product.allowDesignUpload ?? false,
+      hasPrintingOptions: product.hasPrintingOptions ?? false,
+      baseBagPrice: product.baseBagPrice != null ? String(product.baseBagPrice) : "",
+      singleColorPrintPrice: product.singleColorPrintPrice != null ? String(product.singleColorPrintPrice) : "",
+      availableBagColors: product.availableBagColors ? product.availableBagColors.join(', ') : ""
     });
     setShowProductForm(true);
   };
@@ -1533,6 +1547,63 @@ export default function Admin() {
                           data-testid="checkbox-design-upload"
                         />
                         <Label htmlFor="product-design-upload">السماح برفع ملف التصميم</Label>
+                      </div>
+
+                      <div className="border-t pt-4 mt-4">
+                        <div className="flex items-center gap-2 mb-4">
+                          <input
+                            type="checkbox"
+                            id="product-printing-options"
+                            checked={productForm.hasPrintingOptions}
+                            onChange={(e) => setProductForm({...productForm, hasPrintingOptions: e.target.checked})}
+                            className="rounded border-gray-300"
+                            data-testid="checkbox-printing-options"
+                          />
+                          <Label htmlFor="product-printing-options" className="font-bold flex items-center gap-2">
+                            <Printer className="h-4 w-4" />
+                            تفعيل حاسبة الطباعة الذكية
+                          </Label>
+                        </div>
+                        
+                        {productForm.hasPrintingOptions && (
+                          <div className="grid md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+                            <div>
+                              <Label htmlFor="base-bag-price">سعر الكيس الصافي (ريال)</Label>
+                              <Input
+                                id="base-bag-price"
+                                type="number"
+                                value={productForm.baseBagPrice}
+                                onChange={(e) => setProductForm({...productForm, baseBagPrice: e.target.value})}
+                                placeholder="مثال: 500"
+                                data-testid="input-base-bag-price"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">السعر بدون طباعة</p>
+                            </div>
+                            <div>
+                              <Label htmlFor="single-color-price">سعر طباعة اللون الواحد (ريال)</Label>
+                              <Input
+                                id="single-color-price"
+                                type="number"
+                                value={productForm.singleColorPrintPrice}
+                                onChange={(e) => setProductForm({...productForm, singleColorPrintPrice: e.target.value})}
+                                placeholder="مثال: 100"
+                                data-testid="input-single-color-price"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">يُضاف لكل لون طباعة</p>
+                            </div>
+                            <div className="md:col-span-2">
+                              <Label htmlFor="available-bag-colors">ألوان الأكياس المتاحة (مفصولة بفاصلة)</Label>
+                              <Input
+                                id="available-bag-colors"
+                                value={productForm.availableBagColors}
+                                onChange={(e) => setProductForm({...productForm, availableBagColors: e.target.value})}
+                                placeholder="أبيض, شفاف, أسود, أحمر, أزرق"
+                                data-testid="input-available-bag-colors"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">الألوان التي يمكن للعميل اختيارها للكيس</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex gap-2 pt-4">

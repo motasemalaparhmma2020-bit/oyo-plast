@@ -31,6 +31,11 @@ export const products = pgTable("products", {
   soldCount: integer("sold_count").default(0), // Total units sold
   commissionHoldDays: integer("commission_hold_days").default(2), // Days to hold commission before release
   marketerCommissionRate: numeric("marketer_commission_rate"), // Override commission rate for this product
+  // Printing calculator fields
+  hasPrintingOptions: boolean("has_printing_options").default(false), // Enable printing calculator for this product
+  baseBagPrice: numeric("base_bag_price"), // سعر الكيس الصافي (بدون طباعة)
+  singleColorPrintPrice: numeric("single_color_print_price"), // سعر طباعة اللون الواحد
+  availableBagColors: text("available_bag_colors").array(), // ألوان الأكياس المتاحة
 });
 
 export const settings = pgTable("settings", {
@@ -44,6 +49,13 @@ export const cartItems = pgTable("cart_items", {
   userId: varchar("user_id").references(() => users.id).notNull(),
   productId: integer("product_id").references(() => products.id).notNull(),
   quantity: integer("quantity").notNull(),
+  // Printing options
+  selectedBagColor: text("selected_bag_color"), // لون الكيس المختار
+  printColorCount: integer("print_color_count").default(0), // عدد ألوان الطباعة (0-3)
+  printColor1: text("print_color_1"), // لون الطباعة الأول
+  printColor2: text("print_color_2"), // لون الطباعة الثاني
+  printColor3: text("print_color_3"), // لون الطباعة الثالث
+  unitPrice: numeric("unit_price"), // السعر المحسوب للوحدة
 });
 
 export const orders = pgTable("orders", {
@@ -75,6 +87,12 @@ export const orderItems = pgTable("order_items", {
   productId: integer("product_id").references(() => products.id).notNull(),
   quantity: integer("quantity").notNull(),
   price: numeric("price").notNull(),
+  // Printing options (copied from cart at checkout)
+  selectedBagColor: text("selected_bag_color"), // لون الكيس المختار
+  printColorCount: integer("print_color_count").default(0), // عدد ألوان الطباعة
+  printColor1: text("print_color_1"), // لون الطباعة الأول
+  printColor2: text("print_color_2"), // لون الطباعة الثاني
+  printColor3: text("print_color_3"), // لون الطباعة الثالث
 });
 
 // Product Reviews
@@ -306,6 +324,16 @@ export const offers = pgTable("offers", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Product Views (for AI recommendations)
+export const productViews = pgTable("product_views", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id), // Nullable for guest tracking
+  sessionId: text("session_id"), // For guest tracking
+  productId: integer("product_id").references(() => products.id).notNull(),
+  categoryId: integer("category_id").references(() => categories.id),
+  viewedAt: timestamp("viewed_at").defaultNow(),
+});
+
 // Schemas
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
 export const insertBannerSchema = createInsertSchema(banners).omit({ id: true, createdAt: true });
@@ -347,3 +375,4 @@ export type PhoneVerification = typeof phoneVerifications.$inferSelect;
 export type MarketerProfile = typeof marketerProfiles.$inferSelect;
 export type EndCustomerContact = typeof endCustomerContacts.$inferSelect;
 export type MarketerCommission = typeof marketerCommissions.$inferSelect;
+export type ProductView = typeof productViews.$inferSelect;

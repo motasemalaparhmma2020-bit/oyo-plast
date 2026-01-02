@@ -712,7 +712,11 @@ ${notes ? `ملاحظات: ${notes}` : ''}
         reviewCount: 0,
         soldCount: 0,
         commissionHoldDays: 2,
-        marketerCommissionRate: null
+        marketerCommissionRate: null,
+        hasPrintingOptions: false,
+        baseBagPrice: null,
+        singleColorPrintPrice: null,
+        availableBagColors: null
       });
       res.status(201).json(product);
     } catch (error) {

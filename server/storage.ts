@@ -200,7 +200,18 @@ export class DatabaseStorage implements IStorage {
   async updateCartItem(id: number, quantity: number): Promise<CartItem> {
     if (quantity === 0) {
       await this.deleteCartItem(id);
-      return { id, userId: "0", productId: 0, quantity: 0 }; 
+      return { 
+        id, 
+        userId: "0", 
+        productId: 0, 
+        quantity: 0,
+        selectedBagColor: null,
+        printColorCount: null,
+        printColor1: null,
+        printColor2: null,
+        printColor3: null,
+        unitPrice: null
+      }; 
     }
     const [item] = await db.update(cartItems)
       .set({ quantity })
