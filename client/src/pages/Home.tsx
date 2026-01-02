@@ -5,6 +5,28 @@ import { Link } from "wouter";
 import { ArrowLeft, Gift, Percent, Sparkles, ChevronLeft, ChevronRight, Truck, CreditCard, Clock, Tag, ShoppingCart } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import useEmblaCarousel from "embla-carousel-react";
+import { useQuery } from "@tanstack/react-query";
+
+interface Banner {
+  id: number;
+  title: string;
+  subtitle: string | null;
+  imageUrl: string;
+  linkUrl: string | null;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+interface Offer {
+  id: number;
+  title: string;
+  discountPercent: number;
+  imageUrl: string | null;
+  linkUrl: string | null;
+  bgColor: string | null;
+  isActive: boolean;
+  sortOrder: number;
+}
 
 import fabricBagsImg from "@assets/generated_images/colorful_fabric_shopping_bags.png";
 import weddingBagsImg from "@assets/generated_images/wedding_celebration_gift_bags.png";
@@ -72,11 +94,47 @@ const BANNER_SLIDES = [
   }
 ];
 
+const bgColorClasses: Record<string, { bg: string; text: string }> = {
+  blue: { bg: "bg-blue-50 dark:bg-blue-900/20", text: "text-blue-600" },
+  pink: { bg: "bg-pink-50 dark:bg-pink-900/20", text: "text-pink-600" },
+  green: { bg: "bg-green-50 dark:bg-green-900/20", text: "text-green-600" },
+  purple: { bg: "bg-purple-50 dark:bg-purple-900/20", text: "text-purple-600" },
+  orange: { bg: "bg-orange-50 dark:bg-orange-900/20", text: "text-orange-600" },
+};
+
 export default function Home() {
   const { data: products, isLoading } = useProducts();
   const { data: bestselling, isLoading: isBestsellingLoading } = useBestsellingProducts(8);
   const { data: categories } = useCategories();
   const [currentSlide, setCurrentSlide] = useState(0);
+
+  const { data: dynamicBanners } = useQuery<Banner[]>({
+    queryKey: ['/api/banners', 'active'],
+    queryFn: async () => {
+      const res = await fetch('/api/banners?active=true');
+      if (!res.ok) return [];
+      return res.json();
+    }
+  });
+
+  const { data: dynamicOffers } = useQuery<Offer[]>({
+    queryKey: ['/api/offers', 'active'],
+    queryFn: async () => {
+      const res = await fetch('/api/offers?active=true');
+      if (!res.ok) return [];
+      return res.json();
+    }
+  });
+
+  const bannerSlides = dynamicBanners && dynamicBanners.length > 0 
+    ? dynamicBanners.map(b => ({
+        id: b.id,
+        image: b.imageUrl,
+        title: b.title,
+        subtitle: b.subtitle || "",
+        categoryLink: b.linkUrl || "/products"
+      }))
+    : BANNER_SLIDES;
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ 
     loop: true,
@@ -117,7 +175,7 @@ export default function Home() {
       <section className="relative">
         <div className="overflow-hidden" ref={emblaRef}>
           <div className="flex">
-            {BANNER_SLIDES.map((slide) => (
+            {bannerSlides.map((slide) => (
               <div key={slide.id} className="flex-[0_0_100%] min-w-0">
                 <div className="relative aspect-[16/9] md:aspect-[21/9] overflow-hidden">
                   <img
@@ -169,7 +227,7 @@ export default function Home() {
 
         {/* Dots Indicator */}
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
-          {BANNER_SLIDES.map((_, index) => (
+          {bannerSlides.map((_, index) => (
             <button
               key={index}
               className={`w-2 h-2 rounded-full transition-all ${
@@ -267,20 +325,36 @@ export default function Home() {
         </div>
         
         <div className="grid grid-cols-2 gap-3">
-          <Link href="/products">
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 relative overflow-hidden hover:scale-[1.02] transition-transform">
-              <span className="text-3xl font-extrabold text-blue-600">15%</span>
-              <p className="text-sm font-bold text-foreground mt-1">خصم الجملة</p>
-              <p className="text-xs text-muted-foreground">على جميع علب البلاستيك</p>
-            </div>
-          </Link>
-          <Link href="/products">
-            <div className="bg-pink-50 dark:bg-pink-900/20 rounded-xl p-4 relative overflow-hidden hover:scale-[1.02] transition-transform">
-              <span className="text-3xl font-extrabold text-pink-600">10%</span>
-              <p className="text-sm font-bold text-foreground mt-1">عروض الأكياس</p>
-              <p className="text-xs text-muted-foreground">عند طلب أكثر من 10 شدات</p>
-            </div>
-          </Link>
+          {dynamicOffers && dynamicOffers.length > 0 ? (
+            dynamicOffers.map((offer) => {
+              const colors = bgColorClasses[offer.bgColor || 'blue'] || bgColorClasses.blue;
+              return (
+                <Link key={offer.id} href={offer.linkUrl || "/products"}>
+                  <div className={`${colors.bg} rounded-xl p-4 relative overflow-hidden hover:scale-[1.02] transition-transform`} data-testid={`offer-${offer.id}`}>
+                    <span className={`text-3xl font-extrabold ${colors.text}`}>{offer.discountPercent}%</span>
+                    <p className="text-sm font-bold text-foreground mt-1">{offer.title}</p>
+                  </div>
+                </Link>
+              );
+            })
+          ) : (
+            <>
+              <Link href="/products">
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 relative overflow-hidden hover:scale-[1.02] transition-transform">
+                  <span className="text-3xl font-extrabold text-blue-600">15%</span>
+                  <p className="text-sm font-bold text-foreground mt-1">خصم الجملة</p>
+                  <p className="text-xs text-muted-foreground">على جميع علب البلاستيك</p>
+                </div>
+              </Link>
+              <Link href="/products">
+                <div className="bg-pink-50 dark:bg-pink-900/20 rounded-xl p-4 relative overflow-hidden hover:scale-[1.02] transition-transform">
+                  <span className="text-3xl font-extrabold text-pink-600">10%</span>
+                  <p className="text-sm font-bold text-foreground mt-1">عروض الأكياس</p>
+                  <p className="text-xs text-muted-foreground">عند طلب أكثر من 10 شدات</p>
+                </div>
+              </Link>
+            </>
+          )}
         </div>
       </section>
 

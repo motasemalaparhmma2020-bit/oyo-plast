@@ -103,6 +103,607 @@ interface OrderItemWithName {
   productName: string;
 }
 
+interface BannerData {
+  id?: number;
+  title: string;
+  subtitle: string;
+  imageUrl: string;
+  linkUrl: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+interface OfferData {
+  id?: number;
+  title: string;
+  discountPercent: number;
+  imageUrl: string;
+  linkUrl: string;
+  bgColor: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+const emptyBannerForm: BannerData = {
+  title: "",
+  subtitle: "",
+  imageUrl: "",
+  linkUrl: "/products",
+  isActive: true,
+  sortOrder: 0
+};
+
+const emptyOfferForm: OfferData = {
+  title: "",
+  discountPercent: 10,
+  imageUrl: "",
+  linkUrl: "/products",
+  bgColor: "blue",
+  isActive: true,
+  sortOrder: 0
+};
+
+const bgColorOptions = [
+  { value: "blue", label: "أزرق", class: "bg-blue-50 dark:bg-blue-900/20" },
+  { value: "pink", label: "وردي", class: "bg-pink-50 dark:bg-pink-900/20" },
+  { value: "green", label: "أخضر", class: "bg-green-50 dark:bg-green-900/20" },
+  { value: "purple", label: "بنفسجي", class: "bg-purple-50 dark:bg-purple-900/20" },
+  { value: "orange", label: "برتقالي", class: "bg-orange-50 dark:bg-orange-900/20" },
+];
+
+function BannersOffersSection({ adminToken }: { adminToken: string | null }) {
+  const [showBannerForm, setShowBannerForm] = useState(false);
+  const [showOfferForm, setShowOfferForm] = useState(false);
+  const [editingBanner, setEditingBanner] = useState<BannerData | null>(null);
+  const [editingOffer, setEditingOffer] = useState<OfferData | null>(null);
+  const [bannerForm, setBannerForm] = useState<BannerData>(emptyBannerForm);
+  const [offerForm, setOfferForm] = useState<OfferData>(emptyOfferForm);
+  const [isUploading, setIsUploading] = useState(false);
+  const { toast } = useToast();
+
+  const { data: banners, isLoading: bannersLoading } = useQuery<BannerData[]>({
+    queryKey: ['/api/admin/banners'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/banners', {
+        headers: { 'x-admin-token': adminToken! }
+      });
+      if (!res.ok) throw new Error('Failed to fetch banners');
+      return res.json();
+    },
+    enabled: !!adminToken,
+  });
+
+  const { data: offers, isLoading: offersLoading } = useQuery<OfferData[]>({
+    queryKey: ['/api/admin/offers'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/offers', {
+        headers: { 'x-admin-token': adminToken! }
+      });
+      if (!res.ok) throw new Error('Failed to fetch offers');
+      return res.json();
+    },
+    enabled: !!adminToken,
+  });
+
+  const { data: categories } = useQuery<Category[]>({
+    queryKey: ['/api/categories'],
+    enabled: !!adminToken,
+  });
+
+  const handleBannerImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !adminToken) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const res = await fetch('/api/admin/upload', {
+        method: 'POST',
+        headers: { 'x-admin-token': adminToken },
+        body: formData
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setBannerForm(prev => ({ ...prev, imageUrl: data.imageUrl }));
+        toast({ title: "تم رفع الصورة بنجاح" });
+      } else {
+        toast({ title: "فشل رفع الصورة", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "حدث خطأ أثناء رفع الصورة", variant: "destructive" });
+    }
+    setIsUploading(false);
+    e.target.value = '';
+  };
+
+  const handleOfferImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !adminToken) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const res = await fetch('/api/admin/upload', {
+        method: 'POST',
+        headers: { 'x-admin-token': adminToken },
+        body: formData
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setOfferForm(prev => ({ ...prev, imageUrl: data.imageUrl }));
+        toast({ title: "تم رفع الصورة بنجاح" });
+      } else {
+        toast({ title: "فشل رفع الصورة", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "حدث خطأ أثناء رفع الصورة", variant: "destructive" });
+    }
+    setIsUploading(false);
+    e.target.value = '';
+  };
+
+  const createBanner = useMutation({
+    mutationFn: async (data: BannerData) => {
+      const res = await fetch('/api/admin/banners', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken! },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to create banner');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/banners'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/banners'] });
+      setShowBannerForm(false);
+      setBannerForm(emptyBannerForm);
+      toast({ title: "تم إنشاء البنر بنجاح" });
+    },
+    onError: () => toast({ title: "فشل إنشاء البنر", variant: "destructive" })
+  });
+
+  const updateBanner = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<BannerData> }) => {
+      const res = await fetch(`/api/admin/banners/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken! },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to update banner');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/banners'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/banners'] });
+      setShowBannerForm(false);
+      setEditingBanner(null);
+      setBannerForm(emptyBannerForm);
+      toast({ title: "تم تحديث البنر بنجاح" });
+    },
+    onError: () => toast({ title: "فشل تحديث البنر", variant: "destructive" })
+  });
+
+  const deleteBanner = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/admin/banners/${id}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-token': adminToken! }
+      });
+      if (!res.ok) throw new Error('Failed to delete banner');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/banners'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/banners'] });
+      toast({ title: "تم حذف البنر بنجاح" });
+    },
+    onError: () => toast({ title: "فشل حذف البنر", variant: "destructive" })
+  });
+
+  const createOffer = useMutation({
+    mutationFn: async (data: OfferData) => {
+      const res = await fetch('/api/admin/offers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken! },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to create offer');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/offers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/offers'] });
+      setShowOfferForm(false);
+      setOfferForm(emptyOfferForm);
+      toast({ title: "تم إنشاء العرض بنجاح" });
+    },
+    onError: () => toast({ title: "فشل إنشاء العرض", variant: "destructive" })
+  });
+
+  const updateOffer = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<OfferData> }) => {
+      const res = await fetch(`/api/admin/offers/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken! },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to update offer');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/offers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/offers'] });
+      setShowOfferForm(false);
+      setEditingOffer(null);
+      setOfferForm(emptyOfferForm);
+      toast({ title: "تم تحديث العرض بنجاح" });
+    },
+    onError: () => toast({ title: "فشل تحديث العرض", variant: "destructive" })
+  });
+
+  const deleteOffer = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/admin/offers/${id}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-token': adminToken! }
+      });
+      if (!res.ok) throw new Error('Failed to delete offer');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/offers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/offers'] });
+      toast({ title: "تم حذف العرض بنجاح" });
+    },
+    onError: () => toast({ title: "فشل حذف العرض", variant: "destructive" })
+  });
+
+  const handleEditBanner = (banner: BannerData) => {
+    setEditingBanner(banner);
+    setBannerForm({
+      title: banner.title,
+      subtitle: banner.subtitle || "",
+      imageUrl: banner.imageUrl,
+      linkUrl: banner.linkUrl || "/products",
+      isActive: banner.isActive,
+      sortOrder: banner.sortOrder || 0
+    });
+    setShowBannerForm(true);
+  };
+
+  const handleEditOffer = (offer: OfferData) => {
+    setEditingOffer(offer);
+    setOfferForm({
+      title: offer.title,
+      discountPercent: offer.discountPercent,
+      imageUrl: offer.imageUrl || "",
+      linkUrl: offer.linkUrl || "/products",
+      bgColor: offer.bgColor || "blue",
+      isActive: offer.isActive,
+      sortOrder: offer.sortOrder || 0
+    });
+    setShowOfferForm(true);
+  };
+
+  const handleSubmitBanner = () => {
+    if (!bannerForm.title || !bannerForm.imageUrl) {
+      toast({ title: "يرجى ملء جميع الحقول المطلوبة", variant: "destructive" });
+      return;
+    }
+    if (editingBanner?.id) {
+      updateBanner.mutate({ id: editingBanner.id, data: bannerForm });
+    } else {
+      createBanner.mutate(bannerForm);
+    }
+  };
+
+  const handleSubmitOffer = () => {
+    if (!offerForm.title) {
+      toast({ title: "يرجى ملء جميع الحقول المطلوبة", variant: "destructive" });
+      return;
+    }
+    if (editingOffer?.id) {
+      updateOffer.mutate({ id: editingOffer.id, data: offerForm });
+    } else {
+      createOffer.mutate(offerForm);
+    }
+  };
+
+  const linkOptions = [
+    { value: "/products", label: "جميع المنتجات" },
+    { value: "/printing-and-design", label: "طباعة وتصميم" },
+    ...(categories?.map(c => ({ value: `/products?category=${c.id}`, label: c.name })) || [])
+  ];
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <CardTitle>إدارة البنرات الرئيسية (Slider)</CardTitle>
+          <Button 
+            onClick={() => { setShowBannerForm(true); setEditingBanner(null); setBannerForm(emptyBannerForm); }}
+            data-testid="button-add-banner"
+          >
+            <Plus className="h-4 w-4 ml-2" />
+            إضافة بنر جديد
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {showBannerForm && (
+            <div className="border rounded-lg p-4 mb-4 bg-muted/50">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="font-semibold">{editingBanner ? "تعديل البنر" : "إضافة بنر جديد"}</h4>
+                <Button variant="ghost" size="icon" onClick={() => { setShowBannerForm(false); setEditingBanner(null); }}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label>عنوان البنر *</Label>
+                  <Input
+                    value={bannerForm.title}
+                    onChange={(e) => setBannerForm(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="مثال: أكياس قماشية"
+                    data-testid="input-banner-title"
+                  />
+                </div>
+                <div>
+                  <Label>العنوان الفرعي</Label>
+                  <Input
+                    value={bannerForm.subtitle}
+                    onChange={(e) => setBannerForm(prev => ({ ...prev, subtitle: e.target.value }))}
+                    placeholder="مثال: صديقة للبيئة وقابلة لإعادة الاستخدام"
+                    data-testid="input-banner-subtitle"
+                  />
+                </div>
+                <div>
+                  <Label>رابط التوجيه</Label>
+                  <Select 
+                    value={bannerForm.linkUrl} 
+                    onValueChange={(value) => setBannerForm(prev => ({ ...prev, linkUrl: value }))}
+                  >
+                    <SelectTrigger data-testid="select-banner-link">
+                      <SelectValue placeholder="اختر القسم" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {linkOptions.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>ترتيب العرض</Label>
+                  <Input
+                    type="number"
+                    value={bannerForm.sortOrder}
+                    onChange={(e) => setBannerForm(prev => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))}
+                    data-testid="input-banner-sort"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>صورة البنر *</Label>
+                  <div className="flex items-center gap-4">
+                    {bannerForm.imageUrl && (
+                      <img src={bannerForm.imageUrl} alt="Preview" className="h-20 w-32 object-cover rounded" />
+                    )}
+                    <Label className="cursor-pointer border-2 border-dashed rounded-lg p-4 flex items-center gap-2">
+                      <ImagePlus className="h-5 w-5" />
+                      {isUploading ? "جاري الرفع..." : "رفع صورة"}
+                      <input type="file" accept="image/*" className="hidden" onChange={handleBannerImageUpload} disabled={isUploading} />
+                    </Label>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={bannerForm.isActive}
+                    onChange={(e) => setBannerForm(prev => ({ ...prev, isActive: e.target.checked }))}
+                    id="banner-active"
+                  />
+                  <Label htmlFor="banner-active">تفعيل البنر</Label>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-4">
+                <Button variant="outline" onClick={() => { setShowBannerForm(false); setEditingBanner(null); }}>إلغاء</Button>
+                <Button onClick={handleSubmitBanner} disabled={createBanner.isPending || updateBanner.isPending}>
+                  {(createBanner.isPending || updateBanner.isPending) && <Loader2 className="h-4 w-4 ml-2 animate-spin" />}
+                  {editingBanner ? "تحديث" : "حفظ"}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {bannersLoading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : banners && banners.length > 0 ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {banners.map((banner) => (
+                <div key={banner.id} className="relative border rounded-lg overflow-hidden group">
+                  <img src={banner.imageUrl} alt={banner.title} className="w-full h-32 object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex flex-col justify-end p-3">
+                    <h4 className="text-white font-bold text-sm">{banner.title}</h4>
+                    {banner.subtitle && <p className="text-white/80 text-xs">{banner.subtitle}</p>}
+                  </div>
+                  <div className="absolute top-2 right-2 flex gap-1">
+                    <Badge variant={banner.isActive ? "default" : "secondary"}>
+                      {banner.isActive ? "مفعل" : "معطل"}
+                    </Badge>
+                  </div>
+                  <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button size="icon" variant="secondary" onClick={() => handleEditBanner(banner)}>
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button size="icon" variant="destructive" onClick={() => banner.id && deleteBanner.mutate(banner.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-10 text-muted-foreground">
+              <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>لا توجد بنرات بعد</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <CardTitle>إدارة العروض الخاصة</CardTitle>
+          <Button 
+            onClick={() => { setShowOfferForm(true); setEditingOffer(null); setOfferForm(emptyOfferForm); }}
+            data-testid="button-add-offer"
+          >
+            <Plus className="h-4 w-4 ml-2" />
+            إضافة عرض جديد
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {showOfferForm && (
+            <div className="border rounded-lg p-4 mb-4 bg-muted/50">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="font-semibold">{editingOffer ? "تعديل العرض" : "إضافة عرض جديد"}</h4>
+                <Button variant="ghost" size="icon" onClick={() => { setShowOfferForm(false); setEditingOffer(null); }}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label>اسم العرض *</Label>
+                  <Input
+                    value={offerForm.title}
+                    onChange={(e) => setOfferForm(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="مثال: خصم الجملة"
+                    data-testid="input-offer-title"
+                  />
+                </div>
+                <div>
+                  <Label>نسبة الخصم (%)</Label>
+                  <Input
+                    type="number"
+                    value={offerForm.discountPercent}
+                    onChange={(e) => setOfferForm(prev => ({ ...prev, discountPercent: parseInt(e.target.value) || 0 }))}
+                    placeholder="15"
+                    data-testid="input-offer-discount"
+                  />
+                </div>
+                <div>
+                  <Label>رابط التوجيه (Deep Link)</Label>
+                  <Select 
+                    value={offerForm.linkUrl} 
+                    onValueChange={(value) => setOfferForm(prev => ({ ...prev, linkUrl: value }))}
+                  >
+                    <SelectTrigger data-testid="select-offer-link">
+                      <SelectValue placeholder="اختر القسم" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {linkOptions.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>لون الخلفية</Label>
+                  <Select 
+                    value={offerForm.bgColor} 
+                    onValueChange={(value) => setOfferForm(prev => ({ ...prev, bgColor: value }))}
+                  >
+                    <SelectTrigger data-testid="select-offer-color">
+                      <SelectValue placeholder="اختر اللون" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {bgColorOptions.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-4 h-4 rounded ${opt.class}`}></div>
+                            {opt.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>ترتيب العرض</Label>
+                  <Input
+                    type="number"
+                    value={offerForm.sortOrder}
+                    onChange={(e) => setOfferForm(prev => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))}
+                    data-testid="input-offer-sort"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={offerForm.isActive}
+                    onChange={(e) => setOfferForm(prev => ({ ...prev, isActive: e.target.checked }))}
+                    id="offer-active"
+                  />
+                  <Label htmlFor="offer-active">تفعيل العرض</Label>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-4">
+                <Button variant="outline" onClick={() => { setShowOfferForm(false); setEditingOffer(null); }}>إلغاء</Button>
+                <Button onClick={handleSubmitOffer} disabled={createOffer.isPending || updateOffer.isPending}>
+                  {(createOffer.isPending || updateOffer.isPending) && <Loader2 className="h-4 w-4 ml-2 animate-spin" />}
+                  {editingOffer ? "تحديث" : "حفظ"}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {offersLoading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : offers && offers.length > 0 ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {offers.map((offer) => {
+                const colorClass = bgColorOptions.find(c => c.value === offer.bgColor)?.class || "bg-blue-50";
+                return (
+                  <div key={offer.id} className={`relative rounded-xl p-4 ${colorClass} group`}>
+                    <span className="text-3xl font-extrabold text-blue-600">{offer.discountPercent}%</span>
+                    <p className="text-sm font-bold text-foreground mt-1">{offer.title}</p>
+                    <p className="text-xs text-muted-foreground">{offer.linkUrl}</p>
+                    <div className="absolute top-2 right-2 flex gap-1">
+                      <Badge variant={offer.isActive ? "default" : "secondary"} className="text-xs">
+                        {offer.isActive ? "مفعل" : "معطل"}
+                      </Badge>
+                    </div>
+                    <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button size="icon" variant="secondary" onClick={() => handleEditOffer(offer)}>
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button size="icon" variant="destructive" onClick={() => offer.id && deleteOffer.mutate(offer.id)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-10 text-muted-foreground">
+              <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>لا توجد عروض بعد</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminToken, setAdminToken] = useState<string | null>(null);
@@ -582,6 +1183,7 @@ export default function Admin() {
             <TabsTrigger value="manage-products">المنتجات</TabsTrigger>
             <TabsTrigger value="categories">الأقسام</TabsTrigger>
             <TabsTrigger value="products">المخزون</TabsTrigger>
+            <TabsTrigger value="banners-offers">العروض والبنرات</TabsTrigger>
             <TabsTrigger value="reports">التقارير</TabsTrigger>
             <TabsTrigger value="settings">الإعدادات</TabsTrigger>
           </TabsList>
@@ -1269,6 +1871,10 @@ export default function Admin() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="banners-offers">
+            <BannersOffersSection adminToken={adminToken} />
           </TabsContent>
 
           <TabsContent value="reports">
