@@ -97,10 +97,10 @@ export default function Profile() {
   const totalOrders = orders?.length || 0;
 
   const quickActions = [
-    { icon: Ticket, label: "كوبونات", value: "0" },
-    { icon: Star, label: "نقاط", value: "0" },
-    { icon: Wallet, label: "محفظة", value: null },
-    { icon: Gift, label: "بطاقة هدية", value: null },
+    { icon: Ticket, label: "كوبونات", value: "0", href: "/marketer/coupons" },
+    { icon: Star, label: "نقاط", value: "0", href: "/account" },
+    { icon: Wallet, label: "محفظة", value: null, href: "/account" },
+    { icon: Gift, label: "بطاقة هدية", value: null, href: null },
   ];
 
   const orderStatuses = [
@@ -138,21 +138,38 @@ export default function Profile() {
       {/* Quick Actions - Top Bar */}
       <div className="bg-white dark:bg-card px-4 py-6 border-b">
         <div className="grid grid-cols-4 gap-4">
-          {quickActions.map((action, index) => (
-            <button 
-              key={index} 
-              className="flex flex-col items-center gap-2 hover-elevate active-elevate-2 rounded-lg p-2"
-              data-testid={`quick-action-${action.label}`}
-            >
-              <div className="relative">
-                <action.icon className="h-7 w-7 text-gray-700 dark:text-gray-300" strokeWidth={1.5} />
+          {quickActions.map((action, index) => {
+            const content = (
+              <>
+                <div className="relative">
+                  <action.icon className="h-7 w-7 text-gray-700 dark:text-gray-300" strokeWidth={1.5} />
+                </div>
+                {action.value !== null && (
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{action.value}</span>
+                )}
+                <span className="text-xs text-gray-600 dark:text-gray-400">{action.label}</span>
+              </>
+            );
+            
+            return action.href ? (
+              <Link key={index} href={action.href}>
+                <div 
+                  className="flex flex-col items-center gap-2 hover-elevate active-elevate-2 rounded-lg p-2 cursor-pointer"
+                  data-testid={`quick-action-${action.label}`}
+                >
+                  {content}
+                </div>
+              </Link>
+            ) : (
+              <div 
+                key={index} 
+                className="flex flex-col items-center gap-2 rounded-lg p-2 opacity-50"
+                data-testid={`quick-action-${action.label}`}
+              >
+                {content}
               </div>
-              {action.value !== null && (
-                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{action.value}</span>
-              )}
-              <span className="text-xs text-gray-600 dark:text-gray-400">{action.label}</span>
-            </button>
-          ))}
+            );
+          })}
         </div>
       </div>
 

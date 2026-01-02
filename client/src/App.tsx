@@ -19,6 +19,7 @@ import Admin from "@/pages/Admin";
 import Wishlist from "@/pages/Wishlist";
 import Notifications from "@/pages/Notifications";
 import MyAccount from "@/pages/MyAccount";
+import MarketerCoupons from "@/pages/MarketerCoupons";
 import GuestCheckout from "@/pages/GuestCheckout";
 import PrintingAndDesign from "@/pages/PrintingAndDesign";
 import About from "@/pages/About";
@@ -64,6 +65,9 @@ function Router() {
           </Route>
           <Route path="/account">
             {isAuthenticated ? <MyAccount /> : <Auth />}
+          </Route>
+          <Route path="/marketer/coupons">
+            {isAuthenticated ? <MarketerCoupons /> : <Auth />}
           </Route>
           <Route path="/guest-checkout" component={GuestCheckout} />
           <Route path="/printing" component={PrintingAndDesign} />
