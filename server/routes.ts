@@ -179,6 +179,64 @@ export async function registerRoutes(
     res.json(orders);
   });
 
+  // =============== Wallet Routes ===============
+  app.get("/api/wallet", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const wallet = await storage.getOrCreateWallet(getUserId(req));
+    res.json(wallet);
+  });
+
+  app.get("/api/wallet/transactions", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const transactions = await storage.getWalletTransactions(getUserId(req));
+    res.json(transactions);
+  });
+
+  // =============== Reward Points Routes ===============
+  app.get("/api/points", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const points = await storage.getOrCreateRewardPoints(getUserId(req));
+    res.json(points);
+  });
+
+  app.get("/api/points/transactions", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const transactions = await storage.getPointsTransactions(getUserId(req));
+    res.json(transactions);
+  });
+
+  // =============== My Account Summary ===============
+  app.get("/api/account/summary", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    
+    try {
+      const [wallet, points, orders] = await Promise.all([
+        storage.getOrCreateWallet(userId),
+        storage.getOrCreateRewardPoints(userId),
+        storage.getOrders(userId)
+      ]);
+      
+      res.json({
+        wallet: {
+          balanceYer: wallet.balanceYer,
+          balanceSar: wallet.balanceSar
+        },
+        points: {
+          current: points.points,
+          lifetime: points.lifetimePoints
+        },
+        orders: {
+          total: orders.length,
+          pending: orders.filter(o => ['pending', 'processing'].includes(o.status)).length,
+          completed: orders.filter(o => o.status === 'completed' || o.status === 'delivered').length
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch account summary" });
+    }
+  });
+
   // Get order items with product names (user must own the order)
   app.get("/api/orders/:id/items", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
@@ -314,9 +372,36 @@ export async function registerRoutes(
       
       const updated = await storage.updateOrderStatus(orderId, status, trackingNumber);
       
-      // Increment sold count when order is delivered/completed for the first time
-      if (wasNotDelivered && becomingDelivered) {
+      // Increment sold count and award points when order is delivered/completed for the first time
+      if (wasNotDelivered && becomingDelivered && currentOrder) {
         await storage.incrementSoldCount(orderId);
+        
+        // Award reward points: 1 point per 1000 YER or 1 point per 7 SAR
+        const orderTotal = parseFloat(currentOrder.total || '0');
+        let pointsToAward = 0;
+        if (currentOrder.currency === 'SAR') {
+          pointsToAward = Math.floor(orderTotal / 7);
+        } else {
+          pointsToAward = Math.floor(orderTotal / 1000);
+        }
+        
+        if (pointsToAward > 0) {
+          await storage.addPoints(
+            currentOrder.userId, 
+            pointsToAward, 
+            'earned_purchase',
+            `نقاط مكتسبة من طلب #${orderId}`,
+            orderId
+          );
+          
+          // Notify user about earned points
+          await storage.createNotification(
+            currentOrder.userId,
+            "مبروك! حصلت على نقاط",
+            `لقد حصلت على ${pointsToAward} نقطة من طلبك #${orderId}`,
+            "promo"
+          );
+        }
       }
       
       // Create notification for status update
@@ -513,6 +598,22 @@ export async function registerRoutes(
         comment,
         imageUrl
       });
+      
+      // Award points for review: 5 points for text review, 10 extra for photo
+      let pointsForReview = 5;
+      if (imageUrl) {
+        pointsForReview += 10;
+      }
+      
+      await storage.addPoints(
+        userId,
+        pointsForReview,
+        'earned_review',
+        imageUrl ? 'نقاط مكتسبة من تقييم مع صورة' : 'نقاط مكتسبة من تقييم',
+        undefined,
+        review.id
+      );
+      
       res.status(201).json(review);
     } catch (error) {
       res.status(500).json({ error: "Failed to add review" });
