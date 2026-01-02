@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { 
   ShoppingBag, 
@@ -365,7 +365,7 @@ export default function PrintingAndDesign() {
     }
   };
 
-  const breadcrumbs = [
+  const breadcrumbs: { label: string; href?: string; onClick?: () => void }[] = [
     { label: "الرئيسية", href: "/" },
     { label: "طباعة وتصميم", onClick: () => { setSelectedCategory(null); setSelectedSubcategory(null); } },
   ];

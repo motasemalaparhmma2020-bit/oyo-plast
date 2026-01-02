@@ -20,6 +20,7 @@ import Wishlist from "@/pages/Wishlist";
 import Notifications from "@/pages/Notifications";
 import MyAccount from "@/pages/MyAccount";
 import GuestCheckout from "@/pages/GuestCheckout";
+import PrintingAndDesign from "@/pages/PrintingAndDesign";
 import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
@@ -64,6 +65,7 @@ function Router() {
             {isAuthenticated ? <MyAccount /> : <Auth />}
           </Route>
           <Route path="/guest-checkout" component={GuestCheckout} />
+          <Route path="/printing" component={PrintingAndDesign} />
           <Route path="/about" component={About} />
           <Route path="/privacy" component={Privacy} />
           <Route path="/terms" component={Terms} />

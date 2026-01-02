@@ -14,7 +14,7 @@ export function BottomNav() {
   const items = [
     { id: 'home', label: 'متجر', icon: Home, href: '/' },
     { id: 'categories', label: 'الفئات', icon: Grid3X3, href: '/products' },
-    { id: 'printing', label: 'طباعة وتصميم', icon: Printer, href: '/products?category=6' },
+    { id: 'printing', label: 'طباعة وتصميم', icon: Printer, href: '/printing' },
     { id: 'cart', label: 'حقيبة التسوق', icon: ShoppingCart, href: '/cart', count: cartCount },
     { id: 'account', label: 'حسابي', icon: User, href: '/account' },
   ];

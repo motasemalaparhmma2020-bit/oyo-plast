@@ -16,7 +16,7 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-const upload = multer({
+const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
@@ -27,6 +27,30 @@ const upload = multer({
     }
   }
 });
+
+const designUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.ai', '.psd'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowedMimeTypes = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+      'application/pdf',
+      'application/postscript',
+      'image/vnd.adobe.photoshop',
+      'application/octet-stream'
+    ];
+    
+    if (allowedExtensions.includes(ext) || file.mimetype.startsWith('image/') || allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('File type not allowed. Accepted: images, PDF, AI, PSD'));
+    }
+  }
+});
+
+const upload = imageUpload;
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "oyo2024admin";
 
@@ -262,6 +286,68 @@ export async function registerRoutes(
     }
   });
 
+  // =============== Printing Orders Routes ===============
+  app.post("/api/printing-orders", async (req, res) => {
+    const { 
+      categoryName,
+      subcategoryName,
+      size,
+      color,
+      quantity,
+      designUrl,
+      notes,
+      currency = 'YER',
+      totalPrice
+    } = req.body;
+
+    if (!subcategoryName || !size || !color) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    const qty = Number(quantity);
+    const finalPrice = Number(totalPrice);
+    
+    if (!Number.isInteger(qty) || qty < 1) {
+      return res.status(400).json({ message: "Invalid quantity - must be a positive whole number" });
+    }
+    
+    if (!Number.isFinite(finalPrice) || finalPrice <= 0) {
+      return res.status(400).json({ message: "Invalid price" });
+    }
+
+    try {
+      const userId = req.isAuthenticated() ? getUserId(req) : null;
+      
+      const orderNotes = `
+طلب طباعة مخصصة
+القسم: ${categoryName || 'غير محدد'}
+الصنف: ${subcategoryName}
+المقاس: ${size}
+اللون: ${color}
+الكمية: ${qty} قطعة
+${designUrl ? `رابط التصميم: ${designUrl}` : 'لا يوجد تصميم مرفوع'}
+${notes ? `ملاحظات: ${notes}` : ''}
+      `.trim();
+
+      const order = await storage.createOrder(userId, {
+        total: finalPrice.toString(),
+        currency,
+        paymentMethod: 'cash_on_delivery',
+        notes: orderNotes,
+        status: 'pending'
+      });
+
+      res.status(201).json({ 
+        success: true, 
+        orderId: order.id,
+        message: 'تم إرسال طلب الطباعة بنجاح. سنتواصل معك قريباً لتأكيد التفاصيل والسعر النهائي.'
+      });
+    } catch (error) {
+      console.error('Printing order error:', error);
+      res.status(500).json({ message: "Failed to create printing order" });
+    }
+  });
+
   // =============== Wallet Routes ===============
   app.get("/api/wallet", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
@@ -391,6 +477,47 @@ export async function registerRoutes(
     }
   });
 
+  // Public design file upload endpoint for printing orders
+  app.post("/api/upload", designUpload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file provided" });
+      }
+
+      // Sanitize and generate safe filename
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substring(2, 10);
+      const originalExt = path.extname(req.file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, '');
+      const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.ai', '.psd'];
+      const safeExt = allowedExtensions.includes(originalExt) ? originalExt : '.bin';
+
+      // Process image files
+      if (req.file.mimetype.startsWith('image/')) {
+        const filename = `design_${timestamp}_${randomId}.webp`;
+        const filepath = path.join(uploadDir, filename);
+        
+        await sharp(req.file.buffer)
+          .resize(1200, 1200, {
+            fit: 'inside',
+            withoutEnlargement: true
+          })
+          .webp({ quality: 90 })
+          .toFile(filepath);
+          
+        return res.json({ success: true, url: `/products/${filename}` });
+      } else {
+        // For non-image files (PDF, AI, PSD), save with sanitized name
+        const filename = `design_${timestamp}_${randomId}${safeExt}`;
+        const filepath = path.join(uploadDir, filename);
+        fs.writeFileSync(filepath, req.file.buffer);
+        return res.json({ success: true, url: `/products/${filename}` });
+      }
+    } catch (error) {
+      console.error("Design upload error:", error);
+      res.status(500).json({ error: "Failed to process file" });
+    }
+  });
+
   // Public review image upload endpoint (requires login)
   app.post("/api/upload/review", upload.single('image'), async (req, res) => {
     if (!req.isAuthenticated()) {
@@ -468,7 +595,7 @@ export async function registerRoutes(
           pointsToAward = Math.floor(orderTotal / 1000);
         }
         
-        if (pointsToAward > 0) {
+        if (pointsToAward > 0 && currentOrder.userId) {
           await storage.addPoints(
             currentOrder.userId, 
             pointsToAward, 
@@ -496,7 +623,7 @@ export async function registerRoutes(
         'cancelled': 'تم إلغاء طلبك'
       };
       
-      if (statusMessages[status]) {
+      if (statusMessages[status] && updated.userId) {
         await storage.createNotification(
           updated.userId,
           statusMessages[status],
