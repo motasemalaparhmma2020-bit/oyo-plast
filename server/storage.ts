@@ -22,7 +22,7 @@ export interface IStorage {
   deleteCartItem(id: number): Promise<void>;
   clearCart(userId: string): Promise<void>;
 
-  createOrder(userId: string, orderData: {
+  createOrder(userId: string | null, orderData: {
     total: string;
     currency?: string;
     depositAmount?: string | null;
@@ -177,7 +177,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(cartItems).where(eq(cartItems.userId, userId));
   }
 
-  async createOrder(userId: string, orderData: {
+  async createOrder(userId: string | null, orderData: {
     total: string;
     currency?: string;
     depositAmount?: string | null;

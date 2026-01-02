@@ -18,6 +18,8 @@ import Register from "@/pages/Register";
 import Admin from "@/pages/Admin";
 import Wishlist from "@/pages/Wishlist";
 import Notifications from "@/pages/Notifications";
+import MyAccount from "@/pages/MyAccount";
+import GuestCheckout from "@/pages/GuestCheckout";
 import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
@@ -58,6 +60,10 @@ function Router() {
           <Route path="/notifications">
             {isAuthenticated ? <Notifications /> : <Auth />}
           </Route>
+          <Route path="/account">
+            {isAuthenticated ? <MyAccount /> : <Auth />}
+          </Route>
+          <Route path="/guest-checkout" component={GuestCheckout} />
           <Route path="/about" component={About} />
           <Route path="/privacy" component={Privacy} />
           <Route path="/terms" component={Terms} />

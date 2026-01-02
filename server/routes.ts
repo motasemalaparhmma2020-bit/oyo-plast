@@ -179,6 +179,89 @@ export async function registerRoutes(
     res.json(orders);
   });
 
+  // =============== Guest Checkout ===============
+  app.post("/api/orders/guest", async (req, res) => {
+    const { 
+      items, // Array of { productId, quantity }
+      customerName,
+      customerPhone, 
+      customerEmail,
+      shippingCity, 
+      shippingAddress, 
+      gpsCoordinates,
+      notes,
+      currency = 'YER'
+    } = req.body;
+
+    // Validate required fields
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: "Cart is empty" });
+    }
+    if (!customerPhone) {
+      return res.status(400).json({ message: "Phone number is required" });
+    }
+    if (!shippingCity) {
+      return res.status(400).json({ message: "City is required" });
+    }
+    if (!shippingAddress) {
+      return res.status(400).json({ message: "Address is required" });
+    }
+
+    try {
+      // Fetch products and calculate total
+      let total = 0;
+      const orderProducts: { product: any; quantity: number }[] = [];
+      
+      for (const item of items) {
+        const product = await storage.getProduct(item.productId);
+        if (!product) {
+          return res.status(400).json({ message: `Product ${item.productId} not found` });
+        }
+        const price = currency === 'SAR' && product.priceSar 
+          ? Number(product.priceSar) 
+          : Number(product.price);
+        total += price * item.quantity;
+        orderProducts.push({ product, quantity: item.quantity });
+      }
+
+      // Create order with null user ID for guest checkout
+      const order = await storage.createOrder(null, {
+        total: total.toString(),
+        currency,
+        depositAmount: null,
+        paymentMethod: 'cash_on_delivery',
+        receiptImageUrl: null,
+        customerPhone,
+        shippingCity,
+        shippingAddress,
+        notes: `${customerName ? `اسم العميل: ${customerName}\n` : ''}${customerEmail ? `البريد: ${customerEmail}\n` : ''}${gpsCoordinates ? `الموقع GPS: ${gpsCoordinates}\n` : ''}${notes || ''}`,
+        status: 'pending'
+      });
+
+      // Create order items
+      for (const item of orderProducts) {
+        const itemPrice = currency === 'SAR' && item.product.priceSar 
+          ? item.product.priceSar 
+          : item.product.price;
+        await storage.createOrderItem({
+          orderId: order.id,
+          productId: item.product.id,
+          quantity: item.quantity,
+          price: itemPrice,
+        });
+      }
+
+      res.status(201).json({ 
+        success: true, 
+        orderId: order.id,
+        message: 'تم إنشاء طلبك بنجاح. سيتم التواصل معك قريباً.'
+      });
+    } catch (error) {
+      console.error('Guest order error:', error);
+      res.status(500).json({ message: "Failed to create order" });
+    }
+  });
+
   // =============== Wallet Routes ===============
   app.get("/api/wallet", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");

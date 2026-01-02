@@ -33,7 +33,9 @@ import {
   Trash2,
   X,
   ImagePlus,
-  Printer
+  Printer,
+  UserCircle2,
+  ExternalLink
 } from "lucide-react";
 import PrintableInvoice from "@/components/PrintableInvoice";
 
@@ -506,9 +508,23 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <div className="bg-primary text-white p-6">
-        <div className="container mx-auto">
-          <h1 className="text-2xl font-bold">لوحة تحكم OYO PLAST</h1>
-          <p className="text-primary-foreground/80">إدارة الطلبات والمنتجات</p>
+        <div className="container mx-auto flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold">لوحة تحكم OYO PLAST</h1>
+            <p className="text-primary-foreground/80">إدارة الطلبات والمنتجات</p>
+          </div>
+          <Button
+            variant="outline"
+            className="bg-white/10 border-white/30 text-white hover:bg-white/20 gap-2"
+            onClick={() => {
+              window.open('/', '_blank');
+            }}
+            data-testid="button-experience-as-customer"
+          >
+            <UserCircle2 className="h-4 w-4" />
+            تجربة الموقع كعميل
+            <ExternalLink className="h-3 w-3" />
+          </Button>
         </div>
       </div>
 
