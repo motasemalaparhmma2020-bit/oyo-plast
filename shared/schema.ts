@@ -26,8 +26,9 @@ export const products = pgTable("products", {
   sizes: text("sizes").array(), // For size customization (e.g., "صغير", "وسط", "كبير")
   allowDesignUpload: boolean("allow_design_upload").default(false).notNull(),
   bulkPricing: text("bulk_pricing"), // JSON string for quantity-based pricing
-  rating: numeric("rating").default("4.5"), // Product rating (1-5)
+  rating: numeric("rating").default("5"), // Product rating (1-5) - default 5 stars
   reviewCount: integer("review_count").default(0), // Number of reviews
+  soldCount: integer("sold_count").default(0), // Total units sold
 });
 
 export const settings = pgTable("settings", {
@@ -76,6 +77,7 @@ export const reviews = pgTable("reviews", {
   userId: varchar("user_id").references(() => users.id).notNull(),
   rating: integer("rating").notNull(), // 1-5
   comment: text("comment"),
+  imageUrl: text("image_url"), // Customer uploaded photo of the product
   createdAt: timestamp("created_at").defaultNow(),
 });
 
