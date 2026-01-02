@@ -43,7 +43,7 @@ export interface IStorage {
   
   // Reviews
   getProductReviews(productId: number): Promise<Review[]>;
-  addReview(review: { productId: number; userId: string; rating: number; comment?: string }): Promise<Review>;
+  addReview(review: { productId: number; userId: string; rating: number; comment?: string; imageUrl?: string }): Promise<Review>;
   
   // Inventory
   updateProductStock(productId: number, stock: number): Promise<Product>;
@@ -70,6 +70,9 @@ export interface IStorage {
   
   // Bestselling products
   getBestsellingProducts(limit?: number): Promise<Product[]>;
+  
+  // Increment sold count for products in an order
+  incrementSoldCount(orderId: number): Promise<void>;
   
   // Product management
   createProduct(product: Omit<Product, 'id'>): Promise<Product>;
@@ -377,12 +380,13 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(reviews.createdAt));
   }
 
-  async addReview(review: { productId: number; userId: string; rating: number; comment?: string }): Promise<Review> {
+  async addReview(review: { productId: number; userId: string; rating: number; comment?: string; imageUrl?: string }): Promise<Review> {
     const [newReview] = await db.insert(reviews).values({
       productId: review.productId,
       userId: review.userId,
       rating: review.rating,
       comment: review.comment || null,
+      imageUrl: review.imageUrl || null,
     }).returning();
     
     // Update product rating average
@@ -537,6 +541,19 @@ export class DatabaseStorage implements IStorage {
     return bestProducts.sort((a, b) => {
       return productIds.indexOf(a.id) - productIds.indexOf(b.id);
     });
+  }
+
+  // Increment sold count for all products in an order
+  async incrementSoldCount(orderId: number): Promise<void> {
+    const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+    
+    for (const item of items) {
+      await db.update(products)
+        .set({ 
+          soldCount: sql`COALESCE(${products.soldCount}, 0) + ${item.quantity}` 
+        })
+        .where(eq(products.id, item.productId));
+    }
   }
 
   // Product management

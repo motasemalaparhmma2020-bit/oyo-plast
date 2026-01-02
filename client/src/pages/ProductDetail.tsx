@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useAddToCart } from "@/hooks/use-cart";
-import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star, User } from "lucide-react";
+import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star, User, Camera, X, ImagePlus } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -37,17 +37,48 @@ export default function ProductDetail() {
 
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
-  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [reviewImageUrl, setReviewImageUrl] = useState<string | null>(null);
+  const [isUploadingReviewImage, setIsUploadingReviewImage] = useState(false);
+  const reviewImageRef = useRef<HTMLInputElement>(null);
+
+  const handleReviewImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingReviewImage(true);
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const res = await fetch('/api/upload/review', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setReviewImageUrl(data.imageUrl);
+        toast({ title: "تم رفع الصورة بنجاح" });
+      } else {
+        toast({ title: "فشل رفع الصورة", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "حدث خطأ أثناء رفع الصورة", variant: "destructive" });
+    }
+    setIsUploadingReviewImage(false);
+    e.target.value = '';
+  };
 
   const submitReviewMutation = useMutation({
-    mutationFn: async ({ rating, comment }: { rating: number; comment: string }) => {
-      return apiRequest('POST', `/api/products/${id}/reviews`, { rating, comment });
+    mutationFn: async ({ rating, comment, imageUrl }: { rating: number; comment: string; imageUrl?: string }) => {
+      return apiRequest('POST', `/api/products/${id}/reviews`, { rating, comment, imageUrl });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/products', id, 'reviews'] });
       queryClient.invalidateQueries({ queryKey: ['/api/products', id] });
       setReviewComment("");
       setReviewRating(5);
+      setReviewImageUrl(null);
       toast({ title: "تم إضافة تقييمك بنجاح" });
     },
     onError: () => {
@@ -187,29 +218,38 @@ export default function ProductDetail() {
               {product.name}
             </h1>
             
-            {/* Product Rating */}
-            {product.rating && (
-              <div className="flex items-center gap-2 mb-3">
+            {/* Social Proof: Rating + Sold Count */}
+            <div className="flex flex-wrap items-center gap-4 mb-4 p-3 bg-muted/30 rounded-lg">
+              {/* Star Rating */}
+              <div className="flex items-center gap-2">
                 <div className="flex items-center gap-0.5">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <Star 
                       key={star}
                       className={`h-5 w-5 ${
-                        star <= Math.floor(Number(product.rating))
+                        star <= Math.floor(Number(product.rating || 5))
                           ? 'text-yellow-400 fill-yellow-400' 
-                          : star - 0.5 <= Number(product.rating)
+                          : star - 0.5 <= Number(product.rating || 5)
                             ? 'text-yellow-400 fill-yellow-400/50'
                             : 'text-gray-300'
                       }`}
                     />
                   ))}
                 </div>
-                <span className="text-lg font-bold text-foreground">{product.rating}</span>
+                <span className="text-lg font-bold text-foreground">{product.rating || "5"}</span>
                 <span className="text-sm text-muted-foreground">
                   ({product.reviewCount || 0} تقييم)
                 </span>
               </div>
-            )}
+              
+              {/* Sold Counter */}
+              <div className="flex items-center gap-2 text-sm">
+                <Badge variant="secondary" className="gap-1.5 font-semibold">
+                  <ShoppingCart className="h-3.5 w-3.5" />
+                  تم بيع {(product as any).soldCount || 0} قطعة
+                </Badge>
+              </div>
+            </div>
             
             <p className="text-muted-foreground leading-relaxed" data-testid="text-product-description">
               {product.description}
@@ -437,8 +477,65 @@ export default function ProductDetail() {
                 data-testid="input-review-comment"
               />
             </div>
+            
+            {/* Review Image Upload */}
+            <div>
+              <Label className="mb-2 block">أضف صورة للمنتج (اختياري)</Label>
+              <div className="flex items-center gap-4">
+                <input
+                  ref={reviewImageRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleReviewImageUpload}
+                  disabled={isUploadingReviewImage}
+                  data-testid="input-review-image"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => reviewImageRef.current?.click()}
+                  disabled={isUploadingReviewImage}
+                  className="gap-2"
+                  data-testid="button-upload-review-image"
+                >
+                  {isUploadingReviewImage ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Camera className="h-4 w-4" />
+                  )}
+                  {isUploadingReviewImage ? 'جاري الرفع...' : 'رفع صورة'}
+                </Button>
+                
+                {reviewImageUrl && (
+                  <div className="relative">
+                    <img 
+                      src={reviewImageUrl} 
+                      alt="صورة التقييم" 
+                      className="w-16 h-16 object-cover rounded-lg border"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setReviewImageUrl(null)}
+                      className="absolute -top-2 -right-2 w-5 h-5 bg-destructive text-white rounded-full flex items-center justify-center"
+                      data-testid="button-remove-review-image"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                شارك صورة المنتج بعد استلامه
+              </p>
+            </div>
+            
             <Button
-              onClick={() => submitReviewMutation.mutate({ rating: reviewRating, comment: reviewComment })}
+              onClick={() => submitReviewMutation.mutate({ 
+                rating: reviewRating, 
+                comment: reviewComment,
+                imageUrl: reviewImageUrl || undefined
+              })}
               disabled={submitReviewMutation.isPending}
               data-testid="button-submit-review"
             >
@@ -454,7 +551,7 @@ export default function ProductDetail() {
         {reviews.length > 0 ? (
           <div className="space-y-4">
             {reviews.map((review) => (
-              <Card key={review.id}>
+              <Card key={review.id} data-testid={`review-card-${review.id}`}>
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center shrink-0">
@@ -479,7 +576,19 @@ export default function ProductDetail() {
                         </span>
                       </div>
                       {review.comment && (
-                        <p className="text-foreground">{review.comment}</p>
+                        <p className="text-foreground mb-2">{review.comment}</p>
+                      )}
+                      {/* Review Image */}
+                      {(review as any).imageUrl && (
+                        <div className="mt-3">
+                          <img 
+                            src={(review as any).imageUrl} 
+                            alt="صورة من العميل" 
+                            className="w-32 h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => window.open((review as any).imageUrl, '_blank')}
+                            data-testid={`review-image-${review.id}`}
+                          />
+                        </div>
                       )}
                     </div>
                   </div>

@@ -250,6 +250,36 @@ export async function registerRoutes(
     }
   });
 
+  // Public review image upload endpoint (requires login)
+  app.post("/api/upload/review", upload.single('image'), async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No image file provided" });
+      }
+
+      const filename = `review_${Date.now()}_${Math.random().toString(36).substring(7)}.webp`;
+      const filepath = path.join(uploadDir, filename);
+
+      await sharp(req.file.buffer)
+        .resize(600, 600, {
+          fit: 'inside',
+          withoutEnlargement: true
+        })
+        .webp({ quality: 80 })
+        .toFile(filepath);
+
+      const imageUrl = `/products/${filename}`;
+      res.json({ success: true, imageUrl });
+    } catch (error) {
+      console.error("Review image upload error:", error);
+      res.status(500).json({ error: "Failed to process image" });
+    }
+  });
+
   // Admin routes (protected)
   app.get("/api/admin/orders", requireAdmin, async (req, res) => {
     const allOrders = await storage.getAllOrders();
@@ -277,7 +307,17 @@ export async function registerRoutes(
     }
     
     try {
+      // Get current order status to check if we need to increment sold count
+      const currentOrder = await storage.getAllOrders().then(orders => orders.find(o => o.id === orderId));
+      const wasNotDelivered = currentOrder && !['delivered', 'completed'].includes(currentOrder.status);
+      const becomingDelivered = ['delivered', 'completed'].includes(status);
+      
       const updated = await storage.updateOrderStatus(orderId, status, trackingNumber);
+      
+      // Increment sold count when order is delivered/completed for the first time
+      if (wasNotDelivered && becomingDelivered) {
+        await storage.incrementSoldCount(orderId);
+      }
       
       // Create notification for status update
       const statusMessages: Record<string, string> = {
@@ -373,8 +413,9 @@ export async function registerRoutes(
         sizes: sizes || null,
         allowDesignUpload: allowDesignUpload || false,
         bulkPricing: bulkPricing || null,
-        rating: "4.5",
-        reviewCount: 0
+        rating: "5",
+        reviewCount: 0,
+        soldCount: 0
       });
       res.status(201).json(product);
     } catch (error) {
@@ -458,7 +499,7 @@ export async function registerRoutes(
   app.post("/api/products/:id/reviews", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
     const userId = getUserId(req);
-    const { rating, comment } = req.body;
+    const { rating, comment, imageUrl } = req.body;
     
     if (!rating || rating < 1 || rating > 5) {
       return res.status(400).json({ error: "Rating must be between 1 and 5" });
@@ -469,7 +510,8 @@ export async function registerRoutes(
         productId: Number(req.params.id),
         userId,
         rating,
-        comment
+        comment,
+        imageUrl
       });
       res.status(201).json(review);
     } catch (error) {
