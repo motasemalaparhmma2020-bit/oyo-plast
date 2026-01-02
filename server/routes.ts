@@ -764,6 +764,136 @@ ${notes ? `ملاحظات: ${notes}` : ''}
     }
   });
 
+  // Admin: Banner management
+  app.get("/api/banners", async (req, res) => {
+    try {
+      const activeOnly = req.query.active === 'true';
+      const allBanners = await storage.getBanners(activeOnly);
+      res.json(allBanners);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch banners" });
+    }
+  });
+
+  app.get("/api/admin/banners", requireAdmin, async (req, res) => {
+    try {
+      const allBanners = await storage.getBanners();
+      res.json(allBanners);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch banners" });
+    }
+  });
+
+  app.post("/api/admin/banners", requireAdmin, async (req, res) => {
+    try {
+      const { title, subtitle, imageUrl, linkUrl, isActive, sortOrder } = req.body;
+      
+      if (!title || !imageUrl) {
+        return res.status(400).json({ error: "Title and image are required" });
+      }
+      
+      const banner = await storage.createBanner({
+        title,
+        subtitle: subtitle || null,
+        imageUrl,
+        linkUrl: linkUrl || '/products',
+        isActive: isActive !== false,
+        sortOrder: sortOrder || 0
+      });
+      res.status(201).json(banner);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create banner" });
+    }
+  });
+
+  app.patch("/api/admin/banners/:id", requireAdmin, async (req, res) => {
+    try {
+      const bannerId = Number(req.params.id);
+      const updates = req.body;
+      const banner = await storage.updateBanner(bannerId, updates);
+      res.json(banner);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update banner" });
+    }
+  });
+
+  app.delete("/api/admin/banners/:id", requireAdmin, async (req, res) => {
+    try {
+      const bannerId = Number(req.params.id);
+      await storage.deleteBanner(bannerId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete banner" });
+    }
+  });
+
+  // Admin: Offers management
+  app.get("/api/offers", async (req, res) => {
+    try {
+      const activeOnly = req.query.active === 'true';
+      const allOffers = await storage.getOffers(activeOnly);
+      res.json(allOffers);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch offers" });
+    }
+  });
+
+  app.get("/api/admin/offers", requireAdmin, async (req, res) => {
+    try {
+      const allOffers = await storage.getOffers();
+      res.json(allOffers);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch offers" });
+    }
+  });
+
+  app.post("/api/admin/offers", requireAdmin, async (req, res) => {
+    try {
+      const { title, discountPercent, imageUrl, linkUrl, bgColor, isActive, sortOrder } = req.body;
+      
+      if (!title || discountPercent === undefined) {
+        return res.status(400).json({ error: "Title and discount percent are required" });
+      }
+      
+      const offer = await storage.createOffer({
+        title,
+        discountPercent: Number(discountPercent),
+        imageUrl: imageUrl || null,
+        linkUrl: linkUrl || '/products',
+        bgColor: bgColor || 'blue',
+        isActive: isActive !== false,
+        sortOrder: sortOrder || 0
+      });
+      res.status(201).json(offer);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create offer" });
+    }
+  });
+
+  app.patch("/api/admin/offers/:id", requireAdmin, async (req, res) => {
+    try {
+      const offerId = Number(req.params.id);
+      const updates = req.body;
+      if (updates.discountPercent !== undefined) {
+        updates.discountPercent = Number(updates.discountPercent);
+      }
+      const offer = await storage.updateOffer(offerId, updates);
+      res.json(offer);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update offer" });
+    }
+  });
+
+  app.delete("/api/admin/offers/:id", requireAdmin, async (req, res) => {
+    try {
+      const offerId = Number(req.params.id);
+      await storage.deleteOffer(offerId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete offer" });
+    }
+  });
+
   // Admin Settings
   app.get("/api/admin/settings", requireAdmin, async (req, res) => {
     const settings = await storage.getAllSettings();

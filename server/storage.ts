@@ -1,9 +1,9 @@
 import { db } from "./db";
 import {
   users, products, categories, cartItems, orders, orderItems, settings, reviews, wishlist, notifications,
-  wallets, walletTransactions, rewardPoints, pointsTransactions,
+  wallets, walletTransactions, rewardPoints, pointsTransactions, banners, offers,
   type User, type Product, type Category, type CartItem, type Order, type OrderItem, type Setting, type Review, type WishlistItem, type Notification,
-  type Wallet, type WalletTransaction, type RewardPoints, type PointsTransaction
+  type Wallet, type WalletTransaction, type RewardPoints, type PointsTransaction, type Banner, type Offer
 } from "@shared/schema";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
 
@@ -95,6 +95,18 @@ export interface IStorage {
   getPointsTransactions(userId: string): Promise<PointsTransaction[]>;
   addPoints(userId: string, points: number, type: string, description?: string, orderId?: number, reviewId?: number): Promise<PointsTransaction>;
   usePoints(userId: string, points: number, description?: string): Promise<PointsTransaction | null>;
+  
+  // Banners
+  getBanners(activeOnly?: boolean): Promise<Banner[]>;
+  createBanner(banner: Omit<Banner, 'id' | 'createdAt'>): Promise<Banner>;
+  updateBanner(id: number, banner: Partial<Banner>): Promise<Banner>;
+  deleteBanner(id: number): Promise<void>;
+  
+  // Offers
+  getOffers(activeOnly?: boolean): Promise<Offer[]>;
+  createOffer(offer: Omit<Offer, 'id' | 'createdAt'>): Promise<Offer>;
+  updateOffer(id: number, offer: Partial<Offer>): Promise<Offer>;
+  deleteOffer(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -774,6 +786,60 @@ export class DatabaseStorage implements IStorage {
     }).returning();
     
     return transaction;
+  }
+  
+  // Banner methods
+  async getBanners(activeOnly: boolean = false): Promise<Banner[]> {
+    if (activeOnly) {
+      return await db.select().from(banners)
+        .where(eq(banners.isActive, true))
+        .orderBy(banners.sortOrder);
+    }
+    return await db.select().from(banners).orderBy(banners.sortOrder);
+  }
+  
+  async createBanner(banner: Omit<Banner, 'id' | 'createdAt'>): Promise<Banner> {
+    const [newBanner] = await db.insert(banners).values(banner).returning();
+    return newBanner;
+  }
+  
+  async updateBanner(id: number, banner: Partial<Banner>): Promise<Banner> {
+    const [updated] = await db.update(banners)
+      .set(banner)
+      .where(eq(banners.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async deleteBanner(id: number): Promise<void> {
+    await db.delete(banners).where(eq(banners.id, id));
+  }
+  
+  // Offer methods
+  async getOffers(activeOnly: boolean = false): Promise<Offer[]> {
+    if (activeOnly) {
+      return await db.select().from(offers)
+        .where(eq(offers.isActive, true))
+        .orderBy(offers.sortOrder);
+    }
+    return await db.select().from(offers).orderBy(offers.sortOrder);
+  }
+  
+  async createOffer(offer: Omit<Offer, 'id' | 'createdAt'>): Promise<Offer> {
+    const [newOffer] = await db.insert(offers).values(offer).returning();
+    return newOffer;
+  }
+  
+  async updateOffer(id: number, offer: Partial<Offer>): Promise<Offer> {
+    const [updated] = await db.update(offers)
+      .set(offer)
+      .where(eq(offers.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async deleteOffer(id: number): Promise<void> {
+    await db.delete(offers).where(eq(offers.id, id));
   }
 }
 

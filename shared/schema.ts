@@ -223,8 +223,35 @@ export const pointsTransactionsRelations = relations(pointsTransactions, ({ one 
   }),
 }));
 
+// Banners (Main slider)
+export const banners = pgTable("banners", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  subtitle: text("subtitle"),
+  imageUrl: text("image_url").notNull(),
+  linkUrl: text("link_url").default("/products"), // Deep link to category or page
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Special Offers
+export const offers = pgTable("offers", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  discountPercent: integer("discount_percent").notNull(),
+  imageUrl: text("image_url"),
+  linkUrl: text("link_url").default("/products"), // Deep link
+  bgColor: text("bg_color").default("blue"), // Color theme: blue, pink, green, purple, orange
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Schemas
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
+export const insertBannerSchema = createInsertSchema(banners).omit({ id: true, createdAt: true });
+export const insertOfferSchema = createInsertSchema(offers).omit({ id: true, createdAt: true });
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true });
 export const insertCartItemSchema = createInsertSchema(cartItems).omit({ id: true });
 export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true });
@@ -252,3 +279,5 @@ export type Wallet = typeof wallets.$inferSelect;
 export type WalletTransaction = typeof walletTransactions.$inferSelect;
 export type RewardPoints = typeof rewardPoints.$inferSelect;
 export type PointsTransaction = typeof pointsTransactions.$inferSelect;
+export type Banner = typeof banners.$inferSelect;
+export type Offer = typeof offers.$inferSelect;
