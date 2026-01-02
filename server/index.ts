@@ -13,6 +13,9 @@ const rootDir = process.cwd();
 // Serve attached_assets for product images
 app.use('/assets', express.static(path.resolve(rootDir, 'attached_assets')));
 
+// Serve uploaded product images
+app.use('/products', express.static(path.resolve(rootDir, 'public', 'products')));
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;

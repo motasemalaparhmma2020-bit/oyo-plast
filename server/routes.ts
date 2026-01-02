@@ -6,6 +6,27 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { orders } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import multer from "multer";
+import sharp from "sharp";
+import path from "path";
+import fs from "fs";
+
+const uploadDir = path.join(process.cwd(), "public", "products");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only images allowed'));
+    }
+  }
+});
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "oyo2024admin";
 
@@ -202,6 +223,32 @@ export async function registerRoutes(
     }
     next();
   };
+
+  // Image upload endpoint with auto-resize and compression
+  app.post("/api/admin/upload", requireAdmin, upload.single('image'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No image file provided" });
+      }
+
+      const filename = `product_${Date.now()}_${Math.random().toString(36).substring(7)}.webp`;
+      const filepath = path.join(uploadDir, filename);
+
+      await sharp(req.file.buffer)
+        .resize(800, 800, {
+          fit: 'inside',
+          withoutEnlargement: true
+        })
+        .webp({ quality: 85 })
+        .toFile(filepath);
+
+      const imageUrl = `/products/${filename}`;
+      res.json({ success: true, imageUrl });
+    } catch (error) {
+      console.error("Upload error:", error);
+      res.status(500).json({ error: "Failed to process image" });
+    }
+  });
 
   // Admin routes (protected)
   app.get("/api/admin/orders", requireAdmin, async (req, res) => {

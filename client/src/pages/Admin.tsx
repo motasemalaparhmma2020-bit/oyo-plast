@@ -116,7 +116,41 @@ export default function Admin() {
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryForm, setCategoryForm] = useState<CategoryFormData>(emptyCategoryForm);
+  const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'product' | 'category' = 'product') => {
+    const file = e.target.files?.[0];
+    if (!file || !adminToken) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const res = await fetch('/api/admin/upload', {
+        method: 'POST',
+        headers: { 'x-admin-token': adminToken },
+        body: formData
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (type === 'product') {
+          setProductForm(prev => ({ ...prev, imageUrl: data.imageUrl }));
+        } else {
+          setCategoryForm(prev => ({ ...prev, imageUrl: data.imageUrl }));
+        }
+        toast({ title: "تم رفع الصورة بنجاح" });
+      } else {
+        toast({ title: "فشل رفع الصورة", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "حدث خطأ أثناء رفع الصورة", variant: "destructive" });
+    }
+    setIsUploading(false);
+    e.target.value = '';
+  };
 
   const handlePrintDeliveryInvoice = async (order: Order) => {
     if (!adminToken) return;
@@ -812,15 +846,30 @@ export default function Admin() {
                       </div>
 
                       <div>
-                        <Label htmlFor="product-image">رابط الصورة *</Label>
-                        <Input
-                          id="product-image"
-                          value={productForm.imageUrl}
-                          onChange={(e) => setProductForm({...productForm, imageUrl: e.target.value})}
-                          placeholder="https://example.com/image.jpg"
-                          required
-                          data-testid="input-product-image"
-                        />
+                        <Label htmlFor="product-image">صورة المنتج *</Label>
+                        <div className="flex items-center gap-4">
+                          <label 
+                            htmlFor="product-image-upload"
+                            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md cursor-pointer hover:bg-primary/90 transition-colors"
+                          >
+                            <ImagePlus className="h-4 w-4" />
+                            <span>{isUploading ? 'جاري الرفع...' : 'رفع صورة'}</span>
+                          </label>
+                          <input
+                            type="file"
+                            id="product-image-upload"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => handleImageUpload(e, 'product')}
+                            disabled={isUploading}
+                            data-testid="input-product-image-upload"
+                          />
+                          {productForm.imageUrl && (
+                            <span className="text-sm text-muted-foreground truncate max-w-[200px]">
+                              {productForm.imageUrl}
+                            </span>
+                          )}
+                        </div>
                         {productForm.imageUrl && (
                           <div className="mt-2 w-20 h-20 rounded-lg overflow-hidden border">
                             <img 
@@ -1030,15 +1079,25 @@ export default function Admin() {
                         </div>
                       </div>
                       <div>
-                        <Label htmlFor="cat-image">رابط صورة القسم</Label>
-                        <Input
-                          id="cat-image"
-                          value={categoryForm.imageUrl}
-                          onChange={(e) => setCategoryForm({...categoryForm, imageUrl: e.target.value})}
-                          placeholder="رابط الصورة"
-                          required
-                          data-testid="input-category-image"
-                        />
+                        <Label htmlFor="cat-image">صورة القسم</Label>
+                        <div className="flex items-center gap-4">
+                          <label 
+                            htmlFor="category-image-upload"
+                            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md cursor-pointer hover:bg-primary/90 transition-colors"
+                          >
+                            <ImagePlus className="h-4 w-4" />
+                            <span>{isUploading ? 'جاري الرفع...' : 'رفع صورة'}</span>
+                          </label>
+                          <input
+                            type="file"
+                            id="category-image-upload"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => handleImageUpload(e, 'category')}
+                            disabled={isUploading}
+                            data-testid="input-category-image-upload"
+                          />
+                        </div>
                         {categoryForm.imageUrl && (
                           <div className="mt-2 w-20 h-20 bg-gray-100 rounded-lg overflow-hidden">
                             <img src={categoryForm.imageUrl} alt="معاينة" className="w-full h-full object-contain" />
