@@ -73,6 +73,10 @@ export const orders = pgTable("orders", {
   shippingAddress: text("shipping_address"),
   gpsCoordinates: text("gps_coordinates"), // GPS coordinates for delivery location
   notes: text("notes"),
+  // Coupon-related fields
+  couponCode: text("coupon_code"), // Applied coupon code
+  discountAmount: numeric("discount_amount"), // Discount amount applied
+  subtotalBeforeDiscount: numeric("subtotal_before_discount"), // Original subtotal before discount
   // Marketer-related fields
   marketerId: varchar("marketer_id").references(() => users.id), // Who placed the order (if marketer)
   endCustomerContactId: integer("end_customer_contact_id"), // Reference to end customer if marketer order
@@ -334,6 +338,20 @@ export const productViews = pgTable("product_views", {
   viewedAt: timestamp("viewed_at").defaultNow(),
 });
 
+// Marketer Coupons (discount codes)
+export const coupons = pgTable("coupons", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(), // e.g., "AHMED5" for marketer Ahmed with 5% discount
+  marketerId: varchar("marketer_id").references(() => users.id).notNull(), // Owner of the coupon
+  discountPercent: integer("discount_percent").default(5).notNull(), // Customer discount (%)
+  marketerCommissionPercent: integer("marketer_commission_percent").default(5).notNull(), // Marketer gets (%)
+  usageCount: integer("usage_count").default(0).notNull(), // Times used
+  maxUsage: integer("max_usage"), // Maximum uses (null = unlimited)
+  isActive: boolean("is_active").default(true).notNull(),
+  expiresAt: timestamp("expires_at"), // Expiration date (null = never)
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Schemas
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
 export const insertBannerSchema = createInsertSchema(banners).omit({ id: true, createdAt: true });
@@ -354,6 +372,7 @@ export const insertPhoneVerificationSchema = createInsertSchema(phoneVerificatio
 export const insertMarketerProfileSchema = createInsertSchema(marketerProfiles).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertEndCustomerContactSchema = createInsertSchema(endCustomerContacts).omit({ id: true, createdAt: true });
 export const insertMarketerCommissionSchema = createInsertSchema(marketerCommissions).omit({ id: true, createdAt: true });
+export const insertCouponSchema = createInsertSchema(coupons).omit({ id: true, createdAt: true, usageCount: true });
 
 // Types
 export type Product = typeof products.$inferSelect;
@@ -376,3 +395,4 @@ export type MarketerProfile = typeof marketerProfiles.$inferSelect;
 export type EndCustomerContact = typeof endCustomerContacts.$inferSelect;
 export type MarketerCommission = typeof marketerCommissions.$inferSelect;
 export type ProductView = typeof productViews.$inferSelect;
+export type Coupon = typeof coupons.$inferSelect;

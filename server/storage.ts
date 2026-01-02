@@ -2,10 +2,10 @@ import { db } from "./db";
 import {
   users, products, categories, cartItems, orders, orderItems, settings, reviews, wishlist, notifications,
   wallets, walletTransactions, rewardPoints, pointsTransactions, banners, offers, phoneVerifications,
-  marketerProfiles, endCustomerContacts, marketerCommissions,
+  marketerProfiles, endCustomerContacts, marketerCommissions, coupons,
   type User, type Product, type Category, type CartItem, type Order, type OrderItem, type Setting, type Review, type WishlistItem, type Notification,
   type Wallet, type WalletTransaction, type RewardPoints, type PointsTransaction, type Banner, type Offer,
-  type PhoneVerification, type MarketerProfile, type EndCustomerContact, type MarketerCommission
+  type PhoneVerification, type MarketerProfile, type EndCustomerContact, type MarketerCommission, type Coupon
 } from "@shared/schema";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
 
@@ -35,6 +35,9 @@ export interface IStorage {
     shippingAddress?: string | null;
     notes?: string | null;
     status?: string;
+    couponCode?: string | null;
+    discountAmount?: string | null;
+    subtotalBeforeDiscount?: string | null;
   }): Promise<Order>;
   createOrderItem(orderItem: typeof orderItems.$inferInsert): Promise<OrderItem>;
   getOrderItems(orderId: number): Promise<(OrderItem & { productName: string })[]>;
@@ -131,6 +134,13 @@ export interface IStorage {
   createMarketerCommission(commission: Omit<MarketerCommission, 'id' | 'createdAt'>): Promise<MarketerCommission>;
   releaseCommission(commissionId: number): Promise<MarketerCommission>;
   getPendingCommissions(): Promise<MarketerCommission[]>;
+  
+  // Coupons
+  getCoupon(code: string): Promise<Coupon | undefined>;
+  getMarketerCoupons(marketerId: string): Promise<Coupon[]>;
+  createCoupon(coupon: Omit<Coupon, 'id' | 'createdAt' | 'usageCount'>): Promise<Coupon>;
+  updateCoupon(id: number, coupon: Partial<Coupon>): Promise<Coupon>;
+  incrementCouponUsage(code: string): Promise<void>;
   
   // User updates
   updateUserAccountType(userId: string, accountType: string): Promise<User>;
@@ -239,6 +249,9 @@ export class DatabaseStorage implements IStorage {
     shippingAddress?: string | null;
     notes?: string | null;
     status?: string;
+    couponCode?: string | null;
+    discountAmount?: string | null;
+    subtotalBeforeDiscount?: string | null;
   }): Promise<Order> {
     const [order] = await db.insert(orders)
       .values({ 
@@ -252,7 +265,10 @@ export class DatabaseStorage implements IStorage {
         shippingCity: orderData.shippingCity,
         shippingAddress: orderData.shippingAddress,
         notes: orderData.notes,
-        status: orderData.status || 'pending'
+        status: orderData.status || 'pending',
+        couponCode: orderData.couponCode,
+        discountAmount: orderData.discountAmount,
+        subtotalBeforeDiscount: orderData.subtotalBeforeDiscount
       })
       .returning();
     return order;
@@ -1007,6 +1023,42 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId))
       .returning();
     return updated;
+  }
+  
+  // Coupon methods
+  async getCoupon(code: string): Promise<Coupon | undefined> {
+    const [coupon] = await db.select()
+      .from(coupons)
+      .where(eq(coupons.code, code.toUpperCase()));
+    return coupon;
+  }
+  
+  async getMarketerCoupons(marketerId: string): Promise<Coupon[]> {
+    return await db.select()
+      .from(coupons)
+      .where(eq(coupons.marketerId, marketerId))
+      .orderBy(desc(coupons.createdAt));
+  }
+  
+  async createCoupon(coupon: Omit<Coupon, 'id' | 'createdAt' | 'usageCount'>): Promise<Coupon> {
+    const [newCoupon] = await db.insert(coupons)
+      .values({ ...coupon, code: coupon.code.toUpperCase() })
+      .returning();
+    return newCoupon;
+  }
+  
+  async updateCoupon(id: number, coupon: Partial<Coupon>): Promise<Coupon> {
+    const [updated] = await db.update(coupons)
+      .set(coupon)
+      .where(eq(coupons.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async incrementCouponUsage(code: string): Promise<void> {
+    await db.update(coupons)
+      .set({ usageCount: sql`${coupons.usageCount} + 1` })
+      .where(eq(coupons.code, code.toUpperCase()));
   }
 }
 

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useAddToCart } from "@/hooks/use-cart";
-import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star, User, Camera, X, ImagePlus } from "lucide-react";
+import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star, User, Camera, X, ImagePlus, Sparkles } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -32,6 +32,17 @@ export default function ProductDetail() {
     queryKey: ['/api/products', id, 'reviews'],
     enabled: !!id,
   });
+
+  const { data: relatedProducts = [] } = useQuery<Product[]>({
+    queryKey: ['/api/products'],
+  });
+
+  const filteredRelatedProducts = useMemo(() => {
+    if (!product || !relatedProducts.length) return [];
+    return relatedProducts
+      .filter(p => p.id !== product.id && p.categoryId === product.categoryId)
+      .slice(0, 4);
+  }, [product, relatedProducts]);
 
   const { mutate: addToCart, isPending } = useAddToCart();
 
@@ -602,6 +613,40 @@ export default function ProductDetail() {
           </p>
         )}
       </div>
+
+      {/* Related Products Section */}
+      {filteredRelatedProducts.length > 0 && (
+        <div className="container max-w-4xl mx-auto px-4 py-8 pb-24">
+          <div className="flex items-center gap-2 mb-6">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <h2 className="text-xl font-bold">قد يعجبك أيضاً</h2>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {filteredRelatedProducts.map((relatedProduct) => (
+              <Link key={relatedProduct.id} href={`/product/${relatedProduct.id}`}>
+                <Card className="overflow-hidden hover-elevate cursor-pointer" data-testid={`related-product-${relatedProduct.id}`}>
+                  <div className="aspect-square overflow-hidden">
+                    <img
+                      src={relatedProduct.imageUrl}
+                      alt={relatedProduct.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <CardContent className="p-3">
+                    <h3 className="font-medium text-sm line-clamp-2 mb-1">{relatedProduct.name}</h3>
+                    <p className="text-primary font-bold text-sm">
+                      {currency === 'SAR' && relatedProduct.priceSar
+                        ? `${Number(relatedProduct.priceSar).toLocaleString('ar-YE')} ر.س`
+                        : `${Number(relatedProduct.price).toLocaleString('ar-YE')} ر.ي`
+                      }
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

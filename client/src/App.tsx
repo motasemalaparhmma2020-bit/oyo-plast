@@ -24,6 +24,7 @@ import PrintingAndDesign from "@/pages/PrintingAndDesign";
 import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
+import Returns from "@/pages/Returns";
 import NotFound from "@/pages/not-found";
 
 import { BottomNav } from "@/components/BottomNav";
@@ -69,6 +70,7 @@ function Router() {
           <Route path="/about" component={About} />
           <Route path="/privacy" component={Privacy} />
           <Route path="/terms" component={Terms} />
+          <Route path="/returns" component={Returns} />
           <Route component={NotFound} />
         </Switch>
       </main>

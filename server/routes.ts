@@ -133,33 +133,56 @@ export async function registerRoutes(
       shippingCity, 
       shippingAddress, 
       notes,
-      currency = 'YER'
+      currency = 'YER',
+      couponCode = null
     } = req.body;
 
-    // Validate payment method - currently only cash on delivery
-    const validPaymentMethods = ['cash_on_delivery'];
+    // Validate payment method - support all e-wallet options
+    const validPaymentMethods = ['cash_on_delivery', 'jawali', 'jaib', 'onecash', 'cash_wallet', 'mahfazati', 'mobile_money', 'kuraimi_bank'];
     if (!validPaymentMethods.includes(paymentMethod)) {
       return res.status(400).json({ message: "Invalid payment method" });
     }
 
-    // Calculate total server-side based on currency
-    const total = cartItems.reduce((sum, item) => {
+    // Calculate subtotal server-side based on currency
+    const subtotal = cartItems.reduce((sum, item) => {
       const price = currency === 'SAR' && item.product.priceSar 
         ? Number(item.product.priceSar) 
         : Number(item.product.price);
       return sum + (price * item.quantity);
     }, 0);
 
-    // Calculate deposit (30% for bank transfers)
-    const depositAmount = (paymentMethod === 'karimi' || paymentMethod === 'najm') 
-      ? Math.ceil(total * 0.3).toString() 
-      : null;
+    // Validate and apply coupon if provided
+    let discountAmount = 0;
+    let validatedCouponCode: string | null = null;
+    
+    if (couponCode) {
+      const coupon = await storage.getCoupon(couponCode);
+      if (coupon && coupon.isActive) {
+        // Check expiration
+        const isExpired = coupon.expiresAt && new Date(coupon.expiresAt) < new Date();
+        // Check usage limit
+        const isOverLimit = coupon.maxUsage && coupon.usageCount >= coupon.maxUsage;
+        
+        if (!isExpired && !isOverLimit) {
+          discountAmount = Math.floor(subtotal * (coupon.discountPercent / 100));
+          validatedCouponCode = coupon.code;
+          // Increment coupon usage
+          await storage.incrementCouponUsage(coupon.code);
+        }
+      }
+    }
+
+    const finalTotal = subtotal - discountAmount;
+
+    // Calculate deposit (30% for e-wallet transfers)
+    const requiresDeposit = paymentMethod !== 'cash_on_delivery';
+    const depositAmount = requiresDeposit ? Math.ceil(finalTotal * 0.3).toString() : null;
 
     // Determine status based on payment method
     const status = paymentMethod === 'cash_on_delivery' ? 'pending' : 'deposit_paid';
 
     const order = await storage.createOrder(userId, {
-      total: total.toString(),
+      total: finalTotal.toString(),
       currency,
       depositAmount,
       paymentMethod,
@@ -168,7 +191,10 @@ export async function registerRoutes(
       shippingCity,
       shippingAddress,
       notes,
-      status
+      status,
+      couponCode: validatedCouponCode,
+      discountAmount: discountAmount > 0 ? discountAmount.toString() : null,
+      subtotalBeforeDiscount: discountAmount > 0 ? subtotal.toString() : null
     });
 
     for (const item of cartItems) {
@@ -189,7 +215,7 @@ export async function registerRoutes(
     await storage.createNotification(
       userId,
       "تم استلام طلبك",
-      `طلب جديد برقم #${order.id} بقيمة ${total} ${currency === 'SAR' ? 'ر.س' : 'ر.ي'}`,
+      `طلب جديد برقم #${order.id} بقيمة ${finalTotal} ${currency === 'SAR' ? 'ر.س' : 'ر.ي'}${discountAmount > 0 ? ` (خصم ${discountAmount})` : ''}`,
       "order",
       order.id
     );
@@ -1245,6 +1271,88 @@ ${notes ? `ملاحظات: ${notes}` : ''}
       res.status(201).json(contact);
     } catch (error) {
       res.status(500).json({ error: "فشل في إضافة جهة الاتصال" });
+    }
+  });
+
+  // Coupons
+  app.get("/api/coupons/validate/:code", async (req, res) => {
+    const code = req.params.code;
+    
+    if (!code) {
+      return res.status(400).json({ valid: false, error: "كود الخصم مطلوب" });
+    }
+    
+    try {
+      const coupon = await storage.getCoupon(code);
+      
+      if (!coupon) {
+        return res.json({ valid: false, error: "كود الخصم غير صحيح" });
+      }
+      
+      if (!coupon.isActive) {
+        return res.json({ valid: false, error: "كود الخصم غير نشط" });
+      }
+      
+      if (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) {
+        return res.json({ valid: false, error: "كود الخصم منتهي الصلاحية" });
+      }
+      
+      if (coupon.maxUsage && coupon.usageCount >= coupon.maxUsage) {
+        return res.json({ valid: false, error: "تم استخدام الكود بالحد الأقصى" });
+      }
+      
+      res.json({
+        valid: true,
+        coupon: {
+          code: coupon.code,
+          discountPercent: coupon.discountPercent,
+          marketerCommissionPercent: coupon.marketerCommissionPercent
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ valid: false, error: "حدث خطأ أثناء التحقق" });
+    }
+  });
+
+  app.get("/api/marketer/coupons", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    
+    try {
+      const marketerCoupons = await storage.getMarketerCoupons(userId);
+      res.json(marketerCoupons);
+    } catch (error) {
+      res.status(500).json({ error: "فشل في جلب الكوبونات" });
+    }
+  });
+
+  app.post("/api/marketer/coupons", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    const { code, discountPercent = 5, marketerCommissionPercent = 5 } = req.body;
+    
+    if (!code || code.length < 3) {
+      return res.status(400).json({ error: "كود الخصم يجب أن يكون 3 أحرف على الأقل" });
+    }
+    
+    try {
+      const existingCoupon = await storage.getCoupon(code);
+      if (existingCoupon) {
+        return res.status(400).json({ error: "هذا الكود مستخدم بالفعل" });
+      }
+      
+      const coupon = await storage.createCoupon({
+        code: code.toUpperCase(),
+        marketerId: userId,
+        discountPercent,
+        marketerCommissionPercent,
+        isActive: true,
+        maxUsage: null,
+        expiresAt: null
+      });
+      res.status(201).json(coupon);
+    } catch (error) {
+      res.status(500).json({ error: "فشل في إنشاء الكوبون" });
     }
   });
 
