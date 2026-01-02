@@ -20,8 +20,9 @@ export const users = pgTable("users", {
   email: varchar("email").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
+  fullName: varchar("full_name"), // الاسم الكامل
   profileImageUrl: varchar("profile_image_url"),
-  phone: varchar("phone"),
+  phone: varchar("phone"), // رقم الجوال اليمني
   // Address fields
   country: varchar("country").default("اليمن"),
   governorate: varchar("governorate"), // المحافظة
@@ -30,7 +31,8 @@ export const users = pgTable("users", {
   neighborhood: varchar("neighborhood"), // المنطقة أو الحي
   street: varchar("street"), // الشارع
   landmark: varchar("landmark"), // بجوار/أمام/بجانب
-  businessType: varchar("business_type"), // نوع النشاط التجاري
+  businessType: varchar("business_type"), // نوع النشاط التجاري: مصنع، مطعم، محل تجاري، جهة حكومية، أخرى
+  accountType: varchar("account_type").default("customer"), // customer أو marketer
   isPhoneVerified: varchar("is_phone_verified").default("false"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

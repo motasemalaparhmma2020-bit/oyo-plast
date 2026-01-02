@@ -29,6 +29,8 @@ export const products = pgTable("products", {
   rating: numeric("rating").default("5"), // Product rating (1-5) - default 5 stars
   reviewCount: integer("review_count").default(0), // Number of reviews
   soldCount: integer("sold_count").default(0), // Total units sold
+  commissionHoldDays: integer("commission_hold_days").default(2), // Days to hold commission before release
+  marketerCommissionRate: numeric("marketer_commission_rate"), // Override commission rate for this product
 });
 
 export const settings = pgTable("settings", {
@@ -52,13 +54,18 @@ export const orders = pgTable("orders", {
   total: numeric("total").notNull(),
   currency: text("currency").default("YER").notNull(), // YER or SAR
   depositAmount: numeric("deposit_amount"), // Deposit amount paid
-  paymentMethod: text("payment_method"), // karimi, najm, cash_on_delivery
+  paymentMethod: text("payment_method"), // karimi, najm, cash_on_delivery, wallet
   receiptImageUrl: text("receipt_image_url"), // Receipt image for bank transfers
   customerPhone: text("customer_phone"),
   shippingCity: text("shipping_city"),
   shippingAddress: text("shipping_address"),
   gpsCoordinates: text("gps_coordinates"), // GPS coordinates for delivery location
   notes: text("notes"),
+  // Marketer-related fields
+  marketerId: varchar("marketer_id").references(() => users.id), // Who placed the order (if marketer)
+  endCustomerContactId: integer("end_customer_contact_id"), // Reference to end customer if marketer order
+  isMarketerOrder: boolean("is_marketer_order").default(false), // Whether this is a marketer order
+  preferredDeliveryTime: text("preferred_delivery_time"), // Preferred delivery time slot
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -223,6 +230,57 @@ export const pointsTransactionsRelations = relations(pointsTransactions, ({ one 
   }),
 }));
 
+// Phone Verifications (OTP)
+export const phoneVerifications = pgTable("phone_verifications", {
+  id: serial("id").primaryKey(),
+  phone: text("phone").notNull(),
+  code: text("code").notNull(), // 6-digit OTP
+  attempts: integer("attempts").default(0).notNull(),
+  verified: boolean("verified").default(false).notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Marketer Profiles (additional info for marketers)
+export const marketerProfiles = pgTable("marketer_profiles", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id).notNull().unique(),
+  tier: text("tier").default("bronze").notNull(), // bronze, silver, gold, platinum
+  commissionRate: numeric("commission_rate").default("5").notNull(), // Default 5% commission
+  totalEarnings: numeric("total_earnings").default("0").notNull(),
+  pendingEarnings: numeric("pending_earnings").default("0").notNull(),
+  isApproved: boolean("is_approved").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// End Customer Contacts (for marketer orders on behalf of others)
+export const endCustomerContacts = pgTable("end_customer_contacts", {
+  id: serial("id").primaryKey(),
+  marketerId: varchar("marketer_id").references(() => users.id).notNull(),
+  name: text("name").notNull(),
+  phone: text("phone").notNull(),
+  address: text("address"),
+  city: text("city"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Marketer Commissions (tracks commission for each order)
+export const marketerCommissions = pgTable("marketer_commissions", {
+  id: serial("id").primaryKey(),
+  marketerId: varchar("marketer_id").references(() => users.id).notNull(),
+  orderId: integer("order_id").references(() => orders.id).notNull(),
+  grossAmount: numeric("gross_amount").notNull(), // Total order amount
+  commissionAmount: numeric("commission_amount").notNull(), // Commission earned
+  commissionRate: numeric("commission_rate").notNull(), // Rate at time of order
+  currency: text("currency").default("YER").notNull(),
+  status: text("status").default("pending").notNull(), // pending, held, released, cancelled
+  holdUntil: timestamp("hold_until"), // When the hold period ends
+  releasedAt: timestamp("released_at"), // When commission was released to wallet
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Banners (Main slider)
 export const banners = pgTable("banners", {
   id: serial("id").primaryKey(),
@@ -264,6 +322,10 @@ export const insertWalletSchema = createInsertSchema(wallets).omit({ id: true, c
 export const insertWalletTransactionSchema = createInsertSchema(walletTransactions).omit({ id: true, createdAt: true });
 export const insertRewardPointsSchema = createInsertSchema(rewardPoints).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPointsTransactionSchema = createInsertSchema(pointsTransactions).omit({ id: true, createdAt: true });
+export const insertPhoneVerificationSchema = createInsertSchema(phoneVerifications).omit({ id: true, createdAt: true });
+export const insertMarketerProfileSchema = createInsertSchema(marketerProfiles).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertEndCustomerContactSchema = createInsertSchema(endCustomerContacts).omit({ id: true, createdAt: true });
+export const insertMarketerCommissionSchema = createInsertSchema(marketerCommissions).omit({ id: true, createdAt: true });
 
 // Types
 export type Product = typeof products.$inferSelect;
@@ -281,3 +343,7 @@ export type RewardPoints = typeof rewardPoints.$inferSelect;
 export type PointsTransaction = typeof pointsTransactions.$inferSelect;
 export type Banner = typeof banners.$inferSelect;
 export type Offer = typeof offers.$inferSelect;
+export type PhoneVerification = typeof phoneVerifications.$inferSelect;
+export type MarketerProfile = typeof marketerProfiles.$inferSelect;
+export type EndCustomerContact = typeof endCustomerContacts.$inferSelect;
+export type MarketerCommission = typeof marketerCommissions.$inferSelect;
