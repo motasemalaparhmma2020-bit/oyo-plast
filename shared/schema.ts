@@ -101,6 +101,51 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Customer Wallet
+export const wallets = pgTable("wallets", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id).notNull().unique(),
+  balanceYer: numeric("balance_yer").default("0").notNull(), // Balance in Yemeni Rial
+  balanceSar: numeric("balance_sar").default("0").notNull(), // Balance in Saudi Rial
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Wallet Transactions
+export const walletTransactions = pgTable("wallet_transactions", {
+  id: serial("id").primaryKey(),
+  walletId: integer("wallet_id").references(() => wallets.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  type: text("type").notNull(), // deposit, withdrawal, purchase, refund
+  amount: numeric("amount").notNull(),
+  currency: text("currency").default("YER").notNull(), // YER or SAR
+  description: text("description"),
+  orderId: integer("order_id").references(() => orders.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Reward Points
+export const rewardPoints = pgTable("reward_points", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id).notNull().unique(),
+  points: integer("points").default(0).notNull(),
+  lifetimePoints: integer("lifetime_points").default(0).notNull(), // Total points ever earned
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Points Transactions
+export const pointsTransactions = pgTable("points_transactions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  type: text("type").notNull(), // earned_purchase, earned_review, redeemed, expired
+  points: integer("points").notNull(), // Positive for earning, negative for redeeming
+  description: text("description"),
+  orderId: integer("order_id").references(() => orders.id),
+  reviewId: integer("review_id").references(() => reviews.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const productsRelations = relations(products, ({ one }) => ({
   category: one(categories, {
@@ -152,6 +197,32 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   }),
 }));
 
+export const walletsRelations = relations(wallets, ({ many }) => ({
+  transactions: many(walletTransactions),
+}));
+
+export const walletTransactionsRelations = relations(walletTransactions, ({ one }) => ({
+  wallet: one(wallets, {
+    fields: [walletTransactions.walletId],
+    references: [wallets.id],
+  }),
+  order: one(orders, {
+    fields: [walletTransactions.orderId],
+    references: [orders.id],
+  }),
+}));
+
+export const pointsTransactionsRelations = relations(pointsTransactions, ({ one }) => ({
+  order: one(orders, {
+    fields: [pointsTransactions.orderId],
+    references: [orders.id],
+  }),
+  review: one(reviews, {
+    fields: [pointsTransactions.reviewId],
+    references: [reviews.id],
+  }),
+}));
+
 // Schemas
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true });
@@ -162,6 +233,10 @@ export const insertSettingSchema = createInsertSchema(settings).omit({ id: true 
 export const insertReviewSchema = createInsertSchema(reviews).omit({ id: true, createdAt: true });
 export const insertWishlistSchema = createInsertSchema(wishlist).omit({ id: true, createdAt: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+export const insertWalletSchema = createInsertSchema(wallets).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertWalletTransactionSchema = createInsertSchema(walletTransactions).omit({ id: true, createdAt: true });
+export const insertRewardPointsSchema = createInsertSchema(rewardPoints).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPointsTransactionSchema = createInsertSchema(pointsTransactions).omit({ id: true, createdAt: true });
 
 // Types
 export type Product = typeof products.$inferSelect;
@@ -173,3 +248,7 @@ export type Setting = typeof settings.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
 export type WishlistItem = typeof wishlist.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+export type Wallet = typeof wallets.$inferSelect;
+export type WalletTransaction = typeof walletTransactions.$inferSelect;
+export type RewardPoints = typeof rewardPoints.$inferSelect;
+export type PointsTransaction = typeof pointsTransactions.$inferSelect;

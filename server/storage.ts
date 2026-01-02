@@ -1,9 +1,11 @@
 import { db } from "./db";
 import {
   users, products, categories, cartItems, orders, orderItems, settings, reviews, wishlist, notifications,
-  type User, type Product, type Category, type CartItem, type Order, type OrderItem, type Setting, type Review, type WishlistItem, type Notification
+  wallets, walletTransactions, rewardPoints, pointsTransactions,
+  type User, type Product, type Category, type CartItem, type Order, type OrderItem, type Setting, type Review, type WishlistItem, type Notification,
+  type Wallet, type WalletTransaction, type RewardPoints, type PointsTransaction
 } from "@shared/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -81,6 +83,18 @@ export interface IStorage {
   
   // Category management
   createCategory(category: Omit<Category, 'id'>): Promise<Category>;
+  
+  // Wallet
+  getOrCreateWallet(userId: string): Promise<Wallet>;
+  getWalletTransactions(userId: string): Promise<WalletTransaction[]>;
+  addWalletBalance(userId: string, amount: string, currency: string, type: string, description?: string, orderId?: number): Promise<WalletTransaction>;
+  useWalletBalance(userId: string, amount: string, currency: string, orderId?: number): Promise<WalletTransaction | null>;
+  
+  // Reward Points
+  getOrCreateRewardPoints(userId: string): Promise<RewardPoints>;
+  getPointsTransactions(userId: string): Promise<PointsTransaction[]>;
+  addPoints(userId: string, points: number, type: string, description?: string, orderId?: number, reviewId?: number): Promise<PointsTransaction>;
+  usePoints(userId: string, points: number, description?: string): Promise<PointsTransaction | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -578,6 +592,188 @@ export class DatabaseStorage implements IStorage {
   async createCategory(category: Omit<Category, 'id'>): Promise<Category> {
     const [newCategory] = await db.insert(categories).values(category).returning();
     return newCategory;
+  }
+  
+  // Wallet methods
+  async getOrCreateWallet(userId: string): Promise<Wallet> {
+    const [existingWallet] = await db.select().from(wallets).where(eq(wallets.userId, userId));
+    if (existingWallet) {
+      return existingWallet;
+    }
+    const [newWallet] = await db.insert(wallets).values({ userId }).returning();
+    return newWallet;
+  }
+  
+  async getWalletTransactions(userId: string): Promise<WalletTransaction[]> {
+    return await db.select()
+      .from(walletTransactions)
+      .where(eq(walletTransactions.userId, userId))
+      .orderBy(desc(walletTransactions.createdAt));
+  }
+  
+  async addWalletBalance(
+    userId: string, 
+    amount: string, 
+    currency: string, 
+    type: string, 
+    description?: string, 
+    orderId?: number
+  ): Promise<WalletTransaction> {
+    const wallet = await this.getOrCreateWallet(userId);
+    
+    // Update wallet balance
+    if (currency === 'SAR') {
+      await db.update(wallets)
+        .set({ 
+          balanceSar: sql`COALESCE(${wallets.balanceSar}, '0')::numeric + ${amount}::numeric`,
+          updatedAt: sql`NOW()`
+        })
+        .where(eq(wallets.id, wallet.id));
+    } else {
+      await db.update(wallets)
+        .set({ 
+          balanceYer: sql`COALESCE(${wallets.balanceYer}, '0')::numeric + ${amount}::numeric`,
+          updatedAt: sql`NOW()`
+        })
+        .where(eq(wallets.id, wallet.id));
+    }
+    
+    // Create transaction record
+    const [transaction] = await db.insert(walletTransactions).values({
+      walletId: wallet.id,
+      userId,
+      type,
+      amount,
+      currency,
+      description,
+      orderId
+    }).returning();
+    
+    return transaction;
+  }
+  
+  async useWalletBalance(
+    userId: string, 
+    amount: string, 
+    currency: string, 
+    orderId?: number
+  ): Promise<WalletTransaction | null> {
+    const wallet = await this.getOrCreateWallet(userId);
+    const amountNum = parseFloat(amount);
+    
+    // Check if sufficient balance
+    const currentBalance = currency === 'SAR' 
+      ? parseFloat(wallet.balanceSar || '0') 
+      : parseFloat(wallet.balanceYer || '0');
+    
+    if (currentBalance < amountNum) {
+      return null; // Insufficient balance
+    }
+    
+    // Deduct from wallet
+    if (currency === 'SAR') {
+      await db.update(wallets)
+        .set({ 
+          balanceSar: sql`COALESCE(${wallets.balanceSar}, '0')::numeric - ${amount}::numeric`,
+          updatedAt: sql`NOW()`
+        })
+        .where(eq(wallets.id, wallet.id));
+    } else {
+      await db.update(wallets)
+        .set({ 
+          balanceYer: sql`COALESCE(${wallets.balanceYer}, '0')::numeric - ${amount}::numeric`,
+          updatedAt: sql`NOW()`
+        })
+        .where(eq(wallets.id, wallet.id));
+    }
+    
+    // Create transaction record
+    const [transaction] = await db.insert(walletTransactions).values({
+      walletId: wallet.id,
+      userId,
+      type: 'purchase',
+      amount: `-${amount}`,
+      currency,
+      description: 'استخدام رصيد المحفظة للشراء',
+      orderId
+    }).returning();
+    
+    return transaction;
+  }
+  
+  // Reward Points methods
+  async getOrCreateRewardPoints(userId: string): Promise<RewardPoints> {
+    const [existing] = await db.select().from(rewardPoints).where(eq(rewardPoints.userId, userId));
+    if (existing) {
+      return existing;
+    }
+    const [newPoints] = await db.insert(rewardPoints).values({ userId }).returning();
+    return newPoints;
+  }
+  
+  async getPointsTransactions(userId: string): Promise<PointsTransaction[]> {
+    return await db.select()
+      .from(pointsTransactions)
+      .where(eq(pointsTransactions.userId, userId))
+      .orderBy(desc(pointsTransactions.createdAt));
+  }
+  
+  async addPoints(
+    userId: string, 
+    points: number, 
+    type: string, 
+    description?: string, 
+    orderId?: number, 
+    reviewId?: number
+  ): Promise<PointsTransaction> {
+    const userPoints = await this.getOrCreateRewardPoints(userId);
+    
+    // Update points balance
+    await db.update(rewardPoints)
+      .set({ 
+        points: sql`${rewardPoints.points} + ${points}`,
+        lifetimePoints: sql`${rewardPoints.lifetimePoints} + ${points}`,
+        updatedAt: sql`NOW()`
+      })
+      .where(eq(rewardPoints.id, userPoints.id));
+    
+    // Create transaction record
+    const [transaction] = await db.insert(pointsTransactions).values({
+      userId,
+      type,
+      points,
+      description,
+      orderId,
+      reviewId
+    }).returning();
+    
+    return transaction;
+  }
+  
+  async usePoints(userId: string, points: number, description?: string): Promise<PointsTransaction | null> {
+    const userPoints = await this.getOrCreateRewardPoints(userId);
+    
+    if (userPoints.points < points) {
+      return null; // Insufficient points
+    }
+    
+    // Deduct points
+    await db.update(rewardPoints)
+      .set({ 
+        points: sql`${rewardPoints.points} - ${points}`,
+        updatedAt: sql`NOW()`
+      })
+      .where(eq(rewardPoints.id, userPoints.id));
+    
+    // Create transaction record
+    const [transaction] = await db.insert(pointsTransactions).values({
+      userId,
+      type: 'redeemed',
+      points: -points,
+      description: description || 'استبدال نقاط'
+    }).returning();
+    
+    return transaction;
   }
 }
 
