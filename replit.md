@@ -6,6 +6,9 @@
 **الشعار الجديد**: أويو بلاست - لطباعة ومستلزمات البلاستيك
 
 ## Recent Changes (January 2025)
+- **نظام التحقق عبر الواتساب (Ultramsg)**: إرسال OTP عبر WhatsApp للتسجيل مع بديل البريد الإلكتروني
+- **نظام المسوقين/الموزعين**: اختيار نوع الحساب (عميل/مسوق) مع نظام عمولات
+- **جداول جديدة**: ملفات المسوقين، العمولات، جهات اتصال العملاء، التحقق من الهاتف
 - **نظام العضوية الشامل**: محفظة بالعملتين (YER/SAR) مع سجل المعاملات
 - **نقاط الولاء**: 1 نقطة لكل 1000 ريال يمني أو 7 ريال سعودي، 5 نقاط للتقييم، 15 نقطة للتقييم بصورة
 - **صفحة حسابي**: تبويبات (طلباتي، محفظتي، نقاطي) مع ملخص شامل
@@ -91,12 +94,24 @@
 - `SESSION_SECRET`: Session encryption key
 - `ADMIN_PASSWORD`: Admin dashboard password (default: oyo2024admin)
 
+### WhatsApp Verification (Ultramsg)
+- `ULTRAMSG_INSTANCE_ID`: معرف حساب Ultramsg
+- `ULTRAMSG_TOKEN`: رمز الوصول لـ Ultramsg
+
+### Email Fallback (بديل مجاني)
+- `SMTP_HOST`: خادم SMTP
+- `SMTP_PORT`: منفذ SMTP (افتراضي: 587)
+- `SMTP_USER`: اسم المستخدم
+- `SMTP_PASS`: كلمة المرور
+
+**ملاحظة**: إذا لم يتم إعداد Ultramsg أو SMTP، يعمل النظام في وضع التطوير ويعرض كود OTP في الاستجابة.
+
 ## Database Schema
-- `users`: User authentication (Replit Auth)
+- `users`: User authentication (Replit Auth) with accountType (customer/marketer)
 - `categories`: Product categories
-- `products`: Products with dual pricing
+- `products`: Products with dual pricing and commission settings
 - `cart_items`: Shopping cart
-- `orders`: Orders with payment info (nullable userId for guest checkout)
+- `orders`: Orders with payment info and marketer fields
 - `order_items`: Order line items
 - `reviews`: تقييمات المنتجات
 - `notifications`: إشعارات المستخدمين
@@ -105,6 +120,10 @@
 - `wallet_transactions`: سجل معاملات المحفظة
 - `reward_points`: نقاط الولاء للمستخدمين
 - `points_transactions`: سجل معاملات النقاط
+- `phone_verifications`: كودات OTP للتحقق من الجوال
+- `marketer_profiles`: ملفات المسوقين ومعدلات العمولة
+- `end_customer_contacts`: جهات اتصال عملاء المسوقين
+- `marketer_commissions`: سجل عمولات المسوقين
 
 ## Admin Access
 - URL: `/admin`

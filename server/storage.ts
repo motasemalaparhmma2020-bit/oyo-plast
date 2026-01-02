@@ -1,9 +1,11 @@
 import { db } from "./db";
 import {
   users, products, categories, cartItems, orders, orderItems, settings, reviews, wishlist, notifications,
-  wallets, walletTransactions, rewardPoints, pointsTransactions, banners, offers,
+  wallets, walletTransactions, rewardPoints, pointsTransactions, banners, offers, phoneVerifications,
+  marketerProfiles, endCustomerContacts, marketerCommissions,
   type User, type Product, type Category, type CartItem, type Order, type OrderItem, type Setting, type Review, type WishlistItem, type Notification,
-  type Wallet, type WalletTransaction, type RewardPoints, type PointsTransaction, type Banner, type Offer
+  type Wallet, type WalletTransaction, type RewardPoints, type PointsTransaction, type Banner, type Offer,
+  type PhoneVerification, type MarketerProfile, type EndCustomerContact, type MarketerCommission
 } from "@shared/schema";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
 
@@ -107,6 +109,32 @@ export interface IStorage {
   createOffer(offer: Omit<Offer, 'id' | 'createdAt'>): Promise<Offer>;
   updateOffer(id: number, offer: Partial<Offer>): Promise<Offer>;
   deleteOffer(id: number): Promise<void>;
+  
+  // Phone Verification (OTP)
+  createPhoneVerification(phone: string, code: string, expiresAt: Date): Promise<PhoneVerification>;
+  getPhoneVerification(phone: string): Promise<PhoneVerification | undefined>;
+  markPhoneVerified(phone: string): Promise<void>;
+  incrementVerificationAttempts(phone: string): Promise<void>;
+  deletePhoneVerification(phone: string): Promise<void>;
+  
+  // Marketer Profiles
+  getMarketerProfile(userId: string): Promise<MarketerProfile | undefined>;
+  createMarketerProfile(profile: Omit<MarketerProfile, 'id' | 'createdAt' | 'updatedAt'>): Promise<MarketerProfile>;
+  updateMarketerProfile(userId: string, profile: Partial<MarketerProfile>): Promise<MarketerProfile>;
+  
+  // End Customer Contacts (for marketer orders)
+  getEndCustomerContacts(marketerId: string): Promise<EndCustomerContact[]>;
+  createEndCustomerContact(contact: Omit<EndCustomerContact, 'id' | 'createdAt'>): Promise<EndCustomerContact>;
+  
+  // Marketer Commissions
+  getMarketerCommissions(marketerId: string): Promise<MarketerCommission[]>;
+  createMarketerCommission(commission: Omit<MarketerCommission, 'id' | 'createdAt'>): Promise<MarketerCommission>;
+  releaseCommission(commissionId: number): Promise<MarketerCommission>;
+  getPendingCommissions(): Promise<MarketerCommission[]>;
+  
+  // User updates
+  updateUserAccountType(userId: string, accountType: string): Promise<User>;
+  updateUserProfile(userId: string, data: Partial<User>): Promise<User>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -840,6 +868,134 @@ export class DatabaseStorage implements IStorage {
   
   async deleteOffer(id: number): Promise<void> {
     await db.delete(offers).where(eq(offers.id, id));
+  }
+  
+  // Phone Verification methods
+  async createPhoneVerification(phone: string, code: string, expiresAt: Date): Promise<PhoneVerification> {
+    // Delete any existing verification for this phone
+    await db.delete(phoneVerifications).where(eq(phoneVerifications.phone, phone));
+    
+    const [verification] = await db.insert(phoneVerifications).values({
+      phone,
+      code,
+      expiresAt,
+      attempts: 0,
+      verified: false
+    }).returning();
+    return verification;
+  }
+  
+  async getPhoneVerification(phone: string): Promise<PhoneVerification | undefined> {
+    const [verification] = await db.select()
+      .from(phoneVerifications)
+      .where(eq(phoneVerifications.phone, phone));
+    return verification;
+  }
+  
+  async markPhoneVerified(phone: string): Promise<void> {
+    await db.update(phoneVerifications)
+      .set({ verified: true })
+      .where(eq(phoneVerifications.phone, phone));
+  }
+  
+  async incrementVerificationAttempts(phone: string): Promise<void> {
+    await db.update(phoneVerifications)
+      .set({ attempts: sql`${phoneVerifications.attempts} + 1` })
+      .where(eq(phoneVerifications.phone, phone));
+  }
+  
+  async deletePhoneVerification(phone: string): Promise<void> {
+    await db.delete(phoneVerifications).where(eq(phoneVerifications.phone, phone));
+  }
+  
+  // Marketer Profile methods
+  async getMarketerProfile(userId: string): Promise<MarketerProfile | undefined> {
+    const [profile] = await db.select()
+      .from(marketerProfiles)
+      .where(eq(marketerProfiles.userId, userId));
+    return profile;
+  }
+  
+  async createMarketerProfile(profile: Omit<MarketerProfile, 'id' | 'createdAt' | 'updatedAt'>): Promise<MarketerProfile> {
+    const [newProfile] = await db.insert(marketerProfiles)
+      .values(profile)
+      .returning();
+    return newProfile;
+  }
+  
+  async updateMarketerProfile(userId: string, profile: Partial<MarketerProfile>): Promise<MarketerProfile> {
+    const [updated] = await db.update(marketerProfiles)
+      .set({ ...profile, updatedAt: sql`NOW()` })
+      .where(eq(marketerProfiles.userId, userId))
+      .returning();
+    return updated;
+  }
+  
+  // End Customer Contact methods
+  async getEndCustomerContacts(marketerId: string): Promise<EndCustomerContact[]> {
+    return await db.select()
+      .from(endCustomerContacts)
+      .where(eq(endCustomerContacts.marketerId, marketerId))
+      .orderBy(desc(endCustomerContacts.createdAt));
+  }
+  
+  async createEndCustomerContact(contact: Omit<EndCustomerContact, 'id' | 'createdAt'>): Promise<EndCustomerContact> {
+    const [newContact] = await db.insert(endCustomerContacts)
+      .values(contact)
+      .returning();
+    return newContact;
+  }
+  
+  // Marketer Commission methods
+  async getMarketerCommissions(marketerId: string): Promise<MarketerCommission[]> {
+    return await db.select()
+      .from(marketerCommissions)
+      .where(eq(marketerCommissions.marketerId, marketerId))
+      .orderBy(desc(marketerCommissions.createdAt));
+  }
+  
+  async createMarketerCommission(commission: Omit<MarketerCommission, 'id' | 'createdAt'>): Promise<MarketerCommission> {
+    const [newCommission] = await db.insert(marketerCommissions)
+      .values(commission)
+      .returning();
+    return newCommission;
+  }
+  
+  async releaseCommission(commissionId: number): Promise<MarketerCommission> {
+    const [updated] = await db.update(marketerCommissions)
+      .set({ 
+        status: 'released',
+        releasedAt: sql`NOW()`
+      })
+      .where(eq(marketerCommissions.id, commissionId))
+      .returning();
+    return updated;
+  }
+  
+  async getPendingCommissions(): Promise<MarketerCommission[]> {
+    return await db.select()
+      .from(marketerCommissions)
+      .where(and(
+        eq(marketerCommissions.status, 'held'),
+        lte(marketerCommissions.holdUntil, sql`NOW()`)
+      ));
+  }
+  
+  // User update methods
+  async updateUserAccountType(userId: string, accountType: string): Promise<User> {
+    const [updated] = await db.update(users)
+      .set({ accountType })
+      .where(eq(users.id, userId))
+      .returning();
+    return updated;
+  }
+  
+  async updateUserProfile(userId: string, data: Partial<User>): Promise<User> {
+    const [updated] = await db.update(users)
+      .set(data)
+      .where(eq(users.id, userId))
+      .returning();
+    return updated;
   }
 }
 

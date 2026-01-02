@@ -710,7 +710,9 @@ ${notes ? `ملاحظات: ${notes}` : ''}
         bulkPricing: bulkPricing || null,
         rating: "5",
         reviewCount: 0,
-        soldCount: 0
+        soldCount: 0,
+        commissionHoldDays: 2,
+        marketerCommissionRate: null
       });
       res.status(201).json(product);
     } catch (error) {
@@ -1010,6 +1012,235 @@ ${notes ? `ملاحظات: ${notes}` : ''}
     } catch (error) {
       console.error("Error updating profile:", error);
       res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
+
+  // Update user account type
+  app.post("/api/user/account-type", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    const { accountType } = req.body;
+    
+    if (!['customer', 'marketer'].includes(accountType)) {
+      return res.status(400).json({ error: "نوع الحساب غير صالح" });
+    }
+    
+    try {
+      const user = await storage.updateUserAccountType(userId, accountType);
+      res.json(user);
+    } catch (error) {
+      console.error("Error updating account type:", error);
+      res.status(500).json({ error: "فشل في تحديث نوع الحساب" });
+    }
+  });
+
+  // Phone Verification - Send OTP
+  app.post("/api/verify/send-otp", async (req, res) => {
+    const { phone, email } = req.body;
+    
+    if (!phone) {
+      return res.status(400).json({ error: "رقم الجوال مطلوب" });
+    }
+    
+    try {
+      // Import verification service
+      const { generateOTP, sendVerificationCode, formatYemeniPhone } = await import("./services/verification");
+      
+      const code = generateOTP();
+      const formattedPhone = formatYemeniPhone(phone);
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+      
+      // Store verification in database
+      await storage.createPhoneVerification(formattedPhone, code, expiresAt);
+      
+      // Send the code via WhatsApp or Email
+      const result = await sendVerificationCode(formattedPhone, email);
+      
+      if (result.success) {
+        const response: any = { 
+          success: true, 
+          method: result.method,
+          message: result.method === 'whatsapp' 
+            ? 'تم إرسال كود التحقق إلى الواتساب' 
+            : result.method === 'email'
+            ? 'تم إرسال كود التحقق إلى البريد الإلكتروني'
+            : 'وضع التطوير: الكود معروض للاختبار'
+        };
+        
+        // In demo mode, return the code for testing
+        if (result.method === 'demo') {
+          response.demoCode = code;
+        }
+        
+        res.json(response);
+      } else {
+        res.status(500).json({ error: result.error || "فشل في إرسال كود التحقق" });
+      }
+    } catch (error) {
+      console.error("Error sending OTP:", error);
+      res.status(500).json({ error: "فشل في إرسال كود التحقق" });
+    }
+  });
+
+  // Phone Verification - Verify OTP
+  app.post("/api/verify/verify-otp", async (req, res) => {
+    const { phone, code } = req.body;
+    
+    if (!phone || !code) {
+      return res.status(400).json({ error: "رقم الجوال وكود التحقق مطلوبين" });
+    }
+    
+    try {
+      const { formatYemeniPhone, verifyOTPCode } = await import("./services/verification");
+      
+      const formattedPhone = formatYemeniPhone(phone);
+      const verification = await storage.getPhoneVerification(formattedPhone);
+      
+      if (!verification) {
+        return res.status(400).json({ error: "لم يتم إرسال كود تحقق لهذا الرقم" });
+      }
+      
+      // Check attempts
+      if (verification.attempts >= 5) {
+        await storage.deletePhoneVerification(formattedPhone);
+        return res.status(400).json({ error: "تجاوزت الحد الأقصى للمحاولات. أعد طلب كود جديد" });
+      }
+      
+      const result = verifyOTPCode(code, verification.code, verification.expiresAt);
+      
+      if (!result.valid) {
+        await storage.incrementVerificationAttempts(formattedPhone);
+        return res.status(400).json({ error: result.error });
+      }
+      
+      // Mark as verified
+      await storage.markPhoneVerified(formattedPhone);
+      
+      res.json({ success: true, message: "تم التحقق بنجاح" });
+    } catch (error) {
+      console.error("Error verifying OTP:", error);
+      res.status(500).json({ error: "فشل في التحقق" });
+    }
+  });
+
+  // Check verification status
+  app.get("/api/verify/status/:phone", async (req, res) => {
+    try {
+      const { formatYemeniPhone } = await import("./services/verification");
+      const formattedPhone = formatYemeniPhone(req.params.phone);
+      const verification = await storage.getPhoneVerification(formattedPhone);
+      
+      if (!verification) {
+        return res.json({ verified: false, exists: false });
+      }
+      
+      res.json({ 
+        verified: verification.verified, 
+        exists: true,
+        expired: new Date() > verification.expiresAt
+      });
+    } catch (error) {
+      res.status(500).json({ error: "فشل في التحقق من الحالة" });
+    }
+  });
+
+  // Marketer profile routes
+  app.get("/api/marketer/profile", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    
+    try {
+      const profile = await storage.getMarketerProfile(userId);
+      res.json(profile || null);
+    } catch (error) {
+      res.status(500).json({ error: "فشل في جلب ملف المسوق" });
+    }
+  });
+
+  app.post("/api/marketer/profile", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    
+    try {
+      // Check if profile already exists
+      const existing = await storage.getMarketerProfile(userId);
+      if (existing) {
+        return res.status(400).json({ error: "لديك ملف مسوق بالفعل" });
+      }
+      
+      const profile = await storage.createMarketerProfile({
+        userId,
+        tier: 'bronze',
+        commissionRate: '5',
+        totalEarnings: '0',
+        pendingEarnings: '0',
+        isApproved: true
+      });
+      
+      // Update user account type
+      await storage.updateUserAccountType(userId, 'marketer');
+      
+      // Send welcome message if WhatsApp configured
+      const user = await storage.getUser(userId);
+      if (user?.phone) {
+        const { sendMarketerWelcome } = await import("./services/verification");
+        await sendMarketerWelcome(user.phone, user.fullName || user.firstName || 'مسوق');
+      }
+      
+      res.status(201).json(profile);
+    } catch (error) {
+      console.error("Error creating marketer profile:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف المسوق" });
+    }
+  });
+
+  // Marketer commissions
+  app.get("/api/marketer/commissions", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    
+    try {
+      const commissions = await storage.getMarketerCommissions(userId);
+      res.json(commissions);
+    } catch (error) {
+      res.status(500).json({ error: "فشل في جلب العمولات" });
+    }
+  });
+
+  // End customer contacts (for marketer orders)
+  app.get("/api/marketer/contacts", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    
+    try {
+      const contacts = await storage.getEndCustomerContacts(userId);
+      res.json(contacts);
+    } catch (error) {
+      res.status(500).json({ error: "فشل في جلب جهات الاتصال" });
+    }
+  });
+
+  app.post("/api/marketer/contacts", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
+    const userId = getUserId(req);
+    const { name, phone, address, city, notes } = req.body;
+    
+    if (!name || !phone) {
+      return res.status(400).json({ error: "الاسم ورقم الجوال مطلوبين" });
+    }
+    
+    try {
+      const contact = await storage.createEndCustomerContact({
+        marketerId: userId,
+        name,
+        phone,
+        address,
+        city,
+        notes
+      });
+      res.status(201).json(contact);
+    } catch (error) {
+      res.status(500).json({ error: "فشل في إضافة جهة الاتصال" });
     }
   });
 
