@@ -80,6 +80,18 @@ const emptyProductForm: ProductFormData = {
   allowDesignUpload: false
 };
 
+interface CategoryFormData {
+  name: string;
+  slug: string;
+  imageUrl: string;
+}
+
+const emptyCategoryForm: CategoryFormData = {
+  name: "",
+  slug: "",
+  imageUrl: ""
+};
+
 interface OrderItemWithName {
   id: number;
   orderId: number;
@@ -101,6 +113,9 @@ export default function Admin() {
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productForm, setProductForm] = useState<ProductFormData>(emptyProductForm);
+  const [showCategoryForm, setShowCategoryForm] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoryForm, setCategoryForm] = useState<CategoryFormData>(emptyCategoryForm);
   const { toast } = useToast();
 
   const handlePrintDeliveryInvoice = async (order: Order) => {
@@ -322,6 +337,35 @@ export default function Admin() {
     }
   });
 
+  const createCategoryMutation = useMutation({
+    mutationFn: async (data: CategoryFormData) => {
+      const res = await fetch('/api/admin/categories', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken || '' 
+        },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to create category');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+      toast({ title: "تم إضافة القسم بنجاح" });
+      setShowCategoryForm(false);
+      setCategoryForm(emptyCategoryForm);
+    },
+    onError: () => {
+      toast({ title: "حدث خطأ أثناء إضافة القسم", variant: "destructive" });
+    }
+  });
+
+  const handleCategorySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createCategoryMutation.mutate(categoryForm);
+  };
+
   const openEditProduct = (product: Product) => {
     setEditingProduct(product);
     setProductForm({
@@ -486,6 +530,7 @@ export default function Admin() {
           <TabsList className="flex-wrap">
             <TabsTrigger value="orders">الطلبات</TabsTrigger>
             <TabsTrigger value="manage-products">المنتجات</TabsTrigger>
+            <TabsTrigger value="categories">الأقسام</TabsTrigger>
             <TabsTrigger value="products">المخزون</TabsTrigger>
             <TabsTrigger value="reports">التقارير</TabsTrigger>
             <TabsTrigger value="settings">الإعدادات</TabsTrigger>
@@ -929,6 +974,149 @@ export default function Admin() {
                     >
                       <Plus className="h-4 w-4" />
                       إضافة أول منتج
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="categories">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2">
+                <CardTitle>إدارة الأقسام</CardTitle>
+                <Button 
+                  className="gap-2"
+                  onClick={() => {
+                    setShowCategoryForm(true);
+                    setEditingCategory(null);
+                    setCategoryForm(emptyCategoryForm);
+                  }}
+                  data-testid="button-add-category"
+                >
+                  <Plus className="h-4 w-4" />
+                  إضافة قسم
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {showCategoryForm && (
+                  <div className="mb-6 p-4 border rounded-lg bg-muted/30">
+                    <h3 className="font-semibold mb-4">
+                      {editingCategory ? 'تعديل القسم' : 'إضافة قسم جديد'}
+                    </h3>
+                    <form onSubmit={handleCategorySubmit} className="space-y-4">
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="cat-name">اسم القسم</Label>
+                          <Input
+                            id="cat-name"
+                            value={categoryForm.name}
+                            onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
+                            placeholder="مثال: بلاستيكيات"
+                            required
+                            data-testid="input-category-name"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="cat-slug">الرابط (slug)</Label>
+                          <Input
+                            id="cat-slug"
+                            value={categoryForm.slug}
+                            onChange={(e) => setCategoryForm({...categoryForm, slug: e.target.value})}
+                            placeholder="مثال: plastics"
+                            required
+                            data-testid="input-category-slug"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="cat-image">رابط صورة القسم</Label>
+                        <Input
+                          id="cat-image"
+                          value={categoryForm.imageUrl}
+                          onChange={(e) => setCategoryForm({...categoryForm, imageUrl: e.target.value})}
+                          placeholder="رابط الصورة"
+                          required
+                          data-testid="input-category-image"
+                        />
+                        {categoryForm.imageUrl && (
+                          <div className="mt-2 w-20 h-20 bg-gray-100 rounded-lg overflow-hidden">
+                            <img src={categoryForm.imageUrl} alt="معاينة" className="w-full h-full object-contain" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2 pt-4">
+                        <Button 
+                          type="submit" 
+                          disabled={createCategoryMutation.isPending}
+                          className="gap-2"
+                          data-testid="button-save-category"
+                        >
+                          {createCategoryMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4" />
+                          )}
+                          إضافة القسم
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant="outline"
+                          onClick={() => {
+                            setShowCategoryForm(false);
+                            setEditingCategory(null);
+                            setCategoryForm(emptyCategoryForm);
+                          }}
+                        >
+                          إلغاء
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {categories && categories.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">القسم</TableHead>
+                          <TableHead className="text-right">الرابط</TableHead>
+                          <TableHead className="text-right">عدد المنتجات</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {categories.map((category) => (
+                          <TableRow key={category.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
+                                  <img src={category.imageUrl} alt={category.name} className="w-full h-full object-contain" />
+                                </div>
+                                <span className="font-medium">{category.name}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>{category.slug}</TableCell>
+                            <TableCell>
+                              <Badge>
+                                {products?.filter(p => p.categoryId === category.id).length || 0} منتج
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>لا توجد أقسام بعد</p>
+                    <Button 
+                      className="mt-4 gap-2"
+                      onClick={() => setShowCategoryForm(true)}
+                    >
+                      <Plus className="h-4 w-4" />
+                      إضافة أول قسم
                     </Button>
                   </div>
                 )}
