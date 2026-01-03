@@ -3,14 +3,17 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { 
   ShoppingBag, Wallet, Award, ChevronLeft, Package, Clock, 
-  CheckCircle2, Truck, XCircle, Loader2, Eye, ArrowUpRight, ArrowDownLeft
+  CheckCircle2, Truck, XCircle, Loader2, Eye, ArrowUpRight, ArrowDownLeft,
+  UserPlus, LogIn
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/hooks/use-auth";
 import type { Order, Wallet as WalletType, WalletTransaction, RewardPoints, PointsTransaction } from "@shared/schema";
+import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
 
 const statusConfig: Record<string, { label: string; icon: any; color: string }> = {
   pending: { label: "قيد الانتظار", icon: Clock, color: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400" },
@@ -23,6 +26,7 @@ const statusConfig: Record<string, { label: string; icon: any; color: string }> 
 };
 
 export default function MyAccount() {
+  const { isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState("orders");
 
   const { data: accountSummary, isLoading: summaryLoading } = useQuery<{
@@ -66,6 +70,87 @@ export default function MyAccount() {
       day: 'numeric',
     });
   };
+
+  // Guest view - show login/register prompt
+  if (!isAuthenticated) {
+    return (
+      <div className="container max-w-md mx-auto px-4 py-12 pb-24">
+        <div className="text-center mb-8">
+          <div className="mx-auto w-24 h-24 mb-4">
+            <img src={oyoLogo} alt="OYO PLAST" className="w-full h-full object-contain rounded-2xl shadow-lg" />
+          </div>
+          <h1 className="text-3xl font-bold mb-2">حسابي</h1>
+          <p className="text-muted-foreground">سجل دخولك للوصول لحسابك</p>
+        </div>
+
+        <Card className="border-none shadow-xl">
+          <CardContent className="pt-6 space-y-4">
+            <div className="text-center mb-4">
+              <p className="text-muted-foreground">
+                سجل دخولك أو أنشئ حساب جديد للوصول إلى:
+              </p>
+            </div>
+
+            <div className="grid gap-3 mb-6">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5">
+                <ShoppingBag className="h-5 w-5 text-primary" />
+                <span>تتبع طلباتك ومشترياتك</span>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-green-500/5">
+                <Wallet className="h-5 w-5 text-green-500" />
+                <span>محفظتك الإلكترونية</span>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-500/5">
+                <Award className="h-5 w-5 text-yellow-500" />
+                <span>نقاط الولاء والمكافآت</span>
+              </div>
+            </div>
+
+            <Link href="/auth">
+              <Button 
+                className="w-full h-12 text-lg font-bold shadow-lg bg-[#2196F3] hover:bg-[#1976D2]"
+                data-testid="button-login"
+              >
+                <LogIn className="h-5 w-5 ml-2" />
+                تسجيل الدخول
+              </Button>
+            </Link>
+            
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">أو</span>
+              </div>
+            </div>
+
+            <Link href="/register">
+              <Button 
+                variant="outline"
+                className="w-full h-12 text-lg font-bold border-2 border-[#2196F3] text-[#2196F3]"
+                data-testid="button-register"
+              >
+                <UserPlus className="h-5 w-5 ml-2" />
+                إنشاء حساب جديد
+              </Button>
+            </Link>
+
+            <Link href="/guest-checkout">
+              <Button 
+                variant="ghost"
+                className="w-full h-10 text-sm text-muted-foreground"
+                data-testid="button-guest-checkout"
+              >
+                <ShoppingBag className="h-4 w-4 ml-2" />
+                أكمل الشراء كزائر
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (summaryLoading) {
     return (

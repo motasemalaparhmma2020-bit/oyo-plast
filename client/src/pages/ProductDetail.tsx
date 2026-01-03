@@ -1,4 +1,4 @@
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Product, Review } from "@shared/schema";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useAddToCart } from "@/hooks/use-cart";
-import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star, User, Camera, X, ImagePlus, Sparkles } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star, User, Camera, X, ImagePlus, Sparkles, Zap } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -22,6 +23,8 @@ interface BulkPricing {
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const { isAuthenticated } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { data: product, isLoading } = useQuery<Product>({
@@ -164,6 +167,35 @@ export default function ProductDetail() {
   const handleAddToCart = () => {
     if (!product) return;
     addToCart({ productId: product.id, quantity });
+  };
+
+  const handleBuyNow = () => {
+    if (!product) return;
+    
+    // Add to guest cart in localStorage
+    try {
+      const saved = localStorage.getItem('guestCart');
+      const guestCart: { productId: number; quantity: number }[] = saved ? JSON.parse(saved) : [];
+      
+      // Remove existing item for this product
+      const filtered = guestCart.filter(item => item.productId !== product.id);
+      // Add new item
+      filtered.push({ productId: product.id, quantity });
+      
+      localStorage.setItem('guestCart', JSON.stringify(filtered));
+    } catch (e) {
+      console.error('Failed to save to guest cart:', e);
+    }
+    
+    // Navigate to appropriate checkout page
+    if (isAuthenticated) {
+      // For authenticated users, add to cart first then go to checkout
+      addToCart({ productId: product.id, quantity });
+      setTimeout(() => setLocation('/checkout'), 300);
+    } else {
+      // For guests, go directly to guest checkout
+      setLocation('/guest-checkout');
+    }
   };
 
   const colors = product?.colors || [];
@@ -425,20 +457,34 @@ export default function ProductDetail() {
             )}
           </div>
 
-          <Button
-            size="lg"
-            className="w-full h-14 text-lg font-extrabold gap-3 rounded-xl shadow-lg shadow-primary/20"
-            disabled={product.stock <= 0 || isPending}
-            onClick={handleAddToCart}
-            data-testid="button-add-to-cart"
-          >
-            {isPending ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <ShoppingCart className="h-5 w-5" />
-            )}
-            {product.stock <= 0 ? "غير متوفر حالياً" : "أضف إلى السلة"}
-          </Button>
+          <div className="flex gap-3">
+            <Button
+              size="lg"
+              className="flex-1 h-14 text-lg font-extrabold gap-3 rounded-xl shadow-lg shadow-primary/20"
+              disabled={product.stock <= 0 || isPending}
+              onClick={handleAddToCart}
+              data-testid="button-add-to-cart"
+            >
+              {isPending ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <ShoppingCart className="h-5 w-5" />
+              )}
+              {product.stock <= 0 ? "غير متوفر" : "أضف للسلة"}
+            </Button>
+            
+            <Button
+              size="lg"
+              variant="outline"
+              className="flex-1 h-14 text-lg font-extrabold gap-3 rounded-xl border-2 border-primary text-primary"
+              disabled={product.stock <= 0}
+              onClick={handleBuyNow}
+              data-testid="button-buy-now"
+            >
+              <Zap className="h-5 w-5" />
+              اشتري الآن
+            </Button>
+          </div>
         </div>
       </div>
 

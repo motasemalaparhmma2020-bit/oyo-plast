@@ -42,9 +42,7 @@ function Router() {
           <Route path="/" component={Home} />
           <Route path="/products" component={Products} />
           <Route path="/product/:id" component={ProductDetail} />
-          <Route path="/cart">
-            {isAuthenticated ? <Cart /> : <Auth />}
-          </Route>
+          <Route path="/cart" component={Cart} />
           <Route path="/checkout">
             {isAuthenticated ? <Checkout /> : <Auth />}
           </Route>
@@ -63,9 +61,7 @@ function Router() {
           <Route path="/notifications">
             {isAuthenticated ? <Notifications /> : <Auth />}
           </Route>
-          <Route path="/account">
-            {isAuthenticated ? <MyAccount /> : <Auth />}
-          </Route>
+          <Route path="/account" component={MyAccount} />
           <Route path="/marketer/coupons">
             {isAuthenticated ? <MarketerCoupons /> : <Auth />}
           </Route>
