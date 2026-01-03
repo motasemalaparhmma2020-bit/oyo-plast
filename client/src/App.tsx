@@ -1,10 +1,11 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/hooks/use-auth";
+import { useEffect } from "react";
 
 import Home from "@/pages/Home";
 import Products from "@/pages/Products";
@@ -20,7 +21,6 @@ import Wishlist from "@/pages/Wishlist";
 import Notifications from "@/pages/Notifications";
 import MyAccount from "@/pages/MyAccount";
 import MarketerCoupons from "@/pages/MarketerCoupons";
-import GuestCheckout from "@/pages/GuestCheckout";
 import PrintingAndDesign from "@/pages/PrintingAndDesign";
 import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
@@ -31,46 +31,98 @@ import NotFound from "@/pages/not-found";
 import { BottomNav } from "@/components/BottomNav";
 import { Footer, MobileFooter } from "@/components/Footer";
 
+// Component to redirect users who need to complete registration
+function RequireAccountType({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, user, isLoading } = useAuth();
+  const [location, setLocation] = useLocation();
+  
+  useEffect(() => {
+    if (!isLoading) {
+      if (!isAuthenticated) {
+        setLocation('/auth');
+      } else if (isAuthenticated && user && !user.accountType) {
+        // User is logged in but hasn't selected account type
+        if (location !== '/register') {
+          setLocation('/register');
+        }
+      }
+    }
+  }, [isAuthenticated, user, isLoading, location, setLocation]);
+  
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center">جاري التحميل...</div>;
+  }
+  
+  if (!isAuthenticated) {
+    return <Auth />;
+  }
+  
+  if (user && !user.accountType) {
+    return <Register />;
+  }
+  
+  return <>{children}</>;
+}
+
 function Router() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  
+  // Check if user needs to complete registration (no accountType set)
+  const needsAccountType = isAuthenticated && user && !user.accountType;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16 md:pb-0">
       <Navbar />
       <main className="flex-grow">
         <Switch>
-          <Route path="/" component={Home} />
-          <Route path="/products" component={Products} />
-          <Route path="/product/:id" component={ProductDetail} />
-          <Route path="/cart" component={Cart} />
-          <Route path="/checkout">
-            {isAuthenticated ? <Checkout /> : <Auth />}
-          </Route>
-          <Route path="/orders">
-            {isAuthenticated ? <Orders /> : <Auth />}
-          </Route>
-          <Route path="/profile" component={Profile} />
+          {/* Public pages - no auth required */}
           <Route path="/auth">
-            {isAuthenticated ? <Home /> : <Auth />}
+            {isAuthenticated ? (needsAccountType ? <Redirect to="/register" /> : <Redirect to="/" />) : <Auth />}
           </Route>
           <Route path="/register" component={Register} />
           <Route path="/admin" component={Admin} />
-          <Route path="/wishlist">
-            {isAuthenticated ? <Wishlist /> : <Auth />}
-          </Route>
-          <Route path="/notifications">
-            {isAuthenticated ? <Notifications /> : <Auth />}
-          </Route>
-          <Route path="/account" component={MyAccount} />
-          <Route path="/marketer/coupons">
-            {isAuthenticated ? <MarketerCoupons /> : <Auth />}
-          </Route>
-          <Route path="/guest-checkout" component={GuestCheckout} />
-          <Route path="/printing" component={PrintingAndDesign} />
           <Route path="/about" component={About} />
           <Route path="/privacy" component={Privacy} />
           <Route path="/terms" component={Terms} />
           <Route path="/returns" component={Returns} />
+          
+          {/* Protected pages - auth required AND accountType required */}
+          <Route path="/">
+            <RequireAccountType><Home /></RequireAccountType>
+          </Route>
+          <Route path="/products">
+            <RequireAccountType><Products /></RequireAccountType>
+          </Route>
+          <Route path="/product/:id">
+            <RequireAccountType><ProductDetail /></RequireAccountType>
+          </Route>
+          <Route path="/cart">
+            <RequireAccountType><Cart /></RequireAccountType>
+          </Route>
+          <Route path="/checkout">
+            <RequireAccountType><Checkout /></RequireAccountType>
+          </Route>
+          <Route path="/orders">
+            <RequireAccountType><Orders /></RequireAccountType>
+          </Route>
+          <Route path="/profile">
+            <RequireAccountType><Profile /></RequireAccountType>
+          </Route>
+          <Route path="/wishlist">
+            <RequireAccountType><Wishlist /></RequireAccountType>
+          </Route>
+          <Route path="/notifications">
+            <RequireAccountType><Notifications /></RequireAccountType>
+          </Route>
+          <Route path="/account">
+            <RequireAccountType><MyAccount /></RequireAccountType>
+          </Route>
+          <Route path="/marketer/coupons">
+            <RequireAccountType><MarketerCoupons /></RequireAccountType>
+          </Route>
+          <Route path="/printing">
+            <RequireAccountType><PrintingAndDesign /></RequireAccountType>
+          </Route>
           <Route component={NotFound} />
         </Switch>
       </main>

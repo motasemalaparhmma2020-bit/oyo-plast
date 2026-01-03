@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
-import { User, Phone, MapPin, Building2, ArrowLeft, Globe, Map } from "lucide-react";
+import { User, Phone, MapPin, Building2, ArrowLeft, Globe, Map, Users, ShoppingCart } from "lucide-react";
 import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
 
 const YEMENI_GOVERNORATES = [
@@ -70,6 +70,7 @@ export default function Register() {
     street: user?.street || "",
     landmark: user?.landmark || "",
     businessType: user?.businessType || "",
+    accountType: user?.accountType || "",
   });
 
   const updateProfileMutation = useMutation({
@@ -96,6 +97,15 @@ export default function Register() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!formData.accountType) {
+      toast({
+        title: "خطأ",
+        description: "يرجى اختيار نوع الحساب (مسوق أو عميل)",
+        variant: "destructive",
+      });
+      return;
+    }
     
     if (!formData.firstName || !formData.phone || !formData.governorate) {
       toast({
@@ -157,6 +167,43 @@ export default function Register() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Account Type Selection - REQUIRED */}
+              <div className="space-y-3">
+                <Label className="text-lg font-bold text-center block">نوع الحساب *</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, accountType: "customer" })}
+                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                      formData.accountType === "customer"
+                        ? "border-sky-500 bg-sky-50 dark:bg-sky-900/20"
+                        : "border-gray-200 dark:border-gray-700 hover:border-sky-300"
+                    }`}
+                    data-testid="button-account-type-customer"
+                  >
+                    <ShoppingCart className={`w-8 h-8 ${formData.accountType === "customer" ? "text-sky-500" : "text-gray-400"}`} />
+                    <span className={`font-bold ${formData.accountType === "customer" ? "text-sky-600" : "text-foreground"}`}>عميل</span>
+                    <span className="text-xs text-muted-foreground text-center">للشراء والتسوق</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, accountType: "marketer" })}
+                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                      formData.accountType === "marketer"
+                        ? "border-sky-500 bg-sky-50 dark:bg-sky-900/20"
+                        : "border-gray-200 dark:border-gray-700 hover:border-sky-300"
+                    }`}
+                    data-testid="button-account-type-marketer"
+                  >
+                    <Users className={`w-8 h-8 ${formData.accountType === "marketer" ? "text-sky-500" : "text-gray-400"}`} />
+                    <span className={`font-bold ${formData.accountType === "marketer" ? "text-sky-600" : "text-foreground"}`}>مسوق</span>
+                    <span className="text-xs text-muted-foreground text-center">للتسويق والعمولات</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="border-t pt-4" />
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="firstName">الاسم الأول *</Label>

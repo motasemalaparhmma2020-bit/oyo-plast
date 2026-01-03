@@ -172,30 +172,15 @@ export default function ProductDetail() {
   const handleBuyNow = () => {
     if (!product) return;
     
-    // Add to guest cart in localStorage
-    try {
-      const saved = localStorage.getItem('guestCart');
-      const guestCart: { productId: number; quantity: number }[] = saved ? JSON.parse(saved) : [];
-      
-      // Remove existing item for this product
-      const filtered = guestCart.filter(item => item.productId !== product.id);
-      // Add new item
-      filtered.push({ productId: product.id, quantity });
-      
-      localStorage.setItem('guestCart', JSON.stringify(filtered));
-    } catch (e) {
-      console.error('Failed to save to guest cart:', e);
+    if (!isAuthenticated) {
+      // Redirect to auth if not logged in
+      setLocation('/auth');
+      return;
     }
     
-    // Navigate to appropriate checkout page
-    if (isAuthenticated) {
-      // For authenticated users, add to cart first then go to checkout
-      addToCart({ productId: product.id, quantity });
-      setTimeout(() => setLocation('/checkout'), 300);
-    } else {
-      // For guests, go directly to guest checkout
-      setLocation('/guest-checkout');
-    }
+    // Add to cart and go to checkout
+    addToCart({ productId: product.id, quantity });
+    setTimeout(() => setLocation('/checkout'), 300);
   };
 
   const colors = product?.colors || [];
