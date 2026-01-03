@@ -754,10 +754,21 @@ export default function Admin() {
         }
         toast({ title: "تم رفع الصورة بنجاح" });
       } else {
-        toast({ title: "فشل رفع الصورة", variant: "destructive" });
+        const errorData = await res.json().catch(() => ({}));
+        toast({ 
+          title: "فشل رفع الصورة", 
+          description: errorData.error || `خطأ ${res.status}`,
+          variant: "destructive" 
+        });
+        console.error('Upload failed:', res.status, errorData);
       }
     } catch (error) {
-      toast({ title: "حدث خطأ أثناء رفع الصورة", variant: "destructive" });
+      console.error('Upload error:', error);
+      toast({ 
+        title: "حدث خطأ أثناء رفع الصورة", 
+        description: error instanceof Error ? error.message : "خطأ في الاتصال",
+        variant: "destructive" 
+      });
     }
     setIsUploading(false);
     e.target.value = '';

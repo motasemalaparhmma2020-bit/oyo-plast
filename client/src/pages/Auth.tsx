@@ -1,12 +1,21 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { UserPlus, LogIn } from "lucide-react";
-import { Link } from "wouter";
+import { UserPlus, LogIn, Eye, ShoppingBag } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
 
 export default function Auth() {
+  const [, setLocation] = useLocation();
+  
   const handleLogin = () => {
     window.location.href = "/api/login";
+  };
+
+  const handleGuestBrowse = () => {
+    // Set guest mode flag in localStorage
+    localStorage.setItem('guestMode', 'true');
+    // Navigate to products page
+    setLocation('/products');
   };
 
   return (
@@ -56,8 +65,38 @@ export default function Auth() {
                 إنشاء حساب جديد
               </Button>
             </Link>
+
+            <div className="relative py-2">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">أو تصفح</span>
+              </div>
+            </div>
+
+            <Button 
+              variant="ghost"
+              className="w-full h-12 text-lg font-medium text-muted-foreground hover:text-foreground"
+              onClick={handleGuestBrowse}
+              data-testid="button-guest-browse"
+            >
+              <Eye className="h-5 w-5 ml-2" />
+              تصفح كزائر
+            </Button>
+
+            <Link href="/guest-checkout">
+              <Button 
+                variant="ghost"
+                className="w-full h-10 text-sm text-muted-foreground hover:text-foreground"
+                data-testid="button-guest-checkout"
+              >
+                <ShoppingBag className="h-4 w-4 ml-2" />
+                الشراء بدون تسجيل
+              </Button>
+            </Link>
             
-            <p className="text-xs text-center text-muted-foreground mt-6">
+            <p className="text-xs text-center text-muted-foreground mt-4">
               منصة آمنة وموثوقة لجميع احتياجات التغليف الخاصة بك
             </p>
           </CardContent>
