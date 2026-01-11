@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/hooks/use-auth";
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 
 import Home from "@/pages/Home";
 import Products from "@/pages/Products";
@@ -65,8 +65,12 @@ function RequireAccountType({ children }: { children: React.ReactNode }) {
 }
 
 function Router() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, isLoading } = useAuth();
   
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center">جاري التحميل...</div>;
+  }
+
   // Check if user needs to complete registration (no accountType set)
   const needsAccountType = isAuthenticated && user && !user.accountType;
 
