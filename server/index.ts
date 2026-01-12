@@ -10,8 +10,8 @@ const httpServer = createServer(app);
 // Get directory name - use process.cwd() for production compatibility
 const rootDir = process.cwd();
 
-// Serve attached_assets for product images
-app.use('/assets', express.static(path.resolve(rootDir, 'attached_assets')));
+// Serve attached_assets for product images (using /uploaded-assets to avoid conflict with Vite's /assets)
+app.use('/uploaded-assets', express.static(path.resolve(rootDir, 'attached_assets')));
 
 // Serve uploaded product images
 app.use('/products', express.static(path.resolve(rootDir, 'public', 'products')));
