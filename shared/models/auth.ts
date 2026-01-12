@@ -18,6 +18,9 @@ export const sessions = pgTable(
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email").unique(),
+  passwordHash: varchar("password_hash"), // كلمة المرور المشفرة (للتسجيل بالبريد الإلكتروني)
+  authProvider: varchar("auth_provider").default("email"), // email أو replit
+  isEmailVerified: varchar("is_email_verified").default("false"), // هل تم التحقق من البريد
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   fullName: varchar("full_name"), // الاسم الكامل
