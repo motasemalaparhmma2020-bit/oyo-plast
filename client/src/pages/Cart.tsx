@@ -164,7 +164,10 @@ export default function Cart() {
 
     return (
       <div className="container mx-auto px-4 py-8 pb-20">
-        <h1 className="text-3xl font-bold mb-8">سلة التسوق ({guestCart.length} منتجات)</h1>
+        <div className="flex justify-between items-center mb-6">
+          <span className="text-sm text-muted-foreground">{guestCart.length} منتجات</span>
+          <h1 className="text-xl font-bold">سلة التسوق</h1>
+        </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-4">
@@ -266,24 +269,28 @@ export default function Cart() {
             <div className="bg-white dark:bg-card p-6 rounded-2xl shadow-lg border sticky top-24">
               <h2 className="text-xl font-bold mb-6">ملخص الطلب</h2>
               
-              <div className="space-y-4 mb-6">
-                <div className="flex justify-between text-muted-foreground">
-                  <span>المجموع</span>
-                  <span className="font-bold text-foreground">{formatPrice(guestSubtotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
+              <div className="space-y-3 mb-6">
+                <div className="flex justify-between">
+                  <span className="font-medium text-foreground">{formatPrice(guestSubtotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
+                  <span className="text-muted-foreground">المجموع الفرعي</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-green-600">مجاني</span>
+                  <span className="text-muted-foreground">الشحن</span>
                 </div>
                 <Separator />
-                <div className="flex justify-between text-xl font-bold text-primary">
+                <div className="flex justify-between text-xl font-bold">
+                  <span className="text-teal-600">{formatPrice(guestSubtotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
                   <span>الإجمالي</span>
-                  <span>{formatPrice(guestSubtotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
                 </div>
               </div>
 
               <Link href="/guest-checkout">
                 <Button 
-                  className="w-full h-14 text-lg font-bold rounded-xl shadow-lg shadow-primary/20"
+                  className="w-full h-14 text-lg font-bold rounded-xl bg-teal-500 hover:bg-teal-600 shadow-lg"
                   data-testid="button-guest-checkout"
                 >
-                  إتمام الشراء كزائر
+                  إتمام الشراء
                   <ArrowLeft className="mr-2 h-5 w-5" />
                 </Button>
               </Link>
@@ -356,7 +363,10 @@ export default function Cart() {
 
   return (
     <div className="container mx-auto px-4 py-8 pb-20">
-      <h1 className="text-3xl font-bold mb-8">سلة التسوق ({cartItems.length} منتجات)</h1>
+      <div className="flex justify-between items-center mb-6">
+        <span className="text-sm text-muted-foreground">{cartItems.length} منتجات</span>
+        <h1 className="text-xl font-bold">سلة التسوق</h1>
+      </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-4">
@@ -456,24 +466,28 @@ export default function Cart() {
           <div className="bg-white dark:bg-card p-6 rounded-2xl shadow-lg border sticky top-24">
             <h2 className="text-xl font-bold mb-6">ملخص الطلب</h2>
             
-            <div className="space-y-4 mb-6">
-              <div className="flex justify-between text-muted-foreground">
-                <span>المجموع</span>
-                <span className="font-bold text-foreground">{formatPrice(subtotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
+            <div className="space-y-3 mb-6">
+              <div className="flex justify-between">
+                <span className="font-medium text-foreground">{formatPrice(subtotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
+                <span className="text-muted-foreground">المجموع الفرعي</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-medium text-green-600">مجاني</span>
+                <span className="text-muted-foreground">الشحن</span>
               </div>
               <Separator />
-              <div className="flex justify-between text-xl font-bold text-primary">
+              <div className="flex justify-between text-xl font-bold">
+                <span className="text-teal-600">{formatPrice(subtotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
                 <span>الإجمالي</span>
-                <span>{formatPrice(subtotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
               </div>
             </div>
 
             <Link href="/checkout">
               <Button 
-                className="w-full h-14 text-lg font-bold rounded-xl shadow-lg shadow-primary/20"
+                className="w-full h-14 text-lg font-bold rounded-xl bg-teal-500 hover:bg-teal-600 shadow-lg"
                 data-testid="button-checkout"
               >
-                إتمام الطلب
+                إتمام الشراء
                 <ArrowLeft className="mr-2 h-5 w-5" />
               </Button>
             </Link>
