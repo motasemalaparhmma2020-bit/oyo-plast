@@ -67,6 +67,7 @@ interface ProductFormData {
   colors: string;
   sizes: string;
   allowDesignUpload: boolean;
+  printingPricePerUnit: string;
   hasPrintingOptions: boolean;
   baseBagPrice: string;
   singleColorPrintPrice: string;
@@ -84,6 +85,7 @@ const emptyProductForm: ProductFormData = {
   colors: "",
   sizes: "",
   allowDesignUpload: false,
+  printingPricePerUnit: "",
   hasPrintingOptions: false,
   baseBagPrice: "",
   singleColorPrintPrice: "",
@@ -1037,6 +1039,7 @@ export default function Admin() {
       colors: product.colors ? product.colors.join(', ') : "",
       sizes: product.sizes ? product.sizes.join(', ') : "",
       allowDesignUpload: product.allowDesignUpload ?? false,
+      printingPricePerUnit: product.printingPricePerUnit != null ? String(product.printingPricePerUnit) : "",
       hasPrintingOptions: product.hasPrintingOptions ?? false,
       baseBagPrice: product.baseBagPrice != null ? String(product.baseBagPrice) : "",
       singleColorPrintPrice: product.singleColorPrintPrice != null ? String(product.singleColorPrintPrice) : "",
@@ -1548,16 +1551,43 @@ export default function Admin() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="product-design-upload"
-                          checked={productForm.allowDesignUpload}
-                          onChange={(e) => setProductForm({...productForm, allowDesignUpload: e.target.checked})}
-                          className="rounded border-gray-300"
-                          data-testid="checkbox-design-upload"
-                        />
-                        <Label htmlFor="product-design-upload">السماح برفع ملف التصميم</Label>
+                      <div className="border-t pt-4 mt-4">
+                        <div className="flex items-center gap-2 mb-4">
+                          <input
+                            type="checkbox"
+                            id="product-design-upload"
+                            checked={productForm.allowDesignUpload}
+                            onChange={(e) => setProductForm({
+                              ...productForm, 
+                              allowDesignUpload: e.target.checked,
+                              printingPricePerUnit: e.target.checked ? productForm.printingPricePerUnit : ""
+                            })}
+                            className="rounded border-gray-300"
+                            data-testid="checkbox-design-upload"
+                          />
+                          <Label htmlFor="product-design-upload" className="font-bold flex items-center gap-2">
+                            <Printer className="h-4 w-4" />
+                            السماح بالطباعة المخصصة
+                          </Label>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-3">عند التفعيل: يمكن للعميل رفع ملف التصميم وإضافة ملاحظات</p>
+                        
+                        {productForm.allowDesignUpload && (
+                          <div className="p-4 bg-muted/50 rounded-lg space-y-4">
+                            <div>
+                              <Label htmlFor="printing-price-per-unit">سعر الطباعة للوحدة (ريال)</Label>
+                              <Input
+                                id="printing-price-per-unit"
+                                type="number"
+                                value={productForm.printingPricePerUnit}
+                                onChange={(e) => setProductForm({...productForm, printingPricePerUnit: e.target.value})}
+                                placeholder="مثال: 50"
+                                data-testid="input-printing-price-per-unit"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">يُضاف هذا المبلغ لكل قطعة عند طلب الطباعة</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="border-t pt-4 mt-4">
@@ -1572,7 +1602,7 @@ export default function Admin() {
                           />
                           <Label htmlFor="product-printing-options" className="font-bold flex items-center gap-2">
                             <Printer className="h-4 w-4" />
-                            تفعيل حاسبة الطباعة الذكية
+                            تفعيل حاسبة الطباعة الذكية (متقدم)
                           </Label>
                         </div>
                         
