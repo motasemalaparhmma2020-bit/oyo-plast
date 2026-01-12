@@ -10,14 +10,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useAddToCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
-import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star, User, Camera, X, ImagePlus, Sparkles, Zap } from "lucide-react";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star, Camera, X, Zap, Package, ChevronLeft, ChevronRight, Printer } from "lucide-react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import useEmblaCarousel from "embla-carousel-react";
 
 interface BulkPricing {
   minQty: number;
   price: string;
+}
+
+interface SizePricing {
+  size: string;
+  price: string;
+  priceSar?: string;
+  colors?: string[];
+  stock?: number;
 }
 
 export default function ProductDetail() {
@@ -104,6 +113,12 @@ export default function ProductDetail() {
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedDesignUrl, setUploadedDesignUrl] = useState<string | null>(null);
+  const [isUploadingDesign, setIsUploadingDesign] = useState(false);
+  const [designNotes, setDesignNotes] = useState("");
+  const [enableCustomPrinting, setEnableCustomPrinting] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
   const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
     return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
   });
@@ -116,6 +131,32 @@ export default function ProductDetail() {
     return () => window.removeEventListener('currencyChange', handleCurrencyChange);
   }, []);
 
+  const allImages = useMemo(() => {
+    if (!product) return [];
+    const images = [product.imageUrl];
+    if (product.imageUrls && product.imageUrls.length > 0) {
+      images.push(...product.imageUrls);
+    }
+    return images;
+  }, [product]);
+
+  const [emblaRef, emblaApi] = useEmblaCarousel({ direction: 'rtl' });
+
+  const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
+  const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
+
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return;
+    setCurrentImageIndex(emblaApi.selectedScrollSnap());
+  }, [emblaApi]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    onSelect();
+    emblaApi.on('select', onSelect);
+    return () => { emblaApi.off('select', onSelect); };
+  }, [emblaApi, onSelect]);
+
   const bulkPricing: BulkPricing[] = useMemo(() => {
     if (!product?.bulkPricing) return [];
     try {
@@ -125,8 +166,47 @@ export default function ProductDetail() {
     }
   }, [product?.bulkPricing]);
 
+  const sizePricing: SizePricing[] = useMemo(() => {
+    if (!product?.sizePricing) return [];
+    try {
+      return JSON.parse(product.sizePricing);
+    } catch {
+      return [];
+    }
+  }, [product?.sizePricing]);
+
+  const currentSizeData = useMemo(() => {
+    if (!selectedSize || sizePricing.length === 0) return null;
+    return sizePricing.find(sp => sp.size === selectedSize);
+  }, [selectedSize, sizePricing]);
+
+  const availableColors = useMemo(() => {
+    if (currentSizeData?.colors && currentSizeData.colors.length > 0) {
+      return currentSizeData.colors;
+    }
+    return product?.colors || [];
+  }, [currentSizeData, product?.colors]);
+
+  useEffect(() => {
+    if (sizePricing.length > 0 && !selectedSize) {
+      setSelectedSize(sizePricing[0].size);
+    }
+  }, [sizePricing, selectedSize]);
+
+  useEffect(() => {
+    if (selectedSize && availableColors.length > 0 && (!selectedColor || !availableColors.includes(selectedColor))) {
+      setSelectedColor(availableColors[0]);
+    }
+  }, [selectedSize, availableColors, selectedColor]);
+
   const currentPrice = useMemo(() => {
     if (!product) return '0';
+    
+    if (currentSizeData) {
+      return currency === 'SAR' && currentSizeData.priceSar 
+        ? currentSizeData.priceSar 
+        : currentSizeData.price;
+    }
     
     let basePrice = currency === 'SAR' && product.priceSar 
       ? product.priceSar 
@@ -143,47 +223,100 @@ export default function ProductDetail() {
     }
 
     return basePrice;
-  }, [product, quantity, currency, bulkPricing]);
+  }, [product, quantity, currency, bulkPricing, currentSizeData]);
+
+  const printingCost = useMemo(() => {
+    if (!enableCustomPrinting || !product?.printingPricePerUnit) return 0;
+    return Number(product.printingPricePerUnit) * quantity;
+  }, [enableCustomPrinting, product?.printingPricePerUnit, quantity]);
 
   const totalPrice = useMemo(() => {
-    return Number(currentPrice) * quantity;
-  }, [currentPrice, quantity]);
+    return (Number(currentPrice) * quantity) + printingCost;
+  }, [currentPrice, quantity, printingCost]);
+
+  const currentStock = useMemo(() => {
+    if (currentSizeData?.stock !== undefined) {
+      return currentSizeData.stock;
+    }
+    return product?.stock || 0;
+  }, [currentSizeData, product?.stock]);
 
   const formatPrice = (price: number | string) => {
     return Number(price).toLocaleString('ar-YE');
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDesignUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setUploadedFile(file);
-      toast({
-        title: "تم رفع الملف",
-        description: `تم رفع ${file.name} بنجاح`,
+    if (!file) return;
+
+    setIsUploadingDesign(true);
+    setUploadedFile(file);
+
+    const formData = new FormData();
+    formData.append('design', file);
+
+    try {
+      const res = await fetch('/api/upload/design', {
+        method: 'POST',
+        body: formData
       });
+
+      if (res.ok) {
+        const data = await res.json();
+        setUploadedDesignUrl(data.designUrl);
+        toast({
+          title: "تم رفع التصميم",
+          description: `تم رفع ${file.name} بنجاح`,
+        });
+      } else {
+        toast({ title: "فشل رفع التصميم", variant: "destructive" });
+        setUploadedFile(null);
+      }
+    } catch (error) {
+      toast({ title: "حدث خطأ أثناء رفع التصميم", variant: "destructive" });
+      setUploadedFile(null);
     }
+    setIsUploadingDesign(false);
+    e.target.value = '';
   };
 
   const handleAddToCart = () => {
     if (!product) return;
-    addToCart({ productId: product.id, quantity });
+    addToCart({ 
+      productId: product.id, 
+      quantity,
+      selectedSize: selectedSize || undefined,
+      selectedColor: selectedColor || undefined,
+      customPrinting: enableCustomPrinting,
+      designNotes: designNotes || undefined,
+      designFileUrl: uploadedDesignUrl || undefined
+    });
+    toast({
+      title: "تمت الإضافة للسلة",
+      description: `تم إضافة ${product.name} إلى سلة التسوق`,
+    });
   };
 
   const handleBuyNow = () => {
     if (!product) return;
     
     if (!isAuthenticated) {
-      // Redirect to auth if not logged in
       setLocation('/auth');
       return;
     }
     
-    // Add to cart and go to checkout
-    addToCart({ productId: product.id, quantity });
+    addToCart({ 
+      productId: product.id, 
+      quantity,
+      selectedSize: selectedSize || undefined,
+      selectedColor: selectedColor || undefined,
+      customPrinting: enableCustomPrinting,
+      designNotes: designNotes || undefined,
+      designFileUrl: uploadedDesignUrl || undefined
+    });
     setTimeout(() => setLocation('/checkout'), 300);
   };
 
-  const colors = product?.colors || [];
   const sizes = product?.sizes || [];
 
   if (isLoading) {
@@ -226,16 +359,77 @@ export default function ProductDetail() {
 
       <div className="grid md:grid-cols-2 gap-8">
         <div className="relative">
-          <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl overflow-hidden p-8">
-            <img
-              src={product.imageUrl}
-              alt={product.name}
-              className="w-full h-full object-contain"
-            />
-          </div>
-          {product.stock <= 0 && (
+          {allImages.length > 1 ? (
+            <div className="relative">
+              <div className="overflow-hidden rounded-2xl" ref={emblaRef}>
+                <div className="flex">
+                  {allImages.map((img, idx) => (
+                    <div key={idx} className="flex-[0_0_100%] min-w-0">
+                      <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-4">
+                        <img
+                          src={img}
+                          alt={`${product.name} - صورة ${idx + 1}`}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full shadow-md z-10"
+                onClick={scrollNext}
+                data-testid="button-image-next"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full shadow-md z-10"
+                onClick={scrollPrev}
+                data-testid="button-image-prev"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </Button>
+
+              <div className="flex gap-2 mt-3 justify-center">
+                {allImages.map((img, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => emblaApi?.scrollTo(idx)}
+                    className={`w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                      currentImageIndex === idx ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'
+                    }`}
+                    data-testid={`button-thumbnail-${idx}`}
+                  >
+                    <img src={img} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-2xl overflow-hidden p-8">
+              <img
+                src={product.imageUrl}
+                alt={product.name}
+                className="w-full h-full object-contain"
+              />
+            </div>
+          )}
+          
+          {currentStock <= 0 && (
             <Badge variant="destructive" className="absolute top-4 right-4 text-sm px-4 py-2">
               نفذت الكمية
+            </Badge>
+          )}
+          {currentStock > 0 && currentStock <= 10 && (
+            <Badge variant="secondary" className="absolute top-4 left-4 text-sm px-3 py-1 bg-orange-100 text-orange-700">
+              <Package className="h-3 w-3 ml-1" />
+              متبقي {currentStock} فقط
             </Badge>
           )}
         </div>
@@ -246,9 +440,7 @@ export default function ProductDetail() {
               {product.name}
             </h1>
             
-            {/* Social Proof: Rating + Sold Count */}
             <div className="flex flex-wrap items-center gap-4 mb-4 p-3 bg-muted/30 rounded-lg">
-              {/* Star Rating */}
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-0.5">
                   {[1, 2, 3, 4, 5].map((star) => (
@@ -270,7 +462,6 @@ export default function ProductDetail() {
                 </span>
               </div>
               
-              {/* Sold Counter */}
               <div className="flex items-center gap-2 text-sm">
                 <Badge variant="secondary" className="gap-1.5 font-semibold">
                   <ShoppingCart className="h-3.5 w-3.5" />
@@ -283,6 +474,78 @@ export default function ProductDetail() {
               {product.description}
             </p>
           </div>
+
+          {sizePricing.length > 0 && (
+            <div>
+              <Label className="text-base font-semibold mb-3 block">الحجم</Label>
+              <div className="flex flex-wrap gap-2">
+                {sizePricing.map((sp) => (
+                  <button
+                    key={sp.size}
+                    onClick={() => setSelectedSize(sp.size)}
+                    className={`px-4 py-3 rounded-xl border-2 transition-all font-medium flex flex-col items-center min-w-[80px] ${
+                      selectedSize === sp.size 
+                        ? 'border-primary bg-primary/10 text-primary shadow-md' 
+                        : 'border-gray-200 hover:border-gray-400 text-foreground hover:bg-gray-50'
+                    }`}
+                    data-testid={`button-size-${sp.size}`}
+                  >
+                    <span className="font-bold">{sp.size}</span>
+                    <span className="text-xs text-muted-foreground mt-1">
+                      {formatPrice(currency === 'SAR' && sp.priceSar ? sp.priceSar : sp.price)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {sizes.length > 0 && sizePricing.length === 0 && (
+            <div>
+              <Label className="text-base font-semibold mb-3 block">اختر المقاس</Label>
+              <div className="flex flex-wrap gap-2">
+                {sizes.map((size) => (
+                  <button
+                    key={size}
+                    onClick={() => setSelectedSize(size)}
+                    className={`px-4 py-2 rounded-lg border-2 transition-all font-medium ${
+                      selectedSize === size 
+                        ? 'border-primary bg-primary/10 text-primary' 
+                        : 'border-gray-200 hover:border-gray-400 text-foreground'
+                    }`}
+                    data-testid={`button-size-${size}`}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {availableColors.length > 0 && (
+            <div>
+              <Label className="text-base font-semibold mb-3 block">اللون</Label>
+              <div className="flex flex-wrap gap-3">
+                {availableColors.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => setSelectedColor(color)}
+                    className={`w-10 h-10 rounded-full border-2 transition-all flex items-center justify-center ${
+                      selectedColor === color 
+                        ? 'border-primary ring-2 ring-primary/30 scale-110' 
+                        : 'border-gray-200 hover:border-gray-400'
+                    }`}
+                    style={{ backgroundColor: color }}
+                    data-testid={`button-color-${color}`}
+                  >
+                    {selectedColor === color && (
+                      <Check className="h-5 w-5 text-white drop-shadow-md" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <Card className="border-primary/20">
             <CardContent className="p-4 space-y-4">
@@ -304,6 +567,11 @@ export default function ProductDetail() {
                       {currency === 'YER' ? 'ر.ي' : 'ر.س'}
                     </span>
                   </p>
+                  {printingCost > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      (يشمل {formatPrice(printingCost)} رسوم الطباعة)
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -342,103 +610,103 @@ export default function ProductDetail() {
                 <Input
                   type="number"
                   min={1}
-                  max={product.stock}
+                  max={currentStock}
                   value={quantity}
-                  onChange={(e) => setQuantity(Math.max(1, Math.min(product.stock, parseInt(e.target.value) || 1)))}
+                  onChange={(e) => setQuantity(Math.max(1, Math.min(currentStock, parseInt(e.target.value) || 1)))}
                   className="w-20 text-center font-bold text-lg"
                   data-testid="input-quantity"
                 />
                 <Button
                   size="icon"
                   variant="outline"
-                  onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
-                  disabled={quantity >= product.stock}
+                  onClick={() => setQuantity(Math.min(currentStock, quantity + 1))}
+                  disabled={quantity >= currentStock}
                   data-testid="button-increase-quantity"
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
                 <span className="text-sm text-muted-foreground">
-                  متوفر: {product.stock} قطعة
+                  متوفر: {currentStock} قطعة
                 </span>
               </div>
             </div>
 
-            {colors.length > 0 && (
-              <div>
-                <Label className="text-base font-semibold mb-3 block">اختر اللون</Label>
-                <div className="flex flex-wrap gap-3">
-                  {colors.map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => setSelectedColor(color)}
-                      className={`w-10 h-10 rounded-full border-2 transition-all flex items-center justify-center ${
-                        selectedColor === color 
-                          ? 'border-primary ring-2 ring-primary/30' 
-                          : 'border-gray-200 hover:border-gray-400'
-                      }`}
-                      style={{ backgroundColor: color }}
-                      data-testid={`button-color-${color}`}
-                    >
-                      {selectedColor === color && (
-                        <Check className="h-5 w-5 text-white drop-shadow-md" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            {(product.allowDesignUpload || product.hasPrintingOptions) && (
+              <Card className="border-[#2196F3]/30 bg-[#2196F3]/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2 text-[#2196F3]">
+                    <Printer className="h-5 w-5" />
+                    طباعة مخصصة
+                    {product.printingPricePerUnit && (
+                      <Badge variant="secondary" className="mr-2">
+                        +{formatPrice(product.printingPricePerUnit)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}/قطعة
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="enable-printing"
+                      checked={enableCustomPrinting}
+                      onChange={(e) => setEnableCustomPrinting(e.target.checked)}
+                      className="w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <Label htmlFor="enable-printing" className="cursor-pointer">
+                      أريد طباعة شعاري أو تصميمي على المنتج
+                    </Label>
+                  </div>
 
-            {sizes.length > 0 && (
-              <div>
-                <Label className="text-base font-semibold mb-3 block">اختر المقاس</Label>
-                <div className="flex flex-wrap gap-2">
-                  {sizes.map((size) => (
-                    <button
-                      key={size}
-                      onClick={() => setSelectedSize(size)}
-                      className={`px-4 py-2 rounded-lg border-2 transition-all font-medium ${
-                        selectedSize === size 
-                          ? 'border-primary bg-primary/10 text-primary' 
-                          : 'border-gray-200 hover:border-gray-400 text-foreground'
-                      }`}
-                      data-testid={`button-size-${size}`}
-                    >
-                      {size}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+                  {enableCustomPrinting && (
+                    <>
+                      <div 
+                        className="border-2 border-dashed border-[#2196F3]/50 rounded-xl p-6 text-center cursor-pointer hover:border-[#2196F3] transition-colors bg-white dark:bg-gray-800"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*,.pdf,.ai,.psd"
+                          onChange={handleDesignUpload}
+                          className="hidden"
+                          data-testid="input-design-upload"
+                        />
+                        {isUploadingDesign ? (
+                          <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                            <span>جاري رفع التصميم...</span>
+                          </div>
+                        ) : uploadedFile ? (
+                          <div className="flex items-center justify-center gap-2 text-[#2196F3]">
+                            <Check className="h-5 w-5" />
+                            <span className="font-medium">{uploadedFile.name}</span>
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground">
+                            <Upload className="h-10 w-10 mx-auto mb-2 text-[#2196F3]" />
+                            <p className="font-medium">ارفع شعارك أو تصميمك</p>
+                            <p className="text-xs mt-1">PDF, PNG, JPG</p>
+                          </div>
+                        )}
+                      </div>
 
-            {product.allowDesignUpload && (
-              <div>
-                <Label className="text-base font-semibold mb-3 block">رفع التصميم الخاص بك</Label>
-                <div 
-                  className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*,.pdf,.ai,.psd"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    data-testid="input-design-upload"
-                  />
-                  {uploadedFile ? (
-                    <div className="flex items-center justify-center gap-2 text-primary">
-                      <Check className="h-5 w-5" />
-                      <span className="font-medium">{uploadedFile.name}</span>
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground">
-                      <Upload className="h-8 w-8 mx-auto mb-2" />
-                      <p>اضغط لرفع ملف التصميم</p>
-                      <p className="text-xs mt-1">PDF, AI, PSD, أو صور</p>
-                    </div>
+                      <div>
+                        <Label htmlFor="design-notes" className="mb-2 block">تعليمات خاصة</Label>
+                        <Textarea
+                          id="design-notes"
+                          value={designNotes}
+                          onChange={(e) => setDesignNotes(e.target.value)}
+                          placeholder="أضف أي ملاحظات خاصة بالطباعة..."
+                          className="resize-none"
+                          rows={3}
+                          data-testid="input-design-notes"
+                        />
+                      </div>
+                    </>
                   )}
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             )}
           </div>
 
@@ -446,7 +714,7 @@ export default function ProductDetail() {
             <Button
               size="lg"
               className="flex-1 h-14 text-lg font-extrabold gap-3 rounded-xl shadow-lg shadow-primary/20"
-              disabled={product.stock <= 0 || isPending}
+              disabled={currentStock <= 0 || isPending}
               onClick={handleAddToCart}
               data-testid="button-add-to-cart"
             >
@@ -455,14 +723,14 @@ export default function ProductDetail() {
               ) : (
                 <ShoppingCart className="h-5 w-5" />
               )}
-              {product.stock <= 0 ? "غير متوفر" : "أضف للسلة"}
+              {currentStock <= 0 ? "غير متوفر" : "أضف للسلة"}
             </Button>
             
             <Button
               size="lg"
               variant="outline"
               className="flex-1 h-14 text-lg font-extrabold gap-3 rounded-xl border-2 border-primary text-primary"
-              disabled={product.stock <= 0}
+              disabled={currentStock <= 0}
               onClick={handleBuyNow}
               data-testid="button-buy-now"
             >
@@ -473,13 +741,11 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* Reviews Section */}
       <Separator className="my-8" />
       
       <div className="space-y-6">
         <h2 className="text-2xl font-bold">التقييمات والمراجعات</h2>
         
-        {/* Add Review Form */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">أضف تقييمك</CardTitle>
@@ -520,7 +786,6 @@ export default function ProductDetail() {
               />
             </div>
             
-            {/* Review Image Upload */}
             <div>
               <Label className="mb-2 block">أضف صورة للمنتج (اختياري)</Label>
               <div className="flex items-center gap-4">
@@ -589,15 +854,14 @@ export default function ProductDetail() {
           </CardContent>
         </Card>
 
-        {/* Reviews List */}
         {reviews.length > 0 ? (
           <div className="space-y-4">
             {reviews.map((review) => (
               <Card key={review.id} data-testid={`review-card-${review.id}`}>
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center shrink-0">
-                      <User className="h-5 w-5 text-primary" />
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <span className="text-primary font-bold">م</span>
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
@@ -613,24 +877,19 @@ export default function ProductDetail() {
                             />
                           ))}
                         </div>
-                        <span className="text-sm text-muted-foreground">
-                          {review.createdAt ? new Date(review.createdAt).toLocaleDateString('ar-YE') : ''}
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(review.createdAt!).toLocaleDateString('ar-YE')}
                         </span>
                       </div>
                       {review.comment && (
-                        <p className="text-foreground mb-2">{review.comment}</p>
+                        <p className="text-sm text-foreground">{review.comment}</p>
                       )}
-                      {/* Review Image */}
-                      {(review as any).imageUrl && (
-                        <div className="mt-3">
-                          <img 
-                            src={(review as any).imageUrl} 
-                            alt="صورة من العميل" 
-                            className="w-32 h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity"
-                            onClick={() => window.open((review as any).imageUrl, '_blank')}
-                            data-testid={`review-image-${review.id}`}
-                          />
-                        </div>
+                      {review.imageUrl && (
+                        <img 
+                          src={review.imageUrl} 
+                          alt="صورة التقييم" 
+                          className="mt-2 w-24 h-24 object-cover rounded-lg"
+                        />
                       )}
                     </div>
                   </div>
@@ -639,44 +898,39 @@ export default function ProductDetail() {
             ))}
           </div>
         ) : (
-          <p className="text-center text-muted-foreground py-8">
-            لا توجد تقييمات بعد. كن أول من يقيّم هذا المنتج!
-          </p>
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              <Star className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+              <p>لا توجد تقييمات بعد. كن أول من يقيم هذا المنتج!</p>
+            </CardContent>
+          </Card>
         )}
       </div>
 
-      {/* Related Products Section */}
       {filteredRelatedProducts.length > 0 && (
-        <div className="container max-w-4xl mx-auto px-4 py-8 pb-24">
-          <div className="flex items-center gap-2 mb-6">
-            <Sparkles className="h-5 w-5 text-primary" />
-            <h2 className="text-xl font-bold">قد يعجبك أيضاً</h2>
+        <>
+          <Separator className="my-8" />
+          <div>
+            <h2 className="text-2xl font-bold mb-4">منتجات مشابهة</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {filteredRelatedProducts.map((p) => (
+                <Link key={p.id} href={`/products/${p.id}`}>
+                  <Card className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer">
+                    <div className="aspect-square bg-gray-50 dark:bg-gray-800">
+                      <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-4" />
+                    </div>
+                    <CardContent className="p-3">
+                      <h3 className="font-medium text-sm line-clamp-2 mb-1">{p.name}</h3>
+                      <p className="text-primary font-bold text-sm">
+                        {formatPrice(currency === 'SAR' && p.priceSar ? p.priceSar : p.price)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {filteredRelatedProducts.map((relatedProduct) => (
-              <Link key={relatedProduct.id} href={`/product/${relatedProduct.id}`}>
-                <Card className="overflow-hidden hover-elevate cursor-pointer" data-testid={`related-product-${relatedProduct.id}`}>
-                  <div className="aspect-square overflow-hidden">
-                    <img
-                      src={relatedProduct.imageUrl}
-                      alt={relatedProduct.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <CardContent className="p-3">
-                    <h3 className="font-medium text-sm line-clamp-2 mb-1">{relatedProduct.name}</h3>
-                    <p className="text-primary font-bold text-sm">
-                      {currency === 'SAR' && relatedProduct.priceSar
-                        ? `${Number(relatedProduct.priceSar).toLocaleString('ar-YE')} ر.س`
-                        : `${Number(relatedProduct.price).toLocaleString('ar-YE')} ر.ي`
-                      }
-                    </p>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </div>
+        </>
       )}
     </div>
   );

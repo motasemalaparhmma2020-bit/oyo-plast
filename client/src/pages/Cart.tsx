@@ -11,6 +11,11 @@ import type { Product } from "@shared/schema";
 interface GuestCartItem {
   productId: number;
   quantity: number;
+  selectedSize?: string;
+  selectedColor?: string;
+  customPrinting?: boolean;
+  designNotes?: string;
+  designFileUrl?: string;
 }
 
 function getGuestCart(): GuestCartItem[] {
@@ -83,10 +88,10 @@ export default function Cart() {
     return price.toLocaleString('ar-YE');
   };
 
-  // Guest cart functions
-  const updateGuestQuantity = (productId: number, delta: number) => {
-    const updated = guestCart.map(item => {
-      if (item.productId === productId) {
+  // Guest cart functions - use index for proper targeting with size/color variants
+  const updateGuestQuantity = (index: number, delta: number) => {
+    const updated = guestCart.map((item, i) => {
+      if (i === index) {
         const newQty = Math.max(1, item.quantity + delta);
         return { ...item, quantity: newQty };
       }
@@ -96,8 +101,8 @@ export default function Cart() {
     setGuestCartState(updated);
   };
 
-  const removeGuestItem = (productId: number) => {
-    const updated = guestCart.filter(item => item.productId !== productId);
+  const removeGuestItem = (index: number) => {
+    const updated = guestCart.filter((_, i) => i !== index);
     setGuestCart(updated);
     setGuestCartState(updated);
   };
@@ -137,8 +142,8 @@ export default function Cart() {
 
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-4">
-            {guestCartWithProducts.map((item) => (
-              <div key={item.productId} className="bg-white dark:bg-card p-4 rounded-xl shadow-sm border flex flex-col sm:flex-row gap-4 items-center">
+            {guestCartWithProducts.map((item, index) => (
+              <div key={`${item.productId}-${item.selectedSize}-${item.selectedColor}-${index}`} className="bg-white dark:bg-card p-4 rounded-xl shadow-sm border flex flex-col sm:flex-row gap-4 items-center">
                 <div className="w-24 h-24 bg-gray-50 dark:bg-muted rounded-lg overflow-hidden shrink-0">
                   <img 
                     src={item.product?.imageUrl || ''} 
@@ -149,7 +154,26 @@ export default function Cart() {
                 
                 <div className="flex-grow text-center sm:text-right">
                   <h3 className="font-bold text-lg mb-1">{item.product?.name}</h3>
-                  <p className="text-primary font-bold">
+                  {(item.selectedSize || item.selectedColor) && (
+                    <div className="flex flex-wrap gap-2 justify-center sm:justify-start mb-2">
+                      {item.selectedSize && (
+                        <span className="text-xs bg-muted px-2 py-1 rounded">الحجم: {item.selectedSize}</span>
+                      )}
+                      {item.selectedColor && (
+                        <span className="text-xs bg-muted px-2 py-1 rounded flex items-center gap-1">
+                          اللون: 
+                          <span 
+                            className="w-4 h-4 rounded-full border inline-block" 
+                            style={{ backgroundColor: item.selectedColor }}
+                          />
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {item.customPrinting && (
+                    <span className="text-xs bg-[#2196F3]/10 text-[#2196F3] px-2 py-1 rounded">طباعة مخصصة</span>
+                  )}
+                  <p className="text-primary font-bold mt-1">
                     {formatPrice(currency === 'SAR' && item.product?.priceSar 
                       ? Number(item.product.priceSar) 
                       : Number(item.product?.price || 0))} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
@@ -162,8 +186,8 @@ export default function Cart() {
                     size="icon" 
                     className="h-8 w-8 rounded-md"
                     disabled={item.quantity <= 1}
-                    onClick={() => updateGuestQuantity(item.productId, -1)}
-                    data-testid={`button-decrease-${item.productId}`}
+                    onClick={() => updateGuestQuantity(index, -1)}
+                    data-testid={`button-decrease-${item.productId}-${index}`}
                   >
                     <Minus className="h-3 w-3" />
                   </Button>
@@ -172,8 +196,8 @@ export default function Cart() {
                     variant="ghost" 
                     size="icon" 
                     className="h-8 w-8 rounded-md"
-                    onClick={() => updateGuestQuantity(item.productId, 1)}
-                    data-testid={`button-increase-${item.productId}`}
+                    onClick={() => updateGuestQuantity(index, 1)}
+                    data-testid={`button-increase-${item.productId}-${index}`}
                   >
                     <Plus className="h-3 w-3" />
                   </Button>
@@ -183,8 +207,8 @@ export default function Cart() {
                   variant="ghost" 
                   size="icon" 
                   className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
-                  onClick={() => removeGuestItem(item.productId)}
-                  data-testid={`button-remove-${item.productId}`}
+                  onClick={() => removeGuestItem(index)}
+                  data-testid={`button-remove-${item.productId}-${index}`}
                 >
                   <Trash2 className="h-5 w-5" />
                 </Button>
@@ -302,7 +326,26 @@ export default function Cart() {
               
               <div className="flex-grow text-center sm:text-right">
                 <h3 className="font-bold text-lg mb-1">{item.product.name}</h3>
-                <p className="text-primary font-bold">
+                {(item.selectedSize || item.selectedColor) && (
+                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start mb-2">
+                    {item.selectedSize && (
+                      <span className="text-xs bg-muted px-2 py-1 rounded">الحجم: {item.selectedSize}</span>
+                    )}
+                    {item.selectedColor && (
+                      <span className="text-xs bg-muted px-2 py-1 rounded flex items-center gap-1">
+                        اللون: 
+                        <span 
+                          className="w-4 h-4 rounded-full border inline-block" 
+                          style={{ backgroundColor: item.selectedColor }}
+                        />
+                      </span>
+                    )}
+                  </div>
+                )}
+                {item.customPrinting && (
+                  <span className="text-xs bg-[#2196F3]/10 text-[#2196F3] px-2 py-1 rounded">طباعة مخصصة</span>
+                )}
+                <p className="text-primary font-bold mt-1">
                   {formatPrice(getItemPrice(item))} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
                 </p>
               </div>

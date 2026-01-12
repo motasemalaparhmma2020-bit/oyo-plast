@@ -59,6 +59,11 @@ export const api = {
       input: z.object({
         productId: z.number(),
         quantity: z.number().min(1),
+        selectedSize: z.string().optional(),
+        selectedColor: z.string().optional(),
+        customPrinting: z.boolean().optional(),
+        designNotes: z.string().optional(),
+        designFileUrl: z.string().optional(),
       }),
       responses: {
         201: z.custom<typeof cartItems.$inferSelect>(),

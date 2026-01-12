@@ -5,7 +5,14 @@
 
 **الشعار الجديد**: أويو بلاست - لطباعة ومستلزمات البلاستيك
 
-## Recent Changes (January 2025)
+## Recent Changes (January 2026)
+- **نظام الطباعة المتقدم**: تسعير حسب المقاس مع ألوان مختلفة لكل مقاس
+- **معرض صور المنتجات**: صور متعددة للمنتج مع carousel
+- **الطباعة المخصصة**: رفع ملفات التصميم مع ملاحظات + حساب تكلفة الطباعة للوحدة
+- **تحسين السلة**: عرض المقاس واللون والطباعة المخصصة في السلة
+- **تحديث قاعدة البيانات**: حقول جديدة imageUrls, sizePricing, printingPricePerUnit للمنتجات
+
+## Previous Changes (January 2025)
 - **نظام التحقق عبر الواتساب (Ultramsg)**: إرسال OTP عبر WhatsApp للتسجيل مع بديل البريد الإلكتروني
 - **نظام المسوقين/الموزعين**: اختيار نوع الحساب (عميل/مسوق) مع نظام عمولات
 - **جداول جديدة**: ملفات المسوقين، العمولات، جهات اتصال العملاء، التحقق من الهاتف
@@ -59,7 +66,10 @@
 
 ## Key Features
 - عرض مزدوج للأسعار (ريال يمني/سعودي) - 1 ريال سعودي = 140 ريال يمني
-- تسعير ديناميكي حسب الكمية
+- تسعير ديناميكي حسب الكمية والمقاس
+- **تسعير حسب المقاس**: أسعار مختلفة لكل مقاس مع ألوان متوفرة لكل مقاس
+- **معرض صور**: صور متعددة للمنتج مع carousel قابل للتمرير
+- **طباعة مخصصة**: رفع ملفات التصميم (PDF, PNG, AI, PSD) مع ملاحظات خاصة
 - رفع ملفات التصميم
 - **طريقة الدفع حالياً**: الدفع عند الاستلام لمندوب التوصيل
 - لوحة تحكم لإدارة الطلبات
@@ -108,11 +118,16 @@
 
 ## Database Schema
 - `users`: User authentication (Replit Auth) with accountType (customer/marketer)
-- `categories`: Product categories
-- `products`: Products with dual pricing and commission settings
-- `cart_items`: Shopping cart
+- `categories`: Product categories with iconUrl, sortOrder, isActive fields
+- `products`: Products with:
+  - Dual pricing (price, priceSar)
+  - Multiple images (imageUrls array)
+  - Size-based pricing (sizePricing JSON: [{size, price, priceSar, colors[], stock}])
+  - Printing price per unit (printingPricePerUnit)
+  - Commission settings
+- `cart_items`: Shopping cart with selectedSize, selectedColor, customPrinting, designNotes, designFileUrl
 - `orders`: Orders with payment info and marketer fields
-- `order_items`: Order line items
+- `order_items`: Order line items with selectedSize, selectedColor, customPrinting, designNotes, designFileUrl
 - `reviews`: تقييمات المنتجات
 - `notifications`: إشعارات المستخدمين
 - `favorites`: قائمة المفضلة

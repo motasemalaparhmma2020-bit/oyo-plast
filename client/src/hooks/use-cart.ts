@@ -9,8 +9,18 @@ function isGuestMode(): boolean {
   return localStorage.getItem('guestMode') === 'true';
 }
 
+interface GuestCartItem {
+  productId: number;
+  quantity: number;
+  selectedSize?: string;
+  selectedColor?: string;
+  customPrinting?: boolean;
+  designNotes?: string;
+  designFileUrl?: string;
+}
+
 // Guest cart functions
-function getGuestCart(): { productId: number; quantity: number }[] {
+function getGuestCart(): GuestCartItem[] {
   try {
     const saved = localStorage.getItem('guestCart');
     return saved ? JSON.parse(saved) : [];
@@ -19,17 +29,32 @@ function getGuestCart(): { productId: number; quantity: number }[] {
   }
 }
 
-function setGuestCart(cart: { productId: number; quantity: number }[]): void {
+function setGuestCart(cart: GuestCartItem[]): void {
   localStorage.setItem('guestCart', JSON.stringify(cart));
 }
 
-function addToGuestCart(productId: number, quantity: number): void {
+function addToGuestCart(item: GuestCartItem): void {
   const cart = getGuestCart();
-  const existingIdx = cart.findIndex(item => item.productId === productId);
+  
+  // For custom printing items, always add as new
+  if (item.customPrinting) {
+    cart.push(item);
+    setGuestCart(cart);
+    return;
+  }
+  
+  // Find existing item with same product/size/color
+  const existingIdx = cart.findIndex(existing => 
+    existing.productId === item.productId &&
+    existing.selectedSize === item.selectedSize &&
+    existing.selectedColor === item.selectedColor &&
+    !existing.customPrinting
+  );
+  
   if (existingIdx >= 0) {
-    cart[existingIdx].quantity += quantity;
+    cart[existingIdx].quantity += item.quantity;
   } else {
-    cart.push({ productId, quantity });
+    cart.push(item);
   }
   setGuestCart(cart);
 }
@@ -62,8 +87,16 @@ export function useAddToCart() {
     mutationFn: async (data: z.infer<typeof api.cart.add.input>) => {
       // Check if user is in guest mode (not authenticated or explicitly set as guest)
       if (!isAuthenticated || isGuestMode()) {
-        // Add to guest cart in localStorage
-        addToGuestCart(data.productId, data.quantity);
+        // Add to guest cart in localStorage with full customization data
+        addToGuestCart({
+          productId: data.productId,
+          quantity: data.quantity,
+          selectedSize: data.selectedSize,
+          selectedColor: data.selectedColor,
+          customPrinting: data.customPrinting,
+          designNotes: data.designNotes,
+          designFileUrl: data.designFileUrl
+        });
         return { success: true, guest: true };
       }
       
@@ -76,7 +109,15 @@ export function useAddToCart() {
       
       if (!res.ok) {
         // On API failure for authenticated users, fallback to guest cart
-        addToGuestCart(data.productId, data.quantity);
+        addToGuestCart({
+          productId: data.productId,
+          quantity: data.quantity,
+          selectedSize: data.selectedSize,
+          selectedColor: data.selectedColor,
+          customPrinting: data.customPrinting,
+          designNotes: data.designNotes,
+          designFileUrl: data.designFileUrl
+        });
         return { success: true, guest: true, fallback: true };
       }
       return api.cart.add.responses[201].parse(await res.json());
@@ -103,7 +144,15 @@ export function useAddToCart() {
     },
     onError: (error: Error, variables) => {
       // On network/unexpected error, fallback to guest cart
-      addToGuestCart(variables.productId, variables.quantity);
+      addToGuestCart({
+        productId: variables.productId,
+        quantity: variables.quantity,
+        selectedSize: variables.selectedSize,
+        selectedColor: variables.selectedColor,
+        customPrinting: variables.customPrinting,
+        designNotes: variables.designNotes,
+        designFileUrl: variables.designFileUrl
+      });
       toast({
         title: "تمت الإضافة للسلة",
         description: "تمت إضافة المنتج. يمكنك إتمام الشراء من صفحة الشراء كزائر",

@@ -98,8 +98,30 @@ export async function registerRoutes(
 
   app.post(api.cart.add.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).send("Unauthorized");
-    const { productId, quantity } = req.body;
-    const item = await storage.addToCart(getUserId(req), productId, quantity);
+    
+    // Validate request body
+    const parseResult = api.cart.add.input.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ message: "Invalid cart data", errors: parseResult.error.errors });
+    }
+    
+    const { 
+      productId, 
+      quantity, 
+      selectedSize, 
+      selectedColor, 
+      customPrinting, 
+      designNotes, 
+      designFileUrl 
+    } = parseResult.data;
+    
+    const item = await storage.addToCart(getUserId(req), productId, quantity, {
+      selectedSize,
+      selectedColor,
+      customPrinting,
+      designNotes,
+      designFileUrl
+    });
     res.status(201).json(item);
   });
 
@@ -652,11 +674,14 @@ ${notes ? `ملاحظات: ${notes}` : ''}
         priceSar: priceSar || null,
         categoryId,
         imageUrl,
+        imageUrls: null,
         stock: stock || 100,
         colors: colors || null,
         sizes: sizes || null,
         allowDesignUpload: allowDesignUpload || false,
         bulkPricing: bulkPricing || null,
+        sizePricing: null,
+        printingPricePerUnit: null,
         rating: "5",
         reviewCount: 0,
         soldCount: 0,
@@ -712,7 +737,14 @@ ${notes ? `ملاحظات: ${notes}` : ''}
         return res.status(400).json({ error: "Missing required fields" });
       }
       
-      const category = await storage.createCategory({ name, slug, imageUrl });
+      const category = await storage.createCategory({ 
+        name, 
+        slug, 
+        imageUrl,
+        iconUrl: null,
+        sortOrder: 0,
+        isActive: true
+      });
       res.status(201).json(category);
     } catch (error) {
       res.status(500).json({ error: "Failed to create category" });

@@ -11,6 +11,9 @@ export const categories = pgTable("categories", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   imageUrl: text("image_url").notNull(),
+  iconUrl: text("icon_url"),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true).notNull(),
 });
 
 export const products = pgTable("products", {
@@ -21,11 +24,14 @@ export const products = pgTable("products", {
   priceSar: numeric("price_sar"), // Price in SAR
   categoryId: integer("category_id").references(() => categories.id).notNull(),
   imageUrl: text("image_url").notNull(),
+  imageUrls: text("image_urls").array(), // Multiple product images (gallery)
   stock: integer("stock").default(100).notNull(),
   colors: text("colors").array(), // For color customization
   sizes: text("sizes").array(), // For size customization (e.g., "صغير", "وسط", "كبير")
   allowDesignUpload: boolean("allow_design_upload").default(false).notNull(),
   bulkPricing: text("bulk_pricing"), // JSON string for quantity-based pricing
+  sizePricing: text("size_pricing"), // JSON: [{ size: "8oz", price: "100", priceSar: "0.7", colors: ["#fff", "#000"], stock: 50 }]
+  printingPricePerUnit: numeric("printing_price_per_unit"), // سعر الطباعة لكل وحدة
   rating: numeric("rating").default("5"), // Product rating (1-5) - default 5 stars
   reviewCount: integer("review_count").default(0), // Number of reviews
   soldCount: integer("sold_count").default(0), // Total units sold
@@ -49,12 +55,17 @@ export const cartItems = pgTable("cart_items", {
   userId: varchar("user_id").references(() => users.id).notNull(),
   productId: integer("product_id").references(() => products.id).notNull(),
   quantity: integer("quantity").notNull(),
+  selectedSize: text("selected_size"), // المقاس المختار
+  selectedColor: text("selected_color"), // اللون المختار
   // Printing options
   selectedBagColor: text("selected_bag_color"), // لون الكيس المختار
   printColorCount: integer("print_color_count").default(0), // عدد ألوان الطباعة (0-3)
   printColor1: text("print_color_1"), // لون الطباعة الأول
   printColor2: text("print_color_2"), // لون الطباعة الثاني
   printColor3: text("print_color_3"), // لون الطباعة الثالث
+  customPrinting: boolean("custom_printing").default(false), // طباعة مخصصة
+  designNotes: text("design_notes"), // ملاحظات خاصة بالتصميم
+  designFileUrl: text("design_file_url"), // رابط ملف التصميم المرفوع
   unitPrice: numeric("unit_price"), // السعر المحسوب للوحدة
 });
 
@@ -91,12 +102,17 @@ export const orderItems = pgTable("order_items", {
   productId: integer("product_id").references(() => products.id).notNull(),
   quantity: integer("quantity").notNull(),
   price: numeric("price").notNull(),
+  selectedSize: text("selected_size"), // المقاس المختار
+  selectedColor: text("selected_color"), // اللون المختار
   // Printing options (copied from cart at checkout)
   selectedBagColor: text("selected_bag_color"), // لون الكيس المختار
   printColorCount: integer("print_color_count").default(0), // عدد ألوان الطباعة
   printColor1: text("print_color_1"), // لون الطباعة الأول
   printColor2: text("print_color_2"), // لون الطباعة الثاني
   printColor3: text("print_color_3"), // لون الطباعة الثالث
+  customPrinting: boolean("custom_printing").default(false), // طباعة مخصصة
+  designNotes: text("design_notes"), // ملاحظات خاصة بالتصميم
+  designFileUrl: text("design_file_url"), // رابط ملف التصميم المرفوع
 });
 
 // Product Reviews

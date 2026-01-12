@@ -19,7 +19,13 @@ export interface IStorage {
   getCategories(): Promise<Category[]>;
   
   getCartItems(userId: string): Promise<(CartItem & { product: Product })[]>;
-  addToCart(userId: string, productId: number, quantity: number): Promise<CartItem>;
+  addToCart(userId: string, productId: number, quantity: number, options?: {
+    selectedSize?: string;
+    selectedColor?: string;
+    customPrinting?: boolean;
+    designNotes?: string;
+    designFileUrl?: string;
+  }): Promise<CartItem>;
   updateCartItem(id: number, quantity: number): Promise<CartItem>;
   deleteCartItem(id: number): Promise<void>;
   clearCart(userId: string): Promise<void>;
@@ -187,13 +193,33 @@ export class DatabaseStorage implements IStorage {
     return items.map(item => ({ ...item.cartItem, product: item.product }));
   }
 
-  async addToCart(userId: string, productId: number, quantity: number): Promise<CartItem> {
-    // Check if item exists
+  async addToCart(userId: string, productId: number, quantity: number, options?: {
+    selectedSize?: string;
+    selectedColor?: string;
+    customPrinting?: boolean;
+    designNotes?: string;
+    designFileUrl?: string;
+  }): Promise<CartItem> {
+    // Build conditions array for checking existing item
+    const conditions = [
+      eq(cartItems.userId, userId), 
+      eq(cartItems.productId, productId)
+    ];
+    
+    if (options?.selectedSize) {
+      conditions.push(eq(cartItems.selectedSize, options.selectedSize));
+    }
+    if (options?.selectedColor) {
+      conditions.push(eq(cartItems.selectedColor, options.selectedColor));
+    }
+
+    // Check if item exists with same size/color (but not custom printing)
     const [existing] = await db.select()
       .from(cartItems)
-      .where(and(eq(cartItems.userId, userId), eq(cartItems.productId, productId)));
+      .where(and(...conditions));
 
-    if (existing) {
+    // Only merge quantity for non-custom printing items
+    if (existing && !options?.customPrinting && !existing.customPrinting) {
       const [updated] = await db.update(cartItems)
         .set({ quantity: existing.quantity + quantity })
         .where(eq(cartItems.id, existing.id))
@@ -202,7 +228,16 @@ export class DatabaseStorage implements IStorage {
     }
 
     const [item] = await db.insert(cartItems)
-      .values({ userId, productId, quantity })
+      .values({ 
+        userId, 
+        productId, 
+        quantity,
+        selectedSize: options?.selectedSize || null,
+        selectedColor: options?.selectedColor || null,
+        customPrinting: options?.customPrinting || false,
+        designNotes: options?.designNotes || null,
+        designFileUrl: options?.designFileUrl || null,
+      })
       .returning();
     return item;
   }
@@ -215,11 +250,16 @@ export class DatabaseStorage implements IStorage {
         userId: "0", 
         productId: 0, 
         quantity: 0,
+        selectedSize: null,
+        selectedColor: null,
         selectedBagColor: null,
         printColorCount: null,
         printColor1: null,
         printColor2: null,
         printColor3: null,
+        customPrinting: null,
+        designNotes: null,
+        designFileUrl: null,
         unitPrice: null
       }; 
     }
