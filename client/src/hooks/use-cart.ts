@@ -61,6 +61,8 @@ function addToGuestCart(item: GuestCartItem): void {
 
 // GET /api/cart
 export function useCart() {
+  const { isAuthenticated } = useAuth();
+  
   return useQuery({
     queryKey: [api.cart.list.path],
     queryFn: async () => {
@@ -68,6 +70,7 @@ export function useCart() {
       if (!res.ok) throw new Error("Failed to fetch cart");
       return api.cart.list.responses[200].parse(await res.json());
     },
+    enabled: isAuthenticated,
   });
 }
 
