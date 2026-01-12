@@ -228,6 +228,16 @@ export async function registerRoutes(
         productId: item.productId,
         quantity: item.quantity,
         price: itemPrice,
+        selectedSize: item.selectedSize || null,
+        selectedColor: item.selectedColor || null,
+        customPrinting: item.customPrinting || false,
+        designNotes: item.designNotes || null,
+        designFileUrl: item.designFileUrl || null,
+        selectedBagColor: item.selectedBagColor || null,
+        printColorCount: item.printColorCount || 0,
+        printColor1: item.printColor1 || null,
+        printColor2: item.printColor2 || null,
+        printColor3: item.printColor3 || null,
       });
     }
 
