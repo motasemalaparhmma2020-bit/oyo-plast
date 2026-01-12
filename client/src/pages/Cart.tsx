@@ -18,6 +18,32 @@ interface GuestCartItem {
   designFileUrl?: string;
 }
 
+const colorMap: Record<string, string> = {
+  أبيض: "#FFFFFF",
+  أسود: "#000000",
+  أحمر: "#EF4444",
+  أزرق: "#3B82F6",
+  أخضر: "#22C55E",
+  أصفر: "#EAB308",
+  برتقالي: "#F97316",
+  وردي: "#EC4899",
+  بنفسجي: "#8B5CF6",
+  رمادي: "#6B7280",
+  بني: "#92400E",
+  ذهبي: "#D97706",
+  فضي: "#9CA3AF",
+  شفاف: "transparent",
+  سماوي: "#06B6D4",
+  زهري: "#F472B6",
+  كحلي: "#1E3A8A",
+  بيج: "#D4A574",
+};
+
+function getColorCode(colorName: string): string {
+  const trimmed = colorName.trim();
+  return colorMap[trimmed] ?? trimmed;
+}
+
 function getGuestCart(): GuestCartItem[] {
   try {
     const saved = localStorage.getItem('guestCart');
@@ -161,17 +187,37 @@ export default function Cart() {
                       )}
                       {item.selectedColor && (
                         <span className="text-xs bg-muted px-2 py-1 rounded flex items-center gap-1">
-                          اللون: 
+                          اللون: {item.selectedColor}
                           <span 
                             className="w-4 h-4 rounded-full border inline-block" 
-                            style={{ backgroundColor: item.selectedColor }}
+                            style={{ 
+                              backgroundColor: getColorCode(item.selectedColor),
+                              backgroundImage: item.selectedColor === 'شفاف' ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)' : 'none',
+                              backgroundSize: '6px 6px',
+                              backgroundPosition: '0 0, 3px 3px'
+                            }}
                           />
                         </span>
                       )}
                     </div>
                   )}
                   {item.customPrinting && (
-                    <span className="text-xs bg-[#2196F3]/10 text-[#2196F3] px-2 py-1 rounded">طباعة مخصصة</span>
+                    <div className="flex flex-wrap gap-2 justify-center sm:justify-start mb-2">
+                      <span className="text-xs bg-[#2196F3]/10 text-[#2196F3] px-2 py-1 rounded">طباعة مخصصة</span>
+                      {item.designFileUrl && (
+                        <a 
+                          href={item.designFileUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
+                        >
+                          ملف التصميم مرفق
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  {item.designNotes && (
+                    <p className="text-xs text-muted-foreground mt-1 bg-muted/50 p-2 rounded">ملاحظات: {item.designNotes}</p>
                   )}
                   <p className="text-primary font-bold mt-1">
                     {formatPrice(currency === 'SAR' && item.product?.priceSar 
@@ -333,17 +379,37 @@ export default function Cart() {
                     )}
                     {item.selectedColor && (
                       <span className="text-xs bg-muted px-2 py-1 rounded flex items-center gap-1">
-                        اللون: 
+                        اللون: {item.selectedColor}
                         <span 
                           className="w-4 h-4 rounded-full border inline-block" 
-                          style={{ backgroundColor: item.selectedColor }}
+                          style={{ 
+                            backgroundColor: getColorCode(item.selectedColor),
+                            backgroundImage: item.selectedColor === 'شفاف' ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)' : 'none',
+                            backgroundSize: '6px 6px',
+                            backgroundPosition: '0 0, 3px 3px'
+                          }}
                         />
                       </span>
                     )}
                   </div>
                 )}
                 {item.customPrinting && (
-                  <span className="text-xs bg-[#2196F3]/10 text-[#2196F3] px-2 py-1 rounded">طباعة مخصصة</span>
+                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start mb-2">
+                    <span className="text-xs bg-[#2196F3]/10 text-[#2196F3] px-2 py-1 rounded">طباعة مخصصة</span>
+                    {item.designFileUrl && (
+                      <a 
+                        href={item.designFileUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
+                      >
+                        ملف التصميم مرفق
+                      </a>
+                    )}
+                  </div>
+                )}
+                {item.designNotes && (
+                  <p className="text-xs text-muted-foreground mt-1 bg-muted/50 p-2 rounded">ملاحظات: {item.designNotes}</p>
                 )}
                 <p className="text-primary font-bold mt-1">
                   {formatPrice(getItemPrice(item))} {currency === 'YER' ? 'ر.ي' : 'ر.س'}

@@ -21,6 +21,32 @@ interface BulkPricing {
   price: string;
 }
 
+const colorMap: Record<string, string> = {
+  أبيض: "#FFFFFF",
+  أسود: "#000000",
+  أحمر: "#EF4444",
+  أزرق: "#3B82F6",
+  أخضر: "#22C55E",
+  أصفر: "#EAB308",
+  برتقالي: "#F97316",
+  وردي: "#EC4899",
+  بنفسجي: "#8B5CF6",
+  رمادي: "#6B7280",
+  بني: "#92400E",
+  ذهبي: "#D97706",
+  فضي: "#9CA3AF",
+  شفاف: "transparent",
+  سماوي: "#06B6D4",
+  زهري: "#F472B6",
+  كحلي: "#1E3A8A",
+  بيج: "#D4A574",
+};
+
+function getColorCode(colorName: string): string {
+  const trimmed = colorName.trim();
+  return colorMap[trimmed] ?? trimmed;
+}
+
 interface SizePricing {
   size: string;
   price: string;
@@ -526,23 +552,39 @@ export default function ProductDetail() {
             <div>
               <Label className="text-base font-semibold mb-3 block">اللون</Label>
               <div className="flex flex-wrap gap-3">
-                {availableColors.map((color) => (
-                  <button
-                    key={color}
-                    onClick={() => setSelectedColor(color)}
-                    className={`w-10 h-10 rounded-full border-2 transition-all flex items-center justify-center ${
-                      selectedColor === color 
-                        ? 'border-primary ring-2 ring-primary/30 scale-110' 
-                        : 'border-gray-200 hover:border-gray-400'
-                    }`}
-                    style={{ backgroundColor: color }}
-                    data-testid={`button-color-${color}`}
-                  >
-                    {selectedColor === color && (
-                      <Check className="h-5 w-5 text-white drop-shadow-md" />
-                    )}
-                  </button>
-                ))}
+                {availableColors.map((color) => {
+                  const colorCode = getColorCode(color);
+                  const isTransparent = color === 'شفاف';
+                  return (
+                    <button
+                      key={color}
+                      onClick={() => setSelectedColor(color)}
+                      className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${
+                        selectedColor === color 
+                          ? 'bg-primary/10 ring-2 ring-primary' 
+                          : 'hover:bg-muted'
+                      }`}
+                      data-testid={`button-color-${color}`}
+                    >
+                      <div 
+                        className={`w-10 h-10 rounded-full border-2 flex items-center justify-center ${
+                          selectedColor === color ? 'border-primary' : 'border-gray-300'
+                        }`}
+                        style={{ 
+                          backgroundColor: colorCode,
+                          backgroundImage: isTransparent ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)' : 'none',
+                          backgroundSize: '8px 8px',
+                          backgroundPosition: '0 0, 4px 4px'
+                        }}
+                      >
+                        {selectedColor === color && (
+                          <Check className={`h-5 w-5 drop-shadow-md ${color === 'أبيض' || isTransparent ? 'text-gray-700' : 'text-white'}`} />
+                        )}
+                      </div>
+                      <span className="text-xs font-medium">{color}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
