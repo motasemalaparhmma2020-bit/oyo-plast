@@ -49,6 +49,61 @@ const statusMap: Record<string, { label: string; color: string; icon: any }> = {
   cancelled: { label: "ملغي", color: "bg-red-100 text-red-800", icon: XCircle },
 };
 
+const colorMap: Record<string, string> = {
+  أبيض: "#FFFFFF",
+  أسود: "#000000",
+  أحمر: "#EF4444",
+  أزرق: "#3B82F6",
+  أخضر: "#22C55E",
+  أصفر: "#EAB308",
+  برتقالي: "#F97316",
+  وردي: "#EC4899",
+  بنفسجي: "#8B5CF6",
+  رمادي: "#6B7280",
+  بني: "#92400E",
+  ذهبي: "#D97706",
+  فضي: "#9CA3AF",
+  شفاف: "transparent",
+  سماوي: "#06B6D4",
+  زهري: "#F472B6",
+  كحلي: "#1E3A8A",
+  بيج: "#D4A574",
+};
+
+function getColorCode(colorName: string): string {
+  const trimmed = colorName.trim();
+  return colorMap[trimmed] || "#9CA3AF";
+}
+
+function ColorCircles({ colorsString }: { colorsString: string }) {
+  if (!colorsString || !colorsString.trim()) return null;
+  
+  const colors = colorsString.split(',').map(c => c.trim()).filter(c => c);
+  if (colors.length === 0) return null;
+  
+  return (
+    <div className="flex flex-wrap gap-2 mt-2">
+      {colors.map((color, index) => (
+        <div 
+          key={index}
+          className="flex items-center gap-1.5 bg-muted/50 rounded-full px-2 py-1"
+        >
+          <div 
+            className="w-5 h-5 rounded-full border-2 border-gray-300 shadow-sm"
+            style={{ 
+              backgroundColor: getColorCode(color),
+              backgroundImage: color === 'شفاف' ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)' : 'none',
+              backgroundSize: '8px 8px',
+              backgroundPosition: '0 0, 4px 4px'
+            }}
+          />
+          <span className="text-xs font-medium">{color}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface Category {
   id: number;
   name: string;
@@ -1538,6 +1593,7 @@ export default function Admin() {
                             placeholder="أبيض, أسود, أحمر"
                             data-testid="input-product-colors"
                           />
+                          <ColorCircles colorsString={productForm.colors} />
                         </div>
                         <div>
                           <Label htmlFor="product-sizes">المقاسات المتاحة (مفصولة بفاصلة)</Label>
@@ -1641,6 +1697,7 @@ export default function Admin() {
                                 placeholder="أبيض, شفاف, أسود, أحمر, أزرق"
                                 data-testid="input-available-bag-colors"
                               />
+                              <ColorCircles colorsString={productForm.availableBagColors} />
                               <p className="text-xs text-muted-foreground mt-1">الألوان التي يمكن للعميل اختيارها للكيس</p>
                             </div>
                           </div>
