@@ -45,12 +45,33 @@ export default function Auth() {
     },
   });
 
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.email || !formData.password) {
       toast({
         title: "خطأ",
         description: "يرجى ملء جميع الحقول",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!validateEmail(formData.email)) {
+      toast({
+        title: "خطأ",
+        description: "البريد الإلكتروني غير صالح",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (formData.password.length < 6) {
+      toast({
+        title: "خطأ",
+        description: "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
         variant: "destructive",
       });
       return;

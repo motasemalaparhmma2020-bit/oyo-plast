@@ -105,13 +105,18 @@ export default function Register() {
     },
   });
 
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const validateStep1 = () => {
     if (!formData.email) {
       toast({ title: "خطأ", description: "البريد الإلكتروني مطلوب", variant: "destructive" });
       return false;
     }
-    if (!formData.email.includes("@")) {
-      toast({ title: "خطأ", description: "البريد الإلكتروني غير صالح", variant: "destructive" });
+    if (!validateEmail(formData.email)) {
+      toast({ title: "خطأ", description: "البريد الإلكتروني غير صالح (مثال: example@email.com)", variant: "destructive" });
       return false;
     }
     if (formData.password.length < 6) {
