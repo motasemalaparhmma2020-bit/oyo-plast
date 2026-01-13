@@ -673,12 +673,14 @@ ${notes ? `ملاحظات: ${notes}` : ''}
   app.post("/api/admin/products", requireAdmin, async (req, res) => {
     try {
       const { 
-        name, description, price, priceSar, categoryId, imageUrl, stock, colors, sizes, 
+        name, description, price, priceSar, categoryId, imageUrl, imageUrls, stock, colors, sizes, 
         allowDesignUpload, bulkPricing, printingPricePerUnit,
         hasPrintingOptions, baseBagPrice, singleColorPrintPrice, availableBagColors
       } = req.body;
       
-      if (!name || !description || !price || !categoryId || !imageUrl) {
+      const finalImageUrl = imageUrls && imageUrls.length > 0 ? imageUrls[0] : imageUrl;
+      
+      if (!name || !description || !price || !categoryId || !finalImageUrl) {
         return res.status(400).json({ error: "Missing required fields" });
       }
       
@@ -688,8 +690,8 @@ ${notes ? `ملاحظات: ${notes}` : ''}
         price,
         priceSar: priceSar || null,
         categoryId,
-        imageUrl,
-        imageUrls: null,
+        imageUrl: finalImageUrl,
+        imageUrls: imageUrls && imageUrls.length > 0 ? imageUrls : null,
         stock: stock || 100,
         colors: colors || null,
         sizes: sizes || null,

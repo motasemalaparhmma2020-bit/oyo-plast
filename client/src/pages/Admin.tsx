@@ -118,6 +118,7 @@ interface ProductFormData {
   priceSar: string;
   categoryId: number;
   imageUrl: string;
+  imageUrls: string[];
   stock: number;
   colors: string;
   sizes: string;
@@ -136,6 +137,7 @@ const emptyProductForm: ProductFormData = {
   priceSar: "",
   categoryId: 0,
   imageUrl: "",
+  imageUrls: [],
   stock: 100,
   colors: "",
   sizes: "",
@@ -788,36 +790,54 @@ export default function Admin() {
   const { toast } = useToast();
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'product' | 'category' = 'product') => {
-    const file = e.target.files?.[0];
-    if (!file || !adminToken) return;
+    const files = e.target.files;
+    if (!files || files.length === 0 || !adminToken) return;
 
     setIsUploading(true);
-    const formData = new FormData();
-    formData.append('image', file);
-
+    
     try {
-      const res = await fetch('/api/admin/upload', {
-        method: 'POST',
-        headers: { 'x-admin-token': adminToken },
-        body: formData
-      });
+      const uploadedUrls: string[] = [];
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const formData = new FormData();
+        formData.append('image', file);
 
-      if (res.ok) {
-        const data = await res.json();
-        if (type === 'product') {
-          setProductForm(prev => ({ ...prev, imageUrl: data.imageUrl }));
-        } else {
-          setCategoryForm(prev => ({ ...prev, imageUrl: data.imageUrl }));
-        }
-        toast({ title: "تم رفع الصورة بنجاح" });
-      } else {
-        const errorData = await res.json().catch(() => ({}));
-        toast({ 
-          title: "فشل رفع الصورة", 
-          description: errorData.error || `خطأ ${res.status}`,
-          variant: "destructive" 
+        const res = await fetch('/api/admin/upload', {
+          method: 'POST',
+          headers: { 'x-admin-token': adminToken },
+          body: formData
         });
-        console.error('Upload failed:', res.status, errorData);
+
+        if (res.ok) {
+          const data = await res.json();
+          uploadedUrls.push(data.imageUrl);
+        } else {
+          const errorData = await res.json().catch(() => ({}));
+          toast({ 
+            title: `فشل رفع الصورة ${i + 1}`, 
+            description: errorData.error || `خطأ ${res.status}`,
+            variant: "destructive" 
+          });
+          console.error('Upload failed:', res.status, errorData);
+        }
+      }
+      
+      if (uploadedUrls.length > 0) {
+        if (type === 'product') {
+          setProductForm(prev => {
+            const newImageUrls = [...prev.imageUrls, ...uploadedUrls].slice(0, 5);
+            return { 
+              ...prev, 
+              imageUrl: prev.imageUrl || newImageUrls[0],
+              imageUrls: newImageUrls
+            };
+          });
+          toast({ title: `تم رفع ${uploadedUrls.length} صورة بنجاح` });
+        } else {
+          setCategoryForm(prev => ({ ...prev, imageUrl: uploadedUrls[0] }));
+          toast({ title: "تم رفع الصورة بنجاح" });
+        }
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -829,6 +849,17 @@ export default function Admin() {
     }
     setIsUploading(false);
     e.target.value = '';
+  };
+  
+  const removeProductImage = (indexToRemove: number) => {
+    setProductForm(prev => {
+      const newImageUrls = prev.imageUrls.filter((_, idx) => idx !== indexToRemove);
+      return {
+        ...prev,
+        imageUrls: newImageUrls,
+        imageUrl: newImageUrls[0] || ''
+      };
+    });
   };
 
   const handlePrintDeliveryInvoice = async (order: Order) => {
@@ -986,6 +1017,8 @@ export default function Admin() {
         },
         body: JSON.stringify({
           ...data,
+          imageUrl: data.imageUrls[0] || data.imageUrl,
+          imageUrls: data.imageUrls,
           colors: data.colors ? data.colors.split(',').map(c => c.trim()) : null,
           sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()) : null,
           availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()) : null
@@ -1006,19 +1039,38 @@ export default function Admin() {
   });
 
   const updateProductMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Partial<ProductFormData> }) => {
+    mutationFn: async ({ id, data }: { id: number; data: ProductFormData }) => {
+      const payload: Record<string, unknown> = {
+        name: data.name,
+        description: data.description,
+        price: data.price,
+        priceSar: data.priceSar,
+        categoryId: data.categoryId,
+        stock: data.stock,
+        allowDesignUpload: data.allowDesignUpload,
+        printingPricePerUnit: data.printingPricePerUnit,
+        hasPrintingOptions: data.hasPrintingOptions,
+        baseBagPrice: data.baseBagPrice,
+        singleColorPrintPrice: data.singleColorPrintPrice,
+        colors: data.colors ? data.colors.split(',').map(c => c.trim()).filter(c => c) : null,
+        sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()).filter(s => s) : null,
+        availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()).filter(c => c) : null
+      };
+      
+      if (data.imageUrls && data.imageUrls.length > 0) {
+        payload.imageUrls = data.imageUrls;
+        payload.imageUrl = data.imageUrls[0];
+      } else if (data.imageUrl) {
+        payload.imageUrl = data.imageUrl;
+      }
+      
       const res = await fetch(`/api/admin/products/${id}`, {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',
           'x-admin-token': adminToken || '' 
         },
-        body: JSON.stringify({
-          ...data,
-          colors: data.colors ? (data.colors as string).split(',').map(c => c.trim()) : null,
-          sizes: data.sizes ? (data.sizes as string).split(',').map(s => s.trim()) : null,
-          availableBagColors: data.availableBagColors ? (data.availableBagColors as string).split(',').map(c => c.trim()) : null
-        })
+        body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error('Failed to update product');
       return res.json();
@@ -1142,6 +1194,9 @@ export default function Admin() {
 
   const openEditProduct = (product: Product) => {
     setEditingProduct(product);
+    const existingImageUrls = product.imageUrls && product.imageUrls.length > 0 
+      ? product.imageUrls 
+      : (product.imageUrl ? [product.imageUrl] : []);
     setProductForm({
       name: product.name,
       description: product.description,
@@ -1149,6 +1204,7 @@ export default function Admin() {
       priceSar: product.priceSar ?? "",
       categoryId: product.categoryId,
       imageUrl: product.imageUrl,
+      imageUrls: existingImageUrls,
       stock: product.stock,
       colors: product.colors ? product.colors.join(', ') : "",
       sizes: product.sizes ? product.sizes.join(', ') : "",
@@ -1606,40 +1662,57 @@ export default function Admin() {
                       </div>
 
                       <div>
-                        <Label htmlFor="product-image">صورة المنتج *</Label>
+                        <Label htmlFor="product-image">صور المنتج * (2-5 صور)</Label>
                         <div className="flex items-center gap-4">
                           <label 
                             htmlFor="product-image-upload"
-                            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md cursor-pointer hover:bg-primary/90 transition-colors"
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md cursor-pointer transition-colors ${
+                              productForm.imageUrls.length >= 5 
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                                : 'bg-primary text-white hover:bg-primary/90'
+                            }`}
                           >
                             <ImagePlus className="h-4 w-4" />
-                            <span>{isUploading ? 'جاري الرفع...' : 'رفع صورة'}</span>
+                            <span>{isUploading ? 'جاري الرفع...' : `رفع صورة (${productForm.imageUrls.length}/5)`}</span>
                           </label>
                           <input
                             type="file"
                             id="product-image-upload"
                             accept="image/*"
+                            multiple
                             className="hidden"
                             onChange={(e) => handleImageUpload(e, 'product')}
-                            disabled={isUploading}
+                            disabled={isUploading || productForm.imageUrls.length >= 5}
                             data-testid="input-product-image-upload"
                           />
-                          {productForm.imageUrl && (
-                            <span className="text-sm text-muted-foreground truncate max-w-[200px]">
-                              {productForm.imageUrl}
-                            </span>
-                          )}
                         </div>
-                        {productForm.imageUrl && (
-                          <div className="mt-2 w-20 h-20 rounded-lg overflow-hidden border">
-                            <img 
-                              src={productForm.imageUrl} 
-                              alt="معاينة" 
-                              className="w-full h-full object-cover"
-                              onError={(e) => (e.target as HTMLImageElement).src = '/placeholder.jpg'}
-                            />
+                        {productForm.imageUrls.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {productForm.imageUrls.map((url, idx) => (
+                              <div key={idx} className="relative group">
+                                <div className="w-20 h-20 rounded-lg overflow-hidden border">
+                                  <img 
+                                    src={url} 
+                                    alt={`صورة ${idx + 1}`} 
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removeProductImage(idx)}
+                                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                  data-testid={`button-remove-image-${idx}`}
+                                >
+                                  ×
+                                </button>
+                                {idx === 0 && (
+                                  <span className="absolute bottom-0 left-0 right-0 bg-primary/80 text-white text-[10px] text-center py-0.5">رئيسية</span>
+                                )}
+                              </div>
+                            ))}
                           </div>
                         )}
+                        <p className="text-xs text-muted-foreground mt-1">الصورة الأولى ستكون الصورة الرئيسية للمنتج</p>
                       </div>
 
                       <div className="grid md:grid-cols-2 gap-4">
