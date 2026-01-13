@@ -391,7 +391,7 @@ export default function ProductDetail() {
                 <div className="flex">
                   {allImages.map((img, idx) => (
                     <div key={idx} className="flex-[0_0_100%] min-w-0">
-                      <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-4">
+                      <div className="aspect-[3/4] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-4">
                         <img
                           src={img}
                           alt={`${product.name} - صورة ${idx + 1}`}
@@ -438,7 +438,7 @@ export default function ProductDetail() {
               </div>
             </div>
           ) : (
-            <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-2xl overflow-hidden p-8">
+            <div className="aspect-[3/4] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-2xl overflow-hidden p-4">
               <img
                 src={product.imageUrl}
                 alt={product.name}

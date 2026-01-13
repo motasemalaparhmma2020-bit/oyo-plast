@@ -1076,9 +1076,68 @@ export default function Admin() {
     }
   });
 
+  const updateCategoryMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: CategoryFormData }) => {
+      const res = await fetch(`/api/admin/categories/${id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken || '' 
+        },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to update category');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+      toast({ title: "تم تحديث القسم بنجاح" });
+      setShowCategoryForm(false);
+      setEditingCategory(null);
+      setCategoryForm(emptyCategoryForm);
+    },
+    onError: () => {
+      toast({ title: "حدث خطأ أثناء تحديث القسم", variant: "destructive" });
+    }
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/admin/categories/${id}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-token': adminToken || '' }
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || 'Failed to delete category');
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+      toast({ title: "تم حذف القسم بنجاح" });
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message || "حدث خطأ أثناء حذف القسم", variant: "destructive" });
+    }
+  });
+
   const handleCategorySubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createCategoryMutation.mutate(categoryForm);
+    if (editingCategory) {
+      updateCategoryMutation.mutate({ id: editingCategory.id, data: categoryForm });
+    } else {
+      createCategoryMutation.mutate(categoryForm);
+    }
+  };
+
+  const openEditCategory = (category: Category) => {
+    setEditingCategory(category);
+    setCategoryForm({
+      name: category.name,
+      slug: category.slug,
+      imageUrl: category.imageUrl
+    });
+    setShowCategoryForm(true);
   };
 
   const openEditProduct = (product: Product) => {
@@ -1894,16 +1953,16 @@ export default function Admin() {
                       <div className="flex gap-2 pt-4">
                         <Button 
                           type="submit" 
-                          disabled={createCategoryMutation.isPending}
+                          disabled={createCategoryMutation.isPending || updateCategoryMutation.isPending}
                           className="gap-2"
                           data-testid="button-save-category"
                         >
-                          {createCategoryMutation.isPending ? (
+                          {(createCategoryMutation.isPending || updateCategoryMutation.isPending) ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
                             <Save className="h-4 w-4" />
                           )}
-                          إضافة القسم
+                          {editingCategory ? 'حفظ التعديلات' : 'إضافة القسم'}
                         </Button>
                         <Button 
                           type="button" 
@@ -1929,6 +1988,7 @@ export default function Admin() {
                           <TableHead className="text-right">القسم</TableHead>
                           <TableHead className="text-right">الرابط</TableHead>
                           <TableHead className="text-right">عدد المنتجات</TableHead>
+                          <TableHead className="text-right">الإجراءات</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1947,6 +2007,32 @@ export default function Admin() {
                               <Badge>
                                 {products?.filter(p => p.categoryId === category.id).length || 0} منتج
                               </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => openEditCategory(category)}
+                                  data-testid={`button-edit-category-${category.id}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => {
+                                    if (confirm(`هل أنت متأكد من حذف قسم "${category.name}"؟`)) {
+                                      deleteCategoryMutation.mutate(category.id);
+                                    }
+                                  }}
+                                  disabled={deleteCategoryMutation.isPending}
+                                  data-testid={`button-delete-category-${category.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}

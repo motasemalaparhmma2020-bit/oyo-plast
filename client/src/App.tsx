@@ -66,6 +66,7 @@ function RequireAccountType({ children }: { children: React.ReactNode }) {
 
 function Router() {
   const { isAuthenticated, user, isLoading } = useAuth();
+  const [location] = useLocation();
   
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center">جاري التحميل...</div>;
@@ -73,6 +74,9 @@ function Router() {
 
   // Check if user needs to complete registration (no accountType set)
   const needsAccountType = isAuthenticated && user && !user.accountType;
+  
+  // Hide footer on home, products, and product detail pages
+  const hideFooter = location === '/' || location === '/products' || location.startsWith('/product/');
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16 md:pb-0">
@@ -130,8 +134,8 @@ function Router() {
           <Route component={NotFound} />
         </Switch>
       </main>
-      <MobileFooter />
-      <Footer />
+      {!hideFooter && <MobileFooter />}
+      {!hideFooter && <Footer />}
       <BottomNav />
     </div>
   );

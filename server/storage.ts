@@ -94,6 +94,9 @@ export interface IStorage {
   
   // Category management
   createCategory(category: Omit<Category, 'id'>): Promise<Category>;
+  updateCategory(id: number, category: Partial<Category>): Promise<Category>;
+  deleteCategory(id: number): Promise<void>;
+  getCategory(id: number): Promise<Category | undefined>;
   
   // Wallet
   getOrCreateWallet(userId: string): Promise<Wallet>;
@@ -699,6 +702,23 @@ export class DatabaseStorage implements IStorage {
   async createCategory(category: Omit<Category, 'id'>): Promise<Category> {
     const [newCategory] = await db.insert(categories).values(category).returning();
     return newCategory;
+  }
+
+  async updateCategory(id: number, category: Partial<Category>): Promise<Category> {
+    const [updated] = await db.update(categories)
+      .set(category)
+      .where(eq(categories.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCategory(id: number): Promise<void> {
+    await db.delete(categories).where(eq(categories.id, id));
+  }
+
+  async getCategory(id: number): Promise<Category | undefined> {
+    const [category] = await db.select().from(categories).where(eq(categories.id, id));
+    return category;
   }
   
   // Wallet methods

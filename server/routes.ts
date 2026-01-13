@@ -766,6 +766,45 @@ ${notes ? `ملاحظات: ${notes}` : ''}
     }
   });
 
+  app.patch("/api/admin/categories/:id", requireAdmin, async (req, res) => {
+    try {
+      const categoryId = Number(req.params.id);
+      const { name, slug, imageUrl, iconUrl, sortOrder, isActive } = req.body;
+      const updates: any = {};
+      if (name !== undefined) updates.name = name;
+      if (slug !== undefined) updates.slug = slug;
+      if (imageUrl !== undefined) updates.imageUrl = imageUrl;
+      if (iconUrl !== undefined) updates.iconUrl = iconUrl;
+      if (sortOrder !== undefined) updates.sortOrder = sortOrder;
+      if (isActive !== undefined) updates.isActive = isActive;
+      
+      const category = await storage.updateCategory(categoryId, updates);
+      res.json(category);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update category" });
+    }
+  });
+
+  app.delete("/api/admin/categories/:id", requireAdmin, async (req, res) => {
+    try {
+      const categoryId = Number(req.params.id);
+      
+      // Check if category has products
+      const productsInCategory = await storage.getProducts(categoryId);
+      if (productsInCategory.length > 0) {
+        return res.status(400).json({ 
+          error: "Cannot delete category with products",
+          message: `يوجد ${productsInCategory.length} منتج في هذا القسم. يرجى نقل المنتجات أولاً.`
+        });
+      }
+      
+      await storage.deleteCategory(categoryId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete category" });
+    }
+  });
+
   // Admin: Banner management
   app.get("/api/banners", async (req, res) => {
     try {

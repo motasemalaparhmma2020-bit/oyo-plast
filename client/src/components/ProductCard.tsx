@@ -33,11 +33,11 @@ export function ProductCard({ product }: ProductCardProps) {
   return (
     <Card className="group overflow-hidden border-none shadow-md hover:shadow-2xl transition-all duration-300 rounded-2xl bg-white flex flex-col h-full" data-testid={`card-product-${product.id}`}>
       <Link href={`/product/${product.id}`}>
-        <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 p-3 md:p-4 cursor-pointer">
+        <div className="relative aspect-[4/5] overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 cursor-pointer rounded-t-2xl p-2">
           <img 
             src={product.imageUrl} 
             alt={product.name}
-            className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500"
+            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
           />
           {product.stock <= 0 && (
             <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center">
