@@ -885,8 +885,21 @@ export default function Admin() {
   useEffect(() => {
     const savedToken = sessionStorage.getItem("admin_token");
     if (savedToken) {
-      setAdminToken(savedToken);
-      setIsAuthenticated(true);
+      // Verify token is still valid
+      fetch('/api/admin/stats', { headers: { 'x-admin-token': savedToken } })
+        .then(res => {
+          if (res.ok) {
+            setAdminToken(savedToken);
+            setIsAuthenticated(true);
+          } else {
+            // Token expired - clear and show login
+            sessionStorage.removeItem("admin_token");
+          }
+        })
+        .catch(() => {
+          setAdminToken(savedToken);
+          setIsAuthenticated(true);
+        });
     }
   }, []);
 
@@ -1011,6 +1024,7 @@ export default function Admin() {
 
   const createProductMutation = useMutation({
     mutationFn: async (data: ProductFormData) => {
+      const numOrNull = (v: string) => (v && v.trim() !== '' ? v.trim() : null);
       const res = await fetch('/api/admin/products', {
         method: 'POST',
         headers: { 
@@ -1018,16 +1032,29 @@ export default function Admin() {
           'x-admin-token': adminToken || '' 
         },
         body: JSON.stringify({
-          ...data,
+          name: data.name,
+          description: data.description,
+          price: data.price,
+          priceSar: numOrNull(data.priceSar),
+          categoryId: data.categoryId,
+          stock: data.stock,
           imageUrl: data.imageUrls[0] || data.imageUrl,
-          imageUrls: data.imageUrls,
-          colors: data.colors ? data.colors.split(',').map(c => c.trim()) : null,
-          sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()) : null,
-          availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()) : null,
+          imageUrls: data.imageUrls.length > 0 ? data.imageUrls : null,
+          colors: data.colors ? data.colors.split(',').map(c => c.trim()).filter(c => c) : null,
+          sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()).filter(s => s) : null,
+          allowDesignUpload: data.allowDesignUpload,
+          printingPricePerUnit: numOrNull(data.printingPricePerUnit),
+          hasPrintingOptions: data.hasPrintingOptions,
+          baseBagPrice: numOrNull(data.baseBagPrice),
+          singleColorPrintPrice: numOrNull(data.singleColorPrintPrice),
+          availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()).filter(c => c) : null,
           tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null
         })
       });
-      if (!res.ok) throw new Error('Failed to create product');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.details || 'Failed to create product');
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -1043,18 +1070,19 @@ export default function Admin() {
 
   const updateProductMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: ProductFormData }) => {
+      const numOrNull = (v: string) => (v && v.trim() !== '' ? v.trim() : null);
       const payload: Record<string, unknown> = {
         name: data.name,
         description: data.description,
         price: data.price,
-        priceSar: data.priceSar,
+        priceSar: numOrNull(data.priceSar),
         categoryId: data.categoryId,
         stock: data.stock,
         allowDesignUpload: data.allowDesignUpload,
-        printingPricePerUnit: data.printingPricePerUnit,
+        printingPricePerUnit: numOrNull(data.printingPricePerUnit),
         hasPrintingOptions: data.hasPrintingOptions,
-        baseBagPrice: data.baseBagPrice,
-        singleColorPrintPrice: data.singleColorPrintPrice,
+        baseBagPrice: numOrNull(data.baseBagPrice),
+        singleColorPrintPrice: numOrNull(data.singleColorPrintPrice),
         colors: data.colors ? data.colors.split(',').map(c => c.trim()).filter(c => c) : null,
         sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()).filter(s => s) : null,
         availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()).filter(c => c) : null,
@@ -1076,7 +1104,10 @@ export default function Admin() {
         },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error('Failed to update product');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.details || err.error || 'Failed to update product');
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -1086,8 +1117,12 @@ export default function Admin() {
       setEditingProduct(null);
       setProductForm(emptyProductForm);
     },
-    onError: () => {
-      toast({ title: "حدث خطأ أثناء تحديث المنتج", variant: "destructive" });
+    onError: (error: any) => {
+      toast({ 
+        title: "حدث خطأ أثناء تحديث المنتج", 
+        description: error.message || "حاول مرة أخرى",
+        variant: "destructive" 
+      });
     }
   });
 
@@ -1230,6 +1265,25 @@ export default function Admin() {
     } else {
       createProductMutation.mutate(productForm);
     }
+  };
+
+  const handleSessionExpired = () => {
+    sessionStorage.removeItem("admin_token");
+    setAdminToken(null);
+    setIsAuthenticated(false);
+    toast({ title: "انتهت الجلسة", description: "يرجى تسجيل الدخول مجدداً", variant: "destructive" });
+  };
+
+  const adminFetch = async (url: string, options: RequestInit = {}) => {
+    const res = await fetch(url, {
+      ...options,
+      headers: { ...options.headers as any, 'x-admin-token': adminToken || '' }
+    });
+    if (res.status === 401) {
+      handleSessionExpired();
+      throw new Error("انتهت جلسة المدير - يرجى تسجيل الدخول مجدداً");
+    }
+    return res;
   };
 
   const handleLogin = async (e: React.FormEvent) => {

@@ -691,7 +691,7 @@ ${notes ? `ملاحظات: ${notes}` : ''}
       const { 
         name, description, price, priceSar, categoryId, imageUrl, imageUrls, stock, colors, sizes, 
         allowDesignUpload, bulkPricing, printingPricePerUnit,
-        hasPrintingOptions, baseBagPrice, singleColorPrintPrice, availableBagColors
+        hasPrintingOptions, baseBagPrice, singleColorPrintPrice, availableBagColors, tags
       } = req.body;
       
       const finalImageUrl = imageUrls && imageUrls.length > 0 ? imageUrls[0] : imageUrl;
@@ -723,22 +723,38 @@ ${notes ? `ملاحظات: ${notes}` : ''}
         hasPrintingOptions: hasPrintingOptions || false,
         baseBagPrice: baseBagPrice || null,
         singleColorPrintPrice: singleColorPrintPrice || null,
-        availableBagColors: availableBagColors || null
+        availableBagColors: availableBagColors || null,
+        tags: tags || null
       });
       res.status(201).json(product);
     } catch (error) {
-      res.status(500).json({ error: "Failed to create product" });
+      console.error("Create product error:", error);
+      res.status(500).json({ error: "Failed to create product", details: String(error) });
     }
   });
 
   app.patch("/api/admin/products/:id", requireAdmin, async (req, res) => {
     try {
       const productId = Number(req.params.id);
-      const updates = req.body;
+      const body = req.body;
+      // Clean up payload - only include known product fields
+      const updates: Record<string, unknown> = {};
+      const allowedFields = [
+        'name', 'description', 'price', 'priceSar', 'categoryId', 'imageUrl', 'imageUrls',
+        'stock', 'colors', 'sizes', 'allowDesignUpload', 'bulkPricing', 'sizePricing',
+        'printingPricePerUnit', 'rating', 'reviewCount', 'soldCount',
+        'hasPrintingOptions', 'baseBagPrice', 'singleColorPrintPrice', 'availableBagColors', 'tags'
+      ];
+      for (const field of allowedFields) {
+        if (body[field] !== undefined) {
+          updates[field] = body[field];
+        }
+      }
       const product = await storage.updateProduct(productId, updates);
       res.json(product);
     } catch (error) {
-      res.status(500).json({ error: "Failed to update product" });
+      console.error("Update product error:", error);
+      res.status(500).json({ error: "Failed to update product", details: String(error) });
     }
   });
 
