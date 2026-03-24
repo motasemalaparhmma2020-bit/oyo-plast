@@ -8,9 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
+import type { Product } from "@shared/schema";
 import { 
   ShoppingBag, 
   CreditCard, 
@@ -24,7 +25,8 @@ import {
   Check,
   Home,
   X,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Star
 } from "lucide-react";
 
 const EXCHANGE_RATE = 140;
@@ -38,6 +40,7 @@ interface PrintingCategory {
   name: string;
   icon: any;
   description: string;
+  tags: string[];
   subcategories: PrintingSubcategory[];
 }
 
@@ -59,6 +62,7 @@ const printingCategories: PrintingCategory[] = [
     name: "طباعة أكياس قماشية",
     icon: ShoppingBag,
     description: "أكياس قماشية عالية الجودة بتصميمك الخاص",
+    tags: ["كيس-قماشي", "قماش", "fabric-bag"],
     subcategories: [
       {
         id: "flat-bag",
@@ -100,6 +104,7 @@ const printingCategories: PrintingCategory[] = [
     name: "طباعة كروت شخصية",
     icon: CreditCard,
     description: "كروت أعمال احترافية بجودة عالية",
+    tags: ["كرت-شخصي", "بطاقة", "business-card", "ستيكر"],
     subcategories: [
       {
         id: "matte-card",
@@ -141,6 +146,7 @@ const printingCategories: PrintingCategory[] = [
     name: "لوحات تجارية",
     icon: Layers,
     description: "لوحات إعلانية ولافتات للمحلات التجارية",
+    tags: ["لوحة-تجارية", "لافتة", "أكريليك", "بنر", "sign"],
     subcategories: [
       {
         id: "acrylic-sign",
@@ -171,6 +177,7 @@ const printingCategories: PrintingCategory[] = [
     name: "أكياس بلاستيك",
     icon: Package,
     description: "أكياس بلاستيكية مطبوعة بشعارك",
+    tags: ["كيس-بلاستيك", "بلاستيك", "HDPE", "LDPE", "plastic-bag"],
     subcategories: [
       {
         id: "hdpe-bag",
@@ -201,6 +208,7 @@ const printingCategories: PrintingCategory[] = [
     name: "أكياس بهارات ومكسرات",
     icon: Leaf,
     description: "أكياس تغليف للمنتجات الغذائية",
+    tags: ["كيس-بهارات", "تغليف", "مكسرات", "غذائي", "spice-bag", "pouch"],
     subcategories: [
       {
         id: "stand-pouch",
@@ -236,6 +244,18 @@ export default function PrintingAndDesign() {
   const [selectedCategory, setSelectedCategory] = useState<PrintingCategory | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState<PrintingSubcategory | null>(null);
   const [currency, setCurrency] = useState<'YER' | 'SAR'>('YER');
+
+  // جلب المنتجات الحقيقية من قاعدة البيانات بناءً على كلمات التصنيف الدلالية
+  const { data: relatedProducts = [], isLoading: relatedLoading } = useQuery<Product[]>({
+    queryKey: ['/api/products/search/tags', selectedCategory?.tags],
+    queryFn: async () => {
+      if (!selectedCategory?.tags?.length) return [];
+      const res = await fetch(`/api/products/search/tags?tags=${selectedCategory.tags.join(',')}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedCategory && !selectedSubcategory,
+  });
   
   const [formData, setFormData] = useState({
     size: '',
@@ -461,7 +481,61 @@ export default function PrintingAndDesign() {
               </Button>
               <h2 className="text-xl font-bold">{selectedCategory.name}</h2>
             </div>
+
+            {/* منتجات حقيقية من قاعدة البيانات */}
+            {relatedLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : relatedProducts.length > 0 && (
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Badge className="bg-green-100 text-green-700 border-green-200">متوفر في المخزن</Badge>
+                  <h3 className="font-semibold text-sm text-muted-foreground">{relatedProducts.length} منتج جاهز للطلب</h3>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {relatedProducts.map((product) => {
+                    const mainImage = (product.imageUrls && product.imageUrls.length > 0) 
+                      ? product.imageUrls[0] 
+                      : product.imageUrl;
+                    return (
+                      <Link key={product.id} href={`/products/${product.id}`}>
+                        <Card className="cursor-pointer hover-elevate overflow-hidden" data-testid={`related-product-${product.id}`}>
+                          <div className="aspect-square relative">
+                            <img 
+                              src={mainImage} 
+                              alt={product.name}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                          </div>
+                          <CardContent className="p-3">
+                            <h4 className="font-semibold text-sm line-clamp-1">{product.name}</h4>
+                            <div className="flex items-center justify-between mt-1">
+                              <span className="text-primary font-bold text-sm">
+                                {currency === 'SAR' && product.priceSar
+                                  ? `${formatPrice(Number(product.priceSar))} ر.س`
+                                  : `${formatPrice(Number(product.price))} ر.ي`
+                                }
+                              </span>
+                              {product.rating && (
+                                <div className="flex items-center gap-0.5 text-xs text-amber-500">
+                                  <Star className="h-3 w-3 fill-current" />
+                                  <span>{Number(product.rating).toFixed(1)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    );
+                  })}
+                </div>
+                <div className="border-t my-5" />
+              </div>
+            )}
             
+            <h3 className="font-semibold text-base mb-3 text-muted-foreground">طلب بالتصميم الخاص</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {selectedCategory.subcategories.map((sub) => (
                 <Card 

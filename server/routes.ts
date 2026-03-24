@@ -78,6 +78,19 @@ export async function registerRoutes(
     res.json(products);
   });
 
+  // Search products by tags (must be before :id route)
+  app.get("/api/products/search/tags", async (req, res) => {
+    try {
+      const tagsParam = req.query.tags as string;
+      if (!tagsParam) return res.json([]);
+      const tags = tagsParam.split(",").map(t => t.trim()).filter(Boolean);
+      const products = await storage.searchProductsByTags(tags);
+      res.json(products);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to search products by tags" });
+    }
+  });
+
   app.get(api.products.get.path, async (req, res) => {
     const product = await storage.getProduct(Number(req.params.id));
     if (!product) return res.status(404).json({ message: "Product not found" });

@@ -16,6 +16,7 @@ export interface IStorage {
 
   getProducts(categoryId?: number): Promise<Product[]>;
   getProduct(id: number): Promise<Product | undefined>;
+  searchProductsByTags(tags: string[]): Promise<Product[]>;
   getCategories(): Promise<Category[]>;
   
   getCartItems(userId: string): Promise<(CartItem & { product: Product })[]>;
@@ -178,6 +179,18 @@ export class DatabaseStorage implements IStorage {
   async getProduct(id: number): Promise<Product | undefined> {
     const [product] = await db.select().from(products).where(eq(products.id, id));
     return product;
+  }
+
+  async searchProductsByTags(tags: string[]): Promise<Product[]> {
+    if (!tags || tags.length === 0) return [];
+    const allProducts = await db.select().from(products);
+    const lowerTags = tags.map(t => t.toLowerCase());
+    return allProducts.filter(p => {
+      if (!p.tags || p.tags.length === 0) return false;
+      return p.tags.some(tag => 
+        lowerTags.some(searchTag => tag.toLowerCase().includes(searchTag) || searchTag.includes(tag.toLowerCase()))
+      );
+    });
   }
 
   async getCategories(): Promise<Category[]> {

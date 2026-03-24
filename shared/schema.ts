@@ -42,6 +42,7 @@ export const products = pgTable("products", {
   baseBagPrice: numeric("base_bag_price"), // سعر الكيس الصافي (بدون طباعة)
   singleColorPrintPrice: numeric("single_color_print_price"), // سعر طباعة اللون الواحد
   availableBagColors: text("available_bag_colors").array(), // ألوان الأكياس المتاحة
+  tags: text("tags").array(), // كلمات دلالية للبحث والتصنيف (مثل: كيس-قماشي, كرت-شخصي)
 });
 
 export const settings = pgTable("settings", {

@@ -128,6 +128,7 @@ interface ProductFormData {
   baseBagPrice: string;
   singleColorPrintPrice: string;
   availableBagColors: string;
+  tags: string;
 }
 
 const emptyProductForm: ProductFormData = {
@@ -146,7 +147,8 @@ const emptyProductForm: ProductFormData = {
   hasPrintingOptions: false,
   baseBagPrice: "",
   singleColorPrintPrice: "",
-  availableBagColors: ""
+  availableBagColors: "",
+  tags: ""
 };
 
 interface CategoryFormData {
@@ -1021,7 +1023,8 @@ export default function Admin() {
           imageUrls: data.imageUrls,
           colors: data.colors ? data.colors.split(',').map(c => c.trim()) : null,
           sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()) : null,
-          availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()) : null
+          availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()) : null,
+          tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null
         })
       });
       if (!res.ok) throw new Error('Failed to create product');
@@ -1054,7 +1057,8 @@ export default function Admin() {
         singleColorPrintPrice: data.singleColorPrintPrice,
         colors: data.colors ? data.colors.split(',').map(c => c.trim()).filter(c => c) : null,
         sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()).filter(s => s) : null,
-        availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()).filter(c => c) : null
+        availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()).filter(c => c) : null,
+        tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null
       };
       
       if (data.imageUrls && data.imageUrls.length > 0) {
@@ -1213,7 +1217,8 @@ export default function Admin() {
       hasPrintingOptions: product.hasPrintingOptions ?? false,
       baseBagPrice: product.baseBagPrice != null ? String(product.baseBagPrice) : "",
       singleColorPrintPrice: product.singleColorPrintPrice != null ? String(product.singleColorPrintPrice) : "",
-      availableBagColors: product.availableBagColors ? product.availableBagColors.join(', ') : ""
+      availableBagColors: product.availableBagColors ? product.availableBagColors.join(', ') : "",
+      tags: product.tags ? product.tags.join(', ') : ""
     });
     setShowProductForm(true);
   };
@@ -1834,6 +1839,18 @@ export default function Admin() {
                             </div>
                           </div>
                         )}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="product-tags">الكلمات الدلالية (tags) - مفصولة بفاصلة</Label>
+                        <Input
+                          id="product-tags"
+                          value={productForm.tags}
+                          onChange={(e) => setProductForm({...productForm, tags: e.target.value})}
+                          placeholder="كيس-قماشي, أكياس-بلاستيك, طباعة-مخصصة"
+                          data-testid="input-product-tags"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">تُستخدم للبحث وتصنيف المنتجات في صفحة الطباعة</p>
                       </div>
 
                       <div className="flex gap-2 pt-4">
