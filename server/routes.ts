@@ -424,13 +424,16 @@ ${notes ? `ملاحظات: ${notes}` : ''}
   });
 
   // Admin authentication with session token
-  const adminSessions = new Set<string>();
+  // Generate a stable token from the admin password (survives server restarts)
+  const crypto = await import("crypto");
+  const getAdminToken = () => {
+    return crypto.createHash("sha256").update(`oyo-admin-${ADMIN_PASSWORD}`).digest("hex");
+  };
   
   app.post("/api/admin/login", async (req, res) => {
     const { password } = req.body;
     if (password === ADMIN_PASSWORD) {
-      const token = `admin_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      adminSessions.add(token);
+      const token = getAdminToken();
       res.json({ success: true, token });
     } else {
       res.status(401).json({ error: "Invalid password" });
@@ -440,7 +443,7 @@ ${notes ? `ملاحظات: ${notes}` : ''}
   // Admin middleware
   const requireAdmin = (req: any, res: any, next: any) => {
     const token = req.headers['x-admin-token'];
-    if (!token || !adminSessions.has(token)) {
+    if (!token || token !== getAdminToken()) {
       return res.status(401).json({ error: "Admin authentication required" });
     }
     next();
