@@ -764,7 +764,8 @@ ${notes ? `ملاحظات: ${notes}` : ''}
       await storage.deleteProduct(productId);
       res.status(204).send();
     } catch (error) {
-      res.status(500).json({ error: "Failed to delete product" });
+      console.error("Delete product error:", error);
+      res.status(500).json({ error: "Failed to delete product", details: String(error) });
     }
   });
 

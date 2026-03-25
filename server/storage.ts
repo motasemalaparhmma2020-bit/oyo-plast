@@ -2,7 +2,7 @@ import { db } from "./db";
 import {
   users, products, categories, cartItems, orders, orderItems, settings, reviews, wishlist, notifications,
   wallets, walletTransactions, rewardPoints, pointsTransactions, banners, offers, phoneVerifications,
-  marketerProfiles, endCustomerContacts, marketerCommissions, coupons,
+  marketerProfiles, endCustomerContacts, marketerCommissions, coupons, productViews,
   type User, type Product, type Category, type CartItem, type Order, type OrderItem, type Setting, type Review, type WishlistItem, type Notification,
   type Wallet, type WalletTransaction, type RewardPoints, type PointsTransaction, type Banner, type Offer,
   type PhoneVerification, type MarketerProfile, type EndCustomerContact, type MarketerCommission, type Coupon
@@ -708,6 +708,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteProduct(id: number): Promise<void> {
+    // Delete all related records first (foreign key constraints)
+    await db.delete(productViews).where(eq(productViews.productId, id));
+    await db.delete(reviews).where(eq(reviews.productId, id));
+    await db.delete(wishlist).where(eq(wishlist.productId, id));
+    await db.delete(cartItems).where(eq(cartItems.productId, id));
+    // Nullify productId in order_items to preserve order history
+    await db.update(orderItems).set({ productId: null }).where(eq(orderItems.productId, id));
     await db.delete(products).where(eq(products.id, id));
   }
 

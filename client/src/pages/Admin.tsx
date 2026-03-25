@@ -1132,14 +1132,25 @@ export default function Admin() {
         method: 'DELETE',
         headers: { 'x-admin-token': adminToken || '' }
       });
-      if (!res.ok) throw new Error('Failed to delete product');
+      if (res.status === 401) {
+        handleSessionExpired();
+        throw new Error("انتهت الجلسة - يرجى تسجيل الدخول مجدداً");
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.details || err.error || 'Failed to delete product');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
       toast({ title: "تم حذف المنتج بنجاح" });
     },
-    onError: () => {
-      toast({ title: "حدث خطأ أثناء حذف المنتج", variant: "destructive" });
+    onError: (error: any) => {
+      toast({ 
+        title: "حدث خطأ أثناء حذف المنتج", 
+        description: error.message,
+        variant: "destructive" 
+      });
     }
   });
 

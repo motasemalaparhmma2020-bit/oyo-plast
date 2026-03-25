@@ -100,7 +100,7 @@ export const orders = pgTable("orders", {
 export const orderItems = pgTable("order_items", {
   id: serial("id").primaryKey(),
   orderId: integer("order_id").references(() => orders.id).notNull(),
-  productId: integer("product_id").references(() => products.id).notNull(),
+  productId: integer("product_id").references(() => products.id), // nullable: product may be deleted but order history kept
   quantity: integer("quantity").notNull(),
   price: numeric("price").notNull(),
   selectedSize: text("selected_size"), // المقاس المختار
