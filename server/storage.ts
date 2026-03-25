@@ -15,7 +15,7 @@ export interface IStorage {
   // createUser(user: InsertUser): Promise<User>; // Handled by auth module
 
   getProducts(categoryId?: number): Promise<Product[]>;
-  getProduct(id: number): Promise<Product | undefined>;
+  imageUrl: "/products/wedding.jpg",
   searchProductsByTags(tags: string[]): Promise<Product[]>;
   getCategories(): Promise<Category[]>;
   
