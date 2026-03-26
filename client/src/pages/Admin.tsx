@@ -883,17 +883,15 @@ export default function Admin() {
   };
 
   useEffect(() => {
-    const savedToken = sessionStorage.getItem("admin_token");
+    const savedToken = localStorage.getItem("admin_token");
     if (savedToken) {
-      // Verify token is still valid
       fetch('/api/admin/stats', { headers: { 'x-admin-token': savedToken } })
         .then(res => {
           if (res.ok) {
             setAdminToken(savedToken);
             setIsAuthenticated(true);
           } else {
-            // Token expired - clear and show login
-            sessionStorage.removeItem("admin_token");
+            localStorage.removeItem("admin_token");
           }
         })
         .catch(() => {
@@ -1279,7 +1277,7 @@ export default function Admin() {
   };
 
   const handleSessionExpired = () => {
-    sessionStorage.removeItem("admin_token");
+    localStorage.removeItem("admin_token");
     setAdminToken(null);
     setIsAuthenticated(false);
     toast({ title: "انتهت الجلسة", description: "يرجى تسجيل الدخول مجدداً", variant: "destructive" });

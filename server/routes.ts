@@ -30,11 +30,14 @@ const upload = multer({
   },
 });
 
-const adminTokens = new Set<string>();
+function getAdminToken(): string {
+  const secret = process.env.ADMIN_PASSWORD || "oyo-default";
+  return crypto.createHmac("sha256", secret).update("oyo-admin-v1").digest("hex");
+}
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const token = req.headers["x-admin-token"] as string;
-  if (!token || !adminTokens.has(token)) {
+  if (!token || token !== getAdminToken()) {
     return res.status(401).json({ message: "غير مصرح" });
   }
   next();
@@ -59,10 +62,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!adminPassword || password !== adminPassword) {
       return res.status(401).json({ message: "كلمة المرور غير صحيحة" });
     }
-    const token = crypto.randomUUID();
-    adminTokens.add(token);
-    setTimeout(() => adminTokens.delete(token), 24 * 60 * 60 * 1000);
-    res.json({ token });
+    res.json({ token: getAdminToken() });
   });
 
   // ─── Image Upload ─────────────────────────────────────────────────
