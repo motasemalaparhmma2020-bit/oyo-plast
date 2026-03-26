@@ -13,6 +13,8 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   getProducts(): Promise<Product[]>;
   getCategories(): Promise<Category[]>;
+  createCategory(category: InsertCategory): Promise<Category>;
+  createProduct(product: InsertProduct): Promise<Product>;
   sessionStore: session.Store;
 }
 
@@ -68,6 +70,16 @@ export class DatabaseStorage implements IStorage {
 
   async getCategories(): Promise<Category[]> {
     return await db.select().from(categories);
+  }
+
+  async createCategory(insertCategory: InsertCategory): Promise<Category> {
+    const [category] = await db.insert(categories).values(insertCategory).returning();
+    return category;
+  }
+
+  async createProduct(insertProduct: InsertProduct): Promise<Product> {
+    const [product] = await db.insert(products).values(insertProduct).returning();
+    return product;
   }
 }
 
