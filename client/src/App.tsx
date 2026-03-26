@@ -5,7 +5,33 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/hooks/use-auth";
-import React, { useEffect } from "react";
+import React, { useEffect, Component } from "react";
+
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center text-center p-8 bg-white">
+          <div className="text-4xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">حدث خطأ غير متوقع</h2>
+          <p className="text-gray-500 mb-6">نأسف على الإزعاج، يرجى تحديث الصفحة</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-teal-600 text-white px-6 py-2 rounded-full font-medium"
+          >
+            تحديث الصفحة
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 import Home from "@/pages/Home";
 import Products from "@/pages/Products";
@@ -143,12 +169,14 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

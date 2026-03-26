@@ -96,6 +96,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(products);
   });
 
+  app.get("/api/products/bestselling", async (req, res) => {
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 8;
+    const products = await storage.getProducts();
+    const sorted = [...products].sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0));
+    res.json(sorted.slice(0, limit));
+  });
+
   app.get("/api/products/:id", async (req, res) => {
     const product = await storage.getProduct(parseInt(req.params.id));
     if (!product) return res.status(404).json({ message: "المنتج غير موجود" });
