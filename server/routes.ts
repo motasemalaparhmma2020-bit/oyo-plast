@@ -1,10 +1,12 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
-import { setupAuth } from "./auth";
+import { setupAuth } from "./replit_integrations/auth/replitAuth";
+import { registerAuthRoutes } from "./replit_integrations/auth/routes";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<void> {
-  setupAuth(app);
+  await setupAuth(app);
+  registerAuthRoutes(app);
 
   // جلب الأقسام
   app.get("/api/categories", async (_req, res) => {
