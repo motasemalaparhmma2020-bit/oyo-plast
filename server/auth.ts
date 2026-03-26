@@ -1,3 +1,4 @@
+import { Express } from "express";
 import crypto from "crypto";
 
 export function hashPassword(password: string): string {
@@ -12,6 +13,6 @@ export function verifyPassword(password: string, storedHash: string): boolean {
   return hash === hashToVerify;
 }
 
-export function generateToken(): string {
-  return crypto.randomBytes(32).toString("hex");
+export function setupAuth(app: Express) {
+  return;
 }
