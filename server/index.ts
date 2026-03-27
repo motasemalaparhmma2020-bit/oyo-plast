@@ -6,7 +6,7 @@ import path from "path";
 
 const app = express();
 const httpServer = createServer(app);
-
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 // Get directory name - use process.cwd() for production compatibility
 const rootDir = process.cwd();
 
