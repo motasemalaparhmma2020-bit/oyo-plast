@@ -706,9 +706,9 @@ export default function ProductDetail() {
                   </div>
 
                   {enableCustomPrinting && (
-                    <>
+                    <div className="space-y-2">
                       <div 
-                        className="border-2 border-dashed border-[#2196F3]/50 rounded-xl p-6 text-center cursor-pointer hover:border-[#2196F3] transition-colors bg-white dark:bg-gray-800"
+                        className="border-2 border-dashed border-[#2196F3]/50 rounded-lg p-3 text-center cursor-pointer hover:border-[#2196F3] transition-colors bg-white dark:bg-gray-800"
                         onClick={() => fileInputRef.current?.click()}
                       >
                         <input
@@ -720,37 +720,37 @@ export default function ProductDetail() {
                           data-testid="input-design-upload"
                         />
                         {isUploadingDesign ? (
-                          <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                            <span>جاري رفع التصميم...</span>
+                          <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm py-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>جاري الرفع...</span>
                           </div>
                         ) : uploadedFile ? (
-                          <div className="flex items-center justify-center gap-2 text-[#2196F3]">
-                            <Check className="h-5 w-5" />
-                            <span className="font-medium">{uploadedFile.name}</span>
+                          <div className="flex items-center justify-center gap-2 text-[#2196F3] text-sm py-2">
+                            <Check className="h-4 w-4" />
+                            <span className="font-medium truncate">{uploadedFile.name}</span>
                           </div>
                         ) : (
-                          <div className="text-muted-foreground">
-                            <Upload className="h-10 w-10 mx-auto mb-2 text-[#2196F3]" />
-                            <p className="font-medium">ارفع شعارك أو تصميمك</p>
-                            <p className="text-xs mt-1">PDF, PNG, JPG</p>
+                          <div className="text-muted-foreground py-2">
+                            <Upload className="h-6 w-6 mx-auto mb-1 text-[#2196F3]" />
+                            <p className="font-medium text-sm">ارفع التصميم</p>
+                            <p className="text-xs mt-0.5 text-gray-400">PDF, PNG, JPG</p>
                           </div>
                         )}
                       </div>
 
                       <div>
-                        <Label htmlFor="design-notes" className="mb-2 block">تعليمات خاصة</Label>
+                        <Label htmlFor="design-notes" className="text-sm mb-1 block">ملاحظات</Label>
                         <Textarea
                           id="design-notes"
                           value={designNotes}
                           onChange={(e) => setDesignNotes(e.target.value)}
-                          placeholder="أضف أي ملاحظات خاصة بالطباعة..."
-                          className="resize-none"
-                          rows={3}
+                          placeholder="ملاحظات بخصوص التصميم..."
+                          className="resize-none text-sm"
+                          rows={2}
                           data-testid="input-design-notes"
                         />
                       </div>
-                    </>
+                    </div>
                   )}
                 </CardContent>
               </Card>

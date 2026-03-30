@@ -72,6 +72,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ imageUrl });
   });
 
+  // ─── Design Upload (Public) ─────────────────────────────────────────
+  app.post("/api/upload/design", upload.single("design"), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: "لم يتم رفع ملف" });
+    const designUrl = `/uploads/${req.file.filename}`;
+    res.json({ designUrl });
+  });
+
   // ─── Admin Stats ─────────────────────────────────────────────────
   app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
     try {
