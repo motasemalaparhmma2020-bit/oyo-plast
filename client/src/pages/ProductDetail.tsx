@@ -327,6 +327,11 @@ export default function ProductDetail() {
     if (!product) return;
     
     if (!isAuthenticated) {
+      toast({
+        title: "تسجيل الدخول مطلوب",
+        description: "يرجى تسجيل الدخول لإتمام عملية الشراء",
+        variant: "destructive"
+      });
       setLocation('/auth');
       return;
     }

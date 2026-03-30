@@ -1,4 +1,5 @@
 import { useCart } from "@/hooks/use-cart";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -106,6 +107,19 @@ export default function Checkout() {
   const { data: cartItems, isLoading } = useCart();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const { isAuthenticated, user } = useAuth();
+
+  // Check if user is authenticated, redirect to auth if not
+  useEffect(() => {
+    if (!isAuthenticated) {
+      toast({
+        title: "تسجيل الدخول مطلوب",
+        description: "يرجى تسجيل الدخول لإتمام الشراء",
+        variant: "destructive"
+      });
+      setLocation('/auth');
+    }
+  }, [isAuthenticated, setLocation, toast]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState({

@@ -120,19 +120,13 @@ function Router() {
           <Route path="/terms" component={Terms} />
           <Route path="/returns" component={Returns} />
           
+          {/* Public pages - no auth required */}
+          <Route path="/" component={Home} />
+          <Route path="/products" component={Products} />
+          <Route path="/product/:id" component={ProductDetail} />
+          <Route path="/cart" component={Cart} />
+          
           {/* Protected pages - auth required AND accountType required */}
-          <Route path="/">
-            <RequireAccountType><Home /></RequireAccountType>
-          </Route>
-          <Route path="/products">
-            <RequireAccountType><Products /></RequireAccountType>
-          </Route>
-          <Route path="/product/:id">
-            <RequireAccountType><ProductDetail /></RequireAccountType>
-          </Route>
-          <Route path="/cart">
-            <RequireAccountType><Cart /></RequireAccountType>
-          </Route>
           <Route path="/checkout">
             <RequireAccountType><Checkout /></RequireAccountType>
           </Route>
