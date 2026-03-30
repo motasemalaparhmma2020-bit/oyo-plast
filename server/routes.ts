@@ -9,7 +9,7 @@ import fs from "fs";
 import crypto from "crypto";
 
 const rootDir = process.cwd();
-const uploadsDir = path.resolve(rootDir, "public", "uploads");
+const uploadsDir = path.resolve(rootDir, "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
