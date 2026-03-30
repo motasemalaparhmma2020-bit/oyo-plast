@@ -1,7 +1,7 @@
 import { useProducts, useCategories } from "@/hooks/use-products";
 import { ProductCard } from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
-import { Search, ShoppingBag } from "lucide-react";
+import { Search, ShoppingBag, Package } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Input } from "@/components/ui/input";

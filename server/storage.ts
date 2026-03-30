@@ -1,23 +1,29 @@
 import {
   users, products, categories, banners, offers, orders, orderItems,
-  type User, type InsertUser,
-  type Product, type InsertProduct,
-  type Category, type InsertCategory,
+  type User,
+  type Product,
+  type Category,
   type Banner, type Offer,
-  type Order
+  type Order,
+  insertProductSchema, insertCategorySchema
 } from "@shared/schema";
+import { z } from "zod";
 import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
 
+type InsertUser = any;
+type InsertProduct = z.infer<typeof insertProductSchema>;
+type InsertCategory = z.infer<typeof insertCategorySchema>;
+
 const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  createUser(user: any): Promise<User>;
 
   getProducts(categoryId?: number, search?: string): Promise<Product[]>;
   getProduct(id: number): Promise<Product | undefined>;
