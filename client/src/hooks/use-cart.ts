@@ -4,11 +4,6 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 
-// Check if guest mode is active
-function isGuestMode(): boolean {
-  return localStorage.getItem('guestMode') === 'true';
-}
-
 interface GuestCartItem {
   productId: number;
   quantity: number;
@@ -88,9 +83,8 @@ export function useAddToCart() {
 
   return useMutation({
     mutationFn: async (data: z.infer<typeof api.cart.add.input>) => {
-      // Check if user is in guest mode (not authenticated or explicitly set as guest)
-      if (!isAuthenticated || isGuestMode()) {
-        // Add to guest cart in localStorage with full customization data
+      // Add to guest cart only if not authenticated
+      if (!isAuthenticated) {
         addToGuestCart({
           productId: data.productId,
           quantity: data.quantity,
@@ -145,20 +139,11 @@ export function useAddToCart() {
         });
       }
     },
-    onError: (error: Error, variables) => {
-      // On network/unexpected error, fallback to guest cart
-      addToGuestCart({
-        productId: variables.productId,
-        quantity: variables.quantity,
-        selectedSize: variables.selectedSize,
-        selectedColor: variables.selectedColor,
-        customPrinting: variables.customPrinting,
-        designNotes: variables.designNotes,
-        designFileUrl: variables.designFileUrl
-      });
+    onError: (error: Error) => {
       toast({
-        title: "تمت الإضافة للسلة",
-        description: "تمت إضافة المنتج. يمكنك إتمام الشراء من صفحة الشراء كزائر",
+        title: "خطأ",
+        description: "فشل إضافة المنتج للسلة. حاول مرة أخرى",
+        variant: "destructive"
       });
     }
   });

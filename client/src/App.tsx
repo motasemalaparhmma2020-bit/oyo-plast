@@ -7,6 +7,11 @@ import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/hooks/use-auth";
 import React, { useEffect, Component } from "react";
 
+// Cleanup legacy localStorage on app init
+if (typeof window !== 'undefined') {
+  localStorage.removeItem('guestMode');
+}
+
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
