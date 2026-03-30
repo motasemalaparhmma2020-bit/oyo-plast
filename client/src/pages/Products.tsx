@@ -1,18 +1,10 @@
 import { useProducts, useCategories } from "@/hooks/use-products";
 import { ProductCard } from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
-import { Search, Package, Coffee, ShoppingBag, Palette } from "lucide-react";
+import { Search, ShoppingBag } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Input } from "@/components/ui/input";
-
-const QUICK_FILTERS = [
-  { id: "", name: "الكل", icon: null },
-  { id: "1", name: "أكواب", icon: Coffee },
-  { id: "2", name: "علب", icon: Package },
-  { id: "3", name: "أكياس", icon: ShoppingBag },
-  { id: "6", name: "طباعة", icon: Palette },
-];
 
 export default function Products() {
   const [location] = useLocation();
@@ -60,14 +52,29 @@ export default function Products() {
       <header className="sticky top-0 z-40 bg-white dark:bg-card border-b px-4 py-3">
         <h1 className="text-xl font-bold text-center mb-3">التصنيفات</h1>
         
-        {/* Quick Filter Buttons */}
+        {/* Dynamic Filter Buttons from Database */}
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          {QUICK_FILTERS.map((filter) => {
-            const isActive = selectedCategory === filter.id;
-            const IconComponent = filter.icon;
+          {/* All Button */}
+          <Button
+            variant={selectedCategory === "" ? "default" : "outline"}
+            size="sm"
+            className={`flex-shrink-0 rounded-full gap-1.5 px-4 ${
+              selectedCategory === "" 
+                ? "bg-teal-500 hover:bg-teal-600 text-white border-teal-500" 
+                : "bg-white hover:bg-gray-50 text-gray-700 border-gray-200"
+            }`}
+            onClick={() => handleCategoryClick("")}
+            data-testid="filter-all"
+          >
+            الكل
+          </Button>
+
+          {/* Dynamic Categories from Database */}
+          {categories?.filter(c => c?.isActive).map((category) => {
+            const isActive = selectedCategory === String(category?.id);
             return (
               <Button
-                key={filter.id}
+                key={category?.id}
                 variant={isActive ? "default" : "outline"}
                 size="sm"
                 className={`flex-shrink-0 rounded-full gap-1.5 px-4 ${
@@ -75,11 +82,11 @@ export default function Products() {
                     ? "bg-teal-500 hover:bg-teal-600 text-white border-teal-500" 
                     : "bg-white hover:bg-gray-50 text-gray-700 border-gray-200"
                 }`}
-                onClick={() => handleCategoryClick(filter.id)}
-                data-testid={`filter-${filter.id || 'all'}`}
+                onClick={() => handleCategoryClick(String(category?.id))}
+                data-testid={`filter-${category?.id}`}
               >
-                {IconComponent && <IconComponent className="h-4 w-4" />}
-                {filter.name}
+                <ShoppingBag className="h-4 w-4" />
+                {category?.name}
               </Button>
             );
           })}

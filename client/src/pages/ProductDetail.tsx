@@ -234,9 +234,9 @@ export default function ProductDetail() {
         : currentSizeData.price;
     }
     
-    let basePrice = currency === 'SAR' && product.priceSar 
+    let basePrice = currency === 'SAR' && product?.priceSar 
       ? product.priceSar 
-      : product.price;
+      : product?.price || '0';
 
     if (bulkPricing.length > 0) {
       const applicablePricing = [...bulkPricing]
@@ -319,7 +319,7 @@ export default function ProductDetail() {
     });
     toast({
       title: "تمت الإضافة للسلة",
-      description: `تم إضافة ${product.name} إلى سلة التسوق`,
+      description: `تم إضافة ${product?.name} إلى سلة التسوق`,
     });
   };
 
@@ -394,7 +394,7 @@ export default function ProductDetail() {
                       <div className="aspect-[3/4] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-4">
                         <img
                           src={img}
-                          alt={`${product.name} - صورة ${idx + 1}`}
+                          alt={`${product?.name || 'منتج'} - صورة ${idx + 1}`}
                           className="w-full h-full object-contain"
                         />
                       </div>
@@ -440,8 +440,8 @@ export default function ProductDetail() {
           ) : (
             <div className="aspect-[3/4] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-2xl overflow-hidden p-4">
               <img
-                src={product.imageUrl}
-                alt={product.name}
+                src={product?.imageUrl || ''}
+                alt={product?.name || 'منتج'}
                 className="w-full h-full object-contain"
               />
             </div>
@@ -463,7 +463,7 @@ export default function ProductDetail() {
         <div className="space-y-6">
           <div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-foreground mb-2" data-testid="text-product-name">
-              {product.name}
+              {product?.name || 'تحميل المنتج...'}
             </h1>
             
             <div className="flex flex-wrap items-center gap-4 mb-4 p-3 bg-muted/30 rounded-lg">
@@ -497,7 +497,7 @@ export default function ProductDetail() {
             </div>
             
             <p className="text-muted-foreground leading-relaxed" data-testid="text-product-description">
-              {product.description}
+              {product?.description || 'لا توجد وصفة متاحة'}
             </p>
           </div>
 
