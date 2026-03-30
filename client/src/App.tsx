@@ -12,12 +12,17 @@ if (typeof window !== 'undefined') {
   localStorage.removeItem('guestMode');
 }
 
-class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean }> {
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error?: Error }> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
   }
-  static getDerivedStateFromError() { return { hasError: true }; }
+  static getDerivedStateFromError(error: Error) { 
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error) {
+    console.error("Error Boundary caught:", error);
+  }
   render() {
     if (this.state.hasError) {
       return (
@@ -25,6 +30,11 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError:
           <div className="text-4xl mb-4">⚠️</div>
           <h2 className="text-xl font-bold text-gray-800 mb-2">حدث خطأ غير متوقع</h2>
           <p className="text-gray-500 mb-6">نأسف على الإزعاج، يرجى تحديث الصفحة</p>
+          {this.state.error && (
+            <p className="text-red-600 text-sm mb-4 max-w-md break-words">
+              {this.state.error.message}
+            </p>
+          )}
           <button
             onClick={() => window.location.reload()}
             className="bg-teal-600 text-white px-6 py-2 rounded-full font-medium"
