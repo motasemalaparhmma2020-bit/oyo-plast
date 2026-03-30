@@ -12,35 +12,30 @@ if (typeof window !== 'undefined') {
   localStorage.removeItem('guestMode');
 }
 
-class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error?: Error }> {
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
   }
-  static getDerivedStateFromError(error: Error) { 
-    return { hasError: true, error };
+  static getDerivedStateFromError() { 
+    return { hasError: true };
   }
   componentDidCatch(error: Error) {
-    console.error("Error Boundary caught:", error);
+    console.error("Error:", error.message);
   }
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center text-center p-8 bg-white">
-          <div className="text-4xl mb-4">⚠️</div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">حدث خطأ غير متوقع</h2>
-          <p className="text-gray-500 mb-6">نأسف على الإزعاج، يرجى تحديث الصفحة</p>
-          {this.state.error && (
-            <p className="text-red-600 text-sm mb-4 max-w-md break-words">
-              {this.state.error.message}
-            </p>
-          )}
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-teal-600 text-white px-6 py-2 rounded-full font-medium"
-          >
-            تحديث الصفحة
-          </button>
+        <div className="min-h-screen flex items-center justify-center bg-white p-4">
+          <div className="text-center">
+            <p className="text-red-600 mb-4">خطأ في التطبيق</p>
+            <button
+              onClick={() => location.reload()}
+              className="bg-blue-600 text-white px-4 py-2 rounded"
+            >
+              أعد تحميل
+            </button>
+          </div>
         </div>
       );
     }
@@ -187,6 +182,11 @@ function App() {
       </QueryClientProvider>
     </ErrorBoundary>
   );
+}
+
+// Wrap Router with wouter's necessary context
+function AppWrapper() {
+  return <App />;
 }
 
 export default App;
