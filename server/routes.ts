@@ -73,10 +73,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ─── Design Upload (Public) ─────────────────────────────────────────
-  app.post("/api/upload/design", upload.single("design"), (req, res) => {
+  app.post("/api/upload/design", upload.single("design"), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: "لم يتم رفع ملف" });
-    const designUrl = `/uploads/${req.file.filename}`;
-    res.json({ designUrl });
+    try {
+      const fileData = req.file.buffer.toString('base64');
+      const designUrl = `/uploads/${req.file.filename}`;
+      res.json({ designUrl, fileData });
+    } catch (error) {
+      res.status(500).json({ message: "فشل في معالجة الملف" });
+    }
   });
 
   // ─── Admin Stats ─────────────────────────────────────────────────
@@ -370,6 +375,114 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json(row);
     } catch (e: any) {
       res.status(500).json({ message: "فشل حفظ الإعداد", details: e.message });
+    }
+  });
+
+  // ─── Cart (Protected) ─────────────────────────────────────────────────
+  app.get("/api/cart", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      
+      const { db: dbInstance } = await import("./db");
+      const { cartItems: cartTable } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+      
+      const items = await dbInstance.select().from(cartTable).where(eqFn(cartTable.userId, user.id));
+      res.json(items);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب السلة", details: e.message });
+    }
+  });
+
+  app.post("/api/cart", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      
+      const { db: dbInstance } = await import("./db");
+      const { cartItems: cartTable } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+      
+      const { productId, quantity, selectedSize, selectedColor, customPrinting, designNotes, designFileUrl } = req.body;
+      
+      // Check if item exists
+      const existing = await dbInstance.select().from(cartTable)
+        .where(eqFn(cartTable.userId, user.id));
+      
+      const existingItem = existing.find(item =>
+        item.productId === productId &&
+        item.selectedSize === selectedSize &&
+        item.selectedColor === selectedColor &&
+        !item.customPrinting
+      );
+      
+      if (existingItem && !customPrinting) {
+        // Update quantity
+        const [updated] = await dbInstance
+          .update(cartTable)
+          .set({ quantity: existingItem.quantity + quantity })
+          .where(eqFn(cartTable.id, existingItem.id))
+          .returning();
+        return res.status(201).json(updated);
+      }
+      
+      // Add new item
+      const [newItem] = await dbInstance
+        .insert(cartTable)
+        .values({
+          userId: user.id,
+          productId,
+          quantity,
+          selectedSize: selectedSize || null,
+          selectedColor: selectedColor || null,
+          customPrinting: customPrinting || false,
+          designNotes: designNotes || null,
+          designFileUrl: designFileUrl || null,
+        })
+        .returning();
+      
+      res.status(201).json(newItem);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إضافة للسلة", details: e.message });
+    }
+  });
+
+  app.patch("/api/cart/:id", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      
+      const { db: dbInstance } = await import("./db");
+      const { cartItems: cartTable } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+      
+      const { quantity } = req.body;
+      const [updated] = await dbInstance
+        .update(cartTable)
+        .set({ quantity })
+        .where(eqFn(cartTable.id, parseInt(req.params.id)))
+        .returning();
+      
+      res.json(updated);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث السلة", details: e.message });
+    }
+  });
+
+  app.delete("/api/cart/:id", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      
+      const { db: dbInstance } = await import("./db");
+      const { cartItems: cartTable } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+      
+      await dbInstance.delete(cartTable).where(eqFn(cartTable.id, parseInt(req.params.id)));
+      res.json({ message: "تم الحذف" });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حذف من السلة", details: e.message });
     }
   });
 }
