@@ -13,6 +13,6 @@ export function verifyPassword(password: string, storedHash: string): boolean {
   return hash === hashToVerify;
 }
 
-export function setupAuth(app: Express) {
+export async function setupAuth(app: Express): Promise<void> {
   return;
 }
