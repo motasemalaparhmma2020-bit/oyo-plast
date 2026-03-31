@@ -317,6 +317,50 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Navigation Settings (Public) ─────────────────────────────────
+  app.get("/api/navigation-settings", async (_req, res) => {
+    try {
+      const settings = await storage.getNavigationSettings();
+      res.json(settings);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب إعدادات التنقل" });
+    }
+  });
+
+  // ─── Printing Products (Public) ───────────────────────────────────
+  app.get("/api/printing-products", async (_req, res) => {
+    try {
+      const products = await storage.getPrintingProducts();
+      res.json(products);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب منتجات الطباعة" });
+    }
+  });
+
+  // ─── Admin Navigation Settings ────────────────────────────────────
+  app.patch("/api/admin/navigation-settings", requireAdmin, async (req, res) => {
+    try {
+      const settings = await storage.updateNavigationSettings({
+        showPrintingSection: req.body.showPrintingSection ?? true,
+      });
+      res.json(settings);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث إعدادات التنقل", details: e.message });
+    }
+  });
+
+  // ─── Admin Products - Update Printing Status ──────────────────────
+  app.patch("/api/admin/products/:id/printing-status", requireAdmin, async (req, res) => {
+    try {
+      const product = await storage.updateProduct(parseInt(req.params.id), {
+        showInPrinting: req.body.showInPrinting ?? false,
+      });
+      res.json(product);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث حالة الطباعة", details: e.message });
+    }
+  });
+
   // ─── Admin Orders ────────────────────────────────────────────────
   app.get("/api/admin/orders", requireAdmin, async (_req, res) => {
     const allOrders = await storage.getOrders();

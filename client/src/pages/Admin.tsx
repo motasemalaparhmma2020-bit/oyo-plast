@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Order, Product } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -776,6 +776,155 @@ function BannersOffersSection({ adminToken }: { adminToken: string | null }) {
   );
 }
 
+// Navigation Settings Section
+function NavigationSettingsSection({ adminToken }: { adminToken: string | null }) {
+  const { toast } = useToast();
+
+  const { data: settings } = useQuery<any>({
+    queryKey: ['/api/navigation-settings'],
+    queryFn: async () => {
+      const res = await fetch('/api/navigation-settings');
+      return res.json();
+    },
+    enabled: !!adminToken,
+  });
+
+  const updateSettingsMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch('/api/admin/navigation-settings', {
+        method: 'PATCH',
+        headers: { 'x-admin-token': adminToken!, 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update settings');
+      return res.json();
+    },
+  });
+
+  const handleTogglePrinting = async (newValue: boolean) => {
+    updateSettingsMutation.mutate({ showPrintingSection: newValue }, {
+      onSuccess: () => {
+        toast({ title: "تم تحديث الإعدادات بنجاح" });
+      },
+      onError: () => {
+        toast({ title: "فشل تحديث الإعدادات", variant: "destructive" });
+      },
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>إعدادات التنقل</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+          <div>
+            <p className="font-semibold">إظهار قسم الطباعة والتصميم</p>
+            <p className="text-sm text-gray-500">تفعيل/تعطيل قسم الطباعة في قائمة التنقل</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={settings?.showPrintingSection ?? true}
+            onChange={(e) => handleTogglePrinting(e.target.checked)}
+            disabled={updateSettingsMutation.isPending}
+            className="w-5 h-5 cursor-pointer"
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Printing Products Section
+function PrintingProductsSection({ adminToken }: { adminToken: string | null }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: products = [], isLoading } = useQuery<any[]>({
+    queryKey: ['/api/products'],
+    enabled: !!adminToken,
+  });
+
+  const updatePrintingStatusMutation = useMutation({
+    mutationFn: async (data: { productId: number; showInPrinting: boolean }) => {
+      const res = await fetch(`/api/admin/products/${data.productId}/printing-status`, {
+        method: 'PATCH',
+        headers: { 'x-admin-token': adminToken!, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ showInPrinting: data.showInPrinting }),
+      });
+      if (!res.ok) throw new Error('Failed to update product');
+      return res.json();
+    },
+  });
+
+  const handleToggleProduct = async (productId: number, currentValue: boolean) => {
+    updatePrintingStatusMutation.mutate(
+      { productId, showInPrinting: !currentValue },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/printing-products'] });
+          toast({ title: "تم تحديث المنتج بنجاح" });
+        },
+        onError: () => {
+          toast({ title: "فشل تحديث المنتج", variant: "destructive" });
+        },
+      }
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>منتجات الطباعة والتصميم</CardTitle>
+        <CardDescription>اختر المنتجات التي تظهر في قسم الطباعة</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : products.length > 0 ? (
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {products.map((product) => (
+              <div
+                key={product.id}
+                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
+              >
+                <input
+                  type="checkbox"
+                  checked={product.showInPrinting || false}
+                  onChange={() => handleToggleProduct(product.id, product.showInPrinting || false)}
+                  disabled={updatePrintingStatusMutation.isPending}
+                  className="w-5 h-5 cursor-pointer"
+                  data-testid={`checkbox-printing-${product.id}`}
+                />
+                {product.imageUrl && (
+                  <img
+                    src={product.imageUrl}
+                    alt={product.name}
+                    className="w-12 h-12 rounded object-cover"
+                  />
+                )}
+                <div className="flex-1">
+                  <p className="font-semibold">{product.name}</p>
+                  <p className="text-xs text-gray-500">{product.price} ر.ي</p>
+                </div>
+                {product.showInPrinting && (
+                  <Badge className="bg-green-100 text-green-800">مفعل</Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-center text-gray-400 py-10">لا توجد منتجات</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminToken, setAdminToken] = useState<string | null>(null);
@@ -1456,6 +1605,7 @@ export default function Admin() {
             <TabsTrigger value="categories">الأقسام</TabsTrigger>
             <TabsTrigger value="products">المخزون</TabsTrigger>
             <TabsTrigger value="banners-offers">العروض والبنرات</TabsTrigger>
+            <TabsTrigger value="navigation">التنقل والطباعة</TabsTrigger>
             <TabsTrigger value="reports">التقارير</TabsTrigger>
             <TabsTrigger value="settings">الإعدادات</TabsTrigger>
           </TabsList>
@@ -2306,6 +2456,13 @@ export default function Admin() {
 
           <TabsContent value="banners-offers">
             <BannersOffersSection adminToken={adminToken} />
+          </TabsContent>
+
+          <TabsContent value="navigation">
+            <div className="space-y-4">
+              <NavigationSettingsSection adminToken={adminToken} />
+              <PrintingProductsSection adminToken={adminToken} />
+            </div>
           </TabsContent>
 
           <TabsContent value="reports">

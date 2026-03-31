@@ -45,6 +45,8 @@ export const products = pgTable("products", {
   tags: text("tags").array(), // كلمات دلالية للبحث والتصنيف (مثل: كيس-قماشي, كرت-شخصي)
   // Reviews visibility
   showReviews: boolean("show_reviews").default(true).notNull(), // Show/hide reviews section
+  // Printing section visibility
+  showInPrinting: boolean("show_in_printing").default(false).notNull(), // Show in printing & design section
 });
 
 export const settings = pgTable("settings", {
@@ -347,6 +349,13 @@ export const offers = pgTable("offers", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Navigation Settings
+export const navigationSettings = pgTable("navigation_settings", {
+  id: serial("id").primaryKey(),
+  showPrintingSection: boolean("show_printing_section").default(true).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Product Views (for AI recommendations)
 export const productViews = pgTable("product_views", {
   id: serial("id").primaryKey(),
@@ -376,6 +385,7 @@ export const insertProductSchema = createInsertSchema(products).omit({ id: true 
 export const insertBannerSchema = createInsertSchema(banners).omit({ id: true, createdAt: true });
 export const insertOfferSchema = createInsertSchema(offers).omit({ id: true, createdAt: true });
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true });
+export const insertNavigationSettingsSchema = createInsertSchema(navigationSettings).omit({ id: true, updatedAt: true });
 export const insertCartItemSchema = createInsertSchema(cartItems).omit({ id: true });
 export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true });
 export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
@@ -415,3 +425,4 @@ export type EndCustomerContact = typeof endCustomerContacts.$inferSelect;
 export type MarketerCommission = typeof marketerCommissions.$inferSelect;
 export type ProductView = typeof productViews.$inferSelect;
 export type Coupon = typeof coupons.$inferSelect;
+export type NavigationSettings = typeof navigationSettings.$inferSelect;

@@ -57,7 +57,7 @@ import Wishlist from "@/pages/Wishlist";
 import Notifications from "@/pages/Notifications";
 import MyAccount from "@/pages/MyAccount";
 import MarketerCoupons from "@/pages/MarketerCoupons";
-import PrintingAndDesign from "@/pages/PrintingAndDesign";
+import Printing from "@/pages/Printing";
 import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
@@ -158,9 +158,7 @@ function Router() {
           <Route path="/marketer/coupons">
             <RequireAccountType><MarketerCoupons /></RequireAccountType>
           </Route>
-          <Route path="/printing">
-            <RequireAccountType><PrintingAndDesign /></RequireAccountType>
-          </Route>
+          <Route path="/printing" component={Printing} />
           <Route component={NotFound} />
         </Switch>
       </main>

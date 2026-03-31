@@ -1,10 +1,11 @@
 import {
-  users, products, categories, banners, offers, orders, orderItems,
+  users, products, categories, banners, offers, orders, orderItems, navigationSettings,
   type User,
   type Product,
   type Category,
   type Banner, type Offer,
   type Order,
+  type NavigationSettings,
   insertProductSchema, insertCategorySchema
 } from "@shared/schema";
 import { z } from "zod";
@@ -46,6 +47,10 @@ export interface IStorage {
   createOffer(data: any): Promise<Offer>;
   updateOffer(id: number, data: any): Promise<Offer>;
   deleteOffer(id: number): Promise<void>;
+
+  getNavigationSettings(): Promise<NavigationSettings>;
+  updateNavigationSettings(data: any): Promise<NavigationSettings>;
+  getPrintingProducts(): Promise<Product[]>;
 
   getOrders(): Promise<Order[]>;
   getOrderStats(): Promise<{ totalSales: number; totalOrders: number; averageOrderValue: number }>;
@@ -166,6 +171,20 @@ export class DatabaseStorage implements IStorage {
 
   async deleteOffer(id: number): Promise<void> {
     await db.delete(offers).where(eq(offers.id, id));
+  }
+
+  async getNavigationSettings(): Promise<NavigationSettings> {
+    const [settings] = await db.select().from(navigationSettings).limit(1);
+    return settings || { id: 1, showPrintingSection: true, updatedAt: new Date() };
+  }
+
+  async updateNavigationSettings(data: any): Promise<NavigationSettings> {
+    const [settings] = await db.update(navigationSettings).set({ ...data, updatedAt: new Date() }).where(eq(navigationSettings.id, 1)).returning();
+    return settings;
+  }
+
+  async getPrintingProducts(): Promise<Product[]> {
+    return await db.select().from(products).where(eq(products.showInPrinting, true));
   }
 
   async getOrders(): Promise<Order[]> {

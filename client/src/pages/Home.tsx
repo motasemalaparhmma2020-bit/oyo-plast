@@ -2,10 +2,11 @@ import { useBestsellingProducts, useCategories } from "@/hooks/use-products";
 import { ProductCard } from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Link } from "wouter";
-import { ArrowLeft, ArrowRight, Search, ShoppingBag } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { ArrowLeft, ArrowRight, Search, ShoppingBag, User, Palette, Grid } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useCart } from "@/hooks/use-cart";
 
 export default function Home() {
   const { data: bestselling, isLoading: isBestsellingLoading } = useBestsellingProducts(8);
@@ -13,6 +14,19 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [autoPlay, setAutoPlay] = useState(true);
+  const [_location, navigate] = useLocation();
+  const { cart } = useCart();
+
+  const { data: navSettings } = useQuery<any>({
+    queryKey: ["/api/navigation-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/navigation-settings", { credentials: "include" });
+      if (!res.ok) return { showPrintingSection: true };
+      return res.json();
+    },
+  });
+
+  const cartCount = cart?.reduce((sum, item) => sum + item.quantity, 0) || 0;
 
   const { data: banners = [] } = useQuery<any[]>({
     queryKey: ["/api/banners"],
@@ -241,6 +255,58 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {/* Bottom Navigation Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+        <div className="flex items-center justify-around h-20">
+          {/* Profile */}
+          <Link href="/profile">
+            <button className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" data-testid="nav-profile">
+              <User className="h-6 w-6 text-gray-600 dark:text-gray-300" />
+              <span className="text-xs text-gray-600 dark:text-gray-300 text-right">أنا</span>
+            </button>
+          </Link>
+
+          {/* Cart */}
+          <Link href="/cart">
+            <button className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative" data-testid="nav-cart">
+              <ShoppingBag className="h-6 w-6 text-gray-600 dark:text-gray-300" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {cartCount}
+                </span>
+              )}
+              <span className="text-xs text-gray-600 dark:text-gray-300 text-right">حقيبة</span>
+            </button>
+          </Link>
+
+          {/* Printing & Design */}
+          {navSettings?.showPrintingSection && (
+            <Link href="/printing">
+              <button className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" data-testid="nav-printing">
+                <Palette className="h-6 w-6 text-gray-600 dark:text-gray-300" />
+                <span className="text-xs text-gray-600 dark:text-gray-300 text-right">طباعة</span>
+              </button>
+            </Link>
+          )}
+
+          {/* Categories */}
+          <Link href="/products">
+            <button className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" data-testid="nav-categories">
+              <Grid className="h-6 w-6 text-gray-600 dark:text-gray-300" />
+              <span className="text-xs text-gray-600 dark:text-gray-300 text-right">فئات</span>
+            </button>
+          </Link>
+
+          {/* Shop */}
+          <Link href="/products">
+            <button className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" data-testid="nav-shop">
+              <ShoppingBag className="h-6 w-6 text-teal-600" />
+              <span className="text-xs text-teal-600 font-bold text-right">متجر</span>
+            </button>
+          </Link>
+        </div>
+      </nav>
     </div>
   );
 }
