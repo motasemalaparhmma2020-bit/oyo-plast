@@ -925,6 +925,200 @@ function PrintingProductsSection({ adminToken }: { adminToken: string | null }) 
   );
 }
 
+// Home Page Settings Section (Madeline Theme)
+function HomePageSettingsSection({ adminToken }: { adminToken: string | null }) {
+  const { toast } = useToast();
+  const [settings, setSettings] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await fetch('/api/home-settings');
+      if (res.ok) {
+        const data = await res.json();
+        setSettings(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch home settings', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateSettingsMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch('/api/admin/home-settings', {
+        method: 'PATCH',
+        headers: { 'x-admin-token': adminToken!, 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update settings');
+      return res.json();
+    },
+    onSuccess: (newSettings) => {
+      setSettings(newSettings);
+      toast({ title: "تم تحديث إعدادات الصفحة الرئيسية بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "فشل تحديث الإعدادات", variant: "destructive" });
+    },
+  });
+
+  const handleColorChange = (colorType: string, color: string) => {
+    updateSettingsMutation.mutate({
+      [colorType]: color,
+    });
+  };
+
+  const handleToggle = (key: string, value: boolean) => {
+    updateSettingsMutation.mutate({
+      [key]: value,
+    });
+  };
+
+  if (loading) {
+    return <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Palette className="h-5 w-5" />
+          إعدادات الصفحة الرئيسية (مادلين)
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Primary Color */}
+        <div className="space-y-3">
+          <Label className="text-base font-semibold">اللون الأساسي</Label>
+          <div className="flex items-center gap-4">
+            <input
+              type="color"
+              value={settings?.primaryColor || "#06B6D4"}
+              onChange={(e) => handleColorChange("primaryColor", e.target.value)}
+              className="w-16 h-12 rounded cursor-pointer border-2 border-gray-200"
+              disabled={updateSettingsMutation.isPending}
+              data-testid="input-primary-color"
+            />
+            <div className="flex-1">
+              <p className="text-sm text-muted-foreground">
+                {settings?.primaryColor || "#06B6D4"}
+              </p>
+              <p className="text-xs text-gray-500">اللون المستخدم في الأزرار والعناوين الرئيسية</p>
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Accent Color */}
+        <div className="space-y-3">
+          <Label className="text-base font-semibold">لون التمييز</Label>
+          <div className="flex items-center gap-4">
+            <input
+              type="color"
+              value={settings?.accentColor || "#0891B2"}
+              onChange={(e) => handleColorChange("accentColor", e.target.value)}
+              className="w-16 h-12 rounded cursor-pointer border-2 border-gray-200"
+              disabled={updateSettingsMutation.isPending}
+              data-testid="input-accent-color"
+            />
+            <div className="flex-1">
+              <p className="text-sm text-muted-foreground">
+                {settings?.accentColor || "#0891B2"}
+              </p>
+              <p className="text-xs text-gray-500">اللون المستخدم في العروضات والبطاقات</p>
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Visibility Toggles */}
+        <div className="space-y-4">
+          <Label className="text-base font-semibold block">إظهار/إخفاء الأقسام</Label>
+          
+          {/* Show Header */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+            <div>
+              <p className="font-semibold">الشعار والبحث</p>
+              <p className="text-xs text-gray-500">إظهار رأس الصفحة</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings?.showHeader ?? true}
+              onChange={(e) => handleToggle("showHeader", e.target.checked)}
+              disabled={updateSettingsMutation.isPending}
+              className="w-5 h-5 cursor-pointer"
+              data-testid="checkbox-show-header"
+            />
+          </div>
+
+          {/* Show Banners */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+            <div>
+              <p className="font-semibold">البنرات</p>
+              <p className="text-xs text-gray-500">إظهار دوران البنرات</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings?.showBanners ?? true}
+              onChange={(e) => handleToggle("showBanners", e.target.checked)}
+              disabled={updateSettingsMutation.isPending}
+              className="w-5 h-5 cursor-pointer"
+              data-testid="checkbox-show-banners"
+            />
+          </div>
+
+          {/* Show Offers */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+            <div>
+              <p className="font-semibold">العروضات</p>
+              <p className="text-xs text-gray-500">إظهار صناديق العروضات</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings?.showOffers ?? true}
+              onChange={(e) => handleToggle("showOffers", e.target.checked)}
+              disabled={updateSettingsMutation.isPending}
+              className="w-5 h-5 cursor-pointer"
+              data-testid="checkbox-show-offers"
+            />
+          </div>
+
+          {/* Show Categories */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+            <div>
+              <p className="font-semibold">الأقسام</p>
+              <p className="text-xs text-gray-500">إظهار شبكة الأقسام الدائرية</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings?.showCategories ?? true}
+              onChange={(e) => handleToggle("showCategories", e.target.checked)}
+              disabled={updateSettingsMutation.isPending}
+              className="w-5 h-5 cursor-pointer"
+              data-testid="checkbox-show-categories"
+            />
+          </div>
+        </div>
+
+        {updateSettingsMutation.isPending && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            جاري التحديث...
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminToken, setAdminToken] = useState<string | null>(null);
@@ -2521,14 +2715,17 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="settings">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5" />
-                  إعدادات المتجر
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
+            <div className="space-y-4">
+              <HomePageSettingsSection adminToken={adminToken} />
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="h-5 w-5" />
+                    إعدادات المتجر
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
                 <div className="space-y-4">
                   <div>
                     <Label className="text-base font-semibold mb-2 block">سعر صرف الريال اليمني</Label>
@@ -2577,6 +2774,7 @@ export default function Admin() {
                 </div>
               </CardContent>
             </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
