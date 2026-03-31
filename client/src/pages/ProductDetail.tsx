@@ -307,7 +307,11 @@ export default function ProductDetail() {
   };
 
   const handleAddToCart = () => {
-    if (!product) return;
+    if (!product) {
+      console.error("Product not found");
+      return;
+    }
+    console.log("Adding to cart:", { productId: product.id, quantity });
     addToCart({ 
       productId: product.id, 
       quantity,
@@ -316,16 +320,15 @@ export default function ProductDetail() {
       customPrinting: enableCustomPrinting,
       designNotes: designNotes || undefined,
       designFileUrl: uploadedDesignUrl || undefined
-    });
-    toast({
-      title: "تمت الإضافة للسلة",
-      description: `تم إضافة ${product?.name} إلى سلة التسوق`,
     });
   };
 
   const handleBuyNow = () => {
-    if (!product) return;
-    
+    if (!product) {
+      console.error("Product not found for checkout");
+      return;
+    }
+    console.log("Buy now:", { productId: product.id, quantity });
     addToCart({ 
       productId: product.id, 
       quantity,
@@ -335,7 +338,10 @@ export default function ProductDetail() {
       designNotes: designNotes || undefined,
       designFileUrl: uploadedDesignUrl || undefined
     });
-    setTimeout(() => setLocation('/checkout'), 300);
+    setTimeout(() => {
+      console.log("Redirecting to checkout...");
+      setLocation('/checkout');
+    }, 500);
   };
 
   const sizes = product?.sizes || [];
