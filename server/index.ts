@@ -16,7 +16,7 @@ app.use('/uploaded-assets', express.static(path.resolve(rootDir, 'attached_asset
 app.use('/products', express.static(path.resolve(rootDir, 'public', 'products')));
 
 // Serve admin-uploaded images (persistent across deploys)
-app.use('/uploads', express.static(path.resolve(rootDir, 'uploads')));
+app.use('/uploads', express.static(path.resolve(rootDir, 'public', 'uploads')));
 
 declare module "http" {
   interface IncomingMessage {

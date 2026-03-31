@@ -9,7 +9,8 @@ import fs from "fs";
 import crypto from "crypto";
 
 const rootDir = process.cwd();
-const uploadsDir = path.resolve(rootDir, "uploads");
+// Use public/uploads for permanent storage (won't be deleted on redeploy)
+const uploadsDir = path.resolve(rootDir, "public", "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -76,9 +77,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/upload/design", upload.single("design"), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: "لم يتم رفع ملف" });
     try {
-      const fileData = req.file.buffer.toString('base64');
+      // File is saved to disk via diskStorage, URL points to it
       const designUrl = `/uploads/${req.file.filename}`;
-      res.json({ designUrl, fileData });
+      res.json({ designUrl });
     } catch (error) {
       res.status(500).json({ message: "فشل في معالجة الملف" });
     }
@@ -382,7 +383,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/cart", async (req, res) => {
     try {
       const user = (req as any).user;
-      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      // Guests have no persistent cart in DB
+      if (!user) return res.json([]);
       
       const { db: dbInstance } = await import("./db");
       const { cartItems: cartTable } = await import("@shared/schema");
@@ -398,7 +400,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/cart", async (req, res) => {
     try {
       const user = (req as any).user;
-      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      
+      // For guests, just return success - cart is stored in localStorage
+      if (!user) return res.status(201).json({ success: true, guest: true });
       
       const { db: dbInstance } = await import("./db");
       const { cartItems: cartTable } = await import("@shared/schema");
@@ -451,7 +455,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/cart/:id", async (req, res) => {
     try {
       const user = (req as any).user;
-      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      // Guests: just return success (handled by localStorage)
+      if (!user) return res.json({ success: true, guest: true });
       
       const { db: dbInstance } = await import("./db");
       const { cartItems: cartTable } = await import("@shared/schema");
@@ -473,7 +478,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/cart/:id", async (req, res) => {
     try {
       const user = (req as any).user;
-      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      // Guests: just return success (handled by localStorage)
+      if (!user) return res.json({ message: "تم الحذف" });
       
       const { db: dbInstance } = await import("./db");
       const { cartItems: cartTable } = await import("@shared/schema");
