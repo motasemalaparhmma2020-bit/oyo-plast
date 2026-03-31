@@ -73,12 +73,23 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
+    log("Starting application...");
+    log(`Node environment: ${process.env.NODE_ENV || "development"}`);
+    log(`Database URL configured: ${process.env.DATABASE_URL ? "yes" : "no"}`);
+
     // ALWAYS serve the app on the port specified in the environment variable PORT
     // Other ports are firewalled. Default to 5000 if not specified.
     // this serves both the API and the client.
     // It is the only port that is not firewalled.
     const port = parseInt(process.env.PORT || "5000", 10);
     
+    // Add health check endpoint BEFORE listening
+    app.get("/health", (_req, res) => {
+      res.json({ status: "ok", timestamp: new Date().toISOString() });
+    });
+    
+    log("Health check endpoint configured");
+
     // Start listening FIRST before any database operations
     // This ensures health checks pass during deployment
     httpServer.listen(
@@ -88,7 +99,8 @@ app.use((req, res, next) => {
         reusePort: true,
       },
       () => {
-        log(`serving on port ${port}`);
+        log(`Server listening on port ${port} with 0.0.0.0 binding`);
+        log(`Health check available at http://localhost:${port}/health`);
       },
     );
 
@@ -117,8 +129,11 @@ app.use((req, res, next) => {
       await setupVite(httpServer, app);
       log("Vite dev server configured");
     }
+    
+    log("Application startup complete");
   } catch (error) {
     console.error("Failed to start server:", error);
+    console.error("Full error details:", error instanceof Error ? error.stack : error);
     process.exit(1);
   }
 })();
