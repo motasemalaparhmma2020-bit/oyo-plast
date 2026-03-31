@@ -349,6 +349,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Home Page Settings (Madeline Theme) ──────────────────────────
+  app.get("/api/home-settings", async (_req, res) => {
+    try {
+      const settings = await storage.getHomePageSettings();
+      res.json(settings);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب إعدادات الصفحة الرئيسية" });
+    }
+  });
+
+  app.patch("/api/admin/home-settings", requireAdmin, async (req, res) => {
+    try {
+      const settings = await storage.updateHomePageSettings({
+        primaryColor: req.body.primaryColor,
+        accentColor: req.body.accentColor,
+        showHeader: req.body.showHeader ?? true,
+        showBanners: req.body.showBanners ?? true,
+        showOffers: req.body.showOffers ?? true,
+        showCategories: req.body.showCategories ?? true,
+      });
+      res.json(settings);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث إعدادات الصفحة الرئيسية", details: e.message });
+    }
+  });
+
   // ─── Admin Products - Update Printing Status ──────────────────────
   app.patch("/api/admin/products/:id/printing-status", requireAdmin, async (req, res) => {
     try {

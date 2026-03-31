@@ -356,6 +356,18 @@ export const navigationSettings = pgTable("navigation_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Home Page Settings (Madeline Theme)
+export const homePageSettings = pgTable("home_page_settings", {
+  id: serial("id").primaryKey(),
+  primaryColor: text("primary_color").default("#06B6D4").notNull(), // Oyo Plast blue
+  accentColor: text("accent_color").default("#0891B2").notNull(),
+  showHeader: boolean("show_header").default(true).notNull(),
+  showBanners: boolean("show_banners").default(true).notNull(),
+  showOffers: boolean("show_offers").default(true).notNull(),
+  showCategories: boolean("show_categories").default(true).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Product Views (for AI recommendations)
 export const productViews = pgTable("product_views", {
   id: serial("id").primaryKey(),
@@ -386,6 +398,7 @@ export const insertBannerSchema = createInsertSchema(banners).omit({ id: true, c
 export const insertOfferSchema = createInsertSchema(offers).omit({ id: true, createdAt: true });
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true });
 export const insertNavigationSettingsSchema = createInsertSchema(navigationSettings).omit({ id: true, updatedAt: true });
+export const insertHomePageSettingsSchema = createInsertSchema(homePageSettings).omit({ id: true, updatedAt: true });
 export const insertCartItemSchema = createInsertSchema(cartItems).omit({ id: true });
 export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true });
 export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
@@ -426,3 +439,4 @@ export type MarketerCommission = typeof marketerCommissions.$inferSelect;
 export type ProductView = typeof productViews.$inferSelect;
 export type Coupon = typeof coupons.$inferSelect;
 export type NavigationSettings = typeof navigationSettings.$inferSelect;
+export type HomePageSettings = typeof homePageSettings.$inferSelect;

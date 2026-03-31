@@ -1,11 +1,12 @@
 import {
-  users, products, categories, banners, offers, orders, orderItems, navigationSettings,
+  users, products, categories, banners, offers, orders, orderItems, navigationSettings, homePageSettings,
   type User,
   type Product,
   type Category,
   type Banner, type Offer,
   type Order,
   type NavigationSettings,
+  type HomePageSettings,
   insertProductSchema, insertCategorySchema
 } from "@shared/schema";
 import { z } from "zod";
@@ -51,6 +52,9 @@ export interface IStorage {
   getNavigationSettings(): Promise<NavigationSettings>;
   updateNavigationSettings(data: any): Promise<NavigationSettings>;
   getPrintingProducts(): Promise<Product[]>;
+
+  getHomePageSettings(): Promise<HomePageSettings>;
+  updateHomePageSettings(data: any): Promise<HomePageSettings>;
 
   getOrders(): Promise<Order[]>;
   getOrderStats(): Promise<{ totalSales: number; totalOrders: number; averageOrderValue: number }>;
@@ -185,6 +189,25 @@ export class DatabaseStorage implements IStorage {
 
   async getPrintingProducts(): Promise<Product[]> {
     return await db.select().from(products).where(eq(products.showInPrinting, true));
+  }
+
+  async getHomePageSettings(): Promise<HomePageSettings> {
+    const [settings] = await db.select().from(homePageSettings).limit(1);
+    return settings || {
+      id: 1,
+      primaryColor: "#06B6D4",
+      accentColor: "#0891B2",
+      showHeader: true,
+      showBanners: true,
+      showOffers: true,
+      showCategories: true,
+      updatedAt: new Date(),
+    };
+  }
+
+  async updateHomePageSettings(data: any): Promise<HomePageSettings> {
+    const [settings] = await db.update(homePageSettings).set({ ...data, updatedAt: new Date() }).where(eq(homePageSettings.id, 1)).returning();
+    return settings;
   }
 
   async getOrders(): Promise<Order[]> {
