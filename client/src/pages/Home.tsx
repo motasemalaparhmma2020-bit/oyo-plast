@@ -3,23 +3,35 @@ import { ProductCard } from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link } from "wouter";
-import { ArrowLeft, Search, ShoppingBag } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, ArrowRight, Search, ShoppingBag } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 export default function Home() {
   const { data: bestselling, isLoading: isBestsellingLoading } = useBestsellingProducts(8);
   const { data: categories, isLoading: isCategoriesLoading } = useCategories();
   const [search, setSearch] = useState("");
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const [autoPlay, setAutoPlay] = useState(true);
 
-  const { data: banners } = useQuery<any[]>({
+  const { data: banners = [] } = useQuery<any[]>({
     queryKey: ["/api/banners"],
     queryFn: async () => {
       const res = await fetch("/api/banners", { credentials: "include" });
       if (!res.ok) return [];
-      return res.json();
+      const data = await res.json();
+      return data.filter((b: any) => b.isActive).sort((a: any, b: any) => a.sortOrder - b.sortOrder);
     },
   });
+
+  // Auto-play carousel
+  useEffect(() => {
+    if (!autoPlay || banners.length === 0) return;
+    const timer = setInterval(() => {
+      setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
+    }, 5000); // Change banner every 5 seconds
+    return () => clearInterval(timer);
+  }, [autoPlay, banners.length]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +40,17 @@ export default function Home() {
     }
   };
 
-  const activeBanner = banners?.[0];
+  const handlePrevBanner = () => {
+    setAutoPlay(false);
+    setCurrentBannerIndex((prev) => (prev - 1 + banners.length) % banners.length);
+  };
+
+  const handleNextBanner = () => {
+    setAutoPlay(false);
+    setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
+  };
+
+  const activeBanner = banners[currentBannerIndex];
 
   return (
     <div className="flex flex-col pb-20 bg-white dark:bg-background min-h-screen">
@@ -101,24 +123,69 @@ export default function Home() {
         )}
       </section>
 
-      {/* Banner / Special Offer Section */}
+      {/* Banner Carousel Section */}
       <section className="px-4 mb-6">
-        {activeBanner ? (
-          <Link href={activeBanner.linkUrl || "/products"}>
-            <div className="relative rounded-2xl overflow-hidden h-40">
-              <img
-                src={activeBanner.imageUrl}
-                alt={activeBanner.title}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-4">
-                <h3 className="text-white font-bold text-lg">{activeBanner.title}</h3>
-                {activeBanner.subtitle && (
-                  <p className="text-white/80 text-sm">{activeBanner.subtitle}</p>
-                )}
+        {banners.length > 0 ? (
+          <div className="space-y-3">
+            <Link href={activeBanner?.linkUrl || "/products"}>
+              <div className="relative rounded-2xl overflow-hidden h-40 bg-gray-200">
+                <img
+                  src={activeBanner?.imageUrl}
+                  alt={activeBanner?.title}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-4">
+                  <h3 className="text-white font-bold text-lg">{activeBanner?.title}</h3>
+                  {activeBanner?.subtitle && (
+                    <p className="text-white/80 text-sm">{activeBanner.subtitle}</p>
+                  )}
+                </div>
               </div>
+            </Link>
+
+            {/* Navigation Controls */}
+            <div className="flex items-center justify-between gap-2">
+              <button
+                onClick={handlePrevBanner}
+                onMouseEnter={() => setAutoPlay(false)}
+                onMouseLeave={() => setAutoPlay(true)}
+                className="flex-1 bg-white border border-gray-200 rounded-lg p-2 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                aria-label="البنر السابق"
+              >
+                <ArrowRight className="h-5 w-5 text-gray-700" />
+              </button>
+
+              {/* Dot Indicators */}
+              <div className="flex gap-1.5 justify-center flex-1">
+                {banners.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setAutoPlay(false);
+                      setCurrentBannerIndex(idx);
+                    }}
+                    className={`transition-all rounded-full ${
+                      idx === currentBannerIndex
+                        ? "bg-teal-600 h-2.5 w-6"
+                        : "bg-gray-300 h-2 w-2 hover:bg-gray-400"
+                    }`}
+                    aria-label={`البنر ${idx + 1}`}
+                    data-testid={`banner-dot-${idx}`}
+                  />
+                ))}
+              </div>
+
+              <button
+                onClick={handleNextBanner}
+                onMouseEnter={() => setAutoPlay(false)}
+                onMouseLeave={() => setAutoPlay(true)}
+                className="flex-1 bg-white border border-gray-200 rounded-lg p-2 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                aria-label="البنر التالي"
+              >
+                <ArrowLeft className="h-5 w-5 text-gray-700" />
+              </button>
             </div>
-          </Link>
+          </div>
         ) : (
           <div className="bg-gradient-to-l from-teal-500 to-teal-600 rounded-2xl p-6 relative overflow-hidden">
             <div className="absolute top-3 left-3">
