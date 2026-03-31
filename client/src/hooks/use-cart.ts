@@ -83,8 +83,11 @@ export function useAddToCart() {
 
   return useMutation({
     mutationFn: async (data: z.infer<typeof api.cart.add.input>) => {
+      console.log("useAddToCart mutationFn called with data:", data);
+      
       // Add to guest cart only if not authenticated
       if (!isAuthenticated) {
+        console.log("Adding to guest cart (not authenticated)");
         addToGuestCart({
           productId: data.productId,
           quantity: data.quantity,
@@ -94,6 +97,7 @@ export function useAddToCart() {
           designNotes: data.designNotes,
           designFileUrl: data.designFileUrl
         });
+        console.log("Guest cart updated successfully");
         return { success: true, guest: true };
       }
       
