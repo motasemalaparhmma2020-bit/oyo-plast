@@ -82,7 +82,8 @@ export default function ProductDetail() {
       .slice(0, 4);
   }, [product, relatedProducts]);
 
-  const { mutate: addToCart, isPending } = useAddToCart();
+  const addToCartMutation = useAddToCart();
+  const { isPending } = addToCartMutation;
 
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
@@ -307,12 +308,8 @@ export default function ProductDetail() {
   };
 
   const handleAddToCart = () => {
-    if (!product) {
-      console.error("Product not found");
-      return;
-    }
-    console.log("Adding to cart:", { productId: product.id, quantity });
-    addToCart({ 
+    if (!product) return;
+    addToCartMutation.mutate({ 
       productId: product.id, 
       quantity,
       selectedSize: selectedSize || undefined,
@@ -323,25 +320,22 @@ export default function ProductDetail() {
     });
   };
 
-  const handleBuyNow = () => {
-    if (!product) {
-      console.error("Product not found for checkout");
-      return;
-    }
-    console.log("Buy now:", { productId: product.id, quantity });
-    addToCart({ 
-      productId: product.id, 
-      quantity,
-      selectedSize: selectedSize || undefined,
-      selectedColor: selectedColor || undefined,
-      customPrinting: enableCustomPrinting,
-      designNotes: designNotes || undefined,
-      designFileUrl: uploadedDesignUrl || undefined
-    });
-    setTimeout(() => {
-      console.log("Redirecting to checkout...");
+  const handleBuyNow = async () => {
+    if (!product) return;
+    try {
+      await addToCartMutation.mutateAsync({ 
+        productId: product.id, 
+        quantity,
+        selectedSize: selectedSize || undefined,
+        selectedColor: selectedColor || undefined,
+        customPrinting: enableCustomPrinting,
+        designNotes: designNotes || undefined,
+        designFileUrl: uploadedDesignUrl || undefined
+      });
       setLocation('/checkout');
-    }, 500);
+    } catch (error) {
+      // Error is handled by the mutation's onError
+    }
   };
 
   const sizes = product?.sizes || [];
