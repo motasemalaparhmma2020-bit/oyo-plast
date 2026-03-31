@@ -127,9 +127,7 @@ export function useAddToCart() {
         queryClient.invalidateQueries({ queryKey: ['guestCart'] });
         toast({
           title: "تمت الإضافة للسلة",
-          description: isFallback 
-            ? "تمت إضافة المنتج. يمكنك إتمام الشراء من صفحة الشراء كزائر"
-            : "تمت إضافة المنتج. يمكنك إتمام الشراء كزائر أو تسجيل الدخول",
+          description: "أضف منتجاتك المفضلة للسلة وابدأ الطلب",
         });
       } else {
         queryClient.invalidateQueries({ queryKey: [api.cart.list.path] });
