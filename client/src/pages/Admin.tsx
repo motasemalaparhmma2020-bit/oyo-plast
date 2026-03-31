@@ -35,7 +35,8 @@ import {
   ImagePlus,
   Printer,
   UserCircle2,
-  ExternalLink
+  ExternalLink,
+  Star
 } from "lucide-react";
 import PrintableInvoice from "@/components/PrintableInvoice";
 
@@ -129,6 +130,7 @@ interface ProductFormData {
   singleColorPrintPrice: string;
   availableBagColors: string;
   tags: string;
+  showReviews: boolean;
 }
 
 const emptyProductForm: ProductFormData = {
@@ -148,7 +150,8 @@ const emptyProductForm: ProductFormData = {
   baseBagPrice: "",
   singleColorPrintPrice: "",
   availableBagColors: "",
-  tags: ""
+  tags: "",
+  showReviews: true
 };
 
 interface CategoryFormData {
@@ -1046,7 +1049,8 @@ export default function Admin() {
           baseBagPrice: numOrNull(data.baseBagPrice),
           singleColorPrintPrice: numOrNull(data.singleColorPrintPrice),
           availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()).filter(c => c) : null,
-          tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null
+          tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
+          showReviews: data.showReviews
         })
       });
       if (!res.ok) {
@@ -1084,7 +1088,8 @@ export default function Admin() {
         colors: data.colors ? data.colors.split(',').map(c => c.trim()).filter(c => c) : null,
         sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()).filter(s => s) : null,
         availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()).filter(c => c) : null,
-        tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null
+        tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
+        showReviews: data.showReviews
       };
       
       if (data.imageUrls && data.imageUrls.length > 0) {
@@ -1259,6 +1264,7 @@ export default function Admin() {
       allowDesignUpload: product.allowDesignUpload ?? false,
       printingPricePerUnit: product.printingPricePerUnit != null ? String(product.printingPricePerUnit) : "",
       hasPrintingOptions: product.hasPrintingOptions ?? false,
+      showReviews: product.showReviews ?? true,
       baseBagPrice: product.baseBagPrice != null ? String(product.baseBagPrice) : "",
       singleColorPrintPrice: product.singleColorPrintPrice != null ? String(product.singleColorPrintPrice) : "",
       availableBagColors: product.availableBagColors ? product.availableBagColors.join(', ') : "",
@@ -1902,6 +1908,23 @@ export default function Admin() {
                             </div>
                           </div>
                         )}
+                      </div>
+
+                      <div className="border-t pt-4 mt-4">
+                        <div className="flex items-center gap-2 mb-4">
+                          <input
+                            type="checkbox"
+                            id="product-show-reviews"
+                            checked={productForm.showReviews}
+                            onChange={(e) => setProductForm({...productForm, showReviews: e.target.checked})}
+                            className="rounded border-gray-300"
+                            data-testid="checkbox-show-reviews"
+                          />
+                          <Label htmlFor="product-show-reviews" className="font-bold flex items-center gap-2">
+                            <Star className="h-4 w-4" />
+                            إظهار التقييمات والمراجعات
+                          </Label>
+                        </div>
                       </div>
 
                       <div>

@@ -43,6 +43,8 @@ export const products = pgTable("products", {
   singleColorPrintPrice: numeric("single_color_print_price"), // سعر طباعة اللون الواحد
   availableBagColors: text("available_bag_colors").array(), // ألوان الأكياس المتاحة
   tags: text("tags").array(), // كلمات دلالية للبحث والتصنيف (مثل: كيس-قماشي, كرت-شخصي)
+  // Reviews visibility
+  showReviews: boolean("show_reviews").default(true).notNull(), // Show/hide reviews section
 });
 
 export const settings = pgTable("settings", {

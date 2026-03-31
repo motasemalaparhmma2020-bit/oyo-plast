@@ -222,7 +222,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "imageUrl", "imageUrls", "stock", "colors", "sizes",
         "allowDesignUpload", "printingPricePerUnit", "hasPrintingOptions",
         "baseBagPrice", "singleColorPrintPrice", "availableBagColors", "tags",
-        "bulkPricing", "sizePricing"
+        "bulkPricing", "sizePricing", "showReviews"
       ];
       for (const f of fields) {
         if (data[f] !== undefined) update[f] = data[f];

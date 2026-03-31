@@ -780,6 +780,7 @@ export default function ProductDetail() {
 
       <Separator className="my-8" />
       
+      {product.showReviews !== false && (
       <div className="space-y-6">
         <h2 className="text-2xl font-bold">التقييمات والمراجعات</h2>
         
@@ -943,6 +944,7 @@ export default function ProductDetail() {
           </Card>
         )}
       </div>
+      )}
 
       {filteredRelatedProducts.length > 0 && (
         <>
