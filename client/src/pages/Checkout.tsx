@@ -14,6 +14,27 @@ import { ArrowRight, Upload, Check, Loader2, Banknote, MapPin, Wallet, Smartphon
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
+import type { Product } from "@shared/schema";
+
+interface GuestCartItem {
+  productId: number;
+  quantity: number;
+  selectedSize?: string;
+  selectedColor?: string;
+  customPrinting?: boolean;
+  designNotes?: string;
+  designFileUrl?: string;
+}
+
+function getGuestCart(): GuestCartItem[] {
+  try {
+    const saved = localStorage.getItem('guestCart');
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
 
 const YEMENI_CITIES = [
   "صنعاء",
@@ -104,23 +125,25 @@ const PAYMENT_METHODS = [
 ];
 
 export default function Checkout() {
-  const { data: cartItems, isLoading } = useCart();
+  const { data: authCartItems, isLoading } = useCart();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const { isAuthenticated, user } = useAuth();
-
-  // Check if user is authenticated, redirect to auth if not
-  useEffect(() => {
-    if (!isAuthenticated) {
-      toast({
-        title: "تسجيل الدخول مطلوب",
-        description: "يرجى تسجيل الدخول لإتمام الشراء",
-        variant: "destructive"
-      });
-      setLocation('/auth');
-    }
-  }, [isAuthenticated, setLocation, toast]);
+  // Guests can checkout without authentication
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Support for guest cart
+  const [guestCart, setGuestCart] = useState<GuestCartItem[]>(() => getGuestCart());
+  
+  // Fetch all products for guest cart display
+  const { data: allProducts = [] } = useQuery<Product[]>({
+    queryKey: ["/api/products"],
+    enabled: !isAuthenticated && guestCart.length > 0,
+  });
+
+  // Use guest cart if not authenticated, otherwise use auth cart
+  const cartItems = isAuthenticated ? authCartItems : guestCart;
+  const isLoading_checkout = !isAuthenticated ? false : isLoading;
   
   const [formData, setFormData] = useState({
     customerPhone: "",
@@ -156,14 +179,35 @@ export default function Checkout() {
     return () => window.removeEventListener('currencyChange', handleCurrencyChange);
   }, []);
 
+  // Update guest cart from localStorage
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setGuestCart(getGuestCart());
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
   const subtotal = useMemo(() => {
-    return cartItems?.reduce((acc, item) => {
-      const price = currency === 'SAR' && item.product.priceSar 
-        ? Number(item.product.priceSar) 
-        : Number(item.product.price);
-      return acc + (price * item.quantity);
-    }, 0) || 0;
-  }, [cartItems, currency]);
+    if (isAuthenticated) {
+      return authCartItems?.reduce((acc, item) => {
+        const price = currency === 'SAR' && item.product.priceSar 
+          ? Number(item.product.priceSar) 
+          : Number(item.product.price);
+        return acc + (price * item.quantity);
+      }, 0) || 0;
+    } else {
+      // For guests, calculate from guest cart with product data
+      return guestCart.reduce((acc, item) => {
+        const product = allProducts.find(p => p.id === item.productId);
+        if (!product) return acc;
+        const price = currency === 'SAR' && product.priceSar 
+          ? Number(product.priceSar) 
+          : Number(product.price);
+        return acc + (price * item.quantity);
+      }, 0);
+    }
+  }, [authCartItems, guestCart, currency, isAuthenticated, allProducts]);
 
   const discountAmount = useMemo(() => {
     if (couponData) {
@@ -345,7 +389,7 @@ export default function Checkout() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading_checkout) {
     return (
       <div className="container mx-auto px-4 py-20 flex justify-center">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -569,28 +613,62 @@ export default function Checkout() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-3 max-h-60 overflow-y-auto">
-                  {cartItems.map((item) => (
-                    <div key={item.id} className="flex gap-3">
-                      <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden shrink-0">
-                        <img 
-                          src={item.product.imageUrl} 
-                          alt={item.product.name}
-                          className="w-full h-full object-contain"
-                        />
+                  {cartItems.map((item, idx) => {
+                    // For auth cart items
+                    const authItem = item as any;
+                    if (authItem.id && authItem.product) {
+                      return (
+                        <div key={authItem.id} className="flex gap-3">
+                          <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden shrink-0">
+                            <img 
+                              src={authItem.product.imageUrl} 
+                              alt={authItem.product.name}
+                              className="w-full h-full object-contain"
+                            />
+                          </div>
+                          <div className="flex-grow">
+                            <p className="font-medium text-sm line-clamp-1">{authItem.product.name}</p>
+                            <p className="text-xs text-muted-foreground">الكمية: {authItem.quantity}</p>
+                            <p className="text-sm font-bold text-primary">
+                              {formatPrice(
+                                (currency === 'SAR' && authItem.product.priceSar 
+                                  ? Number(authItem.product.priceSar) 
+                                  : Number(authItem.product.price)) * authItem.quantity
+                              )} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    
+                    // For guest cart items
+                    const guestItem = item as GuestCartItem;
+                    const product = allProducts.find(p => p.id === guestItem.productId);
+                    if (!product) return null;
+                    
+                    return (
+                      <div key={`guest-${idx}`} className="flex gap-3">
+                        <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden shrink-0">
+                          <img 
+                            src={product.imageUrl} 
+                            alt={product.name}
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                        <div className="flex-grow">
+                          <p className="font-medium text-sm line-clamp-1">{product.name}</p>
+                          <p className="text-xs text-muted-foreground">الكمية: {guestItem.quantity}</p>
+                          <p className="text-sm font-bold text-primary">
+                            {formatPrice(
+                              (currency === 'SAR' && product.priceSar 
+                                ? Number(product.priceSar) 
+                                : Number(product.price)) * guestItem.quantity
+                            )} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-grow">
-                        <p className="font-medium text-sm line-clamp-1">{item.product.name}</p>
-                        <p className="text-xs text-muted-foreground">الكمية: {item.quantity}</p>
-                        <p className="text-sm font-bold text-primary">
-                          {formatPrice(
-                            (currency === 'SAR' && item.product.priceSar 
-                              ? Number(item.product.priceSar) 
-                              : Number(item.product.price)) * item.quantity
-                          )} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <Separator />

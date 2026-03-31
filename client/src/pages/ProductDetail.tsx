@@ -326,16 +326,6 @@ export default function ProductDetail() {
   const handleBuyNow = () => {
     if (!product) return;
     
-    if (!isAuthenticated) {
-      toast({
-        title: "تسجيل الدخول مطلوب",
-        description: "يرجى تسجيل الدخول لإتمام عملية الشراء",
-        variant: "destructive"
-      });
-      setLocation('/auth');
-      return;
-    }
-    
     addToCart({ 
       productId: product.id, 
       quantity,
