@@ -10,5 +10,20 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Configure connection pool with timeouts to prevent hanging during deployment
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  // Connection pool settings
+  max: 20, // max connections in pool
+  idleTimeoutMillis: 30000, // 30 seconds idle timeout
+  connectionTimeoutMillis: 10000, // 10 second connection timeout
+  // Enable keep-alive to detect stale connections
+  application_name: 'oyoplast-app',
+});
+
+// Log pool errors without blocking
+pool.on('error', (err) => {
+  console.warn("Unexpected error on idle client:", err);
+});
+
 export const db = drizzle(pool, { schema });
