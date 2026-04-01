@@ -1,7 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile, cp } from "fs/promises";
-import { execSync } from "child_process";
 import { existsSync } from "fs";
 
 // server deps to bundle to reduce openat(2) syscalls
@@ -38,13 +37,6 @@ const allowlist = [
 
 async function buildAll() {
   await rm("dist", { recursive: true, force: true });
-
-  console.log("pushing database schema...");
-  try {
-    execSync("drizzle-kit push", { stdio: "inherit" });
-  } catch (error) {
-    console.log("Database push completed or already up to date");
-  }
 
   console.log("building client...");
   await viteBuild();

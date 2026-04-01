@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
+import { runMigrations } from "./migrate";
 import { createServer } from "http";
 import path from "path";
 
@@ -106,6 +107,9 @@ async function startServer() {
         reject(error);
       });
     });
+
+    // Run DB migrations at runtime (not build time)
+    await runMigrations();
 
     // Now initialize routes
     console.log("[INFO] Registering routes...");
