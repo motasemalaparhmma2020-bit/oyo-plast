@@ -127,37 +127,36 @@ export default function Home() {
       <nav
         className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40"
       >
-        <div className="flex items-center justify-around h-20 w-full">
-          {/* Profile */}
-          <Link href="/profile">
+        <div className="flex items-stretch justify-between h-20 w-full">
+          {/* Shop */}
+          <Link href="/products">
             <button
               className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-1"
-              data-testid="nav-profile"
+              data-testid="nav-shop"
+              style={{ color: primaryColor }}
             >
-              <User className="h-6 w-6 text-gray-600 dark:text-gray-300" />
-              <span className="text-xs text-gray-600 dark:text-gray-300 text-right">
-                أنا
+              <ShoppingBag
+                className="h-6 w-6"
+                style={{ color: primaryColor }}
+              />
+              <span
+                className="text-xs font-bold text-right"
+                style={{ color: primaryColor }}
+              >
+                متجر
               </span>
             </button>
           </Link>
 
-          {/* Cart */}
-          <Link href="/cart">
+          {/* Categories */}
+          <Link href="/products">
             <button
-              className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative flex-1"
-              data-testid="nav-cart"
+              className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-1"
+              data-testid="nav-categories"
             >
-              <ShoppingBag className="h-6 w-6 text-gray-600 dark:text-gray-300" />
-              {cartCount > 0 && (
-                <span
-                  className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
-                  data-testid="badge-cart-count"
-                >
-                  {cartCount}
-                </span>
-              )}
+              <Grid className="h-6 w-6 text-gray-600 dark:text-gray-300" />
               <span className="text-xs text-gray-600 dark:text-gray-300 text-right">
-                حقيبة
+                الفئات
               </span>
             </button>
           </Link>
@@ -177,35 +176,36 @@ export default function Home() {
             </Link>
           )}
 
-          {/* Categories */}
-          <Link href="/products">
+          {/* Cart */}
+          <Link href="/cart">
             <button
-              className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-1"
-              data-testid="nav-categories"
+              className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative flex-1"
+              data-testid="nav-cart"
             >
-              <Grid className="h-6 w-6 text-gray-600 dark:text-gray-300" />
+              <ShoppingBag className="h-6 w-6 text-gray-600 dark:text-gray-300" />
+              {cartCount > 0 && (
+                <span
+                  className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+                  data-testid="badge-cart-count"
+                >
+                  {cartCount}
+                </span>
+              )}
               <span className="text-xs text-gray-600 dark:text-gray-300 text-right">
-                فئات
+                السلة
               </span>
             </button>
           </Link>
 
-          {/* Shop */}
-          <Link href="/products">
+          {/* Profile */}
+          <Link href="/profile">
             <button
               className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-1"
-              data-testid="nav-shop"
-              style={{ color: primaryColor }}
+              data-testid="nav-profile"
             >
-              <ShoppingBag
-                className="h-6 w-6"
-                style={{ color: primaryColor }}
-              />
-              <span
-                className="text-xs font-bold text-right"
-                style={{ color: primaryColor }}
-              >
-                متجر
+              <User className="h-6 w-6 text-gray-600 dark:text-gray-300" />
+              <span className="text-xs text-gray-600 dark:text-gray-300 text-right">
+                أنا
               </span>
             </button>
           </Link>
