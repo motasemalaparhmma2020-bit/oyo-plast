@@ -48,6 +48,7 @@ import Products from "@/pages/Products";
 import ProductDetail from "@/pages/ProductDetail";
 import Cart from "@/pages/Cart";
 import Checkout from "@/pages/Checkout";
+import OrderConfirmation from "@/pages/OrderConfirmation";
 import Orders from "@/pages/Orders";
 import Profile from "@/pages/Profile";
 import Auth from "@/pages/Auth";
@@ -139,6 +140,10 @@ function Router() {
           {/* Protected pages - auth required AND accountType required */}
           <Route path="/checkout">
             <RequireAccountType><Checkout /></RequireAccountType>
+          </Route>
+
+          <Route path="/order-confirmation/:id">
+            <OrderConfirmation />
           </Route>
           <Route path="/orders">
             <RequireAccountType><Orders /></RequireAccountType>

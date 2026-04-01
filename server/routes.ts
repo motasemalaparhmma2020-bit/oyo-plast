@@ -415,6 +415,56 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Get Order Details (Public - for order confirmation) ────────────────────────
+  app.get("/api/orders/:id", async (req, res) => {
+    try {
+      const { db: dbInstance } = await import("./db");
+      const { orders: ordersTable } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+      
+      const [order] = await dbInstance
+        .select()
+        .from(ordersTable)
+        .where(eqFn(ordersTable.id, parseInt(req.params.id)));
+
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      res.json(order);
+    } catch (e: any) {
+      res.status(500).json({ message: "Failed to fetch order", details: e.message });
+    }
+  });
+
+  // ─── Get Order Items (Public - for order confirmation) ────────────────────────
+  app.get("/api/orders/:id/items", async (req, res) => {
+    try {
+      const { db: dbInstance } = await import("./db");
+      const { orderItems: orderItemsTable, products: productsTable } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+      const { sql: sqlFn } = await import("drizzle-orm");
+
+      const items = await dbInstance
+        .select({
+          id: orderItemsTable.id,
+          productId: orderItemsTable.productId,
+          productName: productsTable.name,
+          quantity: orderItemsTable.quantity,
+          price: orderItemsTable.price,
+          selectedSize: orderItemsTable.selectedSize,
+          selectedColor: orderItemsTable.selectedColor,
+        })
+        .from(orderItemsTable)
+        .leftJoin(productsTable, eqFn(orderItemsTable.productId, productsTable.id))
+        .where(eqFn(orderItemsTable.orderId, parseInt(req.params.id)));
+
+      res.json(items);
+    } catch (e: any) {
+      res.status(500).json({ message: "Failed to fetch order items", details: e.message });
+    }
+  });
+
   // ─── Admin Orders ────────────────────────────────────────────────
   app.get("/api/admin/orders", requireAdmin, async (_req, res) => {
     const allOrders = await storage.getOrders();
