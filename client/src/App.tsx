@@ -65,8 +65,8 @@ import Terms from "@/pages/Terms";
 import Returns from "@/pages/Returns";
 import NotFound from "@/pages/not-found";
 
-import { BottomNav } from "@/components/BottomNav";
 import { Footer, MobileFooter } from "@/components/Footer";
+import { GlobalBottomNav } from "@/components/GlobalBottomNav";
 
 // Component to redirect users who need to complete registration
 function RequireAccountType({ children }: { children: React.ReactNode }) {
@@ -112,8 +112,10 @@ function Router() {
   // Check if user needs to complete registration (no accountType set)
   const needsAccountType = isAuthenticated && user && !user.accountType;
   
-  // Hide footer on home, products, and product detail pages
+  // Hide traditional footer on mobile-first pages (they use GlobalBottomNav instead)
   const hideFooter = location === '/' || location === '/products' || location.startsWith('/product/');
+  // Hide GlobalBottomNav only on admin/auth pages
+  const hideBottomNav = location === '/admin' || location === '/auth' || location === '/register';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16 md:pb-0">
@@ -169,7 +171,7 @@ function Router() {
       </main>
       {!hideFooter && <MobileFooter />}
       {!hideFooter && <Footer />}
-      <BottomNav />
+      {!hideBottomNav && <GlobalBottomNav />}
     </div>
   );
 }

@@ -9,13 +9,25 @@ import fs from "fs";
 import crypto from "crypto";
 
 const rootDir = process.cwd();
-// Use public/uploads for permanent storage (won't be deleted on redeploy)
+
+// Keep uploads dir for design files only (not product images)
 const uploadsDir = path.resolve(rootDir, "public", "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+// Memory storage: images stored as base64 in DB (permanent, survives deploys)
 const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) cb(null, true);
+    else cb(new Error("Only images are allowed"));
+  },
+});
+
+// Design upload still uses disk (for larger files)
+const designUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, uploadsDir),
     filename: (_req, file, cb) => {
@@ -24,11 +36,7 @@ const upload = multer({
       cb(null, name);
     },
   }),
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) cb(null, true);
-    else cb(new Error("Only images are allowed"));
-  },
+  limits: { fileSize: 20 * 1024 * 1024 },
 });
 
 function getAdminToken(): string {
@@ -66,18 +74,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ token: getAdminToken() });
   });
 
-  // ─── Image Upload ─────────────────────────────────────────────────
+  // ─── Image Upload - Base64 (permanent, survives deploys) ────────────
   app.post("/api/admin/upload", requireAdmin, upload.single("image"), (req, res) => {
     if (!req.file) return res.status(400).json({ message: "لم يتم رفع صورة" });
-    const imageUrl = `/uploads/${req.file.filename}`;
+    // Convert to base64 data URL - stored in DB, never deleted on redeploy
+    const base64 = req.file.buffer.toString("base64");
+    const imageUrl = `data:${req.file.mimetype};base64,${base64}`;
     res.json({ imageUrl });
   });
 
-  // ─── Design Upload (Public) ─────────────────────────────────────────
-  app.post("/api/upload/design", upload.single("design"), async (req, res) => {
+  // ─── Design Upload (Public) - still uses disk for large files ────────
+  app.post("/api/upload/design", designUpload.single("design"), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: "لم يتم رفع ملف" });
     try {
-      // File is saved to disk via diskStorage, URL points to it
       const designUrl = `/uploads/${req.file.filename}`;
       res.json({ designUrl });
     } catch (error) {

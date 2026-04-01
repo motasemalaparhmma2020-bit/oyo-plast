@@ -763,17 +763,6 @@ export default function ProductDetail() {
               {currentStock <= 0 ? "غير متوفر" : "أضف للسلة"}
             </Button>
             
-            <Button
-              size="lg"
-              variant="outline"
-              className="flex-1 h-14 text-lg font-extrabold gap-3 rounded-xl border-2 border-primary text-primary"
-              disabled={currentStock <= 0}
-              onClick={handleBuyNow}
-              data-testid="button-buy-now"
-            >
-              <Zap className="h-5 w-5" />
-              اشتري الآن
-            </Button>
           </div>
         </div>
       </div>

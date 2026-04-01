@@ -231,7 +231,11 @@ export class DatabaseStorage implements IStorage {
       const [created] = await db.insert(displaySettings).values({ ...data, updatedAt: new Date() }).returning();
       return created;
     }
-    const [updated] = await db.update(displaySettings).set({ ...data, updatedAt: new Date() }).where(eq(displaySettings.id, 1)).returning();
+    const existingId = existing[0].id;
+    const [updated] = await db.update(displaySettings)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(displaySettings.id, existingId))
+      .returning();
     return updated;
   }
 

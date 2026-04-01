@@ -59,13 +59,16 @@ export function useCart() {
   const { isAuthenticated } = useAuth();
   
   return useQuery({
-    queryKey: [api.cart.list.path],
+    queryKey: isAuthenticated ? [api.cart.list.path] : ['guestCart'],
     queryFn: async () => {
+      if (!isAuthenticated) {
+        return getGuestCart() as any[];
+      }
       const res = await fetch(api.cart.list.path, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch cart");
       return api.cart.list.responses[200].parse(await res.json());
     },
-    enabled: isAuthenticated,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -125,21 +128,17 @@ export function useAddToCart() {
     },
     onSuccess: (result: unknown) => {
       const isGuest = result && typeof result === 'object' && 'guest' in result && result.guest;
-      const isFallback = result && typeof result === 'object' && 'fallback' in result && result.fallback;
       
-      if (isGuest) {
-        queryClient.invalidateQueries({ queryKey: ['guestCart'] });
-        toast({
-          title: "تمت الإضافة للسلة",
-          description: "أضف منتجاتك المفضلة للسلة وابدأ الطلب",
-        });
-      } else {
-        queryClient.invalidateQueries({ queryKey: [api.cart.list.path] });
-        toast({
-          title: "تمت الإضافة للسلة",
-          description: "تمت إضافة المنتج بنجاح إلى سلة التسوق الخاصة بك",
-        });
-      }
+      // Always invalidate both keys to ensure UI updates
+      queryClient.invalidateQueries({ queryKey: ['guestCart'] });
+      queryClient.invalidateQueries({ queryKey: [api.cart.list.path] });
+      
+      toast({
+        title: "✅ تمت الإضافة للسلة",
+        description: isGuest
+          ? "سجّل دخولك لإتمام الطلب"
+          : "تمت إضافة المنتج بنجاح",
+      });
     },
     onError: (error: Error) => {
       toast({
