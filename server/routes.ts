@@ -387,6 +387,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Get User Orders ────────────────────────
+  app.get("/api/orders", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !user.id) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const { db: dbInstance } = await import("./db");
+      const { orders: ordersTable } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+      const { desc: descFn } = await import("drizzle-orm");
+
+      const userOrders = await dbInstance
+        .select()
+        .from(ordersTable)
+        .where(eqFn(ordersTable.userId, user.id))
+        .orderBy(descFn(ordersTable.createdAt));
+
+      res.json(userOrders);
+    } catch (e: any) {
+      res.status(500).json({ message: "Failed to fetch orders", details: e.message });
+    }
+  });
+
   // ─── Create Order (Public - for checkout) ────────────────────────
   app.post("/api/orders/create", async (req, res) => {
     try {
