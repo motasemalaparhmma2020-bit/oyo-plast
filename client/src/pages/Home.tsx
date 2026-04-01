@@ -19,7 +19,7 @@ export default function Home() {
   const [_location, navigate] = useLocation();
   const { cart } = useCart();
 
-  const { data: navSettings } = useQuery<any>({
+  const { data: navSettings = { showPrintingSection: true } } = useQuery<any>({
     queryKey: ["/api/navigation-settings"],
     queryFn: async () => {
       const res = await fetch("/api/navigation-settings", { credentials: "include" });

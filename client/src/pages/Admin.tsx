@@ -779,11 +779,13 @@ function BannersOffersSection({ adminToken }: { adminToken: string | null }) {
 // Navigation Settings Section
 function NavigationSettingsSection({ adminToken }: { adminToken: string | null }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: settings } = useQuery<any>({
     queryKey: ['/api/navigation-settings'],
     queryFn: async () => {
       const res = await fetch('/api/navigation-settings');
+      if (!res.ok) throw new Error('Failed to fetch settings');
       return res.json();
     },
     enabled: !!adminToken,
@@ -799,17 +801,17 @@ function NavigationSettingsSection({ adminToken }: { adminToken: string | null }
       if (!res.ok) throw new Error('Failed to update settings');
       return res.json();
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/navigation-settings'] });
+      toast({ title: "تم تحديث الإعدادات بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "فشل تحديث الإعدادات", variant: "destructive" });
+    },
   });
 
-  const handleTogglePrinting = async (newValue: boolean) => {
-    updateSettingsMutation.mutate({ showPrintingSection: newValue }, {
-      onSuccess: () => {
-        toast({ title: "تم تحديث الإعدادات بنجاح" });
-      },
-      onError: () => {
-        toast({ title: "فشل تحديث الإعدادات", variant: "destructive" });
-      },
-    });
+  const handleTogglePrinting = (newValue: boolean) => {
+    updateSettingsMutation.mutate({ showPrintingSection: newValue });
   };
 
   return (
