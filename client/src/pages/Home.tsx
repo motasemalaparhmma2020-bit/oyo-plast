@@ -125,13 +125,13 @@ export default function Home() {
 
       {/* Bottom Navigation Bar */}
       <nav
-        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800"
+        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40"
       >
-        <div className="flex items-center justify-around h-20">
+        <div className="flex items-center justify-around h-20 w-full">
           {/* Profile */}
           <Link href="/profile">
             <button
-              className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-1"
               data-testid="nav-profile"
             >
               <User className="h-6 w-6 text-gray-600 dark:text-gray-300" />
@@ -144,7 +144,7 @@ export default function Home() {
           {/* Cart */}
           <Link href="/cart">
             <button
-              className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative"
+              className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative flex-1"
               data-testid="nav-cart"
             >
               <ShoppingBag className="h-6 w-6 text-gray-600 dark:text-gray-300" />
@@ -163,10 +163,10 @@ export default function Home() {
           </Link>
 
           {/* Printing & Design */}
-          {navSettings?.showPrintingSection && (
+          {navSettings?.showPrintingSection !== false && (
             <Link href="/printing">
               <button
-                className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-1"
                 data-testid="nav-printing"
               >
                 <Palette className="h-6 w-6 text-gray-600 dark:text-gray-300" />
@@ -180,7 +180,7 @@ export default function Home() {
           {/* Categories */}
           <Link href="/products">
             <button
-              className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-1"
               data-testid="nav-categories"
             >
               <Grid className="h-6 w-6 text-gray-600 dark:text-gray-300" />
@@ -193,7 +193,7 @@ export default function Home() {
           {/* Shop */}
           <Link href="/products">
             <button
-              className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-1"
               data-testid="nav-shop"
               style={{ color: primaryColor }}
             >
