@@ -81,9 +81,6 @@ export default function Auth() {
     loginMutation.mutate(formData);
   };
 
-  const handleReplitLogin = () => {
-    window.location.href = "/api/login";
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-background flex items-center justify-center p-4">
@@ -233,15 +230,6 @@ export default function Auth() {
                 </Button>
               </Link>
 
-              <Button 
-                variant="ghost"
-                className="w-full text-muted-foreground hover:text-foreground"
-                onClick={handleReplitLogin}
-                data-testid="button-replit-login"
-              >
-                تسجيل الدخول عبر Replit
-              </Button>
-              
               <p className="text-xs text-center text-muted-foreground mt-4">
                 منصة آمنة وموثوقة لجميع احتياجات التغليف الخاصة بك
               </p>
