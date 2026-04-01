@@ -42,7 +42,19 @@ export default function PrintableInvoice({ order, orderItems, isDeliveryInvoice,
   };
 
   const handlePrint = () => {
-    window.print();
+    try {
+      // تأخير صغير لضمان تحميل المحتوى بشكل صحيح
+      setTimeout(() => {
+        if (window.print) {
+          window.print();
+        } else {
+          alert('آسف، لا يمكن الطباعة في هذا المتصفح');
+        }
+      }, 100);
+    } catch (error) {
+      console.error('خطأ في الطباعة:', error);
+      alert('حدث خطأ أثناء محاولة الطباعة');
+    }
   };
 
   return (
@@ -213,22 +225,64 @@ export default function PrintableInvoice({ order, orderItems, isDeliveryInvoice,
 
       <style>{`
         @media print {
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          
+          body, html {
+            background: white;
+            width: 100%;
+            height: 100%;
+          }
+          
           body * {
             visibility: hidden;
           }
+          
           #invoice-content, #invoice-content * {
-            visibility: visible;
+            visibility: visible !important;
           }
+          
           #invoice-content {
             position: absolute;
             left: 0;
             top: 0;
+            right: 0;
             width: 100%;
+            height: 100%;
             background: white;
+            padding: 0;
+            margin: 0;
           }
+          
           .print\\:hidden {
             display: none !important;
           }
+          
+          .print\\:p-4 {
+            padding: 1rem;
+          }
+          
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          
+          td, th {
+            border: 1px solid #ddd;
+            padding: 8px;
+          }
+          
+          .no-print {
+            display: none !important;
+          }
+        }
+        
+        @page {
+          margin: 0.5cm;
+          size: A4;
         }
       `}</style>
     </div>
