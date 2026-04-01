@@ -71,69 +71,81 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
-  try {
-    log("Starting application...");
-    log(`Node environment: ${process.env.NODE_ENV || "development"}`);
-    log(`Database URL configured: ${process.env.DATABASE_URL ? "yes" : "no"}`);
+async function startServer() {
+  const port = parseInt(process.env.PORT || "5000", 10);
 
-    // ALWAYS serve the app on the port specified in the environment variable PORT
-    // Other ports are firewalled. Default to 5000 if not specified.
-    // this serves both the API and the client.
-    // It is the only port that is not firewalled.
-    const port = parseInt(process.env.PORT || "5000", 10);
-    
+  try {
+    // Log startup
+    console.log("[INFO] Starting Oyo Plast server...");
+    console.log(`[INFO] Environment: ${process.env.NODE_ENV || "development"}`);
+    console.log(`[INFO] Database: ${process.env.DATABASE_URL ? "configured" : "not configured"}`);
+    console.log(`[INFO] Port: ${port}`);
+
     // Add health check endpoint BEFORE listening
     app.get("/health", (_req, res) => {
       res.json({ status: "ok", timestamp: new Date().toISOString() });
     });
-    
-    log("Health check endpoint configured");
 
-    // Start listening FIRST before any database operations
-    // This ensures health checks pass during deployment
-    httpServer.listen(
-      {
-        port,
-        host: "0.0.0.0",
-        reusePort: true,
-      },
-      () => {
-        log(`Server listening on port ${port} with 0.0.0.0 binding`);
-        log(`Health check available at http://localhost:${port}/health`);
-      },
-    );
+    // Start listening FIRST - this is critical for deployment health checks
+    await new Promise<void>((resolve, reject) => {
+      httpServer.listen(
+        {
+          port,
+          host: "0.0.0.0",
+          reusePort: true,
+        },
+        () => {
+          console.log(`[SUCCESS] Server listening on port ${port}`);
+          console.log(`[SUCCESS] Health check available at http://0.0.0.0:${port}/health`);
+          resolve();
+        }
+      );
 
-    log("Initializing routes...");
+      httpServer.on("error", (error: any) => {
+        console.error(`[ERROR] Failed to listen on port ${port}:`, error.message);
+        reject(error);
+      });
+    });
+
+    // Now initialize routes
+    console.log("[INFO] Registering routes...");
     await registerRoutes(httpServer, app);
-    log("Routes registered successfully");
+    console.log("[SUCCESS] Routes registered");
 
+    // Error handler
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
-
+      console.error(`[ERROR] ${status}: ${message}`);
       res.status(status).json({ message });
-      throw err;
     });
 
-    // importantly only setup vite in development and after
-    // setting up all the other routes so the catch-all route
-    // doesn't interfere with the other routes
+    // Setup static files or vite
     if (process.env.NODE_ENV === "production") {
-      log("Setting up static file serving for production...");
+      console.log("[INFO] Setting up production static file serving...");
       serveStatic(app);
-      log("Static file serving configured");
+      console.log("[SUCCESS] Static file serving ready");
     } else {
-      log("Setting up Vite dev server...");
+      console.log("[INFO] Setting up Vite development server...");
       const { setupVite } = await import("./vite");
       await setupVite(httpServer, app);
-      log("Vite dev server configured");
+      console.log("[SUCCESS] Vite dev server ready");
     }
-    
-    log("Application startup complete");
+
+    console.log("[SUCCESS] Application ready to accept requests");
+    console.log("[INFO] Oyo Plast server is running!");
+
   } catch (error) {
-    console.error("Failed to start server:", error);
-    console.error("Full error details:", error instanceof Error ? error.stack : error);
+    console.error("[FATAL] Failed to start server:", error instanceof Error ? error.message : String(error));
+    if (error instanceof Error) {
+      console.error("[FATAL] Stack trace:", error.stack);
+    }
     process.exit(1);
   }
-})();
+}
+
+// Start the server
+startServer().catch((error) => {
+  console.error("[FATAL] Unhandled error:", error);
+  process.exit(1);
+});
