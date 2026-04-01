@@ -2,8 +2,9 @@ import { useBestsellingProducts, useCategories } from "@/hooks/use-products";
 import { useHomeSettings } from "@/hooks/use-home-settings";
 import { ProductCard } from "@/components/ProductCard";
 import { MadelineHeader } from "@/components/MadelineHeader";
-import { MadelineCategoriesGrid } from "@/components/MadelineCategoriesGrid";
-import { MadelineOffers } from "@/components/MadelineOffers";
+import { BannerCarousel } from "@/components/BannerCarousel";
+import { OfferBanners } from "@/components/OfferBanners";
+import { CategoryCircles } from "@/components/CategoryCircles";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, ArrowRight, ShoppingBag, User, Palette, Grid } from "lucide-react";
@@ -15,8 +16,6 @@ export default function Home() {
   const { data: bestselling, isLoading: isBestsellingLoading } = useBestsellingProducts(8);
   const { data: categories, isLoading: isCategoriesLoading } = useCategories();
   const { data: homeSettings, isLoading: isHomeSettingsLoading } = useHomeSettings();
-  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
-  const [autoPlay, setAutoPlay] = useState(true);
   const [_location, navigate] = useLocation();
   const { cart } = useCart();
 
@@ -51,32 +50,12 @@ export default function Home() {
     },
   });
 
-  // Auto-play carousel
-  useEffect(() => {
-    if (!autoPlay || banners.length === 0) return;
-    const timer = setInterval(() => {
-      setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [autoPlay, banners.length]);
-
   const handleSearch = (query: string) => {
     if (query.trim()) {
       window.location.href = `/products?search=${encodeURIComponent(query)}`;
     }
   };
 
-  const handlePrevBanner = () => {
-    setAutoPlay(false);
-    setCurrentBannerIndex((prev) => (prev - 1 + banners.length) % banners.length);
-  };
-
-  const handleNextBanner = () => {
-    setAutoPlay(false);
-    setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
-  };
-
-  const activeBanner = banners[currentBannerIndex];
   const primaryColor = homeSettings?.primaryColor || "#06B6D4";
   const accentColor = homeSettings?.accentColor || "#0891B2";
 
@@ -92,105 +71,18 @@ export default function Home() {
       )}
 
       {/* Banner Carousel Section */}
-      {homeSettings?.showBanners !== false && (
-        <section className="px-4 py-6">
-          {banners.length > 0 ? (
-            <div className="space-y-3">
-              <Link href={activeBanner?.linkUrl || "/products"}>
-                <div className="relative rounded-2xl overflow-hidden h-40 bg-gray-200">
-                  <img
-                    src={activeBanner?.imageUrl}
-                    alt={activeBanner?.title}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-4">
-                    <h3
-                      className="text-white font-bold text-lg"
-                      data-testid="text-banner-title"
-                    >
-                      {activeBanner?.title}
-                    </h3>
-                    {activeBanner?.subtitle && (
-                      <p
-                        className="text-white/80 text-sm"
-                        data-testid="text-banner-subtitle"
-                      >
-                        {activeBanner.subtitle}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </Link>
-
-              {/* Navigation Controls */}
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  onClick={handlePrevBanner}
-                  onMouseEnter={() => setAutoPlay(false)}
-                  onMouseLeave={() => setAutoPlay(true)}
-                  className="flex-1 bg-white border border-gray-200 rounded-lg p-2 flex items-center justify-center hover:bg-gray-50 transition-colors"
-                  aria-label="البنر السابق"
-                  data-testid="button-banner-prev"
-                >
-                  <ArrowRight className="h-5 w-5 text-gray-700" />
-                </button>
-
-                {/* Dot Indicators */}
-                <div className="flex gap-1.5 justify-center flex-1">
-                  {banners.map((_, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        setAutoPlay(false);
-                        setCurrentBannerIndex(idx);
-                      }}
-                      className={`transition-all rounded-full ${
-                        idx === currentBannerIndex
-                          ? "h-2.5 w-6"
-                          : "h-2 w-2 hover:opacity-75"
-                      }`}
-                      style={{
-                        backgroundColor:
-                          idx === currentBannerIndex ? primaryColor : "#d1d5db",
-                      }}
-                      aria-label={`البنر ${idx + 1}`}
-                      data-testid={`banner-dot-${idx}`}
-                    />
-                  ))}
-                </div>
-
-                <button
-                  onClick={handleNextBanner}
-                  onMouseEnter={() => setAutoPlay(false)}
-                  onMouseLeave={() => setAutoPlay(true)}
-                  className="flex-1 bg-white border border-gray-200 rounded-lg p-2 flex items-center justify-center hover:bg-gray-50 transition-colors"
-                  aria-label="البنر التالي"
-                  data-testid="button-banner-next"
-                >
-                  <ArrowLeft className="h-5 w-5 text-gray-700" />
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </section>
+      {homeSettings?.showBanners !== false && banners.length > 0 && (
+        <BannerCarousel banners={banners} height={414} />
       )}
 
-      {/* Madeline Offers Section */}
+      {/* Offer Banners Section */}
       {homeSettings?.showOffers !== false && (
-        <MadelineOffers
-          offers={offers}
-          accentColor={accentColor}
-          isLoading={false}
-        />
+        <OfferBanners />
       )}
 
-      {/* Madeline Categories Grid */}
+      {/* Category Circles Section */}
       {homeSettings?.showCategories !== false && (
-        <MadelineCategoriesGrid
-          categories={categories || []}
-          primaryColor={primaryColor}
-          isLoading={isCategoriesLoading}
-        />
+        <CategoryCircles categories={categories || []} circleSize={144} />
       )}
 
       {/* Best Selling Products */}
