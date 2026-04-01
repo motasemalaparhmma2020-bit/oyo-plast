@@ -664,4 +664,109 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(500).json({ message: "فشل حذف من السلة", details: e.message });
     }
   });
+
+  // ─── User Profile & Addresses (Protected) ──────────────────────────────────
+  app.get("/api/profile", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !user.id) return res.status(401).json({ message: "Not authenticated" });
+      
+      res.json({ user });
+    } catch (e: any) {
+      res.status(500).json({ message: "Failed to fetch profile", details: e.message });
+    }
+  });
+
+  app.get("/api/addresses", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !user.id) return res.status(401).json({ message: "Not authenticated" });
+
+      const { db: dbInstance } = await import("./db");
+      const { userAddresses: addressTable } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+
+      const addresses = await dbInstance
+        .select()
+        .from(addressTable)
+        .where(eqFn(addressTable.userId, user.id));
+
+      res.json(addresses);
+    } catch (e: any) {
+      res.status(500).json({ message: "Failed to fetch addresses", details: e.message });
+    }
+  });
+
+  app.post("/api/addresses", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !user.id) return res.status(401).json({ message: "Not authenticated" });
+
+      const { name, city, address, phone, isDefault } = req.body;
+      if (!name || !city || !address || !phone) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      const { db: dbInstance } = await import("./db");
+      const { userAddresses: addressTable } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+
+      if (isDefault) {
+        await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, user.id));
+      }
+
+      const [newAddress] = await dbInstance
+        .insert(addressTable)
+        .values({ userId: user.id, name, city, address, phone, isDefault: isDefault || false })
+        .returning();
+
+      res.status(201).json(newAddress);
+    } catch (e: any) {
+      res.status(500).json({ message: "Failed to add address", details: e.message });
+    }
+  });
+
+  app.patch("/api/addresses/:id", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !user.id) return res.status(401).json({ message: "Not authenticated" });
+
+      const { db: dbInstance } = await import("./db");
+      const { userAddresses: addressTable } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+
+      const { name, city, address, phone, isDefault } = req.body;
+
+      if (isDefault) {
+        await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, user.id));
+      }
+
+      const [updated] = await dbInstance
+        .update(addressTable)
+        .set({ name, city, address, phone, isDefault: isDefault || false, updatedAt: new Date() })
+        .where(eqFn(addressTable.id, parseInt(req.params.id)))
+        .returning();
+
+      res.json(updated);
+    } catch (e: any) {
+      res.status(500).json({ message: "Failed to update address", details: e.message });
+    }
+  });
+
+  app.delete("/api/addresses/:id", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !user.id) return res.status(401).json({ message: "Not authenticated" });
+
+      const { db: dbInstance } = await import("./db");
+      const { userAddresses: addressTable } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+
+      await dbInstance.delete(addressTable).where(eqFn(addressTable.id, parseInt(req.params.id)));
+
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "Failed to delete address", details: e.message });
+    }
+  });
 }
