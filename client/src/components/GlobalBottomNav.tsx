@@ -41,14 +41,34 @@ export function GlobalBottomNav() {
     >
       <div className="flex items-stretch justify-around h-16 w-full px-1">
 
-        {/* متجر */}
+        {/* متجر - Home */}
+        <Link href="/">
+          <button
+            className={navItemClass(location === "/")}
+            data-testid="nav-shop"
+            style={{ color: location === "/" ? primaryColor : undefined }}
+          >
+            <ShoppingBag
+              className="h-5 w-5"
+              style={{ color: location === "/" ? primaryColor : "#6b7280" }}
+            />
+            <span
+              className="text-xs font-medium"
+              style={{ color: location === "/" ? primaryColor : "#6b7280" }}
+            >
+              متجر
+            </span>
+          </button>
+        </Link>
+
+        {/* الفئات - Products */}
         <Link href="/products">
           <button
             className={navItemClass(location.startsWith("/products"))}
-            data-testid="nav-shop"
+            data-testid="nav-categories"
             style={{ color: location.startsWith("/products") ? primaryColor : undefined }}
           >
-            <ShoppingBag
+            <Grid
               className="h-5 w-5"
               style={{ color: location.startsWith("/products") ? primaryColor : "#6b7280" }}
             />
@@ -56,19 +76,6 @@ export function GlobalBottomNav() {
               className="text-xs font-medium"
               style={{ color: location.startsWith("/products") ? primaryColor : "#6b7280" }}
             >
-              متجر
-            </span>
-          </button>
-        </Link>
-
-        {/* الفئات */}
-        <Link href="/products">
-          <button
-            className={navItemClass(false)}
-            data-testid="nav-categories"
-          >
-            <Grid className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
               الفئات
             </span>
           </button>
