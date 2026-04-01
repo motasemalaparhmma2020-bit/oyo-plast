@@ -9,12 +9,14 @@ interface Category {
 
 interface CategoryCirclesProps {
   categories: Category[];
-  circleSize?: number; // بكسل
+  circleSize?: number;
+  perRow?: number;
 }
 
 export function CategoryCircles({
   categories,
-  circleSize = 144,
+  circleSize = 72,
+  perRow = 4,
 }: CategoryCirclesProps) {
   if (categories.length === 0) {
     return (
@@ -24,26 +26,26 @@ export function CategoryCircles({
     );
   }
 
-  // تقسيم الأقسام إلى صفوف (4 أقسام لكل صف)
   const rows = [];
-  for (let i = 0; i < categories.length; i += 4) {
-    rows.push(categories.slice(i, i + 4));
+  for (let i = 0; i < categories.length; i += perRow) {
+    rows.push(categories.slice(i, i + perRow));
   }
 
+  const gridCols: Record<number, string> = {
+    1: "grid-cols-1",
+    2: "grid-cols-2",
+    3: "grid-cols-3",
+    4: "grid-cols-4",
+    5: "grid-cols-5",
+    6: "grid-cols-6",
+  };
+
   return (
-    <div className="w-full px-4 py-6 space-y-6" data-testid="category-circles">
+    <div className="w-full px-4 py-4 space-y-4" data-testid="category-circles">
       {rows.map((row, rowIndex) => (
         <div
           key={rowIndex}
-          className={`grid gap-4 ${
-            row.length === 4
-              ? "grid-cols-4"
-              : row.length === 3
-                ? "grid-cols-3"
-                : row.length === 2
-                  ? "grid-cols-2"
-                  : "grid-cols-1"
-          }`}
+          className={`grid gap-3 ${gridCols[row.length] || "grid-cols-4"}`}
           data-testid={`category-row-${rowIndex}`}
         >
           {row.map((category) => (
@@ -52,10 +54,9 @@ export function CategoryCircles({
               href={`/products?category=${category.slug}`}
             >
               <div
-                className="flex flex-col items-center gap-2 cursor-pointer group"
+                className="flex flex-col items-center gap-1 cursor-pointer group"
                 data-testid={`category-circle-${category.id}`}
               >
-                {/* الدائرة */}
                 <div
                   className="rounded-full overflow-hidden flex-shrink-0 shadow-md group-hover:shadow-lg transition-shadow bg-gray-100 dark:bg-gray-800"
                   style={{
@@ -70,9 +71,10 @@ export function CategoryCircles({
                     data-testid={`category-image-${category.id}`}
                   />
                 </div>
-
-                {/* الاسم */}
-                <p className="text-center text-xs font-medium text-gray-900 dark:text-white line-clamp-2">
+                <p
+                  className="text-center font-medium text-gray-900 dark:text-white line-clamp-2"
+                  style={{ fontSize: `${Math.max(9, circleSize * 0.13)}px` }}
+                >
                   {category.name}
                 </p>
               </div>

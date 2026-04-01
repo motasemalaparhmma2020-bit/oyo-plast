@@ -375,6 +375,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Display Settings (Public) ───────────────────────────────────
+  app.get("/api/display-settings", async (_req, res) => {
+    try {
+      const settings = await storage.getDisplaySettings();
+      res.json(settings);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب إعدادات العرض" });
+    }
+  });
+
+  app.patch("/api/admin/display-settings", requireAdmin, async (req, res) => {
+    try {
+      const { categorySize, categoriesPerRow, showCategories, productCardWidth, productCardHeight, offerBannerHeight, showOfferBanners } = req.body;
+      const settings = await storage.updateDisplaySettings({
+        ...(categorySize !== undefined && { categorySize: parseInt(categorySize) }),
+        ...(categoriesPerRow !== undefined && { categoriesPerRow: parseInt(categoriesPerRow) }),
+        ...(showCategories !== undefined && { showCategories }),
+        ...(productCardWidth !== undefined && { productCardWidth: parseInt(productCardWidth) }),
+        ...(productCardHeight !== undefined && { productCardHeight: parseInt(productCardHeight) }),
+        ...(offerBannerHeight !== undefined && { offerBannerHeight: parseInt(offerBannerHeight) }),
+        ...(showOfferBanners !== undefined && { showOfferBanners }),
+      });
+      res.json(settings);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث إعدادات العرض", details: e.message });
+    }
+  });
+
   // ─── Admin Products - Update Printing Status ──────────────────────
   app.patch("/api/admin/products/:id/printing-status", requireAdmin, async (req, res) => {
     try {

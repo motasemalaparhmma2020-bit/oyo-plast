@@ -1,5 +1,5 @@
 import {
-  users, products, categories, banners, offers, orders, orderItems, navigationSettings, homePageSettings,
+  users, products, categories, banners, offers, orders, orderItems, navigationSettings, homePageSettings, displaySettings,
   type User,
   type Product,
   type Category,
@@ -7,6 +7,7 @@ import {
   type Order,
   type NavigationSettings,
   type HomePageSettings,
+  type DisplaySettings,
   insertProductSchema, insertCategorySchema
 } from "@shared/schema";
 import { z } from "zod";
@@ -55,6 +56,9 @@ export interface IStorage {
 
   getHomePageSettings(): Promise<HomePageSettings>;
   updateHomePageSettings(data: any): Promise<HomePageSettings>;
+
+  getDisplaySettings(): Promise<DisplaySettings>;
+  updateDisplaySettings(data: any): Promise<DisplaySettings>;
 
   getOrders(): Promise<Order[]>;
   getOrderStats(): Promise<{ totalSales: number; totalOrders: number; averageOrderValue: number }>;
@@ -204,6 +208,31 @@ export class DatabaseStorage implements IStorage {
       showCategories: true,
       updatedAt: new Date(),
     };
+  }
+
+  async getDisplaySettings(): Promise<DisplaySettings> {
+    const [settings] = await db.select().from(displaySettings).limit(1);
+    return settings || {
+      id: 1,
+      categorySize: 72,
+      categoriesPerRow: 4,
+      showCategories: true,
+      productCardWidth: 160,
+      productCardHeight: 200,
+      offerBannerHeight: 72,
+      showOfferBanners: true,
+      updatedAt: new Date(),
+    };
+  }
+
+  async updateDisplaySettings(data: any): Promise<DisplaySettings> {
+    const existing = await db.select().from(displaySettings).limit(1);
+    if (existing.length === 0) {
+      const [created] = await db.insert(displaySettings).values({ ...data, updatedAt: new Date() }).returning();
+      return created;
+    }
+    const [updated] = await db.update(displaySettings).set({ ...data, updatedAt: new Date() }).where(eq(displaySettings.id, 1)).returning();
+    return updated;
   }
 
   async updateHomePageSettings(data: any): Promise<HomePageSettings> {

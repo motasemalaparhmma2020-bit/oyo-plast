@@ -6,7 +6,6 @@ import { useState } from "react";
 import { 
   Loader2, 
   Settings, 
-  ScanLine, 
   Ticket, 
   Star, 
   Wallet, 
@@ -16,7 +15,6 @@ import {
   Truck,
   MessageSquare,
   RotateCcw,
-  Heart,
   Users,
   History,
   ChevronLeft,
@@ -54,13 +52,11 @@ export default function Profile() {
             <Button variant="ghost" size="icon" data-testid="button-settings">
               <Settings className="h-5 w-5 text-gray-600" strokeWidth={1.5} />
             </Button>
-            <Button variant="ghost" size="icon" data-testid="button-scan">
-              <ScanLine className="h-5 w-5 text-gray-600" strokeWidth={1.5} />
-            </Button>
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <span>ملفي الشخصي</span>
-            <User className="h-4 w-4" strokeWidth={1.5} />
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-extrabold tracking-wider text-blue-500 dark:text-blue-400" data-testid="text-store-name-guest">
+              OYO PLAST
+            </span>
           </div>
         </div>
 
@@ -122,7 +118,6 @@ export default function Profile() {
   ];
 
   const bottomActions = [
-    { icon: Heart, label: "قائمة الأماني", count: 0, suffix: "منتج" },
     { icon: Users, label: "متابع", count: 0, suffix: "متابع" },
     { icon: History, label: "تاريخ", count: totalOrders, suffix: "منتج" },
   ];
@@ -150,13 +145,11 @@ export default function Profile() {
               </span>
             </div>
           </Button>
-          <Button variant="ghost" size="icon" data-testid="button-scan">
-            <ScanLine className="h-5 w-5 text-gray-600" strokeWidth={1.5} />
-          </Button>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <span>ملفي الشخصي</span>
-          <User className="h-4 w-4" strokeWidth={1.5} />
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-extrabold tracking-wider text-blue-500 dark:text-blue-400" data-testid="text-store-name">
+            OYO PLAST
+          </span>
         </div>
       </div>
 
@@ -233,7 +226,7 @@ export default function Profile() {
 
       {/* Bottom Actions - Personal Lists */}
       <div className="bg-white dark:bg-card mt-2">
-        <div className="grid grid-cols-3 divide-x divide-x-reverse divide-gray-200 dark:divide-border">
+        <div className="grid grid-cols-2 divide-x divide-x-reverse divide-gray-200 dark:divide-border">
           {bottomActions.map((action, index) => (
             <button 
               key={index} 

@@ -6,15 +6,14 @@ import { OfferBanners } from "@/components/OfferBanners";
 import { CategoryCircles } from "@/components/CategoryCircles";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, ArrowRight, ShoppingBag, User, Palette, Grid } from "lucide-react";
-import { useState, useEffect } from "react";
+import { ArrowLeft, ShoppingBag, User, Palette, Grid } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCart } from "@/hooks/use-cart";
 
 export default function Home() {
   const { data: bestselling, isLoading: isBestsellingLoading } = useBestsellingProducts(8);
-  const { data: categories, isLoading: isCategoriesLoading } = useCategories();
-  const { data: homeSettings, isLoading: isHomeSettingsLoading } = useHomeSettings();
+  const { data: categories } = useCategories();
+  const { data: homeSettings } = useHomeSettings();
   const [_location, navigate] = useLocation();
   const { cart } = useCart();
 
@@ -23,6 +22,31 @@ export default function Home() {
     queryFn: async () => {
       const res = await fetch("/api/navigation-settings", { credentials: "include" });
       if (!res.ok) return { showPrintingSection: true };
+      return res.json();
+    },
+  });
+
+  const { data: displaySettings = {
+    categorySize: 72,
+    categoriesPerRow: 4,
+    showCategories: true,
+    productCardWidth: 160,
+    productCardHeight: 200,
+    offerBannerHeight: 72,
+    showOfferBanners: true,
+  } } = useQuery<any>({
+    queryKey: ["/api/display-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/display-settings", { credentials: "include" });
+      if (!res.ok) return {
+        categorySize: 72,
+        categoriesPerRow: 4,
+        showCategories: true,
+        productCardWidth: 160,
+        productCardHeight: 200,
+        offerBannerHeight: 72,
+        showOfferBanners: true,
+      };
       return res.json();
     },
   });
@@ -49,14 +73,7 @@ export default function Home() {
     },
   });
 
-  const handleSearch = (query: string) => {
-    if (query.trim()) {
-      window.location.href = `/products?search=${encodeURIComponent(query)}`;
-    }
-  };
-
   const primaryColor = homeSettings?.primaryColor || "#06B6D4";
-  const accentColor = homeSettings?.accentColor || "#0891B2";
 
   return (
     <div className="flex flex-col pb-20 bg-white dark:bg-background min-h-screen">
@@ -66,13 +83,17 @@ export default function Home() {
       )}
 
       {/* Offer Banners Section */}
-      {homeSettings?.showOffers !== false && (
-        <OfferBanners />
+      {displaySettings.showOfferBanners && (
+        <OfferBanners height={displaySettings.offerBannerHeight} />
       )}
 
       {/* Category Circles Section */}
-      {homeSettings?.showCategories !== false && (
-        <CategoryCircles categories={categories || []} circleSize={144} />
+      {displaySettings.showCategories && (
+        <CategoryCircles
+          categories={categories || []}
+          circleSize={displaySettings.categorySize}
+          perRow={displaySettings.categoriesPerRow}
+        />
       )}
 
       {/* Best Selling Products */}
@@ -107,16 +128,19 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-2 gap-3">
             {bestselling?.slice(0, 6).map((product: any) => (
-              <ProductCard key={product.id} product={product} />
+              <ProductCard
+                key={product.id}
+                product={product}
+                cardWidth={displaySettings.productCardWidth}
+                imageHeight={displaySettings.productCardHeight}
+              />
             ))}
           </div>
         )}
       </section>
 
       {/* Bottom Navigation Bar */}
-      <nav
-        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40"
-      >
+      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40">
         <div className="flex items-stretch justify-between h-20 w-full">
           {/* Shop */}
           <Link href="/products">
@@ -125,14 +149,8 @@ export default function Home() {
               data-testid="nav-shop"
               style={{ color: primaryColor }}
             >
-              <ShoppingBag
-                className="h-6 w-6"
-                style={{ color: primaryColor }}
-              />
-              <span
-                className="text-xs font-bold text-right"
-                style={{ color: primaryColor }}
-              >
+              <ShoppingBag className="h-6 w-6" style={{ color: primaryColor }} />
+              <span className="text-xs font-bold text-right" style={{ color: primaryColor }}>
                 متجر
               </span>
             </button>

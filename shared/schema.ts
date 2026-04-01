@@ -379,6 +379,22 @@ export const navigationSettings = pgTable("navigation_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Display Settings - تحكم كامل بأحجام عناصر الواجهة
+export const displaySettings = pgTable("display_settings", {
+  id: serial("id").primaryKey(),
+  // إعدادات الأقسام
+  categorySize: integer("category_size").default(72).notNull(),       // حجم صورة القسم (بكسل)
+  categoriesPerRow: integer("categories_per_row").default(4).notNull(), // عدد الأقسام بالصف
+  showCategories: boolean("show_categories").default(true).notNull(),
+  // إعدادات المنتجات
+  productCardWidth: integer("product_card_width").default(160).notNull(),  // عرض بطاقة المنتج
+  productCardHeight: integer("product_card_height").default(200).notNull(), // ارتفاع صورة المنتج
+  // إعدادات العروض
+  offerBannerHeight: integer("offer_banner_height").default(72).notNull(), // ارتفاع بنر العروض
+  showOfferBanners: boolean("show_offer_banners").default(true).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Home Page Settings (Madeline Theme)
 export const homePageSettings = pgTable("home_page_settings", {
   id: serial("id").primaryKey(),
@@ -464,3 +480,5 @@ export type ProductView = typeof productViews.$inferSelect;
 export type Coupon = typeof coupons.$inferSelect;
 export type NavigationSettings = typeof navigationSettings.$inferSelect;
 export type HomePageSettings = typeof homePageSettings.$inferSelect;
+export type DisplaySettings = typeof displaySettings.$inferSelect;
+export const insertDisplaySettingsSchema = createInsertSchema(displaySettings).omit({ id: true, updatedAt: true });

@@ -9,9 +9,11 @@ import { useState, useEffect } from "react";
 
 interface ProductCardProps {
   product: Product;
+  cardWidth?: number;
+  imageHeight?: number;
 }
 
-export function ProductCard({ product }: ProductCardProps) {
+export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProps) {
   const { mutate: addToCart, isPending } = useAddToCart();
   const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
     return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
@@ -31,9 +33,16 @@ export function ProductCard({ product }: ProductCardProps) {
   };
 
   return (
-    <Card className="group overflow-hidden border-none shadow-md hover:shadow-2xl transition-all duration-300 rounded-2xl bg-white flex flex-col h-full" data-testid={`card-product-${product.id}`}>
+    <Card
+      className="group overflow-hidden border-none shadow-md hover:shadow-2xl transition-all duration-300 rounded-2xl bg-white flex flex-col h-full"
+      data-testid={`card-product-${product.id}`}
+      style={cardWidth ? { minWidth: `${cardWidth}px`, maxWidth: `${cardWidth}px` } : undefined}
+    >
       <Link href={`/product/${product.id}`}>
-        <div className="relative aspect-[4/5] overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 cursor-pointer rounded-t-2xl p-2">
+        <div
+          className="relative overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 cursor-pointer rounded-t-2xl p-2"
+          style={imageHeight ? { height: `${imageHeight}px` } : { aspectRatio: '4/5' }}
+        >
           <img 
             src={product.imageUrl} 
             alt={product.name}

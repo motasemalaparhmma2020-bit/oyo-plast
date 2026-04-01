@@ -36,8 +36,12 @@ import {
   Printer,
   UserCircle2,
   ExternalLink,
-  Star
+  Star,
+  Grid2x2,
+  LayoutGrid,
+  Zap
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
 
 const statusMap: Record<string, { label: string; color: string; icon: any }> = {
@@ -928,6 +932,194 @@ function PrintingProductsSection({ adminToken }: { adminToken: string | null }) 
 }
 
 // Home Page Settings Section (Madeline Theme)
+function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
+  const { toast } = useToast();
+  const [settings, setSettings] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/display-settings')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setSettings(data); })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch('/api/admin/display-settings', {
+        method: 'PATCH',
+        headers: { 'x-admin-token': adminToken!, 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setSettings(data);
+      toast({ title: "تم تحديث إعدادات العرض بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "فشل تحديث إعدادات العرض", variant: "destructive" });
+    },
+  });
+
+  const handleUpdate = (key: string, value: any) => {
+    updateMutation.mutate({ [key]: value });
+  };
+
+  if (loading) return <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Grid2x2 className="h-5 w-5" />
+          إعدادات العرض والأحجام
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Category Settings */}
+        <div className="border rounded-lg p-4 space-y-4">
+          <h3 className="font-semibold text-base flex items-center gap-2">
+            <LayoutGrid className="h-4 w-4" />
+            إعدادات الأقسام
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>حجم أيقونة القسم (بكسل)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={40}
+                  max={200}
+                  value={settings?.categorySize ?? 72}
+                  onChange={e => setSettings((s: any) => ({ ...s, categorySize: +e.target.value }))}
+                  onBlur={e => handleUpdate('categorySize', +e.target.value)}
+                  className="w-24"
+                  data-testid="input-category-size"
+                  disabled={updateMutation.isPending}
+                />
+                <span className="text-sm text-muted-foreground">بكسل</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>عدد الأقسام في الصف</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={2}
+                  max={6}
+                  value={settings?.categoriesPerRow ?? 4}
+                  onChange={e => setSettings((s: any) => ({ ...s, categoriesPerRow: +e.target.value }))}
+                  onBlur={e => handleUpdate('categoriesPerRow', +e.target.value)}
+                  className="w-24"
+                  data-testid="input-categories-per-row"
+                  disabled={updateMutation.isPending}
+                />
+                <span className="text-sm text-muted-foreground">أقسام</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <Label>إظهار الأقسام</Label>
+            <Switch
+              checked={settings?.showCategories ?? true}
+              onCheckedChange={v => handleUpdate('showCategories', v)}
+              disabled={updateMutation.isPending}
+              data-testid="switch-show-categories"
+            />
+          </div>
+        </div>
+
+        {/* Product Card Settings */}
+        <div className="border rounded-lg p-4 space-y-4">
+          <h3 className="font-semibold text-base flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            إعدادات بطاقة المنتج
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>عرض البطاقة (بكسل)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={100}
+                  max={400}
+                  value={settings?.productCardWidth ?? 160}
+                  onChange={e => setSettings((s: any) => ({ ...s, productCardWidth: +e.target.value }))}
+                  onBlur={e => handleUpdate('productCardWidth', +e.target.value)}
+                  className="w-24"
+                  data-testid="input-product-card-width"
+                  disabled={updateMutation.isPending}
+                />
+                <span className="text-sm text-muted-foreground">بكسل</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>ارتفاع صورة المنتج (بكسل)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={100}
+                  max={500}
+                  value={settings?.productCardHeight ?? 200}
+                  onChange={e => setSettings((s: any) => ({ ...s, productCardHeight: +e.target.value }))}
+                  onBlur={e => handleUpdate('productCardHeight', +e.target.value)}
+                  className="w-24"
+                  data-testid="input-product-card-height"
+                  disabled={updateMutation.isPending}
+                />
+                <span className="text-sm text-muted-foreground">بكسل</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Offer Banners Settings */}
+        <div className="border rounded-lg p-4 space-y-4">
+          <h3 className="font-semibold text-base flex items-center gap-2">
+            <Zap className="h-4 w-4" />
+            إعدادات بنرات العروض
+          </h3>
+          <div className="space-y-2">
+            <Label>ارتفاع البنر (بكسل)</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={40}
+                max={200}
+                value={settings?.offerBannerHeight ?? 72}
+                onChange={e => setSettings((s: any) => ({ ...s, offerBannerHeight: +e.target.value }))}
+                onBlur={e => handleUpdate('offerBannerHeight', +e.target.value)}
+                className="w-24"
+                data-testid="input-offer-banner-height"
+                disabled={updateMutation.isPending}
+              />
+              <span className="text-sm text-muted-foreground">بكسل</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <Label>إظهار بنرات العروض</Label>
+            <Switch
+              checked={settings?.showOfferBanners ?? true}
+              onCheckedChange={v => handleUpdate('showOfferBanners', v)}
+              disabled={updateMutation.isPending}
+              data-testid="switch-show-offer-banners"
+            />
+          </div>
+        </div>
+
+        {updateMutation.isPending && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            جاري الحفظ...
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function HomePageSettingsSection({ adminToken }: { adminToken: string | null }) {
   const { toast } = useToast();
   const [settings, setSettings] = useState<any>(null);
@@ -2718,6 +2910,7 @@ export default function Admin() {
 
           <TabsContent value="settings">
             <div className="space-y-4">
+              <DisplaySettingsSection adminToken={adminToken} />
               <HomePageSettingsSection adminToken={adminToken} />
               
               <Card>
