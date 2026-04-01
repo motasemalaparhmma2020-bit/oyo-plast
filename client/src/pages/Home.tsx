@@ -1,7 +1,6 @@
 import { useBestsellingProducts, useCategories } from "@/hooks/use-products";
 import { useHomeSettings } from "@/hooks/use-home-settings";
 import { ProductCard } from "@/components/ProductCard";
-import { MadelineHeader } from "@/components/MadelineHeader";
 import { BannerCarousel } from "@/components/BannerCarousel";
 import { OfferBanners } from "@/components/OfferBanners";
 import { CategoryCircles } from "@/components/CategoryCircles";
@@ -61,15 +60,6 @@ export default function Home() {
 
   return (
     <div className="flex flex-col pb-20 bg-white dark:bg-background min-h-screen">
-      {/* Madeline Header */}
-      {homeSettings?.showHeader !== false && (
-        <MadelineHeader
-          primaryColor={primaryColor}
-          cartCount={cartCount}
-          onSearch={handleSearch}
-        />
-      )}
-
       {/* Banner Carousel Section */}
       {homeSettings?.showBanners !== false && banners.length > 0 && (
         <BannerCarousel banners={banners} height={414} />

@@ -2,6 +2,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useOrders } from "@/hooks/use-orders";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
+import { useState } from "react";
 import { 
   Loader2, 
   Settings, 
@@ -20,12 +21,21 @@ import {
   History,
   ChevronLeft,
   User,
-  LogOut
+  LogOut,
+  Globe
 } from "lucide-react";
 
 export default function Profile() {
   const { user, isLoading: isAuthLoading, logout, isAuthenticated } = useAuth();
   const { data: orders, isLoading: isOrdersLoading } = useOrders();
+  const [currency, setCurrency] = useState<'YER' | 'SAR'>('YER');
+  const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
+
+  const toggleCurrency = () => {
+    const newCurrency = currency === 'YER' ? 'SAR' : 'YER';
+    setCurrency(newCurrency);
+    localStorage.setItem('preferred_currency', newCurrency);
+  };
 
   if (isAuthLoading) {
     return (
@@ -124,6 +134,21 @@ export default function Profile() {
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" data-testid="button-settings">
             <Settings className="h-5 w-5 text-gray-600" strokeWidth={1.5} />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={toggleCurrency}
+            className="relative"
+            data-testid="button-currency"
+            title={`تغيير العملة: ${currency}`}
+          >
+            <div className="relative">
+              <Globe className="h-5 w-5 text-gray-600" strokeWidth={1.5} />
+              <span className="absolute -bottom-1 -right-1 text-xs font-bold bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center">
+                {currency === 'YER' ? 'ي' : 'س'}
+              </span>
+            </div>
           </Button>
           <Button variant="ghost" size="icon" data-testid="button-scan">
             <ScanLine className="h-5 w-5 text-gray-600" strokeWidth={1.5} />
