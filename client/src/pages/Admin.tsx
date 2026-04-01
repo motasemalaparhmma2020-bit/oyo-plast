@@ -39,7 +39,8 @@ import {
   Star,
   Grid2x2,
   LayoutGrid,
-  Zap
+  Zap,
+  Palette
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
