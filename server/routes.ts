@@ -387,6 +387,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Create Order (Public - for checkout) ────────────────────────
+  app.post("/api/orders/create", async (req, res) => {
+    try {
+      const { customerName, customerEmail, customerPhone, shippingCity, shippingAddress, shippingOption, shippingCost, notes, total, items } = req.body;
+
+      if (!customerName || !customerEmail || !customerPhone || !shippingCity || !shippingAddress || !items || items.length === 0) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      const order = await storage.createOrder({
+        customerName,
+        customerEmail,
+        customerPhone,
+        shippingCity,
+        shippingAddress,
+        shippingOption,
+        shippingCost,
+        notes,
+        total,
+        items,
+      });
+
+      res.json(order);
+    } catch (e: any) {
+      res.status(500).json({ message: "Failed to create order", details: e.message });
+    }
+  });
+
   // ─── Admin Orders ────────────────────────────────────────────────
   app.get("/api/admin/orders", requireAdmin, async (_req, res) => {
     const allOrders = await storage.getOrders();

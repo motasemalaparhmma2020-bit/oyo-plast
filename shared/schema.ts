@@ -82,9 +82,13 @@ export const orders = pgTable("orders", {
   total: numeric("total").notNull(),
   currency: text("currency").default("YER").notNull(), // YER or SAR
   depositAmount: numeric("deposit_amount"), // Deposit amount paid
-  paymentMethod: text("payment_method"), // karimi, najm, cash_on_delivery, wallet
+  paymentMethod: text("payment_method").default("cash_on_delivery"), // karimi, najm, cash_on_delivery, wallet
   receiptImageUrl: text("receipt_image_url"), // Receipt image for bank transfers
+  customerName: text("customer_name"),
+  customerEmail: text("customer_email"),
   customerPhone: text("customer_phone"),
+  shippingOption: text("shipping_option").default("normal"), // normal (3-5 days), fast (1-2 days)
+  shippingCost: numeric("shipping_cost").default("0"),
   shippingCity: text("shipping_city"),
   shippingAddress: text("shipping_address"),
   gpsCoordinates: text("gps_coordinates"), // GPS coordinates for delivery location

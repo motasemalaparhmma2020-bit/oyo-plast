@@ -58,6 +58,7 @@ export interface IStorage {
 
   getOrders(): Promise<Order[]>;
   getOrderStats(): Promise<{ totalSales: number; totalOrders: number; averageOrderValue: number }>;
+  createOrder(data: any): Promise<Order>;
 
   sessionStore: session.Store;
 }
@@ -226,6 +227,38 @@ export class DatabaseStorage implements IStorage {
       totalOrders: Number(totalOrders),
       averageOrderValue: totalOrders > 0 ? Number(totalSales) / Number(totalOrders) : 0,
     };
+  }
+
+  async createOrder(data: any): Promise<Order> {
+    const [order] = await db.insert(orders).values({
+      customerName: data.customerName,
+      customerEmail: data.customerEmail,
+      customerPhone: data.customerPhone,
+      shippingCity: data.shippingCity,
+      shippingAddress: data.shippingAddress,
+      shippingOption: data.shippingOption,
+      shippingCost: data.shippingCost,
+      notes: data.notes,
+      total: data.total,
+      paymentMethod: "cash_on_delivery",
+      status: "pending",
+    }).returning();
+
+    // Add order items
+    if (data.items && data.items.length > 0) {
+      for (const item of data.items) {
+        await db.insert(orderItems).values({
+          orderId: order.id,
+          productId: item.productId,
+          quantity: item.quantity,
+          price: item.price,
+          selectedSize: item.selectedSize,
+          selectedColor: item.selectedColor,
+        });
+      }
+    }
+
+    return order;
   }
 }
 
