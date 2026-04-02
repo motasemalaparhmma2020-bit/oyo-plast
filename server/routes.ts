@@ -452,11 +452,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ─── Create Order (Public - for checkout) ────────────────────────
   app.post("/api/orders/create", async (req, res) => {
     try {
-      const { customerName, customerEmail, customerPhone, shippingCity, shippingAddress, shippingOption, shippingCost, notes, total, items } = req.body;
+      const { validateOrderCreation } = await import("./lib/errorHandler");
+      const { logOrderCreation, logValidationError } = await import("./lib/logger");
+      const { sendOrderConfirmation, sendAdminNotification } = await import("./lib/whatsapp");
 
-      if (!customerName || !customerEmail || !customerPhone || !shippingCity || !shippingAddress || !items || items.length === 0) {
-        return res.status(400).json({ message: "Missing required fields" });
+      const validation = validateOrderCreation(req.body);
+      if (!validation.valid) {
+        Object.entries(validation.errors).forEach(([field, message]) => {
+          logValidationError(field, message);
+        });
+        return res.status(400).json({ message: "Missing or invalid fields", errors: validation.errors });
       }
+
+      const { customerName, customerEmail, customerPhone, shippingCity, shippingAddress, shippingOption, shippingCost, notes, total, items, paymentMethod = "cash_on_delivery" } = req.body;
 
       const order = await storage.createOrder({
         customerName,
@@ -470,6 +478,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         total,
         items,
       });
+
+      logOrderCreation(order.id, {
+        customerName,
+        customerPhone,
+        total,
+        paymentMethod,
+        itemsCount: items.length,
+      });
+
+      await Promise.allSettled([
+        sendOrderConfirmation(customerPhone, order.id, Number(total), "SAR"),
+        sendAdminNotification(order.id, customerName, customerPhone, Number(total), items.length),
+      ]);
 
       res.json(order);
     } catch (e: any) {
