@@ -85,6 +85,26 @@ export function handleValidationError(
   return new ValidationError(message, field);
 }
 
+export function validateOrderCreation(data: unknown): { valid: boolean; errors: Record<string, string> } {
+  const errors: Record<string, string> = {};
+
+  if (!data || typeof data !== "object") {
+    return { valid: false, errors: { form: "بيانات الطلب غير صالحة" } };
+  }
+
+  const input = data as Record<string, any>;
+
+  if (!input.customerName) errors.customerName = "اسم العميل مطلوب";
+  if (!input.customerEmail) errors.customerEmail = "البريد الإلكتروني مطلوب";
+  if (!input.customerPhone) errors.customerPhone = "رقم الهاتف مطلوب";
+  if (!input.shippingCity) errors.shippingCity = "المدينة مطلوبة";
+  if (!input.shippingAddress) errors.shippingAddress = "العنوان مطلوب";
+  if (!Array.isArray(input.items) || input.items.length === 0) errors.items = "السلة فارغة";
+  if (input.total === undefined || input.total === null) errors.total = "الإجمالي مطلوب";
+
+  return { valid: Object.keys(errors).length === 0, errors };
+}
+
 /**
  * Handle database errors
  */
@@ -147,12 +167,13 @@ export function sendErrorResponse(
       orderId
     );
 
-    return res.status(error.statusCode).json({
+    res.status(error.statusCode).json({
       success: false,
       message: error.message,
       error: process.env.NODE_ENV === "development" ? error.stack : undefined,
       ...(orderId && { orderId }),
     });
+    return;
   }
 
   // Unknown error
