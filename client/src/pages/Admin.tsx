@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
+import { DigitalWalletsManager } from "@/components/DigitalWalletsManager";
 
 const statusMap: Record<string, { label: string; color: string; icon: any }> = {
   pending: { label: "قيد الانتظار", color: "bg-yellow-100 text-yellow-800", icon: Clock },
@@ -2257,6 +2258,7 @@ export default function Admin() {
             <TabsTrigger value="products">المخزون</TabsTrigger>
             <TabsTrigger value="banners-offers">العروض والبنرات</TabsTrigger>
             <TabsTrigger value="logo-splash">🎨 الشعار والسبلاش</TabsTrigger>
+            <TabsTrigger value="financial">💳 المركز المالي</TabsTrigger>
             <TabsTrigger value="navigation">التنقل والطباعة</TabsTrigger>
             <TabsTrigger value="reports">التقارير</TabsTrigger>
             <TabsTrigger value="settings">الإعدادات</TabsTrigger>
@@ -3238,6 +3240,19 @@ export default function Admin() {
           {/* ─── Logo & Splash Tab ────────────────────────────────────── */}
           <TabsContent value="logo-splash">
             <LogoSplashManager adminToken={adminToken} toast={toast} />
+          </TabsContent>
+
+          {/* ─── Financial Center Tab ─────────────────────────────────── */}
+          <TabsContent value="financial">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-right">💳 المركز المالي</CardTitle>
+                <CardDescription className="text-right">إدارة طرق الدفع والمحافظ الإلكترونية</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DigitalWalletsManager adminToken={adminToken} />
+              </CardContent>
+            </Card>
           </TabsContent>
 
         </Tabs>

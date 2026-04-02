@@ -70,6 +70,22 @@ export async function runMigrations(): Promise<void> {
       );
     `);
 
+    // Digital wallets table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS digital_wallets (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        logo_url TEXT,
+        receiver_name TEXT NOT NULL,
+        phone_number TEXT NOT NULL,
+        purchase_code TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT true,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

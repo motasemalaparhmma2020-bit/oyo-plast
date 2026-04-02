@@ -943,6 +943,96 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Digital Wallets (Public read, Admin write) ────────────────────
+  app.get("/api/digital-wallets", async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        "SELECT id, name, logo_url as logoUrl, receiver_name as receiverName, phone_number as phoneNumber, purchase_code as purchaseCode, is_active as isActive, sort_order as sortOrder FROM digital_wallets WHERE is_active = true ORDER BY sort_order ASC, id ASC"
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب المحافظ", details: e.message });
+    }
+  });
+
+  app.post("/api/admin/digital-wallets", requireAdmin, upload.single("logo"), async (req, res) => {
+    try {
+      const { name, receiverName, phoneNumber, purchaseCode, isActive, sortOrder } = req.body;
+      if (!name || !receiverName || !phoneNumber || !purchaseCode) {
+        return res.status(400).json({ message: "جميع الحقول مطلوبة" });
+      }
+
+      let logoUrl: string | null = null;
+      if (req.file) {
+        logoUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+      }
+
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        `INSERT INTO digital_wallets (name, logo_url, receiver_name, phone_number, purchase_code, is_active, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, logo_url as logoUrl, receiver_name as receiverName, phone_number as phoneNumber, purchase_code as purchaseCode, is_active as isActive, sort_order as sortOrder`,
+        [name, logoUrl, receiverName, phoneNumber, purchaseCode, isActive !== "false", parseInt(sortOrder) || 0]
+      );
+      res.status(201).json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إنشاء المحفظة", details: e.message });
+    }
+  });
+
+  app.patch("/api/admin/digital-wallets/:id", requireAdmin, upload.single("logo"), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, receiverName, phoneNumber, purchaseCode, isActive, sortOrder } = req.body;
+
+      const { pool: dbPool } = await import("./db");
+      const setClauses: string[] = [];
+      const values: any[] = [];
+      let idx = 1;
+
+      if (name) { setClauses.push(`name = $${idx++}`); values.push(name); }
+      if (receiverName) { setClauses.push(`receiver_name = $${idx++}`); values.push(receiverName); }
+      if (phoneNumber) { setClauses.push(`phone_number = $${idx++}`); values.push(phoneNumber); }
+      if (purchaseCode) { setClauses.push(`purchase_code = $${idx++}`); values.push(purchaseCode); }
+      if (isActive !== undefined) { setClauses.push(`is_active = $${idx++}`); values.push(isActive !== "false"); }
+      if (sortOrder !== undefined) { setClauses.push(`sort_order = $${idx++}`); values.push(parseInt(sortOrder)); }
+      if (req.file) {
+        const logoUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+        setClauses.push(`logo_url = $${idx++}`);
+        values.push(logoUrl);
+      }
+      setClauses.push(`updated_at = NOW()`);
+
+      if (setClauses.length <= 1) {
+        return res.status(400).json({ message: "لا توجد تحديثات" });
+      }
+
+      values.push(parseInt(id));
+      const result = await dbPool.query(
+        `UPDATE digital_wallets SET ${setClauses.join(", ")} WHERE id = $${idx} RETURNING id, name, logo_url as logoUrl, receiver_name as receiverName, phone_number as phoneNumber, purchase_code as purchaseCode, is_active as isActive, sort_order as sortOrder`,
+        values
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "المحفظة غير موجودة" });
+      }
+      res.json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث المحفظة", details: e.message });
+    }
+  });
+
+  app.delete("/api/admin/digital-wallets/:id", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query("DELETE FROM digital_wallets WHERE id = $1", [parseInt(id)]);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حذف المحفظة", details: e.message });
+    }
+  });
+
   // ─── Products with Pagination support ───────────────────────────
   app.get("/api/products/paginated", async (req, res) => {
     try {

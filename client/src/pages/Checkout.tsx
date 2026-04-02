@@ -10,12 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
-import { ArrowRight, Upload, Check, Loader2, Banknote, MapPin, Wallet, Smartphone, CreditCard, Building2, CheckCircle, X } from "lucide-react";
+import { ArrowRight, Upload, Check, Loader2, Banknote, MapPin, Wallet, Smartphone, CreditCard, Building2, CheckCircle, X, Copy } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
 import type { Product } from "@shared/schema";
+import { useDigitalWallets } from "@/hooks/use-digital-wallets";
 
 interface GuestCartItem {
   productId: number;
@@ -121,6 +122,14 @@ const PAYMENT_METHODS = [
     icon: Building2,
     requiresDeposit: true,
     instructions: "حوّل العربون (30%) إلى حساب رقم: 1234567890 باسم: أويو بلاست"
+  },
+  {
+    id: "digital_wallet",
+    name: "المحفظة الإلكترونية",
+    description: "ادفع باستخدام المحافظ الإلكترونية المتاحة",
+    icon: Wallet,
+    requiresDeposit: false,
+    instructions: null
   }
 ];
 
@@ -151,11 +160,16 @@ export default function Checkout() {
     shippingAddress: "",
     paymentMethod: "cash_on_delivery",
     notes: "",
-    gpsCoordinates: ""
+    gpsCoordinates: "",
+    selectedWalletId: null as number | null,
+    purchaseCode: ""
   });
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  
+  // Fetch digital wallets
+  const { data: digitalWallets = [] } = useDigitalWallets();
   
   // Coupon state
   const [couponCode, setCouponCode] = useState("");
@@ -567,6 +581,71 @@ export default function Checkout() {
                     </div>
                   ))}
                 </RadioGroup>
+
+                {/* Digital Wallets Section */}
+                {formData.paymentMethod === "digital_wallet" && digitalWallets.length > 0 && (
+                  <div className="mt-6 space-y-4">
+                    <h3 className="font-semibold text-lg">اختر المحفظة الإلكترونية</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {digitalWallets.map((wallet: any) => (
+                        <div
+                          key={wallet.id}
+                          className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                            formData.selectedWalletId === wallet.id
+                              ? "border-primary bg-primary/5"
+                              : "border-gray-200 hover:border-gray-300"
+                          }`}
+                          onClick={() => setFormData({ ...formData, selectedWalletId: wallet.id })}
+                        >
+                          {wallet.logoUrl && (
+                            <img src={wallet.logoUrl} alt={wallet.name} className="w-10 h-10 rounded object-contain flex-shrink-0" />
+                          )}
+                          <div className="flex-1">
+                            <p className="font-bold text-sm">{wallet.name}</p>
+                            <p className="text-xs text-gray-600">المستلم: {wallet.receiverName}</p>
+                            <div className="flex items-center gap-1 mt-1">
+                              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">
+                                {wallet.phoneNumber}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(wallet.phoneNumber);
+                                  toast({ title: "✅ تم نسخ الرقم" });
+                                }}
+                                className="text-blue-600 hover:text-blue-800"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                          {formData.selectedWalletId === wallet.id && (
+                            <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Purchase Code Input */}
+                    {formData.selectedWalletId && (
+                      <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <Label className="font-semibold mb-2 block">أدخل كود الشراء *</Label>
+                        <Input
+                          type="text"
+                          value={formData.purchaseCode}
+                          onChange={(e) => setFormData({ ...formData, purchaseCode: e.target.value })}
+                          placeholder="أدخل الرمز المكتوب على التطبيق"
+                          className="font-mono"
+                          required
+                        />
+                        <p className="text-xs text-gray-600 mt-2">
+                          ⚠️ أدخل الكود بدقة - سيتم التحقق منه عند تأكيد الطلب
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {selectedPayment?.requiresDeposit && (
                   <div className="mt-6">
