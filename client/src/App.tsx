@@ -49,6 +49,7 @@ import ProductDetail from "@/pages/ProductDetail";
 import Cart from "@/pages/Cart";
 import Checkout from "@/pages/Checkout";
 import OrderConfirmation from "@/pages/OrderConfirmation";
+import OrderTracking from "@/pages/OrderTracking";
 import Orders from "@/pages/Orders";
 import Profile from "@/pages/Profile";
 import Auth from "@/pages/Auth";
@@ -177,6 +178,9 @@ function Router() {
 
             <Route path="/order-confirmation/:id">
               <OrderConfirmation />
+            </Route>
+            <Route path="/track/:id">
+              <OrderTracking />
             </Route>
             <Route path="/orders">
               <RequireAccountType><Orders /></RequireAccountType>
