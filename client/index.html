@@ -37,7 +37,17 @@
     <meta name="apple-mobile-web-app-title" content="أويو بلاست" />
     <link rel="icon" type="image/jpeg" href="/favicon.jpg" />
     <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="/icons/oyo-logo.jpg" />
+    <link rel="apple-touch-icon" href="/favicon.jpg" />
+    
+    <!-- Web App (PWA) Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="أويو بلاست" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="أويو بلاست" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
+    <meta name="msapplication-TileColor" content="#2196F3" />
+    <meta name="msapplication-navbutton-color" content="#2196F3" />
 
     <!-- Structured Data / JSON-LD -->
     <script type="application/ld+json">
@@ -83,17 +93,47 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
+      // PWA Service Worker Registration
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
             .then((registration) => {
-              console.log('SW registered:', registration);
+              console.log('[PWA] Service Worker registered successfully');
+              
+              // Check for updates periodically
+              setInterval(() => {
+                registration.update();
+              }, 60000); // Check every minute
+              
+              // Listen for updates
+              registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                newWorker.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('[PWA] New service worker version available');
+                    // Optional: show update notification to user
+                  }
+                });
+              });
             })
             .catch((error) => {
-              console.log('SW registration failed:', error);
+              console.error('[PWA] Service Worker registration failed:', error);
             });
+          
+          // Handle skip waiting
+          if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+          }
         });
       }
+
+      // Prompt install on Android
+      let deferredPrompt;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        console.log('[PWA] Install prompt available');
+      });
     </script>
   </body>
 </html>
