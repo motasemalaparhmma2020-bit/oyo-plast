@@ -31,6 +31,11 @@ function setGuestCart(cart: GuestCartItem[]): void {
 function addToGuestCart(item: GuestCartItem): void {
   const cart = getGuestCart();
   
+  // Limit cart size to prevent localStorage bloat (max 50 items)
+  if (cart.length >= 50) {
+    cart.splice(0, 5); // Remove oldest 5 items
+  }
+  
   // For custom printing items, always add as new
   if (item.customPrinting) {
     cart.push(item);
@@ -157,6 +162,7 @@ export function useAddToCart() {
     },
     onSuccess: (result: unknown) => {
       const isGuest = result && typeof result === 'object' && 'guest' in result && result.guest;
+      const isFallback = result && typeof result === 'object' && 'fallback' in result && result.fallback;
       
       // For guest cart: set data directly into cache (localStorage doesn't trigger re-query automatically)
       if (isGuest) {
@@ -166,17 +172,26 @@ export function useAddToCart() {
       queryClient.invalidateQueries({ queryKey: ['guestCart'] });
       queryClient.invalidateQueries({ queryKey: [api.cart.list.path] });
       
-      toast({
-        title: "✅ تمت الإضافة للسلة",
-        description: isGuest
-          ? "سجّل دخولك لإتمام الطلب"
-          : "تمت إضافة المنتج بنجاح",
-      });
+      if (isFallback) {
+        toast({
+          title: "⚠️ تم الحفظ محلياً",
+          description: "سيتم مزامنة الطلب عند تسجيل الدخول",
+          variant: "default"
+        });
+      } else {
+        toast({
+          title: "✅ تمت الإضافة للسلة",
+          description: isGuest
+            ? "سجّل دخولك لإتمام الطلب"
+            : "تمت إضافة المنتج بنجاح",
+        });
+      }
     },
     onError: (error: Error) => {
+      console.error('❌ Cart mutation error:', error);
       toast({
-        title: "خطأ",
-        description: "فشل إضافة المنتج للسلة. حاول مرة أخرى",
+        title: "❌ خطأ في الإضافة",
+        description: error.message || "فشل إضافة المنتج. تأكد من الاتصال بالإنترنت وحاول مرة أخرى",
         variant: "destructive"
       });
     }
