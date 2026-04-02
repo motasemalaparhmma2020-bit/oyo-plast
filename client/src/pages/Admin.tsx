@@ -46,6 +46,7 @@ import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
 import { DigitalWalletsManager } from "@/components/DigitalWalletsManager";
 import { ImageDimensionsManager } from "@/components/ImageDimensionsManager";
+import { AdminNav } from "@/components/AdminNav";
 
 const statusMap: Record<string, { label: string; color: string; icon: any }> = {
   pending: { label: "قيد الانتظار", color: "bg-yellow-100 text-yellow-800", icon: Clock },
@@ -1579,6 +1580,7 @@ function HomePageSettingsSection({ adminToken }: { adminToken: string | null }) 
 }
 
 export default function Admin() {
+  const [activeSection, setActiveSection] = useState("orders");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [password, setPassword] = useState("");
@@ -2251,20 +2253,11 @@ export default function Admin() {
           </Card>
         </div>
 
-        <Tabs defaultValue="orders" className="space-y-4">
-          <TabsList className="flex-wrap">
-            <TabsTrigger value="orders">الطلبات</TabsTrigger>
-            <TabsTrigger value="manage-products">المنتجات</TabsTrigger>
-            <TabsTrigger value="categories">الأقسام</TabsTrigger>
-            <TabsTrigger value="products">المخزون</TabsTrigger>
-            <TabsTrigger value="banners-offers">العروض والبنرات</TabsTrigger>
-            <TabsTrigger value="logo-splash">🎨 الشعار والسبلاش</TabsTrigger>
-            <TabsTrigger value="dimensions">📐 مقاسات الصور</TabsTrigger>
-            <TabsTrigger value="financial">💳 المركز المالي</TabsTrigger>
-            <TabsTrigger value="navigation">التنقل والطباعة</TabsTrigger>
-            <TabsTrigger value="reports">التقارير</TabsTrigger>
-            <TabsTrigger value="settings">الإعدادات</TabsTrigger>
-          </TabsList>
+        {/* Admin Navigation Grid */}
+        <AdminNav activeSection={activeSection} onSelectSection={setActiveSection} />
+
+        <Tabs value={activeSection} onValueChange={setActiveSection} className="space-y-4">
+          <TabsList style={{ display: "none" }} />
 
           <TabsContent value="orders">
             <Card>
@@ -2422,7 +2415,7 @@ export default function Admin() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="manage-products">
+          <TabsContent value="products">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-4">
                 <CardTitle>إدارة المنتجات</CardTitle>
@@ -3038,7 +3031,7 @@ export default function Admin() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="products">
+          <TabsContent value="inventory">
             <Card>
               <CardHeader>
                 <CardTitle>إدارة المخزون</CardTitle>
