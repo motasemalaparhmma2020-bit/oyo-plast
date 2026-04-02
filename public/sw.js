@@ -1,13 +1,18 @@
-const CACHE_VERSION = 'v1.0.0';
+const CACHE_VERSION = 'v1.1.0';
 const STATIC_CACHE = `oyo-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `oyo-dynamic-${CACHE_VERSION}`;
 const API_CACHE = `oyo-api-${CACHE_VERSION}`;
+const IMAGE_CACHE = `oyo-images-${CACHE_VERSION}`;
 
 // Minimal files to cache (lightweight only)
 const STATIC_ASSETS = [
   '/manifest.json',
   '/robots.txt'
 ];
+
+// Image cache configuration
+const IMAGE_CACHE_MAX = 50; // Maximum images to cache
+const IMAGE_EXPIRY = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Install event - cache only lightweight files
 self.addEventListener('install', (event) => {
@@ -89,27 +94,35 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Images - cache first
+  // Images - cache first with smart cleanup
   if (request.destination === 'image') {
     event.respondWith(
       caches.match(request)
         .then((response) => {
           if (response) return response;
-          return fetch(request)
+          return fetch(request, { timeout: 15000 })
             .then((response) => {
               if (!response || response.status !== 200) {
                 return response;
               }
               const responseClone = response.clone();
-              caches.open(DYNAMIC_CACHE)
-                .then((cache) => cache.put(request, responseClone))
+              caches.open(IMAGE_CACHE)
+                .then((cache) => {
+                  cache.put(request, responseClone);
+                  // Cleanup old images if cache exceeds max
+                  cache.keys().then((keys) => {
+                    if (keys.length > IMAGE_CACHE_MAX) {
+                      cache.delete(keys[0]); // Remove oldest
+                    }
+                  });
+                })
                 .catch(() => {});
               return response;
             })
             .catch(() => {
               // Placeholder SVG
               return new Response(
-                '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="#f0f0f0" width="100" height="100"/></svg>',
+                '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="#f0f0f0" width="100" height="100"/><text x="50" y="50" text-anchor="middle" fill="#999" font-size="12">Loading</text></svg>',
                 { headers: { 'Content-Type': 'image/svg+xml' } }
               );
             });

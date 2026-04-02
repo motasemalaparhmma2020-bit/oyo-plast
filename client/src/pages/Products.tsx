@@ -1,10 +1,11 @@
 import { useProducts, useCategories } from "@/hooks/use-products";
 import { ProductCard } from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
-import { Search, ShoppingBag, Package } from "lucide-react";
+import { Search, ShoppingBag, Package, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Input } from "@/components/ui/input";
+import { usePaginatedProducts } from "@/hooks/use-paginated-products";
 
 export default function Products() {
   const [location] = useLocation();
@@ -22,6 +23,17 @@ export default function Products() {
   );
   
   const { data: categories } = useCategories();
+  
+  // Pagination hook
+  const {
+    items: paginatedProducts,
+    totalPages,
+    currentPage,
+    totalItems,
+    nextPage,
+    prevPage,
+    goToPage,
+  } = usePaginatedProducts(products);
 
   useEffect(() => {
     if (initialCategory) {
@@ -42,6 +54,8 @@ export default function Products() {
     setSelectedCategory(categoryId);
     setSearchTerm("");
     setSearch("");
+    // Reset to first page when filtering
+    goToPage(1);
   };
 
   const productCount = products?.length || 0;
@@ -119,11 +133,59 @@ export default function Products() {
             ))}
           </div>
         ) : products && products.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3">
-            {products.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {paginatedProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-900 rounded-xl sticky bottom-20">
+                <Button
+                  onClick={prevPage}
+                  disabled={currentPage === 1}
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                  السابق
+                </Button>
+
+                <div className="flex gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <Button
+                      key={page}
+                      onClick={() => goToPage(page)}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      className="w-8 h-8 p-0"
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                </div>
+
+                <Button
+                  onClick={nextPage}
+                  disabled={currentPage === totalPages}
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                >
+                  التالي
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
+            {/* Pagination Info */}
+            <div className="text-center text-sm text-gray-500 mt-4">
+              عرض {(currentPage - 1) * 12 + 1}-{Math.min(currentPage * 12, totalItems)} من {totalItems} منتج
+            </div>
+          </>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Package className="h-16 w-16 text-gray-300 mb-4" />
