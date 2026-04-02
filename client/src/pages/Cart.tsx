@@ -1,11 +1,11 @@
 import { useCart, useUpdateCartItem, useRemoveFromCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Trash2, Plus, Minus, ArrowLeft, ShoppingBag, Loader2, UserPlus } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Product } from "@shared/schema";
 
 interface GuestCartItem {
@@ -62,9 +62,13 @@ export default function Cart() {
   const { data: cartItems, isLoading } = useCart();
   const { mutate: updateItem } = useUpdateCartItem();
   const { mutate: removeItem } = useRemoveFromCart();
-  
-  const [guestCart, setGuestCartState] = useState<GuestCartItem[]>(() => getGuestCart());
-  
+  const queryClient = useQueryClient();
+
+  // Guest cart: read directly from query cache (kept in sync by useAddToCart)
+  const guestCart: GuestCartItem[] = !isAuthenticated
+    ? ((cartItems as GuestCartItem[]) || getGuestCart())
+    : [];
+
   const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
     return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
   });
@@ -72,7 +76,7 @@ export default function Cart() {
   // Fetch all products for guest cart
   const { data: products = [] } = useQuery<Product[]>({
     queryKey: ["/api/products"],
-    enabled: !isAuthenticated || guestCart.length > 0,
+    enabled: !isAuthenticated,
   });
 
   // Map guest cart items with product details
@@ -82,25 +86,6 @@ export default function Cart() {
       return { ...item, product };
     }).filter(item => item.product);
   }, [guestCart, products]);
-
-  // Sync guest cart with localStorage
-  useEffect(() => {
-    const handleStorageChange = () => {
-      setGuestCartState(getGuestCart());
-    };
-    window.addEventListener('storage', handleStorageChange);
-    // Check periodically for changes
-    const interval = setInterval(() => {
-      const current = getGuestCart();
-      if (JSON.stringify(current) !== JSON.stringify(guestCart)) {
-        setGuestCartState(current);
-      }
-    }, 1000);
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
-    };
-  }, [guestCart]);
 
   useEffect(() => {
     const handleCurrencyChange = () => {
@@ -114,23 +99,24 @@ export default function Cart() {
     return price.toLocaleString('ar-YE');
   };
 
-  // Guest cart functions - use index for proper targeting with size/color variants
+  // Guest cart functions - update localStorage then sync query cache
   const updateGuestQuantity = (index: number, delta: number) => {
-    const updated = guestCart.map((item, i) => {
+    const current = getGuestCart();
+    const updated = current.map((item, i) => {
       if (i === index) {
-        const newQty = Math.max(1, item.quantity + delta);
-        return { ...item, quantity: newQty };
+        return { ...item, quantity: Math.max(1, item.quantity + delta) };
       }
       return item;
     });
     setGuestCart(updated);
-    setGuestCartState(updated);
+    queryClient.setQueryData(['guestCart'], updated);
   };
 
   const removeGuestItem = (index: number) => {
-    const updated = guestCart.filter((_, i) => i !== index);
+    const current = getGuestCart();
+    const updated = current.filter((_, i) => i !== index);
     setGuestCart(updated);
-    setGuestCartState(updated);
+    queryClient.setQueryData(['guestCart'], updated);
   };
 
   // Show guest cart if not authenticated

@@ -50,6 +50,9 @@ export function BannerCarousel({ banners, height = 414 }: BannerCarouselProps) {
         alt={banner.title || "Banner"}
         className="w-full h-full object-cover transition-opacity duration-500"
         key={currentIndex}
+        fetchPriority={currentIndex === 0 ? "high" : "low"}
+        loading={currentIndex === 0 ? "eager" : "lazy"}
+        decoding="async"
         data-testid={`banner-image-${currentIndex}`}
       />
 

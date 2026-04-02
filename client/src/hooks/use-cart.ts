@@ -86,11 +86,8 @@ export function useAddToCart() {
 
   return useMutation({
     mutationFn: async (data: z.infer<typeof api.cart.add.input>) => {
-      console.log("useAddToCart mutationFn called with data:", data);
-      
       // Add to guest cart only if not authenticated
       if (!isAuthenticated) {
-        console.log("Adding to guest cart (not authenticated)");
         addToGuestCart({
           productId: data.productId,
           quantity: data.quantity,
@@ -100,7 +97,6 @@ export function useAddToCart() {
           designNotes: data.designNotes,
           designFileUrl: data.designFileUrl
         });
-        console.log("Guest cart updated successfully");
         return { success: true, guest: true };
       }
       
@@ -129,7 +125,11 @@ export function useAddToCart() {
     onSuccess: (result: unknown) => {
       const isGuest = result && typeof result === 'object' && 'guest' in result && result.guest;
       
-      // Always invalidate both keys to ensure UI updates
+      // For guest cart: set data directly into cache (localStorage doesn't trigger re-query automatically)
+      if (isGuest) {
+        queryClient.setQueryData(['guestCart'], getGuestCart());
+      }
+      // Always invalidate both to ensure freshness
       queryClient.invalidateQueries({ queryKey: ['guestCart'] });
       queryClient.invalidateQueries({ queryKey: [api.cart.list.path] });
       
