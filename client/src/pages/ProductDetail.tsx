@@ -457,7 +457,7 @@ export default function ProductDetail() {
 
         <div className="space-y-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-foreground mb-2" data-testid="text-product-name">
+            <h1 className="text-lg md:text-xl font-extrabold text-foreground mb-2" data-testid="text-product-name">
               {product?.name || 'تحميل المنتج...'}
             </h1>
             
@@ -598,9 +598,9 @@ export default function ProductDetail() {
                 </div>
                 <div className="text-left">
                   <p className="text-sm text-muted-foreground mb-1">الإجمالي</p>
-                  <p className="text-2xl font-bold text-foreground" data-testid="text-total-price">
+                  <p className="text-lg font-bold text-foreground" data-testid="text-total-price">
                     {formatPrice(totalPrice)} 
-                    <span className="text-sm font-normal text-muted-foreground mr-1">
+                    <span className="text-xs font-normal text-muted-foreground mr-1">
                       {currency === 'YER' ? 'ر.ي' : 'ر.س'}
                     </span>
                   </p>

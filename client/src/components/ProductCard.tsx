@@ -63,21 +63,21 @@ export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProp
         </div>
       </Link>
       
-      <CardContent className="p-3 md:p-4 flex-grow">
+      <CardContent className="p-2 md:p-3 flex-grow">
         <Link href={`/product/${product.id}`}>
-          <h3 className="font-extrabold text-sm md:text-base mb-2 text-foreground line-clamp-2 leading-tight min-h-[2.5rem] cursor-pointer hover:text-primary transition-colors">
+          <h3 className="font-extrabold text-xs md:text-sm mb-1 text-foreground line-clamp-2 leading-tight min-h-[2rem] cursor-pointer hover:text-primary transition-colors">
             {product.name}
           </h3>
         </Link>
         
         {/* Rating Stars */}
         {product.rating && (
-          <div className="flex items-center gap-1 mb-2">
+          <div className="flex items-center gap-1 mb-1">
             <div className="flex items-center">
               {[1, 2, 3, 4, 5].map((star) => (
                 <Star 
                   key={star}
-                  className={`h-3 w-3 ${
+                  className={`h-2 w-2 ${
                     star <= Math.floor(Number(product.rating))
                       ? 'text-yellow-400 fill-yellow-400' 
                       : star - 0.5 <= Number(product.rating)
@@ -93,23 +93,23 @@ export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProp
           </div>
         )}
         
-        <div className="space-y-1">
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <span className="text-xl md:text-2xl font-extrabold text-primary">
+        <div className="space-y-0.5">
+          <div className="flex items-baseline gap-1 flex-wrap">
+            <span className="text-base md:text-lg font-extrabold text-primary">
               {formatPrice(currency === 'SAR' ? product.priceSar : product.price)}
             </span>
-            <span className="text-xs md:text-sm font-medium text-muted-foreground">
+            <span className="text-xs font-medium text-muted-foreground">
               {currency === 'YER' ? 'ر.ي' : 'ر.س'}
             </span>
           </div>
           <div className="text-xs text-muted-foreground">
             {currency === 'YER' && product.priceSar && (
-              <span className="bg-gray-100 px-2 py-0.5 rounded-full">
+              <span className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">
                 {formatPrice(product.priceSar)} ر.س
               </span>
             )}
             {currency === 'SAR' && (
-              <span className="bg-gray-100 px-2 py-0.5 rounded-full">
+              <span className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">
                 {formatPrice(product.price)} ر.ي
               </span>
             )}
@@ -117,9 +117,9 @@ export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProp
         </div>
       </CardContent>
 
-      <CardFooter className="p-3 md:p-4 pt-0">
+      <CardFooter className="p-2 md:p-3 pt-0">
         <Button 
-          className="w-full gap-2 font-extrabold shadow-md shadow-primary/20 text-sm md:text-base h-10 md:h-11 rounded-lg md:rounded-xl"
+          className="w-full gap-2 font-bold shadow-md shadow-primary/20 text-xs md:text-sm h-9 md:h-10 rounded-lg"
           disabled={product.stock <= 0 || isPending}
           onClick={(e) => {
             e.preventDefault();

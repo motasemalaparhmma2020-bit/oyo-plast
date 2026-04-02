@@ -47,6 +47,7 @@ import PrintableInvoice from "@/components/PrintableInvoice";
 import { DigitalWalletsManager } from "@/components/DigitalWalletsManager";
 import { ImageDimensionsManager } from "@/components/ImageDimensionsManager";
 import { AdminNav } from "@/components/AdminNav";
+import { compressImage, formatFileSize } from "@/lib/imageCompression";
 
 const statusMap: Record<string, { label: string; color: string; icon: any }> = {
   pending: { label: "قيد الانتظار", color: "bg-yellow-100 text-yellow-800", icon: Clock },
@@ -302,15 +303,46 @@ function LogoSplashManager({ adminToken, toast }: { adminToken: string | null; t
     }
   };
 
-  const handleFileChange = (
+  const handleFileChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
     setter: (v: string) => void
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => setter(ev.target?.result as string);
-    reader.readAsDataURL(file);
+
+    try {
+      // Compress image automatically
+      const originalSize = file.size;
+      const compressedBlob = await compressImage(file, {
+        maxWidth: 1200,
+        maxHeight: 1200,
+        quality: 0.75,
+        format: 'webp'
+      });
+
+      const compressedSize = compressedBlob.size;
+      const savings = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
+      
+      toast({
+        title: "✅ صورة مضغوطة",
+        description: `${formatFileSize(originalSize)} → ${formatFileSize(compressedSize)} (توفير ${savings}%)`
+      });
+
+      // Convert compressed blob to base64
+      const reader = new FileReader();
+      reader.onload = (ev) => setter(ev.target?.result as string);
+      reader.readAsDataURL(compressedBlob);
+    } catch (err) {
+      toast({
+        title: "⚠️ خطأ في ضغط الصورة",
+        description: "سيتم رفع الصورة بحجمها الأصلي",
+        variant: "destructive"
+      });
+      // Fallback to original
+      const reader = new FileReader();
+      reader.onload = (ev) => setter(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    }
   };
 
   const removeLogo = async () => {
