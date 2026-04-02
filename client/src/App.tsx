@@ -165,6 +165,11 @@ function Router() {
             <Route path="/product/:id" component={ProductDetail} />
             <Route path="/cart" component={Cart} />
             
+            {/* Guest Checkout - no auth required */}
+            <Route path="/guest-checkout">
+              <Checkout />
+            </Route>
+
             {/* Protected pages - auth required AND accountType required */}
             <Route path="/checkout">
               <RequireAccountType><Checkout /></RequireAccountType>
