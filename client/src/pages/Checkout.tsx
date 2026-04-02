@@ -18,6 +18,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Product } from "@shared/schema";
 import { useDigitalWallets } from "@/hooks/use-digital-wallets";
 import { GuestCartItem, getGuestCart, clearGuestCart } from "@/lib/cartUtils";
+import { validateCheckoutForm } from "@shared/schemas/checkout";
 
 const YEMENI_CITIES = [
   "صنعاء",
@@ -334,10 +335,22 @@ export default function Checkout() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.customerPhone || !formData.shippingCity || !formData.shippingAddress) {
+    const validation = validateCheckoutForm({
+      customerPhone: formData.customerPhone,
+      shippingCity: formData.shippingCity,
+      shippingAddress: formData.shippingAddress,
+      paymentMethod: formData.paymentMethod,
+      notes: formData.notes,
+      gpsCoordinates: formData.gpsCoordinates,
+      selectedWalletId: formData.selectedWalletId,
+      purchaseCode: formData.purchaseCode,
+      couponCode,
+    });
+
+    if (!validation.valid) {
       toast({
         title: "خطأ",
-        description: "يرجى ملء جميع الحقول المطلوبة",
+        description: Object.values(validation.errors)[0] || "يرجى التحقق من البيانات",
         variant: "destructive"
       });
       return;
@@ -384,16 +397,29 @@ export default function Checkout() {
         discountAmount: discountAmount > 0 ? discountAmount.toString() : null
       };
 
-      await apiRequest('POST', '/api/orders', orderData);
+      await apiRequest("POST", "/api/orders/create", {
+        customerName: user?.fullName || user?.username || "عميل",
+        customerEmail: user?.email || "guest@oyoplast.com",
+        customerPhone: formData.customerPhone,
+        shippingCity: formData.shippingCity,
+        shippingAddress: formData.shippingAddress,
+        shippingOption: "standard",
+        shippingCost: 0,
+        notes: formData.notes,
+        total: finalTotal,
+        items: cartItems,
+      });
 
-      await queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
+      clearGuestCart();
+
+      await queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
       
       toast({
         title: "تم إنشاء الطلب بنجاح",
         description: "سيتم التواصل معك قريباً لتأكيد الطلب",
       });
       
-      setLocation('/profile');
+      setLocation("/profile");
     } catch (error) {
       toast({
         title: "خطأ",

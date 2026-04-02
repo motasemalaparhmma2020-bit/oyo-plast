@@ -86,21 +86,16 @@ export default function Cart() {
   // Guest cart functions - update localStorage then sync query cache
   const updateGuestQuantity = (index: number, delta: number) => {
     const current = getGuestCart();
-    const updated = current.map((item, i) => {
-      if (i === index) {
-        return { ...item, quantity: Math.max(1, item.quantity + delta) };
-      }
-      return item;
-    });
+    const updated = current.map((item, i) => i === index ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item);
     setGuestCart(updated);
-    queryClient.setQueryData(['guestCart'], updated);
+    queryClient.setQueryData(["guestCart"], updated);
   };
 
   const removeGuestItem = (index: number) => {
     const current = getGuestCart();
     const updated = current.filter((_, i) => i !== index);
     setGuestCart(updated);
-    queryClient.setQueryData(['guestCart'], updated);
+    queryClient.setQueryData(["guestCart"], updated);
   };
 
   // Show guest cart if not authenticated
@@ -228,6 +223,7 @@ export default function Cart() {
                   className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
                   onClick={() => removeGuestItem(index)}
                   data-testid={`button-remove-${item.productId}-${index}`}
+                  aria-label="حذف المنتج"
                 >
                   <Trash2 className="h-5 w-5" />
                 </Button>

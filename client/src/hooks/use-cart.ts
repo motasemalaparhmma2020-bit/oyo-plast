@@ -15,11 +15,9 @@ export function useCart() {
   const { isAuthenticated } = useAuth();
   
   return useQuery({
-    queryKey: isAuthenticated ? [api.cart.list.path] : ['guestCart'],
+    queryKey: isAuthenticated ? [api.cart.list.path] : ["guestCart"],
     queryFn: async () => {
-      if (!isAuthenticated) {
-        return getGuestCart() as any[];
-      }
+      if (!isAuthenticated) return getGuestCart() as any[];
       const res = await fetch(api.cart.list.path, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch cart");
       return api.cart.list.responses[200].parse(await res.json());
@@ -112,8 +110,8 @@ export function useAddToCart() {
       return { success: true, guest: true, fallback: true };
     },
     onSuccess: (result: unknown) => {
-      const isGuest = result && typeof result === 'object' && 'guest' in result && result.guest;
-      const isFallback = result && typeof result === 'object' && 'fallback' in result && result.fallback;
+      const isGuest = !!(result && typeof result === "object" && "guest" in result && (result as any).guest);
+      const isFallback = !!(result && typeof result === "object" && "fallback" in result && (result as any).fallback);
       
       // For guest cart: set data directly into cache (localStorage doesn't trigger re-query automatically)
       if (isGuest) {
