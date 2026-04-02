@@ -7,16 +7,13 @@ import { Trash2, Plus, Minus, ArrowLeft, ShoppingBag, Loader2, UserPlus } from "
 import { Separator } from "@/components/ui/separator";
 import { useEffect, useMemo, useState } from "react";
 import type { Product } from "@shared/schema";
-
-interface GuestCartItem {
-  productId: number;
-  quantity: number;
-  selectedSize?: string;
-  selectedColor?: string;
-  customPrinting?: boolean;
-  designNotes?: string;
-  designFileUrl?: string;
-}
+import { 
+  GuestCartItem, 
+  getGuestCart, 
+  setGuestCart,
+  removeFromGuestCart,
+  updateGuestCartItem
+} from "@/lib/cartUtils";
 
 const colorMap: Record<string, string> = {
   أبيض: "#FFFFFF",
@@ -42,19 +39,6 @@ const colorMap: Record<string, string> = {
 function getColorCode(colorName: string): string {
   const trimmed = colorName.trim();
   return colorMap[trimmed] ?? trimmed;
-}
-
-function getGuestCart(): GuestCartItem[] {
-  try {
-    const saved = localStorage.getItem('guestCart');
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
-  }
-}
-
-function setGuestCart(cart: GuestCartItem[]): void {
-  localStorage.setItem('guestCart', JSON.stringify(cart));
 }
 
 export default function Cart() {

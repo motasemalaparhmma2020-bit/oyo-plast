@@ -3,61 +3,12 @@ import { api, buildUrl } from "@shared/routes";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-
-interface GuestCartItem {
-  productId: number;
-  quantity: number;
-  selectedSize?: string;
-  selectedColor?: string;
-  customPrinting?: boolean;
-  designNotes?: string;
-  designFileUrl?: string;
-}
-
-// Guest cart functions
-function getGuestCart(): GuestCartItem[] {
-  try {
-    const saved = localStorage.getItem('guestCart');
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
-  }
-}
-
-function setGuestCart(cart: GuestCartItem[]): void {
-  localStorage.setItem('guestCart', JSON.stringify(cart));
-}
-
-function addToGuestCart(item: GuestCartItem): void {
-  const cart = getGuestCart();
-  
-  // Limit cart size to prevent localStorage bloat (max 50 items)
-  if (cart.length >= 50) {
-    cart.splice(0, 5); // Remove oldest 5 items
-  }
-  
-  // For custom printing items, always add as new
-  if (item.customPrinting) {
-    cart.push(item);
-    setGuestCart(cart);
-    return;
-  }
-  
-  // Find existing item with same product/size/color
-  const existingIdx = cart.findIndex(existing => 
-    existing.productId === item.productId &&
-    existing.selectedSize === item.selectedSize &&
-    existing.selectedColor === item.selectedColor &&
-    !existing.customPrinting
-  );
-  
-  if (existingIdx >= 0) {
-    cart[existingIdx].quantity += item.quantity;
-  } else {
-    cart.push(item);
-  }
-  setGuestCart(cart);
-}
+import { 
+  GuestCartItem, 
+  getGuestCart, 
+  setGuestCart, 
+  addToGuestCart 
+} from "@/lib/cartUtils";
 
 // GET /api/cart
 export function useCart() {

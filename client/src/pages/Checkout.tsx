@@ -17,25 +17,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
 import type { Product } from "@shared/schema";
 import { useDigitalWallets } from "@/hooks/use-digital-wallets";
-
-interface GuestCartItem {
-  productId: number;
-  quantity: number;
-  selectedSize?: string;
-  selectedColor?: string;
-  customPrinting?: boolean;
-  designNotes?: string;
-  designFileUrl?: string;
-}
-
-function getGuestCart(): GuestCartItem[] {
-  try {
-    const saved = localStorage.getItem('guestCart');
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
-  }
-}
+import { GuestCartItem, getGuestCart, clearGuestCart } from "@/lib/cartUtils";
 
 const YEMENI_CITIES = [
   "صنعاء",
