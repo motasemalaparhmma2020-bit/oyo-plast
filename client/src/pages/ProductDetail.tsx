@@ -16,6 +16,33 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import useEmblaCarousel from "embla-carousel-react";
 
+// Lazy image component with loading state
+const LazyImage = ({ src, alt, className }: { src: string; alt: string; className: string }) => {
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    setLoaded(false);
+    setError(false);
+  }, [src]);
+
+  if (error) return <div className={`${className} bg-gray-200 dark:bg-gray-800`} />;
+
+  return (
+    <>
+      {!loaded && <div className={`${className} bg-gray-200 dark:bg-gray-800 animate-pulse`} />}
+      <img
+        src={src}
+        alt={alt}
+        className={className}
+        onLoad={() => setLoaded(true)}
+        onError={() => setError(true)}
+        style={{ display: loaded ? 'block' : 'none' }}
+      />
+    </>
+  );
+};
+
 interface BulkPricing {
   minQty: number;
   price: string;
@@ -64,15 +91,20 @@ export default function ProductDetail() {
   
   const { data: product, isLoading } = useQuery<Product>({
     queryKey: ['/api/products', id],
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
   });
 
   const { data: reviews = [] } = useQuery<Review[]>({
     queryKey: ['/api/products', id, 'reviews'],
     enabled: !!id,
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
   const { data: relatedProducts = [] } = useQuery<Product[]>({
     queryKey: ['/api/products'],
+    staleTime: 3 * 60 * 1000, // 3 minutes
+    gcTime: 10 * 60 * 1000,
   });
 
   const filteredRelatedProducts = useMemo(() => {
@@ -314,15 +346,28 @@ export default function ProductDetail() {
 
   const handleAddToCart = () => {
     if (!product) return;
-    addToCartMutation.mutate({ 
-      productId: product.id, 
+    
+    // Debug log
+    console.log('🛒 زر إضافة للسلة: جاري الإضافة...', {
+      productId: product.id,
       quantity,
-      selectedSize: selectedSize || undefined,
-      selectedColor: selectedColor || undefined,
-      customPrinting: enableCustomPrinting,
-      designNotes: designNotes || undefined,
-      designFileUrl: uploadedDesignUrl || undefined
+      hasDesign: !!uploadedDesignUrl,
+      isPending: isPending
     });
+
+    try {
+      addToCartMutation.mutate({ 
+        productId: product.id, 
+        quantity,
+        selectedSize: selectedSize || undefined,
+        selectedColor: selectedColor || undefined,
+        customPrinting: enableCustomPrinting,
+        designNotes: designNotes || undefined,
+        designFileUrl: uploadedDesignUrl || undefined
+      });
+    } catch (err) {
+      console.error('❌ خطأ في الزر:', err);
+    }
   };
 
   const handleBuyNow = async () => {
@@ -391,8 +436,8 @@ export default function ProductDetail() {
                 <div className="flex">
                   {allImages.map((img, idx) => (
                     <div key={idx} className="flex-[0_0_100%] min-w-0">
-                      <div className="aspect-[3/4] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-4">
-                        <img
+                      <div className="aspect-[3/4] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-4 flex items-center justify-center">
+                        <LazyImage
                           src={img}
                           alt={`${product?.name || 'منتج'} - صورة ${idx + 1}`}
                           className="w-full h-full object-contain"
@@ -432,14 +477,14 @@ export default function ProductDetail() {
                     }`}
                     data-testid={`button-thumbnail-${idx}`}
                   >
-                    <img src={img} alt="" className="w-full h-full object-cover" />
+                    <LazyImage src={img} alt="" className="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>
             </div>
           ) : (
-            <div className="aspect-[3/4] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-2xl overflow-hidden p-4">
-              <img
+            <div className="aspect-[3/4] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-2xl overflow-hidden p-4 flex items-center justify-center">
+              <LazyImage
                 src={product?.imageUrl || ''}
                 alt={product?.name || 'منتج'}
                 className="w-full h-full object-contain"
