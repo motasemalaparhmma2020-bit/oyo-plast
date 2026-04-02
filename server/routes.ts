@@ -943,6 +943,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Image Dimensions (Public read, Admin write) ────────────────────
+  app.get("/api/image-dimensions", async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        "SELECT id, image_type as imageType, width, height, description FROM image_dimensions ORDER BY id ASC"
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب مقاسات الصور", details: e.message });
+    }
+  });
+
+  app.patch("/api/admin/image-dimensions/:id", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { width, height, description } = req.body;
+
+      if (!width || !height || width <= 0 || height <= 0) {
+        return res.status(400).json({ message: "المقاسات يجب أن تكون أكبر من صفر" });
+      }
+
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        "UPDATE image_dimensions SET width = $1, height = $2, description = $3, updated_at = NOW() WHERE id = $4 RETURNING id, image_type as imageType, width, height, description",
+        [width, height, description || null, parseInt(id)]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "المقاس غير موجود" });
+      }
+      res.json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث المقاس", details: e.message });
+    }
+  });
+
   // ─── Digital Wallets (Public read, Admin write) ────────────────────
   app.get("/api/digital-wallets", async (_req, res) => {
     try {

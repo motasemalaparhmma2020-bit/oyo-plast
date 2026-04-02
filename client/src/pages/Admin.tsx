@@ -45,6 +45,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
 import { DigitalWalletsManager } from "@/components/DigitalWalletsManager";
+import { ImageDimensionsManager } from "@/components/ImageDimensionsManager";
 
 const statusMap: Record<string, { label: string; color: string; icon: any }> = {
   pending: { label: "قيد الانتظار", color: "bg-yellow-100 text-yellow-800", icon: Clock },
@@ -2258,6 +2259,7 @@ export default function Admin() {
             <TabsTrigger value="products">المخزون</TabsTrigger>
             <TabsTrigger value="banners-offers">العروض والبنرات</TabsTrigger>
             <TabsTrigger value="logo-splash">🎨 الشعار والسبلاش</TabsTrigger>
+            <TabsTrigger value="dimensions">📐 مقاسات الصور</TabsTrigger>
             <TabsTrigger value="financial">💳 المركز المالي</TabsTrigger>
             <TabsTrigger value="navigation">التنقل والطباعة</TabsTrigger>
             <TabsTrigger value="reports">التقارير</TabsTrigger>
@@ -3240,6 +3242,19 @@ export default function Admin() {
           {/* ─── Logo & Splash Tab ────────────────────────────────────── */}
           <TabsContent value="logo-splash">
             <LogoSplashManager adminToken={adminToken} toast={toast} />
+          </TabsContent>
+
+          {/* ─── Image Dimensions Tab ─────────────────────────────────── */}
+          <TabsContent value="dimensions">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-right">📐 مقاسات الصور</CardTitle>
+                <CardDescription className="text-right">تحكم يدوي بمقاسات صور المنتجات والبنرات والصور الأخرى</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ImageDimensionsManager adminToken={adminToken} />
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* ─── Financial Center Tab ─────────────────────────────────── */}
