@@ -276,31 +276,36 @@ export default function ProductDetail() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Check file size (max 10MB for design)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast({ 
+        title: "❌ الملف كبير جداً",
+        description: "الحد الأقصى 10MB",
+        variant: "destructive" 
+      });
+      return;
+    }
+
     setIsUploadingDesign(true);
     setUploadedFile(file);
 
-    const formData = new FormData();
-    formData.append('design', file);
-
     try {
-      const res = await fetch('/api/upload/design', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setUploadedDesignUrl(data.designUrl);
+      // Convert file to base64 directly (NO server upload)
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64String = event.target?.result as string;
+        setUploadedDesignUrl(base64String); // Store base64 directly
+        
+        const sizeInMB = (file.size / 1024 / 1024).toFixed(2);
         toast({
-          title: "تم رفع التصميم",
-          description: `تم رفع ${file.name} بنجاح`,
+          title: "✅ تم تحضير التصميم",
+          description: `${file.name} (${sizeInMB}MB) - جاهز للإضافة`,
         });
-      } else {
-        toast({ title: "فشل رفع التصميم", variant: "destructive" });
-        setUploadedFile(null);
-      }
+      };
+      reader.readAsDataURL(file);
     } catch (error) {
-      toast({ title: "حدث خطأ أثناء رفع التصميم", variant: "destructive" });
+      toast({ title: "❌ خطأ في قراءة الملف", variant: "destructive" });
       setUploadedFile(null);
     }
     setIsUploadingDesign(false);

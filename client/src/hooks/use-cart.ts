@@ -102,27 +102,58 @@ export function useAddToCart() {
         return { success: true, guest: true };
       }
       
-      const res = await fetch(api.cart.add.path, {
-        method: api.cart.add.method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-        credentials: "include",
-      });
-      
-      if (!res.ok) {
-        // On API failure for authenticated users, fallback to guest cart
-        addToGuestCart({
-          productId: data.productId,
-          quantity: data.quantity,
-          selectedSize: data.selectedSize,
-          selectedColor: data.selectedColor,
-          customPrinting: data.customPrinting,
-          designNotes: data.designNotes,
-          designFileUrl: data.designFileUrl
-        });
-        return { success: true, guest: true, fallback: true };
+      // Retry logic for authenticated users (up to 3 attempts)
+      let lastError: Error | null = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const controller = new AbortController();
+          // 30 second timeout for large file uploads
+          const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+          const res = await fetch(api.cart.add.path, {
+            method: api.cart.add.method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+            credentials: "include",
+            signal: controller.signal
+          });
+
+          clearTimeout(timeoutId);
+
+          if (res.ok) {
+            return api.cart.add.responses[201].parse(await res.json());
+          }
+
+          // If server error, retry
+          if (res.status >= 500 && attempt < 3) {
+            await new Promise(r => setTimeout(r, 500 * attempt)); // Exponential backoff
+            continue;
+          }
+
+          // On final failure, fallback to guest cart
+          throw new Error(`Server error: ${res.status}`);
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          
+          // If last attempt or network error, fallback
+          if (attempt === 3) break;
+          
+          // Wait before retry
+          await new Promise(r => setTimeout(r, 500 * attempt));
+        }
       }
-      return api.cart.add.responses[201].parse(await res.json());
+
+      // Fallback to guest cart on repeated failures
+      addToGuestCart({
+        productId: data.productId,
+        quantity: data.quantity,
+        selectedSize: data.selectedSize,
+        selectedColor: data.selectedColor,
+        customPrinting: data.customPrinting,
+        designNotes: data.designNotes,
+        designFileUrl: data.designFileUrl
+      });
+      return { success: true, guest: true, fallback: true };
     },
     onSuccess: (result: unknown) => {
       const isGuest = result && typeof result === 'object' && 'guest' in result && result.guest;
