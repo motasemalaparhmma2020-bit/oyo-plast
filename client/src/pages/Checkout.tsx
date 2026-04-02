@@ -586,61 +586,72 @@ export default function Checkout() {
                 {formData.paymentMethod === "digital_wallet" && digitalWallets.length > 0 && (
                   <div className="mt-6 space-y-4">
                     <h3 className="font-semibold text-lg">اختر المحفظة الإلكترونية</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-3">
                       {digitalWallets.map((wallet: any) => (
                         <div
                           key={wallet.id}
-                          className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                          className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
                             formData.selectedWalletId === wallet.id
                               ? "border-primary bg-primary/5"
                               : "border-gray-200 hover:border-gray-300"
                           }`}
                           onClick={() => setFormData({ ...formData, selectedWalletId: wallet.id })}
                         >
-                          {wallet.logoUrl && (
-                            <img src={wallet.logoUrl} alt={wallet.name} className="w-10 h-10 rounded object-contain flex-shrink-0" />
-                          )}
-                          <div className="flex-1">
-                            <p className="font-bold text-sm">{wallet.name}</p>
-                            <p className="text-xs text-gray-600">المستلم: {wallet.receiverName}</p>
-                            <div className="flex items-center gap-1 mt-1">
-                              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">
-                                {wallet.phoneNumber}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigator.clipboard.writeText(wallet.phoneNumber);
-                                  toast({ title: "✅ تم نسخ الرقم" });
-                                }}
-                                className="text-blue-600 hover:text-blue-800"
-                              >
-                                <Copy className="h-3 w-3" />
-                              </button>
+                          <div className="flex items-start gap-4">
+                            {wallet.logoUrl && (
+                              <img src={wallet.logoUrl} alt={wallet.name} className="w-12 h-12 rounded object-contain flex-shrink-0" />
+                            )}
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between mb-3">
+                                <p className="font-bold text-base">{wallet.name}</p>
+                                {formData.selectedWalletId === wallet.id && (
+                                  <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+                                )}
+                              </div>
+                              
+                              {/* Receiver Name */}
+                              <div className="mb-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">باسم المستلم</p>
+                                <p className="font-bold text-sm">{wallet.receiverName}</p>
+                              </div>
+
+                              {/* Phone Number */}
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">رقم التحويل/الدفع</p>
+                                  <p className="font-mono font-bold text-sm">{wallet.phoneNumber}</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(wallet.phoneNumber);
+                                    toast({ title: "✅ تم نسخ الرقم" });
+                                  }}
+                                  className="p-3 bg-blue-100 dark:bg-blue-900 hover:bg-blue-200 dark:hover:bg-blue-800 rounded-lg text-blue-600 dark:text-blue-400 transition-colors flex-shrink-0"
+                                >
+                                  <Copy className="h-5 w-5" />
+                                </button>
+                              </div>
                             </div>
                           </div>
-                          {formData.selectedWalletId === wallet.id && (
-                            <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
-                          )}
                         </div>
                       ))}
                     </div>
 
-                    {/* Purchase Code Input */}
+                    {/* Purchase Code Input - OPTIONAL */}
                     {formData.selectedWalletId && (
-                      <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                        <Label className="font-semibold mb-2 block">أدخل كود الشراء *</Label>
+                      <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                        <Label className="font-semibold mb-2 block">كود الشراء (اختياري)</Label>
                         <Input
                           type="text"
                           value={formData.purchaseCode}
                           onChange={(e) => setFormData({ ...formData, purchaseCode: e.target.value })}
-                          placeholder="أدخل الرمز المكتوب على التطبيق"
+                          placeholder="أدخل الكود إذا لزم الأمر (اختياري)"
                           className="font-mono"
-                          required
                         />
-                        <p className="text-xs text-gray-600 mt-2">
-                          ⚠️ أدخل الكود بدقة - سيتم التحقق منه عند تأكيد الطلب
+                        <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">
+                          💡 إذا طلب منك الموقع أو التطبيق كود تحويل، أدخله هنا
                         </p>
                       </div>
                     )}

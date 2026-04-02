@@ -68,7 +68,9 @@ export function useCart() {
       if (!res.ok) throw new Error("Failed to fetch cart");
       return api.cart.list.responses[200].parse(await res.json());
     },
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 
