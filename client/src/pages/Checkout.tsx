@@ -370,6 +370,26 @@ export default function Checkout() {
       return;
     }
 
+    // Validate digital wallet payment
+    if (formData.paymentMethod === "digital_wallet") {
+      if (!formData.selectedWalletId) {
+        toast({
+          title: "خطأ",
+          description: "يرجى اختيار محفظة إلكترونية",
+          variant: "destructive"
+        });
+        return;
+      }
+      if (!formData.purchaseCode || formData.purchaseCode.trim() === "") {
+        toast({
+          title: "خطأ",
+          description: "يرجى إدخال رقم الحوالة أو كود الشراء",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -639,19 +659,20 @@ export default function Checkout() {
                       ))}
                     </div>
 
-                    {/* Purchase Code Input - OPTIONAL */}
+                    {/* Purchase Code Input - REQUIRED */}
                     {formData.selectedWalletId && (
-                      <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
-                        <Label className="font-semibold mb-2 block">كود الشراء (اختياري)</Label>
+                      <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <Label className="font-semibold mb-2 block">كود الشراء/رقم الحوالة *</Label>
                         <Input
                           type="text"
                           value={formData.purchaseCode}
                           onChange={(e) => setFormData({ ...formData, purchaseCode: e.target.value })}
-                          placeholder="أدخل الكود إذا لزم الأمر (اختياري)"
+                          placeholder="أدخل رقم السند/الحوالة أو كود التحويل"
                           className="font-mono"
+                          required
                         />
-                        <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">
-                          💡 إذا طلب منك الموقع أو التطبيق كود تحويل، أدخله هنا
+                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                          ⚠️ <strong>إلزامي:</strong> يجب إدخال رقم الحوالة أو كود الدفع الذي حصلت عليه من المحفظة - الإدارة ستتحقق منه للموافقة على طلبك
                         </p>
                       </div>
                     )}
