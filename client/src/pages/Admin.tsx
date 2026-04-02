@@ -228,6 +228,268 @@ const bgColorOptions = [
   { value: "orange", label: "برتقالي", class: "bg-orange-50 dark:bg-orange-900/20" },
 ];
 
+// ─── Logo & Splash Manager ────────────────────────────────────────────────────
+function LogoSplashManager({ adminToken, toast }: { adminToken: string | null; toast: any }) {
+  const queryClient = useQueryClient();
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [bgPreview, setBgPreview] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [form, setForm] = useState({
+    splashBgColor: "#1565C0",
+    splashText: "أويو بلاست",
+    splashTextColor: "#ffffff",
+    showSplash: true,
+  });
+
+  const { data: current, isLoading } = useQuery<any>({
+    queryKey: ["/api/logo-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/logo-settings");
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    if (current) {
+      setForm({
+        splashBgColor: current.splashBgColor || "#1565C0",
+        splashText: current.splashText || "أويو بلاست",
+        splashTextColor: current.splashTextColor || "#ffffff",
+        showSplash: current.showSplash !== false,
+      });
+    }
+  }, [current]);
+
+  const handleSave = async () => {
+    if (!adminToken) return;
+    setIsSaving(true);
+    try {
+      const formData = new FormData();
+      formData.append("splashBgColor", form.splashBgColor);
+      formData.append("splashText", form.splashText);
+      formData.append("splashTextColor", form.splashTextColor);
+      formData.append("showSplash", String(form.showSplash));
+
+      if (logoPreview && logoPreview.startsWith("data:")) {
+        // Convert base64 to file
+        const res = await fetch(logoPreview);
+        const blob = await res.blob();
+        formData.append("logo", blob, "logo.jpg");
+      }
+      if (bgPreview && bgPreview.startsWith("data:")) {
+        const res = await fetch(bgPreview);
+        const blob = await res.blob();
+        formData.append("splashBg", blob, "splash-bg.jpg");
+      }
+
+      const response = await fetch("/api/admin/logo-settings", {
+        method: "PATCH",
+        headers: { "x-admin-token": adminToken },
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error("Failed to save");
+      queryClient.invalidateQueries({ queryKey: ["/api/logo-settings"] });
+      toast({ title: "✅ تم حفظ إعدادات الشعار بنجاح" });
+    } catch (err) {
+      toast({ title: "❌ فشل الحفظ", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: (v: string) => void
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setter(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const removeLogo = async () => {
+    if (!adminToken) return;
+    setLogoPreview(null);
+    await fetch("/api/admin/logo-settings", {
+      method: "PATCH",
+      headers: { "x-admin-token": adminToken, "Content-Type": "application/json" },
+      body: JSON.stringify({ logoUrl: null }),
+    });
+    queryClient.invalidateQueries({ queryKey: ["/api/logo-settings"] });
+    toast({ title: "تم حذف الشعار" });
+  };
+
+  const removeBg = async () => {
+    if (!adminToken) return;
+    setBgPreview(null);
+    await fetch("/api/admin/logo-settings", {
+      method: "PATCH",
+      headers: { "x-admin-token": adminToken, "Content-Type": "application/json" },
+      body: JSON.stringify({ splashBgUrl: null }),
+    });
+    queryClient.invalidateQueries({ queryKey: ["/api/logo-settings"] });
+    toast({ title: "تم حذف خلفية السبلاش" });
+  };
+
+  const currentLogo = logoPreview || current?.logoUrl;
+  const currentBg = bgPreview || current?.splashBgUrl;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      {/* Left: Logo Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-right">🖼️ شعار المتجر</CardTitle>
+          <CardDescription className="text-right">
+            الشعار يظهر في شاشة التحميل وفي الـ Navbar وعلى PWA
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Preview */}
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-32 h-32 rounded-2xl border-2 border-dashed border-gray-300 overflow-hidden bg-gray-50 flex items-center justify-center">
+              {currentLogo ? (
+                <img src={currentLogo} alt="logo" className="w-full h-full object-contain" />
+              ) : (
+                <span className="text-gray-400 text-sm text-center px-2">لا يوجد شعار</span>
+              )}
+            </div>
+            {currentLogo && (
+              <Button variant="destructive" size="sm" onClick={removeLogo}>
+                <Trash2 className="h-4 w-4 ml-1" /> حذف الشعار
+              </Button>
+            )}
+          </div>
+
+          {/* Upload */}
+          <div>
+            <Label className="block text-right mb-1">رفع شعار جديد (512×512 px)</Label>
+            <Input
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleFileChange(e, setLogoPreview)}
+              className="text-right"
+            />
+            <p className="text-xs text-gray-500 text-right mt-1">JPG أو PNG • حجم أقصى 2MB</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Right: Splash Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-right">🚀 شاشة البداية (Splash)</CardTitle>
+          <CardDescription className="text-right">
+            تظهر للعميل عند أول فتح للتطبيق
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+
+          {/* Preview of splash */}
+          <div
+            className="w-full h-40 rounded-xl flex flex-col items-center justify-center gap-2 relative overflow-hidden border"
+            style={{
+              backgroundColor: form.splashBgColor,
+              backgroundImage: currentBg ? `url(${currentBg})` : undefined,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }}
+          >
+            {currentBg && <div className="absolute inset-0 bg-black/40" />}
+            <div className="relative z-10 flex flex-col items-center gap-1">
+              {currentLogo && (
+                <div className="w-14 h-14 rounded-xl overflow-hidden bg-white flex items-center justify-center">
+                  <img src={currentLogo} className="w-full h-full object-contain" alt="" />
+                </div>
+              )}
+              <span className="font-bold text-base" style={{ color: currentBg ? "#fff" : form.splashTextColor }}>
+                {form.splashText}
+              </span>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="space-y-3" dir="rtl">
+            <div>
+              <Label>نص الشاشة</Label>
+              <Input
+                value={form.splashText}
+                onChange={(e) => setForm({ ...form, splashText: e.target.value })}
+                placeholder="أويو بلاست"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>لون الخلفية</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="color"
+                    value={form.splashBgColor}
+                    onChange={(e) => setForm({ ...form, splashBgColor: e.target.value })}
+                    className="h-8 w-8 rounded border cursor-pointer"
+                  />
+                  <span className="text-sm text-gray-500">{form.splashBgColor}</span>
+                </div>
+              </div>
+              <div>
+                <Label>لون النص</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="color"
+                    value={form.splashTextColor}
+                    onChange={(e) => setForm({ ...form, splashTextColor: e.target.value })}
+                    className="h-8 w-8 rounded border cursor-pointer"
+                  />
+                  <span className="text-sm text-gray-500">{form.splashTextColor}</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <Label>صورة خلفية (اختياري) - 1200×400 px</Label>
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleFileChange(e, setBgPreview)}
+                className="mt-1"
+              />
+              {currentBg && (
+                <Button variant="ghost" size="sm" className="text-red-500 mt-1" onClick={removeBg}>
+                  <Trash2 className="h-3 w-3 ml-1" /> حذف الخلفية
+                </Button>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between border rounded-lg p-3">
+              <Switch
+                checked={form.showSplash}
+                onCheckedChange={(v) => setForm({ ...form, showSplash: v })}
+              />
+              <span className="text-sm font-medium">تفعيل شاشة البداية</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Save Button */}
+      <div className="md:col-span-2 flex justify-end">
+        <Button
+          onClick={handleSave}
+          disabled={isSaving || !adminToken}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-8"
+        >
+          {isSaving ? <><Loader2 className="h-4 w-4 ml-2 animate-spin" /> جاري الحفظ...</> : <><Save className="h-4 w-4 ml-2" /> حفظ الإعدادات</>}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function BannersOffersSection({ adminToken }: { adminToken: string | null }) {
   const [showBannerForm, setShowBannerForm] = useState(false);
   const [showOfferForm, setShowOfferForm] = useState(false);
@@ -1994,6 +2256,7 @@ export default function Admin() {
             <TabsTrigger value="categories">الأقسام</TabsTrigger>
             <TabsTrigger value="products">المخزون</TabsTrigger>
             <TabsTrigger value="banners-offers">العروض والبنرات</TabsTrigger>
+            <TabsTrigger value="logo-splash">🎨 الشعار والسبلاش</TabsTrigger>
             <TabsTrigger value="navigation">التنقل والطباعة</TabsTrigger>
             <TabsTrigger value="reports">التقارير</TabsTrigger>
             <TabsTrigger value="settings">الإعدادات</TabsTrigger>
@@ -2972,6 +3235,11 @@ export default function Admin() {
             </Card>
             </div>
           </TabsContent>
+          {/* ─── Logo & Splash Tab ────────────────────────────────────── */}
+          <TabsContent value="logo-splash">
+            <LogoSplashManager adminToken={adminToken} toast={toast} />
+          </TabsContent>
+
         </Tabs>
       </div>
 

@@ -806,4 +806,194 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(500).json({ message: "Failed to delete address", details: e.message });
     }
   });
+
+  // ─── Logo & Splash Settings (Public read, Admin write) ──────────────────────
+  app.get("/api/logo-settings", async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query("SELECT * FROM logo_settings ORDER BY id DESC LIMIT 1");
+      if (result.rows.length === 0) {
+        return res.json({
+          logoUrl: null,
+          splashBgUrl: null,
+          splashBgColor: "#ffffff",
+          splashText: "أويو بلاست",
+          splashTextColor: "#2196F3",
+          showSplash: true,
+        });
+      }
+      const row = result.rows[0];
+      res.json({
+        id: row.id,
+        logoUrl: row.logo_url,
+        splashBgUrl: row.splash_bg_url,
+        splashBgColor: row.splash_bg_color,
+        splashText: row.splash_text,
+        splashTextColor: row.splash_text_color,
+        showSplash: row.show_splash,
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب إعدادات الشعار", details: e.message });
+    }
+  });
+
+  app.patch("/api/admin/logo-settings", requireAdmin, upload.fields([
+    { name: "logo", maxCount: 1 },
+    { name: "splashBg", maxCount: 1 },
+  ]), async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+
+      // Check existing record
+      const existing = await dbPool.query("SELECT id FROM logo_settings ORDER BY id DESC LIMIT 1");
+
+      let logoUrl: string | undefined;
+      let splashBgUrl: string | undefined;
+
+      if (files?.logo?.[0]) {
+        logoUrl = `data:${files.logo[0].mimetype};base64,${files.logo[0].buffer.toString("base64")}`;
+      } else if (req.body.logoUrl !== undefined) {
+        logoUrl = req.body.logoUrl;
+      }
+
+      if (files?.splashBg?.[0]) {
+        splashBgUrl = `data:${files.splashBg[0].mimetype};base64,${files.splashBg[0].buffer.toString("base64")}`;
+      } else if (req.body.splashBgUrl !== undefined) {
+        splashBgUrl = req.body.splashBgUrl;
+      }
+
+      const { splashBgColor, splashText, splashTextColor, showSplash } = req.body;
+
+      let result;
+      if (existing.rows.length > 0) {
+        const id = existing.rows[0].id;
+        const setClauses: string[] = [];
+        const values: any[] = [];
+        let idx = 1;
+
+        if (logoUrl !== undefined) { setClauses.push(`logo_url = $${idx++}`); values.push(logoUrl); }
+        if (splashBgUrl !== undefined) { setClauses.push(`splash_bg_url = $${idx++}`); values.push(splashBgUrl); }
+        if (splashBgColor) { setClauses.push(`splash_bg_color = $${idx++}`); values.push(splashBgColor); }
+        if (splashText !== undefined) { setClauses.push(`splash_text = $${idx++}`); values.push(splashText); }
+        if (splashTextColor) { setClauses.push(`splash_text_color = $${idx++}`); values.push(splashTextColor); }
+        if (showSplash !== undefined) { setClauses.push(`show_splash = $${idx++}`); values.push(showSplash === "true" || showSplash === true); }
+        setClauses.push(`updated_at = NOW()`);
+
+        if (setClauses.length > 1) {
+          values.push(id);
+          result = await dbPool.query(
+            `UPDATE logo_settings SET ${setClauses.join(", ")} WHERE id = $${idx} RETURNING *`,
+            values
+          );
+        } else {
+          result = await dbPool.query("SELECT * FROM logo_settings WHERE id = $1", [id]);
+        }
+      } else {
+        result = await dbPool.query(
+          `INSERT INTO logo_settings (logo_url, splash_bg_url, splash_bg_color, splash_text, splash_text_color, show_splash)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+          [
+            logoUrl || null,
+            splashBgUrl || null,
+            splashBgColor || "#ffffff",
+            splashText || "أويو بلاست",
+            splashTextColor || "#2196F3",
+            showSplash !== undefined ? (showSplash === "true" || showSplash === true) : true,
+          ]
+        );
+      }
+
+      const row = result.rows[0];
+      res.json({
+        id: row.id,
+        logoUrl: row.logo_url,
+        splashBgUrl: row.splash_bg_url,
+        splashBgColor: row.splash_bg_color,
+        splashText: row.splash_text,
+        splashTextColor: row.splash_text_color,
+        showSplash: row.show_splash,
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث إعدادات الشعار", details: e.message });
+    }
+  });
+
+  // ─── Offline Sync: receive pending orders ──────────────────────
+  app.post("/api/sync/orders", async (req, res) => {
+    try {
+      const { orders: pendingOrders } = req.body;
+      if (!Array.isArray(pendingOrders) || pendingOrders.length === 0) {
+        return res.json({ synced: 0 });
+      }
+
+      const results = [];
+      for (const orderData of pendingOrders) {
+        try {
+          const order = await storage.createOrder(orderData);
+          results.push({ success: true, id: order.id, localId: orderData.localId });
+        } catch (err: any) {
+          results.push({ success: false, localId: orderData.localId, error: err.message });
+        }
+      }
+
+      res.json({ synced: results.filter(r => r.success).length, results });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل مزامنة الطلبات", details: e.message });
+    }
+  });
+
+  // ─── Products with Pagination support ───────────────────────────
+  app.get("/api/products/paginated", async (req, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
+      const search = req.query.search as string | undefined;
+      const offset = (page - 1) * limit;
+
+      const { pool: dbPool } = await import("./db");
+
+      let countQuery = "SELECT COUNT(*) FROM products";
+      let dataQuery = "SELECT * FROM products";
+      const params: any[] = [];
+      const conditions: string[] = [];
+      let idx = 1;
+
+      if (categoryId) {
+        conditions.push(`category_id = $${idx++}`);
+        params.push(categoryId);
+      }
+      if (search) {
+        conditions.push(`(name ILIKE $${idx} OR description ILIKE $${idx})`);
+        params.push(`%${search}%`);
+        idx++;
+      }
+
+      if (conditions.length > 0) {
+        const where = ` WHERE ${conditions.join(" AND ")}`;
+        countQuery += where;
+        dataQuery += where;
+      }
+
+      const countResult = await dbPool.query(countQuery, params);
+      const total = parseInt(countResult.rows[0].count);
+
+      dataQuery += ` ORDER BY id DESC LIMIT $${idx} OFFSET $${idx + 1}`;
+      params.push(limit, offset);
+
+      const dataResult = await dbPool.query(dataQuery, params);
+
+      res.json({
+        products: dataResult.rows,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasMore: page * limit < total,
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب المنتجات", details: e.message });
+    }
+  });
 }

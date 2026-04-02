@@ -25,6 +25,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useState, useRef, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
+import { useLogoSettings } from "@/hooks/use-logo-settings";
 import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
 
 // ─── Search Bar Component ────────────────────────────────────────
@@ -153,9 +154,12 @@ function SearchBar({ onClose }: { onClose?: () => void }) {
 export function Navbar() {
   const { user, logout, isAuthenticated } = useAuth();
   const { data: cart } = useCart();
+  const { data: logoSettings } = useLogoSettings();
   const [isOpen, setIsOpen] = useState(false);
   const [mobileSearch, setMobileSearch] = useState(false);
   const [location] = useLocation();
+  
+  const logoSrc = logoSettings?.logoUrl || oyoLogo;
   const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
     return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
   });
@@ -201,7 +205,7 @@ export function Navbar() {
             </SheetTrigger>
             <SheetContent side="right">
               <div className="flex flex-col items-center pt-4 mb-6">
-                <img src={oyoLogo} alt="OYO PLAST" className="w-24 h-24 object-contain" />
+                <img src={logoSrc} alt="OYO PLAST" className="w-24 h-24 object-contain rounded-xl" />
               </div>
               <div className="flex flex-col space-y-4">
                 <Link href="/" onClick={() => setIsOpen(false)} className="text-lg font-medium">الرئيسية</Link>
@@ -226,7 +230,7 @@ export function Navbar() {
         <div className="flex-shrink-0">
           <Link href="/" className="flex items-center gap-2" data-testid="link-logo">
             <img 
-              src={oyoLogo} 
+              src={logoSrc} 
               alt="OYO PLAST" 
               className="h-10 w-10 md:h-12 md:w-12 object-contain rounded-lg shadow-md"
             />

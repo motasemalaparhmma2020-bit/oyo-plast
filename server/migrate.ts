@@ -45,6 +45,31 @@ export async function runMigrations(): Promise<void> {
       );
     `);
 
+    // Logo & App settings table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS logo_settings (
+        id SERIAL PRIMARY KEY,
+        logo_url TEXT,
+        splash_bg_url TEXT,
+        splash_bg_color VARCHAR(7) DEFAULT '#ffffff',
+        splash_text TEXT DEFAULT 'أويو بلاست',
+        splash_text_color VARCHAR(7) DEFAULT '#2196F3',
+        show_splash BOOLEAN DEFAULT true,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    // Pending offline orders table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pending_sync_orders (
+        id SERIAL PRIMARY KEY,
+        guest_id TEXT NOT NULL,
+        order_data JSONB NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        synced_at TIMESTAMP
+      );
+    `);
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

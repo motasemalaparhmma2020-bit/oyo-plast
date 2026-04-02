@@ -67,6 +67,8 @@ import NotFound from "@/pages/not-found";
 
 import { Footer, MobileFooter } from "@/components/Footer";
 import { GlobalBottomNav } from "@/components/GlobalBottomNav";
+import { SplashScreen } from "@/components/SplashScreen";
+import { useOfflineSync } from "@/hooks/use-offline-sync";
 
 // Component to redirect users who need to complete registration
 function RequireAccountType({ children }: { children: React.ReactNode }) {
@@ -101,6 +103,27 @@ function RequireAccountType({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function OfflineSyncProvider() {
+  const { isOnline, syncedCount } = useOfflineSync();
+  
+  useEffect(() => {
+    if (syncedCount > 0) {
+      // Could show a toast here, but we keep it silent
+      console.log(`[Offline] ${syncedCount} orders synced`);
+    }
+  }, [syncedCount]);
+
+  return (
+    <>
+      {!isOnline && (
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-orange-500 text-white text-center text-xs py-1 font-medium" dir="rtl">
+          📴 أنت غير متصل بالإنترنت - يمكنك التسوق بشكل طبيعي، طلباتك ستُرسل عند الاتصال
+        </div>
+      )}
+    </>
+  );
+}
+
 function Router() {
   const { isAuthenticated, user, isLoading } = useAuth();
   const [location] = useLocation();
@@ -118,61 +141,65 @@ function Router() {
   const hideBottomNav = location === '/admin' || location === '/auth' || location === '/register';
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16 md:pb-0">
-      <Navbar />
-      <main className="flex-grow">
-        <Switch>
-          {/* Public pages - no auth required */}
-          <Route path="/auth">
-            {isAuthenticated ? (needsAccountType ? <Redirect to="/register" /> : <Redirect to="/" />) : <Auth />}
-          </Route>
-          <Route path="/register" component={Register} />
-          <Route path="/admin" component={Admin} />
-          <Route path="/about" component={About} />
-          <Route path="/privacy" component={Privacy} />
-          <Route path="/terms" component={Terms} />
-          <Route path="/returns" component={Returns} />
-          
-          {/* Public pages - no auth required */}
-          <Route path="/" component={Home} />
-          <Route path="/products" component={Products} />
-          <Route path="/product/:id" component={ProductDetail} />
-          <Route path="/cart" component={Cart} />
-          
-          {/* Protected pages - auth required AND accountType required */}
-          <Route path="/checkout">
-            <RequireAccountType><Checkout /></RequireAccountType>
-          </Route>
+    <>
+      <SplashScreen />
+      <OfflineSyncProvider />
+      <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16 md:pb-0">
+        <Navbar />
+        <main className="flex-grow">
+          <Switch>
+            {/* Public pages - no auth required */}
+            <Route path="/auth">
+              {isAuthenticated ? (needsAccountType ? <Redirect to="/register" /> : <Redirect to="/" />) : <Auth />}
+            </Route>
+            <Route path="/register" component={Register} />
+            <Route path="/admin" component={Admin} />
+            <Route path="/about" component={About} />
+            <Route path="/privacy" component={Privacy} />
+            <Route path="/terms" component={Terms} />
+            <Route path="/returns" component={Returns} />
+            
+            {/* Public pages - no auth required */}
+            <Route path="/" component={Home} />
+            <Route path="/products" component={Products} />
+            <Route path="/product/:id" component={ProductDetail} />
+            <Route path="/cart" component={Cart} />
+            
+            {/* Protected pages - auth required AND accountType required */}
+            <Route path="/checkout">
+              <RequireAccountType><Checkout /></RequireAccountType>
+            </Route>
 
-          <Route path="/order-confirmation/:id">
-            <OrderConfirmation />
-          </Route>
-          <Route path="/orders">
-            <RequireAccountType><Orders /></RequireAccountType>
-          </Route>
-          <Route path="/profile">
-            <RequireAccountType><Profile /></RequireAccountType>
-          </Route>
-          <Route path="/wishlist">
-            <RequireAccountType><Wishlist /></RequireAccountType>
-          </Route>
-          <Route path="/notifications">
-            <RequireAccountType><Notifications /></RequireAccountType>
-          </Route>
-          <Route path="/account">
-            <RequireAccountType><MyAccount /></RequireAccountType>
-          </Route>
-          <Route path="/marketer/coupons">
-            <RequireAccountType><MarketerCoupons /></RequireAccountType>
-          </Route>
-          <Route path="/printing" component={Printing} />
-          <Route component={NotFound} />
-        </Switch>
-      </main>
-      {!hideFooter && <MobileFooter />}
-      {!hideFooter && <Footer />}
-      {!hideBottomNav && <GlobalBottomNav />}
-    </div>
+            <Route path="/order-confirmation/:id">
+              <OrderConfirmation />
+            </Route>
+            <Route path="/orders">
+              <RequireAccountType><Orders /></RequireAccountType>
+            </Route>
+            <Route path="/profile">
+              <RequireAccountType><Profile /></RequireAccountType>
+            </Route>
+            <Route path="/wishlist">
+              <RequireAccountType><Wishlist /></RequireAccountType>
+            </Route>
+            <Route path="/notifications">
+              <RequireAccountType><Notifications /></RequireAccountType>
+            </Route>
+            <Route path="/account">
+              <RequireAccountType><MyAccount /></RequireAccountType>
+            </Route>
+            <Route path="/marketer/coupons">
+              <RequireAccountType><MarketerCoupons /></RequireAccountType>
+            </Route>
+            <Route path="/printing" component={Printing} />
+            <Route component={NotFound} />
+          </Switch>
+        </main>
+        {!hideFooter && <MobileFooter />}
+        {!hideFooter && <Footer />}
+        {!hideBottomNav && <GlobalBottomNav />}
+      </div>
+    </>
   );
 }
 
