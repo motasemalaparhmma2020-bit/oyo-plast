@@ -397,8 +397,8 @@ export default function Checkout() {
         discountAmount: discountAmount > 0 ? discountAmount.toString() : null
       };
 
-      await apiRequest("POST", "/api/orders/create", {
-        customerName: user?.fullName || user?.username || "عميل",
+      const response = await apiRequest("POST", "/api/orders/create", {
+        customerName: user?.fullName || user?.email || "عميل",
         customerEmail: user?.email || "guest@oyoplast.com",
         customerPhone: formData.customerPhone,
         shippingCity: formData.shippingCity,
@@ -419,7 +419,12 @@ export default function Checkout() {
         description: "سيتم التواصل معك قريباً لتأكيد الطلب",
       });
       
-      setLocation("/profile");
+      const createdOrderId = (response as any)?.id;
+      if (createdOrderId) {
+        setLocation(`/order-confirmation/${createdOrderId}`);
+      } else {
+        setLocation("/profile");
+      }
     } catch (error) {
       toast({
         title: "خطأ",
