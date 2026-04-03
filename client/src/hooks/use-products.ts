@@ -12,8 +12,10 @@ export function useProducts(categoryId?: string, search?: string) {
       
       const res = await fetch(url.toString(), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch products");
-      return api.products.list.responses[200].parse(await res.json());
+      return await res.json();
     },
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -38,8 +40,10 @@ export function useCategories() {
     queryFn: async () => {
       const res = await fetch(api.categories.list.path, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch categories");
-      return api.categories.list.responses[200].parse(await res.json());
+      return await res.json();
     },
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -52,5 +56,7 @@ export function useBestsellingProducts(limit: number = 8) {
       if (!res.ok) throw new Error("Failed to fetch bestselling products");
       return res.json();
     },
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 }
