@@ -419,12 +419,7 @@ export default function Checkout() {
         description: "سيتم التواصل معك قريباً لتأكيد الطلب",
       });
       
-      const createdOrderId = (response as any)?.id;
-      if (createdOrderId) {
-        setLocation(`/order-confirmation/${createdOrderId}`);
-      } else {
-        setLocation("/profile");
-      }
+      setLocation(`/order-confirmation/${(response as any)?.id ?? ""}`);
     } catch (error) {
       toast({
         title: "خطأ",
