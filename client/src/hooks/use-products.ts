@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
+import { useMemo } from "react";
 
 // GET /api/products
 export function useProducts(categoryId?: string, search?: string) {
@@ -17,6 +18,18 @@ export function useProducts(categoryId?: string, search?: string) {
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
+}
+
+export function useCategoriesAndProducts(categoryId?: string, search?: string) {
+  const productsQuery = useProducts(categoryId, search);
+  const categoriesQuery = useCategories();
+  return useMemo(() => ({
+    products: productsQuery.data ?? [],
+    categories: categoriesQuery.data ?? [],
+    isLoading: productsQuery.isLoading || categoriesQuery.isLoading,
+    isFetching: productsQuery.isFetching || categoriesQuery.isFetching,
+    error: productsQuery.error || categoriesQuery.error,
+  }), [productsQuery.data, categoriesQuery.data, productsQuery.isLoading, categoriesQuery.isLoading, productsQuery.isFetching, categoriesQuery.isFetching, productsQuery.error, categoriesQuery.error]);
 }
 
 // GET /api/products/:id

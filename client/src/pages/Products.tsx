@@ -1,4 +1,4 @@
-import { useProducts, useCategories } from "@/hooks/use-products";
+import { useCategoriesAndProducts } from "@/hooks/use-products";
 import { ProductCard } from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
 import { Search, ShoppingBag, Package, ChevronLeft, ChevronRight } from "lucide-react";
@@ -17,12 +17,10 @@ export default function Products() {
   const [search, setSearch] = useState(initialSearch);
   const [searchTerm, setSearchTerm] = useState(initialSearch);
 
-  const { data: products, isLoading } = useProducts(
+  const { products, categories, isLoading } = useCategoriesAndProducts(
     selectedCategory || undefined,
     searchTerm
   );
-  
-  const { data: categories } = useCategories();
   
   // Pagination hook
   const {

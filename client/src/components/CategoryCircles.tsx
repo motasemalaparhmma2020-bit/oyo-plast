@@ -68,6 +68,8 @@ export function CategoryCircles({
                     src={category.imageUrl}
                     alt={category.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    loading="lazy"
+                    decoding="async"
                     data-testid={`category-image-${category.id}`}
                   />
                 </div>
