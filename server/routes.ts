@@ -526,19 +526,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/admin/home-settings", requireAdmin, async (req, res) => {
     try {
-      const settings = await storage.updateHomePageSettings({
-        primaryColor: req.body.primaryColor,
-        accentColor: req.body.accentColor,
-        showHeader: req.body.showHeader ?? true,
-        showBanners: req.body.showBanners ?? true,
-        showOffers: req.body.showOffers ?? true,
-        showCategories: req.body.showCategories ?? true,
-        footerPrivacyText: req.body.footerPrivacyText ?? "سياسة الخصوصية",
-        footerAffiliateText: req.body.footerAffiliateText ?? "التسويق بالعمولة",
-        footerReturnsText: req.body.footerReturnsText ?? "سياسة الاسترجاع",
-        footerBottomText: req.body.footerBottomText ?? "أويو بلاست - مستلزمات التغليف",
-        signupEntryMode: req.body.signupEntryMode ?? "cart",
-      });
+      const body = req.body;
+      const updateData: Record<string, any> = {
+        showHeader: body.showHeader ?? true,
+        showBanners: body.showBanners ?? true,
+        showOffers: body.showOffers ?? true,
+        showCategories: body.showCategories ?? true,
+        footerPrivacyText: body.footerPrivacyText ?? "سياسة الخصوصية",
+        footerAffiliateText: body.footerAffiliateText ?? "التسويق بالعمولة",
+        footerReturnsText: body.footerReturnsText ?? "سياسة الاسترجاع",
+        footerBottomText: body.footerBottomText ?? "أويو بلاست - مستلزمات التغليف",
+        signupEntryMode: body.signupEntryMode ?? "cart",
+        loginFlow: body.loginFlow ?? "checkout",
+      };
+      if (body.primaryColor !== undefined) updateData.primaryColor = body.primaryColor;
+      if (body.accentColor !== undefined) updateData.accentColor = body.accentColor;
+      if (body.privacyContent !== undefined) updateData.privacyContent = body.privacyContent;
+      if (body.returnsContent !== undefined) updateData.returnsContent = body.returnsContent;
+      if (body.affiliateContent !== undefined) updateData.affiliateContent = body.affiliateContent;
+      const settings = await storage.updateHomePageSettings(updateData as any);
       res.json(settings);
     } catch (e: any) {
       res.status(500).json({ message: "فشل تحديث إعدادات الصفحة الرئيسية", details: e.message });

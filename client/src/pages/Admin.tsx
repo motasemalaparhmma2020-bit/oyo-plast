@@ -1641,6 +1641,60 @@ function HomePageSettingsSection({ adminToken }: { adminToken: string | null }) 
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>متى يُطلب تسجيل الدخول</Label>
+              <Select value={settings?.loginFlow || "checkout"} onValueChange={(value) => handleText("loginFlow", value)}>
+                <SelectTrigger data-testid="select-login-flow">
+                  <SelectValue placeholder="اختر" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="checkout">عند إتمام الطلب فقط</SelectItem>
+                  <SelectItem value="cart">عند إضافة للسلة</SelectItem>
+                  <SelectItem value="none">لا يُطلب (دائماً ضيف)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">يتحكم في متى يُطلب من المستخدم تسجيل الدخول</p>
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Page Content Editor */}
+        <div className="space-y-4">
+          <Label className="text-base font-semibold block">محتوى الصفحات (اختياري)</Label>
+          <p className="text-xs text-muted-foreground">إذا تركت الحقل فارغاً سيُعرض المحتوى الافتراضي. عند الكتابة يُستبدل المحتوى الافتراضي بما تكتبه.</p>
+          <div className="grid gap-4">
+            <div>
+              <Label>محتوى صفحة سياسة الخصوصية</Label>
+              <textarea
+                className="w-full border rounded-md p-3 text-sm bg-background resize-y min-h-[120px]"
+                value={settings?.privacyContent || ""}
+                onChange={(e) => handleText("privacyContent", e.target.value)}
+                placeholder="اكتب محتوى صفحة سياسة الخصوصية هنا..."
+                data-testid="textarea-privacy-content"
+              />
+            </div>
+            <div>
+              <Label>محتوى صفحة سياسة الاسترجاع</Label>
+              <textarea
+                className="w-full border rounded-md p-3 text-sm bg-background resize-y min-h-[120px]"
+                value={settings?.returnsContent || ""}
+                onChange={(e) => handleText("returnsContent", e.target.value)}
+                placeholder="اكتب محتوى صفحة سياسة الاسترجاع هنا..."
+                data-testid="textarea-returns-content"
+              />
+            </div>
+            <div>
+              <Label>محتوى صفحة التسويق بالعمولة</Label>
+              <textarea
+                className="w-full border rounded-md p-3 text-sm bg-background resize-y min-h-[120px]"
+                value={settings?.affiliateContent || ""}
+                onChange={(e) => handleText("affiliateContent", e.target.value)}
+                placeholder="اكتب محتوى صفحة التسويق بالعمولة هنا..."
+                data-testid="textarea-affiliate-content"
+              />
+            </div>
           </div>
         </div>
 

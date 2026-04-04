@@ -99,6 +99,26 @@ export async function runMigrations(): Promise<void> {
         ADD COLUMN IF NOT EXISTS enable_variant_product_page BOOLEAN NOT NULL DEFAULT false;
     `);
 
+    // Extra columns for navigation settings
+    await client.query(`
+      ALTER TABLE navigation_settings
+        ADD COLUMN IF NOT EXISTS show_signup_entry_point BOOLEAN NOT NULL DEFAULT true;
+    `);
+
+    // Footer content & login flow columns for home_page_settings
+    await client.query(`
+      ALTER TABLE home_page_settings
+        ADD COLUMN IF NOT EXISTS footer_privacy_text TEXT NOT NULL DEFAULT 'سياسة الخصوصية',
+        ADD COLUMN IF NOT EXISTS footer_affiliate_text TEXT NOT NULL DEFAULT 'التسويق بالعمولة',
+        ADD COLUMN IF NOT EXISTS footer_returns_text TEXT NOT NULL DEFAULT 'سياسة الاسترجاع',
+        ADD COLUMN IF NOT EXISTS footer_bottom_text TEXT NOT NULL DEFAULT 'أويو بلاست - مستلزمات التغليف',
+        ADD COLUMN IF NOT EXISTS signup_entry_mode TEXT NOT NULL DEFAULT 'cart',
+        ADD COLUMN IF NOT EXISTS privacy_content TEXT,
+        ADD COLUMN IF NOT EXISTS returns_content TEXT,
+        ADD COLUMN IF NOT EXISTS affiliate_content TEXT,
+        ADD COLUMN IF NOT EXISTS login_flow TEXT NOT NULL DEFAULT 'checkout';
+    `);
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

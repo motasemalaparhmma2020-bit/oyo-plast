@@ -104,6 +104,46 @@ function RequireAccountType({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Merges guest cart into server cart when user logs in
+function CartMerger() {
+  const { isAuthenticated } = useAuth();
+  const wasAuthenticated = React.useRef(false);
+
+  useEffect(() => {
+    if (isAuthenticated && !wasAuthenticated.current) {
+      // User just logged in — merge guest cart to server cart
+      const guestCart: any[] = JSON.parse(localStorage.getItem('guestCart') || '[]');
+      if (guestCart.length > 0) {
+        (async () => {
+          for (const item of guestCart) {
+            try {
+              await fetch('/api/cart', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                  productId: item.productId,
+                  quantity: item.quantity,
+                  selectedSize: item.selectedSize,
+                  selectedColor: item.selectedColor,
+                  customPrinting: item.customPrinting,
+                  designNotes: item.designNotes,
+                  designFileUrl: item.designFileUrl,
+                }),
+              });
+            } catch {}
+          }
+          localStorage.removeItem('guestCart');
+          queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
+        })();
+      }
+    }
+    wasAuthenticated.current = isAuthenticated;
+  }, [isAuthenticated]);
+
+  return null;
+}
+
 function OfflineSyncProvider() {
   const { isOnline, syncedCount } = useOfflineSync();
   
@@ -138,12 +178,13 @@ function Router() {
   
   // Hide traditional footer on mobile-first pages (they use GlobalBottomNav instead)
   const hideFooter = location === '/' || location === '/products' || location.startsWith('/product/');
-  // Hide GlobalBottomNav only on admin/auth pages
-  const hideBottomNav = location === '/admin' || location === '/auth' || location === '/register';
+  // Hide GlobalBottomNav only on admin page
+  const hideBottomNav = location === '/admin';
 
   return (
     <>
       <SplashScreen />
+      <CartMerger />
       <OfflineSyncProvider />
       <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16 md:pb-0">
         <Navbar />
@@ -164,6 +205,7 @@ function Router() {
             <Route path="/" component={Home} />
             <Route path="/products" component={Products} />
             <Route path="/product/:id" component={ProductDetail} />
+            <Route path="/products/:id" component={ProductDetail} />
             <Route path="/cart" component={Cart} />
             
             {/* Guest Checkout - no auth required */}

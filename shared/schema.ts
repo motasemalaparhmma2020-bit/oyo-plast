@@ -414,6 +414,12 @@ export const homePageSettings = pgTable("home_page_settings", {
   footerReturnsText: text("footer_returns_text").default("سياسة الاسترجاع").notNull(),
   footerBottomText: text("footer_bottom_text").default("أويو بلاست - مستلزمات التغليف").notNull(),
   signupEntryMode: text("signup_entry_mode").default("cart").notNull(),
+  // Page content (editable from admin)
+  privacyContent: text("privacy_content"),
+  returnsContent: text("returns_content"),
+  affiliateContent: text("affiliate_content"),
+  // Login flow control
+  loginFlow: text("login_flow").default("checkout").notNull(), // 'checkout' | 'cart' | 'none'
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

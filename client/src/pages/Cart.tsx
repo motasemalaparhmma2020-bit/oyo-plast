@@ -264,8 +264,27 @@ export default function Cart() {
     ? (cartItems?.length ?? 0)
     : guestCart.length;
 
-  /* ─── وجهة زر "إتمام الطلب" ─── */
-  const checkoutHref = isAuthenticated ? "/checkout" : "/auth";
+  const { data: homeSettings } = useQuery<any>({
+    queryKey: ["/api/home-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/home-settings", { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+
+  /* ─── وجهة زر "إتمام الطلب" بناءً على إعداد loginFlow ─── */
+  const loginFlow: string = homeSettings?.loginFlow || "checkout";
+  let checkoutHref: string;
+  if (isAuthenticated) {
+    checkoutHref = "/checkout";
+  } else if (loginFlow === "none") {
+    checkoutHref = "/guest-checkout";
+  } else {
+    // "checkout" or "cart" → send unauthenticated users to login
+    checkoutHref = "/auth";
+  }
+  const checkoutLabel = isAuthenticated ? "إتمام الطلب" : (loginFlow === "none" ? "إتمام الطلب" : "تسجيل الدخول لإتمام الطلب");
 
   return (
     <div className="max-w-lg mx-auto px-4 py-5 pb-24">
@@ -354,7 +373,7 @@ export default function Cart() {
             className="w-full h-12 text-base font-bold rounded-xl bg-teal-500 hover:bg-teal-600 shadow-md"
             data-testid="button-checkout"
           >
-            {isAuthenticated ? "إتمام الطلب" : "تسجيل الدخول لإتمام الطلب"}
+            {checkoutLabel}
             <LogIn className="mr-2 h-4 w-4" />
           </Button>
         </Link>
