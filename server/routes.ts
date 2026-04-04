@@ -122,7 +122,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const imageUrl = result.rows[0].image_url;
       if (!imageUrl) return res.status(404).send("No image");
       if (!imageUrl.startsWith("data:")) return res.redirect(imageUrl);
-      const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/s);
+      const matches = imageUrl.match(new RegExp("^data:([^;]+);base64,(.+)$", "s"));
       if (!matches) return res.status(400).send("Invalid image data");
       const mimeType = matches[1];
       const imageData = Buffer.from(matches[2], "base64");
@@ -146,7 +146,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!imageUrls || !imageUrls[imgIndex]) return res.status(404).send("No image at index");
       const imageUrl = imageUrls[imgIndex];
       if (!imageUrl.startsWith("data:")) return res.redirect(imageUrl);
-      const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/s);
+      const matches = imageUrl.match(new RegExp("^data:([^;]+);base64,(.+)$", "s"));
       if (!matches) return res.status(400).send("Invalid image data");
       const mimeType = matches[1];
       const imageData = Buffer.from(matches[2], "base64");

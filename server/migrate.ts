@@ -86,30 +86,6 @@ export async function runMigrations(): Promise<void> {
       );
     `);
 
-    // Image dimensions table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS image_dimensions (
-        id SERIAL PRIMARY KEY,
-        image_type TEXT NOT NULL UNIQUE,
-        width INTEGER NOT NULL,
-        height INTEGER NOT NULL,
-        description TEXT,
-        updated_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
-
-    // Insert default dimensions if not exist
-    await client.query(`
-      INSERT INTO image_dimensions (image_type, width, height, description)
-      VALUES 
-        ('product', 300, 400, 'Product page images'),
-        ('banner', 1200, 414, 'Homepage banner images'),
-        ('category', 200, 200, 'Category thumbnail images'),
-        ('offer', 600, 72, 'Offer/promotion images'),
-        ('logo', 512, 512, 'Logo/splash images')
-      ON CONFLICT (image_type) DO NOTHING;
-    `);
-
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));
