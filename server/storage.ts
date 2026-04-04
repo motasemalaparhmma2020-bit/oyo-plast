@@ -226,6 +226,7 @@ export class DatabaseStorage implements IStorage {
       footerReturnsText: "سياسة الاسترجاع",
       footerBottomText: "أويو بلاست - مستلزمات التغليف",
       signupEntryMode: "cart",
+      loginFlow: "checkout",
       updatedAt: new Date(),
     }).returning();
     return created;
