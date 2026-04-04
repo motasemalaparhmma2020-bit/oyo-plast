@@ -1,0 +1,22 @@
+{
+  "name": "Oyo Plast",
+  "short_name": "Oyo Plast",
+  "description": "متجر أويو بلاست للمنتجات والتغليف",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#06B6D4",
+  "icons": [
+    {
+      "src": "/uploaded-assets/FB_IMG_1748731871206_1766877101101.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "/uploaded-assets/FB_IMG_1748731871206_1766877101101.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
