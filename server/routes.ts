@@ -184,8 +184,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ─── Admin Products ──────────────────────────────────────────────
   app.get("/api/admin/products", requireAdmin, async (_req, res) => {
-    const prods = await storage.getProducts();
-    res.json(prods);
+    try {
+      const prods = await storage.getProducts();
+      res.json(prods);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحميل المنتجات", details: e.message });
+    }
   });
 
   app.post("/api/admin/products", requireAdmin, async (req, res) => {

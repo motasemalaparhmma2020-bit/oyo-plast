@@ -1,5 +1,5 @@
 import { Product } from "@shared/schema";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +15,6 @@ interface ProductCardProps {
 
 export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProps) {
   const { mutate: addToCart, isPending } = useAddToCart();
-  const [, setLocation] = useLocation();
   const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
     return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
   });
@@ -124,10 +123,7 @@ export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProp
           disabled={product.stock <= 0 || isPending}
           onClick={(e) => {
             e.preventDefault();
-            addToCart(
-              { productId: product.id, quantity: 1 },
-              { onSuccess: () => setLocation("/cart") }
-            );
+            addToCart({ productId: product.id, quantity: 1 });
           }}
           data-testid={`button-add-to-cart-${product.id}`}
         >

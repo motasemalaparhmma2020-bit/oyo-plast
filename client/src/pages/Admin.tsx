@@ -1174,8 +1174,8 @@ function PrintingProductsSection({ adminToken }: { adminToken: string | null }) 
       { productId, showInPrinting: !currentValue },
       {
         onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
           queryClient.invalidateQueries({ queryKey: ['/api/products'] });
-          queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
           queryClient.invalidateQueries({ queryKey: ['/api/printing-products'] });
           toast({ title: "تم تحديث المنتج بنجاح" });
         },
@@ -1808,15 +1808,16 @@ export default function Admin() {
   });
 
   const { data: products, isLoading: productsLoading, isError: productsError } = useQuery<Product[]>({
-    queryKey: ['/api/products'],
+    queryKey: ['/api/admin/products'],
     enabled: isAuthenticated && !!adminToken,
     queryFn: async () => {
       const res = await fetch('/api/admin/products', {
         headers: { 'x-admin-token': adminToken || '' }
       });
-      if (!res.ok) throw new Error('Failed to fetch products');
+      if (!res.ok) throw new Error(`Failed to fetch products: ${res.status}`);
       return res.json();
     },
+    retry: false,
   });
 
   const productsList = Array.isArray(products) ? products : [];
@@ -1854,8 +1855,8 @@ export default function Admin() {
       return res.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       toast({ title: "تم تحديث المخزون" });
     }
   });
@@ -1873,15 +1874,16 @@ export default function Admin() {
   });
 
   const { data: categories } = useQuery<Category[]>({
-    queryKey: ['/api/categories'],
+    queryKey: ['/api/admin/categories'],
     enabled: isAuthenticated && !!adminToken,
     queryFn: async () => {
       const res = await fetch('/api/admin/categories', {
         headers: { 'x-admin-token': adminToken || '' }
       });
-      if (!res.ok) throw new Error('Failed to fetch categories');
+      if (!res.ok) throw new Error(`Failed to fetch categories: ${res.status}`);
       return res.json();
     },
+    retry: false,
   });
 
   const categoriesList = Array.isArray(categories) ? categories : [];
@@ -1923,6 +1925,8 @@ export default function Admin() {
       return res.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/categories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
       queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       toast({ title: "تم إضافة المنتج بنجاح" });
@@ -1978,6 +1982,8 @@ export default function Admin() {
       return res.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/categories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
       queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       toast({ title: "تم تحديث المنتج بنجاح" });
@@ -2010,6 +2016,7 @@ export default function Admin() {
       }
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
       queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       toast({ title: "تم حذف المنتج بنجاح" });
@@ -2037,6 +2044,7 @@ export default function Admin() {
       return res.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/categories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       toast({ title: "تم إضافة القسم بنجاح" });
       setShowCategoryForm(false);
@@ -2061,6 +2069,7 @@ export default function Admin() {
       return res.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/categories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       toast({ title: "تم تحديث القسم بنجاح" });
       setShowCategoryForm(false);
@@ -2084,6 +2093,7 @@ export default function Admin() {
       }
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/categories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       toast({ title: "تم حذف القسم بنجاح" });
     },
