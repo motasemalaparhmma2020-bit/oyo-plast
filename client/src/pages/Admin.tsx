@@ -40,7 +40,8 @@ import {
   Grid2x2,
   LayoutGrid,
   Zap,
-  Palette
+  Palette,
+  RefreshCw
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
@@ -1819,7 +1820,7 @@ export default function Admin() {
     }
   });
 
-  const { data: products, isLoading: productsLoading, isError: productsError } = useQuery<Product[]>({
+  const { data: products, isLoading: productsLoading, isError: productsError, refetch: refetchProducts } = useQuery<Product[]>({
     queryKey: ['/api/admin/products'],
     enabled: isAuthenticated && !!adminToken,
     queryFn: async () => {
@@ -1832,8 +1833,8 @@ export default function Admin() {
       }
       return res.json();
     },
-    retry: false,
-    placeholderData: [],
+    retry: 1,
+    staleTime: 0,
   });
 
   const productsList = Array.isArray(products) ? products : [];
@@ -1889,7 +1890,7 @@ export default function Admin() {
     }
   });
 
-  const { data: categories } = useQuery<Category[]>({
+  const { data: categories, isLoading: categoriesLoading, isError: categoriesError, refetch: refetchCategories } = useQuery<Category[]>({
     queryKey: ['/api/admin/categories'],
     enabled: isAuthenticated && !!adminToken,
     queryFn: async () => {
@@ -1902,8 +1903,8 @@ export default function Admin() {
       }
       return res.json();
     },
-    retry: false,
-    placeholderData: [],
+    retry: 1,
+    staleTime: 0,
   });
 
   const categoriesList = Array.isArray(categories) ? categories : [];
@@ -2860,83 +2861,120 @@ export default function Admin() {
                   </div>
                 )}
 
+                {/* زر تحديث قائمة المنتجات */}
+                <div className="flex justify-end mb-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => refetchProducts()}
+                    disabled={productsLoading}
+                    data-testid="button-refresh-products"
+                  >
+                    {productsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    تحديث
+                  </Button>
+                </div>
+
                 {productsLoading ? (
                   <div className="flex justify-center py-10">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
                 ) : productsError ? (
-                  <div className="text-center py-10 text-destructive">
-                    حدث خطأ أثناء تحميل المنتجات
+                  <div className="text-center py-10">
+                    <Package className="h-12 w-12 mx-auto mb-4 text-destructive opacity-60" />
+                    <p className="text-destructive font-medium mb-2">تعذّر تحميل المنتجات</p>
+                    <p className="text-sm text-muted-foreground mb-4">تأكد من اتصالك بالإنترنت ثم أعد المحاولة</p>
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => refetchProducts()}
+                      data-testid="button-retry-products"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      إعادة المحاولة
+                    </Button>
                   </div>
                 ) : productsList.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-right">المنتج</TableHead>
-                          <TableHead className="text-right">القسم</TableHead>
-                          <TableHead className="text-right">السعر (ر.ي)</TableHead>
-                          <TableHead className="text-right">المخزون</TableHead>
-                          <TableHead className="text-right">إجراءات</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {productsList.map((product) => (
-                          <TableRow key={product.id}>
-                            <TableCell>
-                              <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
-                                  <img src={product.imageUrl} alt={product.name} className="w-full h-full object-contain" />
-                                </div>
-                                <span className="font-medium">{product.name}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {categoriesList.find(c => c.id === product.categoryId)?.name || '-'}
-                            </TableCell>
-                            <TableCell>{formatPrice(product.price)}</TableCell>
-                            <TableCell>
-                              <Badge variant={product.stock > 10 ? "default" : product.stock > 0 ? "secondary" : "destructive"}>
-                                {product.stock > 0 ? `${product.stock} قطعة` : 'نفذ'}
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {productsList.map((product) => (
+                      <div
+                        key={product.id}
+                        className="flex items-start gap-3 rounded-xl border bg-card p-3 shadow-sm hover:shadow-md transition-shadow"
+                        data-testid={`card-product-${product.id}`}
+                      >
+                        {/* صورة المنتج */}
+                        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted">
+                          <img
+                            src={product.imageUrl}
+                            alt={product.name}
+                            className="h-full w-full object-contain"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        </div>
+
+                        {/* بيانات المنتج */}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold truncate text-sm">{product.name}</p>
+                          <p className="text-xs text-muted-foreground truncate mb-1">
+                            {categoriesList.find(c => c.id === product.categoryId)?.name || '—'}
+                          </p>
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {formatPrice(product.price)} ر.ي
+                            </Badge>
+                            {product.priceSar && (
+                              <Badge variant="outline" className="text-xs">
+                                {formatPrice(product.priceSar)} ر.س
                               </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost"
-                                  onClick={() => openEditProduct(product)}
-                                  data-testid={`button-edit-product-${product.id}`}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost"
-                                  className="text-destructive"
-                                  onClick={() => {
-                                    if (confirm('هل أنت متأكد من حذف هذا المنتج؟')) {
-                                      deleteProductMutation.mutate(product.id);
-                                    }
-                                  }}
-                                  data-testid={`button-delete-product-${product.id}`}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                            )}
+                            <Badge
+                              variant={product.stock > 10 ? "default" : product.stock > 0 ? "secondary" : "destructive"}
+                              className="text-xs"
+                            >
+                              {product.stock > 0 ? `${product.stock} قطعة` : 'نفذ'}
+                            </Badge>
+                          </div>
+
+                          {/* أزرار الإجراءات */}
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 gap-1 text-xs"
+                              onClick={() => openEditProduct(product)}
+                              data-testid={`button-edit-product-${product.id}`}
+                            >
+                              <Pencil className="h-3 w-3" />
+                              تعديل
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 gap-1 text-xs text-destructive hover:text-destructive border-destructive/30 hover:border-destructive"
+                              onClick={() => {
+                                if (confirm('هل أنت متأكد من حذف هذا المنتج؟')) {
+                                  deleteProductMutation.mutate(product.id);
+                                }
+                              }}
+                              data-testid={`button-delete-product-${product.id}`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              حذف
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="text-center py-10 text-muted-foreground">
                     <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>لا توجد منتجات بعد</p>
-                    <Button 
-                      className="mt-4 gap-2"
+                    <p className="mb-4">لا توجد منتجات بعد</p>
+                    <Button
+                      className="gap-2"
                       onClick={() => setShowProductForm(true)}
+                      data-testid="button-add-first-product"
                     >
                       <Plus className="h-4 w-4" />
                       إضافة أول منتج
@@ -3051,72 +3089,103 @@ export default function Admin() {
                   </div>
                 )}
 
-                {categoriesList.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-right">القسم</TableHead>
-                          <TableHead className="text-right">الرابط</TableHead>
-                          <TableHead className="text-right">عدد المنتجات</TableHead>
-                          <TableHead className="text-right">الإجراءات</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {categoriesList.map((category) => (
-                          <TableRow key={category.id}>
-                            <TableCell>
-                              <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
-                                  <img src={category.imageUrl} alt={category.name} className="w-full h-full object-contain" />
-                                </div>
-                                <span className="font-medium">{category.name}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>{category.slug}</TableCell>
-                            <TableCell>
-                              <Badge>
-                                {productsList.filter(p => p.categoryId === category.id).length} منتج
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={() => openEditCategory(category)}
-                                  data-testid={`button-edit-category-${category.id}`}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="text-destructive hover:text-destructive"
-                                  onClick={() => {
-                                    if (confirm(`هل أنت متأكد من حذف قسم "${category.name}"؟`)) {
-                                      deleteCategoryMutation.mutate(category.id);
-                                    }
-                                  }}
-                                  disabled={deleteCategoryMutation.isPending}
-                                  data-testid={`button-delete-category-${category.id}`}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                {/* زر تحديث الأقسام */}
+                <div className="flex justify-end mb-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => refetchCategories()}
+                    disabled={categoriesLoading}
+                    data-testid="button-refresh-categories"
+                  >
+                    {categoriesLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    تحديث
+                  </Button>
+                </div>
+
+                {categoriesLoading ? (
+                  <div className="flex justify-center py-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : categoriesError ? (
+                  <div className="text-center py-10">
+                    <Package className="h-12 w-12 mx-auto mb-4 text-destructive opacity-60" />
+                    <p className="text-destructive font-medium mb-2">تعذّر تحميل الأقسام</p>
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => refetchCategories()}
+                      data-testid="button-retry-categories"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      إعادة المحاولة
+                    </Button>
+                  </div>
+                ) : categoriesList.length > 0 ? (
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {categoriesList.map((category) => (
+                      <div
+                        key={category.id}
+                        className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm hover:shadow-md transition-shadow"
+                        data-testid={`card-category-${category.id}`}
+                      >
+                        {/* صورة القسم */}
+                        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-muted">
+                          <img
+                            src={category.imageUrl}
+                            alt={category.name}
+                            className="h-full w-full object-contain"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        </div>
+
+                        {/* بيانات القسم */}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold truncate">{category.name}</p>
+                          <p className="text-xs text-muted-foreground truncate mb-1">{category.slug}</p>
+                          <Badge variant="secondary" className="text-xs">
+                            {productsList.filter(p => p.categoryId === category.id).length} منتج
+                          </Badge>
+                        </div>
+
+                        {/* أزرار الإجراءات */}
+                        <div className="flex flex-col gap-1 shrink-0">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => openEditCategory(category)}
+                            data-testid={`button-edit-category-${category.id}`}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (confirm(`هل أنت متأكد من حذف قسم "${category.name}"؟`)) {
+                                deleteCategoryMutation.mutate(category.id);
+                              }
+                            }}
+                            disabled={deleteCategoryMutation.isPending}
+                            data-testid={`button-delete-category-${category.id}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="text-center py-10 text-muted-foreground">
                     <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>لا توجد أقسام بعد</p>
-                    <Button 
-                      className="mt-4 gap-2"
+                    <p className="mb-4">لا توجد أقسام بعد</p>
+                    <Button
+                      className="gap-2"
                       onClick={() => setShowCategoryForm(true)}
+                      data-testid="button-add-first-category"
                     >
                       <Plus className="h-4 w-4" />
                       إضافة أول قسم
@@ -3133,65 +3202,90 @@ export default function Admin() {
                 <CardTitle>إدارة المخزون</CardTitle>
               </CardHeader>
               <CardContent>
+                {/* زر تحديث المخزون */}
+                <div className="flex justify-end mb-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => refetchProducts()}
+                    disabled={productsLoading}
+                    data-testid="button-refresh-inventory"
+                  >
+                    {productsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    تحديث
+                  </Button>
+                </div>
+
                 {productsLoading ? (
                   <div className="flex justify-center py-10">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
                 ) : productsError ? (
-                  <div className="text-center py-10 text-destructive">
-                    حدث خطأ أثناء تحميل المخزون
+                  <div className="text-center py-10">
+                    <Package className="h-12 w-12 mx-auto mb-4 text-destructive opacity-60" />
+                    <p className="text-destructive font-medium mb-2">تعذّر تحميل المخزون</p>
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => refetchProducts()}
+                      data-testid="button-retry-inventory"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      إعادة المحاولة
+                    </Button>
                   </div>
                 ) : productsList.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-right">المنتج</TableHead>
-                          <TableHead className="text-right">السعر (ر.ي)</TableHead>
-                          <TableHead className="text-right">السعر (ر.س)</TableHead>
-                          <TableHead className="text-right">المخزون</TableHead>
-                          <TableHead className="text-right">تعديل المخزون</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {productsList.map((product) => (
-                          <TableRow key={product.id}>
-                            <TableCell>
-                              <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
-                                  <img src={product.imageUrl} alt={product.name} className="w-full h-full object-contain" />
-                                </div>
-                                <span className="font-medium">{product.name}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>{formatPrice(product.price)}</TableCell>
-                            <TableCell>{formatPrice(product.priceSar)}</TableCell>
-                            <TableCell>
-                              <Badge variant={product.stock > 10 ? "default" : product.stock > 0 ? "secondary" : "destructive"}>
-                                {product.stock > 0 ? `${product.stock} قطعة` : 'نفذ'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  defaultValue={product.stock}
-                                  className="w-20"
-                                  onBlur={(e) => {
-                                    const newStock = parseInt(e.target.value);
-                                    if (newStock !== product.stock) {
-                                      updateProductStock.mutate({ productId: product.id, stock: newStock });
-                                    }
-                                  }}
-                                  data-testid={`input-stock-${product.id}`}
-                                />
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                  <div className="space-y-2">
+                    {productsList.map((product) => (
+                      <div
+                        key={product.id}
+                        className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm"
+                        data-testid={`row-inventory-${product.id}`}
+                      >
+                        {/* صورة المنتج */}
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted">
+                          <img
+                            src={product.imageUrl}
+                            alt={product.name}
+                            className="h-full w-full object-contain"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        </div>
+
+                        {/* اسم المنتج والأسعار */}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm truncate">{product.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatPrice(product.price)} ر.ي
+                            {product.priceSar ? ` · ${formatPrice(product.priceSar)} ر.س` : ''}
+                          </p>
+                        </div>
+
+                        {/* حالة المخزون الحالي */}
+                        <Badge
+                          variant={product.stock > 10 ? "default" : product.stock > 0 ? "secondary" : "destructive"}
+                          className="shrink-0 text-xs"
+                        >
+                          {product.stock > 0 ? `${product.stock} قطعة` : 'نفذ'}
+                        </Badge>
+
+                        {/* حقل تعديل المخزون */}
+                        <Input
+                          type="number"
+                          min={0}
+                          defaultValue={product.stock}
+                          className="w-20 shrink-0 text-center"
+                          onBlur={(e) => {
+                            const newStock = parseInt(e.target.value);
+                            if (!isNaN(newStock) && newStock !== product.stock) {
+                              updateProductStock.mutate({ productId: product.id, stock: newStock });
+                            }
+                          }}
+                          data-testid={`input-stock-${product.id}`}
+                        />
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="text-center py-10 text-muted-foreground">
