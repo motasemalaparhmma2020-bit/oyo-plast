@@ -3,16 +3,14 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Trash2, Plus, Minus, ArrowLeft, ShoppingBag, Loader2, UserPlus } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingBag, Loader2, LogIn } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useEffect, useMemo, useState } from "react";
 import type { Product } from "@shared/schema";
-import { 
-  GuestCartItem, 
-  getGuestCart, 
+import {
+  GuestCartItem,
+  getGuestCart,
   setGuestCart,
-  removeFromGuestCart,
-  updateGuestCartItem
 } from "@/lib/cartUtils";
 
 const colorMap: Record<string, string> = {
@@ -36,57 +34,164 @@ const colorMap: Record<string, string> = {
   بيج: "#D4A574",
 };
 
-function getColorCode(colorName: string): string {
-  const trimmed = colorName.trim();
-  return colorMap[trimmed] ?? trimmed;
+function getColorCode(name: string): string {
+  return colorMap[name.trim()] ?? name.trim();
 }
 
+function formatPrice(n: number) {
+  return n.toLocaleString("ar-YE");
+}
+
+/* ─── بطاقة منتج مدمجة ─── */
+function CartRow({
+  image,
+  name,
+  price,
+  unit,
+  quantity,
+  selectedSize,
+  selectedColor,
+  onIncrease,
+  onDecrease,
+  onRemove,
+  testPrefix,
+}: {
+  image: string;
+  name: string;
+  price: number;
+  unit: string;
+  quantity: number;
+  selectedSize?: string | null;
+  selectedColor?: string | null;
+  onIncrease: () => void;
+  onDecrease: () => void;
+  onRemove: () => void;
+  testPrefix: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 bg-white dark:bg-card rounded-xl border shadow-sm p-3">
+      {/* صورة المنتج */}
+      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted">
+        <img src={image} alt={name} className="h-full w-full object-contain" />
+      </div>
+
+      {/* الاسم والتفاصيل */}
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold text-sm leading-tight truncate">{name}</p>
+        {(selectedSize || selectedColor) && (
+          <div className="flex flex-wrap gap-1 mt-0.5">
+            {selectedSize && (
+              <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                {selectedSize}
+              </span>
+            )}
+            {selectedColor && (
+              <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground flex items-center gap-1">
+                <span
+                  className="w-3 h-3 rounded-full border inline-block shrink-0"
+                  style={{
+                    backgroundColor: getColorCode(selectedColor),
+                    backgroundImage:
+                      selectedColor === "شفاف"
+                        ? "linear-gradient(45deg,#ccc 25%,transparent 25%,transparent 75%,#ccc 75%,#ccc),linear-gradient(45deg,#ccc 25%,transparent 25%,transparent 75%,#ccc 75%,#ccc)"
+                        : "none",
+                    backgroundSize: "6px 6px",
+                    backgroundPosition: "0 0,3px 3px",
+                  }}
+                />
+                {selectedColor}
+              </span>
+            )}
+          </div>
+        )}
+        {/* السعر */}
+        <p className="text-primary font-bold text-sm mt-1">
+          {formatPrice(price * quantity)} {unit}
+        </p>
+      </div>
+
+      {/* التحكم في الكمية */}
+      <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 rounded-md"
+          disabled={quantity <= 1}
+          onClick={onDecrease}
+          data-testid={`button-decrease-${testPrefix}`}
+        >
+          <Minus className="h-3 w-3" />
+        </Button>
+        <span className="w-6 text-center text-sm font-bold tabular-nums">{quantity}</span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 rounded-md"
+          onClick={onIncrease}
+          data-testid={`button-increase-${testPrefix}`}
+        >
+          <Plus className="h-3 w-3" />
+        </Button>
+      </div>
+
+      {/* حذف */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+        onClick={onRemove}
+        data-testid={`button-remove-${testPrefix}`}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+/* ─── الصفحة الرئيسية ─── */
 export default function Cart() {
-  const { isAuthenticated } = useAuth();
-  const { data: cartItems, isLoading } = useCart();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { data: cartItems, isLoading: cartLoading } = useCart();
   const { mutate: updateItem } = useUpdateCartItem();
   const { mutate: removeItem } = useRemoveFromCart();
   const queryClient = useQueryClient();
 
-  // Guest cart: read directly from query cache (kept in sync by useAddToCart)
+  const [currency, setCurrency] = useState<"YER" | "SAR">(
+    () => (localStorage.getItem("currency") as "YER" | "SAR") || "YER"
+  );
+
+  useEffect(() => {
+    const handle = () =>
+      setCurrency((localStorage.getItem("currency") as "YER" | "SAR") || "YER");
+    window.addEventListener("currencyChange", handle);
+    return () => window.removeEventListener("currencyChange", handle);
+  }, []);
+
+  const unit = currency === "YER" ? "ر.ي" : "ر.س";
+
+  /* ─── سلة الزائر ─── */
   const guestCart: GuestCartItem[] = !isAuthenticated
     ? ((cartItems as GuestCartItem[]) || getGuestCart())
     : [];
 
-  const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
-    return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
-  });
-
-  // Fetch all products for guest cart
-  const { data: products = [] } = useQuery<Product[]>({
+  const { data: allProducts = [] } = useQuery<Product[]>({
     queryKey: ["/api/products"],
     enabled: !isAuthenticated,
   });
 
-  // Map guest cart items with product details
-  const guestCartWithProducts = useMemo(() => {
-    return guestCart.map(item => {
-      const product = products.find(p => p.id === item.productId);
-      return { ...item, product };
-    }).filter(item => item.product);
-  }, [guestCart, products]);
+  const guestCartWithProducts = useMemo(
+    () =>
+      guestCart
+        .map((item) => ({ ...item, product: allProducts.find((p) => p.id === item.productId) }))
+        .filter((i) => i.product),
+    [guestCart, allProducts]
+  );
 
-  useEffect(() => {
-    const handleCurrencyChange = () => {
-      setCurrency((localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER');
-    };
-    window.addEventListener('currencyChange', handleCurrencyChange);
-    return () => window.removeEventListener('currencyChange', handleCurrencyChange);
-  }, []);
-
-  const formatPrice = (price: number) => {
-    return price.toLocaleString('ar-YE');
-  };
-
-  // Guest cart functions - update localStorage then sync query cache
-  const updateGuestQuantity = (index: number, delta: number) => {
+  const updateGuestQty = (index: number, delta: number) => {
     const current = getGuestCart();
-    const updated = current.map((item, i) => i === index ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item);
+    const updated = current.map((item, i) =>
+      i === index ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item
+    );
     setGuestCart(updated);
     queryClient.setQueryData(["guestCart"], updated);
   };
@@ -98,228 +203,36 @@ export default function Cart() {
     queryClient.setQueryData(["guestCart"], updated);
   };
 
-  // Show guest cart if not authenticated
-  if (!isAuthenticated) {
-    const guestSubtotal = guestCartWithProducts.reduce((acc, item) => {
-      if (!item.product) return acc;
-      const price = currency === 'SAR' && item.product.priceSar 
-        ? Number(item.product.priceSar) 
-        : Number(item.product.price);
-      return acc + (price * item.quantity);
-    }, 0);
-
-    if (guestCart.length === 0) {
-      return (
-        <div className="container mx-auto px-4 py-20 text-center max-w-md">
-          <div className="bg-primary/5 p-8 rounded-full w-fit mx-auto mb-6">
-            <ShoppingBag className="h-16 w-16 text-primary" />
-          </div>
-          <h1 className="text-3xl font-bold mb-4">سلة التسوق فارغة</h1>
-          <p className="text-muted-foreground mb-8 text-lg">
-            لم تقم بإضافة أي منتجات للسلة بعد. تصفح منتجاتنا المميزة وابدأ التسوق!
-          </p>
-          <Link href="/products">
-            <Button size="lg" className="rounded-full px-8 text-lg h-14" data-testid="button-browse-products">
-              تصفح المنتجات
-            </Button>
-          </Link>
-        </div>
-      );
-    }
-
+  /* ─── حالة التحميل ─── */
+  if (authLoading || cartLoading) {
     return (
-      <div className="container mx-auto px-4 py-8 pb-20">
-        <div className="flex justify-between items-center mb-6">
-          <span className="text-sm text-muted-foreground">{guestCart.length} منتجات</span>
-          <h1 className="text-xl font-bold">سلة التسوق</h1>
-        </div>
-
-        <div className="grid lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-4">
-            {guestCartWithProducts.map((item, index) => (
-              <div key={`${item.productId}-${item.selectedSize}-${item.selectedColor}-${index}`} className="bg-white dark:bg-card p-4 rounded-xl shadow-sm border flex flex-col sm:flex-row gap-4 items-center">
-                <div className="w-24 h-24 bg-gray-50 dark:bg-muted rounded-lg overflow-hidden shrink-0">
-                  <img 
-                    src={item.product?.imageUrl || ''} 
-                    alt={item.product?.name || ''} 
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-                
-                <div className="flex-grow text-center sm:text-right">
-                  <h3 className="font-bold text-lg mb-1">{item.product?.name}</h3>
-                  {(item.selectedSize || item.selectedColor) && (
-                    <div className="flex flex-wrap gap-2 justify-center sm:justify-start mb-2">
-                      {item.selectedSize && (
-                        <span className="text-xs bg-muted px-2 py-1 rounded">الحجم: {item.selectedSize}</span>
-                      )}
-                      {item.selectedColor && (
-                        <span className="text-xs bg-muted px-2 py-1 rounded flex items-center gap-1">
-                          اللون: {item.selectedColor}
-                          <span 
-                            className="w-4 h-4 rounded-full border inline-block" 
-                            style={{ 
-                              backgroundColor: getColorCode(item.selectedColor),
-                              backgroundImage: item.selectedColor === 'شفاف' ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)' : 'none',
-                              backgroundSize: '6px 6px',
-                              backgroundPosition: '0 0, 3px 3px'
-                            }}
-                          />
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {item.customPrinting && (
-                    <div className="flex flex-wrap gap-2 justify-center sm:justify-start mb-2">
-                      <span className="text-xs bg-[#2196F3]/10 text-[#2196F3] px-2 py-1 rounded">طباعة مخصصة</span>
-                      {item.designFileUrl && (
-                        <a 
-                          href={item.designFileUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
-                        >
-                          ملف التصميم مرفق
-                        </a>
-                      )}
-                    </div>
-                  )}
-                  {item.designNotes && (
-                    <p className="text-xs text-muted-foreground mt-1 bg-muted/50 p-2 rounded">ملاحظات: {item.designNotes}</p>
-                  )}
-                  <p className="text-primary font-bold mt-1">
-                    {formatPrice(currency === 'SAR' && item.product?.priceSar 
-                      ? Number(item.product.priceSar) 
-                      : Number(item.product?.price || 0))} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3 bg-gray-50 dark:bg-muted p-1 rounded-lg border">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 rounded-md"
-                    disabled={item.quantity <= 1}
-                    onClick={() => updateGuestQuantity(index, -1)}
-                    data-testid={`button-decrease-${item.productId}-${index}`}
-                  >
-                    <Minus className="h-3 w-3" />
-                  </Button>
-                  <span className="w-8 text-center font-bold tabular-nums">{item.quantity}</span>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 rounded-md"
-                    onClick={() => updateGuestQuantity(index, 1)}
-                    data-testid={`button-increase-${item.productId}-${index}`}
-                  >
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                </div>
-
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
-                  onClick={() => removeGuestItem(index)}
-                  data-testid={`button-remove-${item.productId}-${index}`}
-                  aria-label="حذف المنتج"
-                >
-                  <Trash2 className="h-5 w-5" />
-                </Button>
-              </div>
-            ))}
-          </div>
-
-          <div className="lg:col-span-1">
-            <div className="bg-white dark:bg-card p-6 rounded-2xl shadow-lg border sticky top-24">
-              <h2 className="text-xl font-bold mb-6">ملخص الطلب</h2>
-              
-              <div className="space-y-3 mb-6">
-                <div className="flex justify-between">
-                  <span className="font-medium text-foreground">{formatPrice(guestSubtotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
-                  <span className="text-muted-foreground">المجموع الفرعي</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-green-600">مجاني</span>
-                  <span className="text-muted-foreground">الشحن</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between text-xl font-bold">
-                  <span className="text-teal-600">{formatPrice(guestSubtotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
-                  <span>الإجمالي</span>
-                </div>
-              </div>
-
-              <Link href="/guest-checkout">
-                <Button 
-                  className="w-full h-14 text-lg font-bold rounded-xl bg-teal-500 hover:bg-teal-600 shadow-lg"
-                  data-testid="button-guest-checkout"
-                >
-                  إتمام الشراء
-                  <ArrowLeft className="mr-2 h-5 w-5" />
-                </Button>
-              </Link>
-
-              <div className="relative my-4">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-white dark:bg-card px-2 text-muted-foreground">أو</span>
-                </div>
-              </div>
-
-              <Link href="/auth">
-                <Button 
-                  variant="outline"
-                  className="w-full h-12 font-bold gap-2"
-                  data-testid="button-login-to-checkout"
-                >
-                  <UserPlus className="h-5 w-5" />
-                  سجل دخولك للمزايا الإضافية
-                </Button>
-              </Link>
-              
-              <p className="text-xs text-center text-muted-foreground mt-4">
-                سجل الدخول للحصول على نقاط الولاء وتتبع طلباتك
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Authenticated user cart
-  const getItemPrice = (item: NonNullable<typeof cartItems>[0]) => {
-    return currency === 'SAR' && item.product.priceSar 
-      ? Number(item.product.priceSar) 
-      : Number(item.product.price);
-  };
-
-  const subtotal = cartItems?.reduce((acc, item) => acc + (getItemPrice(item) * item.quantity), 0) || 0;
-
-  if (isLoading) {
-    return (
-      <div className="container mx-auto px-4 py-20 flex justify-center">
+      <div className="flex justify-center items-center py-24">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
       </div>
     );
   }
 
-  if (!cartItems || cartItems.length === 0) {
+  /* ─── سلة فارغة ─── */
+  const isEmpty = isAuthenticated
+    ? !cartItems || cartItems.length === 0
+    : guestCart.length === 0;
+
+  if (isEmpty) {
     return (
-      <div className="container mx-auto px-4 py-20 text-center max-w-md">
-        <div className="bg-primary/5 p-8 rounded-full w-fit mx-auto mb-6">
-          <ShoppingBag className="h-16 w-16 text-primary" />
+      <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+        <div className="bg-primary/5 p-6 rounded-full mb-5">
+          <ShoppingBag className="h-14 w-14 text-primary" />
         </div>
-        <h1 className="text-3xl font-bold mb-4">سلة التسوق فارغة</h1>
-        <p className="text-muted-foreground mb-8 text-lg">
-          لم تقم بإضافة أي منتجات للسلة بعد. تصفح منتجاتنا المميزة وابدأ التسوق!
+        <h1 className="text-2xl font-bold mb-3">سلة التسوق فارغة</h1>
+        <p className="text-muted-foreground mb-6 text-sm max-w-xs">
+          لم تقم بإضافة أي منتجات بعد. تصفح منتجاتنا وابدأ التسوق!
         </p>
         <Link href="/products">
-          <Button size="lg" className="rounded-full px-8 text-lg h-14" data-testid="button-browse-products">
+          <Button
+            size="lg"
+            className="rounded-full px-8"
+            data-testid="button-browse-products"
+          >
             تصفح المنتجات
           </Button>
         </Link>
@@ -327,142 +240,131 @@ export default function Cart() {
     );
   }
 
+  /* ─── حساب الإجمالي ─── */
+  let subtotal = 0;
+  if (isAuthenticated && cartItems) {
+    subtotal = cartItems.reduce((acc, item) => {
+      const price =
+        currency === "SAR" && item.product.priceSar
+          ? Number(item.product.priceSar)
+          : Number(item.product.price);
+      return acc + price * item.quantity;
+    }, 0);
+  } else {
+    subtotal = guestCartWithProducts.reduce((acc, item) => {
+      const price =
+        currency === "SAR" && item.product?.priceSar
+          ? Number(item.product.priceSar)
+          : Number(item.product?.price || 0);
+      return acc + price * item.quantity;
+    }, 0);
+  }
+
+  const itemCount = isAuthenticated
+    ? (cartItems?.length ?? 0)
+    : guestCart.length;
+
+  /* ─── وجهة زر "إتمام الطلب" ─── */
+  const checkoutHref = isAuthenticated ? "/checkout" : "/auth";
+
   return (
-    <div className="container mx-auto px-4 py-8 pb-20">
-      <div className="flex justify-between items-center mb-6">
-        <span className="text-sm text-muted-foreground">{cartItems.length} منتجات</span>
-        <h1 className="text-xl font-bold">سلة التسوق</h1>
+    <div className="max-w-lg mx-auto px-4 py-5 pb-24">
+      {/* رأس الصفحة */}
+      <div className="flex justify-between items-center mb-4">
+        <span className="text-sm text-muted-foreground">{itemCount} منتجات</span>
+        <h1 className="text-lg font-bold">سلة التسوق</h1>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-4">
-          {cartItems.map((item) => (
-            <div key={item.id} className="bg-white dark:bg-card p-4 rounded-xl shadow-sm border flex flex-col sm:flex-row gap-4 items-center">
-              <div className="w-24 h-24 bg-gray-50 dark:bg-muted rounded-lg overflow-hidden shrink-0">
-                <img 
-                  src={item.product.imageUrl} 
-                  alt={item.product.name} 
-                  className="w-full h-full object-contain"
+      {/* قائمة المنتجات */}
+      <div className="space-y-3 mb-5">
+        {isAuthenticated && cartItems
+          ? cartItems.map((item) => {
+              const price =
+                currency === "SAR" && item.product.priceSar
+                  ? Number(item.product.priceSar)
+                  : Number(item.product.price);
+              return (
+                <CartRow
+                  key={item.id}
+                  image={item.product.imageUrl}
+                  name={item.product.name}
+                  price={price}
+                  unit={unit}
+                  quantity={item.quantity}
+                  selectedSize={item.selectedSize}
+                  selectedColor={item.selectedColor}
+                  onIncrease={() => updateItem({ id: item.id, quantity: item.quantity + 1 })}
+                  onDecrease={() => updateItem({ id: item.id, quantity: item.quantity - 1 })}
+                  onRemove={() => removeItem(item.id)}
+                  testPrefix={String(item.id)}
                 />
-              </div>
-              
-              <div className="flex-grow text-center sm:text-right">
-                <h3 className="font-bold text-lg mb-1">{item.product.name}</h3>
-                {(item.selectedSize || item.selectedColor) && (
-                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start mb-2">
-                    {item.selectedSize && (
-                      <span className="text-xs bg-muted px-2 py-1 rounded">الحجم: {item.selectedSize}</span>
-                    )}
-                    {item.selectedColor && (
-                      <span className="text-xs bg-muted px-2 py-1 rounded flex items-center gap-1">
-                        اللون: {item.selectedColor}
-                        <span 
-                          className="w-4 h-4 rounded-full border inline-block" 
-                          style={{ 
-                            backgroundColor: getColorCode(item.selectedColor),
-                            backgroundImage: item.selectedColor === 'شفاف' ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)' : 'none',
-                            backgroundSize: '6px 6px',
-                            backgroundPosition: '0 0, 3px 3px'
-                          }}
-                        />
-                      </span>
-                    )}
-                  </div>
-                )}
-                {item.customPrinting && (
-                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start mb-2">
-                    <span className="text-xs bg-[#2196F3]/10 text-[#2196F3] px-2 py-1 rounded">طباعة مخصصة</span>
-                    {item.designFileUrl && (
-                      <a 
-                        href={item.designFileUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
-                      >
-                        ملف التصميم مرفق
-                      </a>
-                    )}
-                  </div>
-                )}
-                {item.designNotes && (
-                  <p className="text-xs text-muted-foreground mt-1 bg-muted/50 p-2 rounded">ملاحظات: {item.designNotes}</p>
-                )}
-                <p className="text-primary font-bold mt-1">
-                  {formatPrice(getItemPrice(item))} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
-                </p>
-              </div>
+              );
+            })
+          : guestCartWithProducts.map((item, index) => {
+              const price =
+                currency === "SAR" && item.product?.priceSar
+                  ? Number(item.product.priceSar)
+                  : Number(item.product?.price || 0);
+              return (
+                <CartRow
+                  key={`${item.productId}-${item.selectedSize}-${index}`}
+                  image={item.product?.imageUrl || ""}
+                  name={item.product?.name || ""}
+                  price={price}
+                  unit={unit}
+                  quantity={item.quantity}
+                  selectedSize={item.selectedSize}
+                  selectedColor={item.selectedColor}
+                  onIncrease={() => updateGuestQty(index, 1)}
+                  onDecrease={() => updateGuestQty(index, -1)}
+                  onRemove={() => removeGuestItem(index)}
+                  testPrefix={`guest-${item.productId}-${index}`}
+                />
+              );
+            })}
+      </div>
 
-              <div className="flex items-center gap-3 bg-gray-50 dark:bg-muted p-1 rounded-lg border">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-8 w-8 rounded-md"
-                  disabled={item.quantity <= 1}
-                  onClick={() => updateItem({ id: item.id, quantity: item.quantity - 1 })}
-                  data-testid={`button-decrease-${item.id}`}
-                >
-                  <Minus className="h-3 w-3" />
-                </Button>
-                <span className="w-8 text-center font-bold tabular-nums">{item.quantity}</span>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-8 w-8 rounded-md"
-                  onClick={() => updateItem({ id: item.id, quantity: item.quantity + 1 })}
-                  data-testid={`button-increase-${item.id}`}
-                >
-                  <Plus className="h-3 w-3" />
-                </Button>
-              </div>
+      {/* ملخص الطلب والزر */}
+      <div className="bg-white dark:bg-card rounded-2xl border shadow-md p-5">
+        <h2 className="text-base font-bold mb-4 text-right">ملخص الطلب</h2>
 
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
-                onClick={() => removeItem(item.id)}
-                data-testid={`button-remove-${item.id}`}
-              >
-                <Trash2 className="h-5 w-5" />
-              </Button>
-            </div>
-          ))}
-        </div>
-
-        <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-card p-6 rounded-2xl shadow-lg border sticky top-24">
-            <h2 className="text-xl font-bold mb-6">ملخص الطلب</h2>
-            
-            <div className="space-y-3 mb-6">
-              <div className="flex justify-between">
-                <span className="font-medium text-foreground">{formatPrice(subtotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
-                <span className="text-muted-foreground">المجموع الفرعي</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-medium text-green-600">مجاني</span>
-                <span className="text-muted-foreground">الشحن</span>
-              </div>
-              <Separator />
-              <div className="flex justify-between text-xl font-bold">
-                <span className="text-teal-600">{formatPrice(subtotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
-                <span>الإجمالي</span>
-              </div>
-            </div>
-
-            <Link href="/checkout">
-              <Button 
-                className="w-full h-14 text-lg font-bold rounded-xl bg-teal-500 hover:bg-teal-600 shadow-lg"
-                data-testid="button-checkout"
-              >
-                إتمام الشراء
-                <ArrowLeft className="mr-2 h-5 w-5" />
-              </Button>
-            </Link>
-            
-            <p className="text-xs text-center text-muted-foreground mt-4">
-              سيتم تحديد طريقة الدفع في الخطوة التالية
-            </p>
+        <div className="space-y-2 mb-4">
+          <div className="flex justify-between text-sm">
+            <span className="font-medium">
+              {formatPrice(subtotal)} {unit}
+            </span>
+            <span className="text-muted-foreground">المجموع الفرعي</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="font-medium text-green-600">مجاني</span>
+            <span className="text-muted-foreground">الشحن</span>
+          </div>
+          <Separator />
+          <div className="flex justify-between text-base font-bold">
+            <span className="text-teal-600">
+              {formatPrice(subtotal)} {unit}
+            </span>
+            <span>الإجمالي</span>
           </div>
         </div>
+
+        {/* زر إتمام الطلب — يتوجه للدفع إن مسجل، للتسجيل إن لم يكن */}
+        <Link href={checkoutHref}>
+          <Button
+            className="w-full h-12 text-base font-bold rounded-xl bg-teal-500 hover:bg-teal-600 shadow-md"
+            data-testid="button-checkout"
+          >
+            {isAuthenticated ? "إتمام الطلب" : "تسجيل الدخول لإتمام الطلب"}
+            <LogIn className="mr-2 h-4 w-4" />
+          </Button>
+        </Link>
+
+        {/* تلميح للزائر فقط */}
+        {!isAuthenticated && (
+          <p className="text-xs text-center text-muted-foreground mt-3">
+            سجّل الدخول للحصول على نقاط الولاء وتتبع طلباتك
+          </p>
+        )}
       </div>
     </div>
   );
