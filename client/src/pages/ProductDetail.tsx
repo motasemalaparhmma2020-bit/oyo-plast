@@ -346,14 +346,6 @@ export default function ProductDetail() {
 
   const handleAddToCart = () => {
     if (!product) return;
-    
-    // Debug log
-    console.log('🛒 زر إضافة للسلة: جاري الإضافة...', {
-      productId: product.id,
-      quantity,
-      hasDesign: !!uploadedDesignUrl,
-      isPending: isPending
-    });
 
     try {
       addToCartMutation.mutate({ 
