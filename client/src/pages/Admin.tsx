@@ -1814,10 +1814,14 @@ export default function Admin() {
       const res = await fetch('/api/admin/products', {
         headers: { 'x-admin-token': adminToken || '' }
       });
-      if (!res.ok) throw new Error(`Failed to fetch products: ${res.status}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.details || err.message || `Failed to fetch products: ${res.status}`);
+      }
       return res.json();
     },
     retry: false,
+    placeholderData: [],
   });
 
   const productsList = Array.isArray(products) ? products : [];
@@ -1880,10 +1884,14 @@ export default function Admin() {
       const res = await fetch('/api/admin/categories', {
         headers: { 'x-admin-token': adminToken || '' }
       });
-      if (!res.ok) throw new Error(`Failed to fetch categories: ${res.status}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.details || err.message || `Failed to fetch categories: ${res.status}`);
+      }
       return res.json();
     },
     retry: false,
+    placeholderData: [],
   });
 
   const categoriesList = Array.isArray(categories) ? categories : [];
