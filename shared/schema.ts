@@ -47,6 +47,9 @@ export const products = pgTable("products", {
   showReviews: boolean("show_reviews").default(true).notNull(), // Show/hide reviews section
   // Printing section visibility
   showInPrinting: boolean("show_in_printing").default(false).notNull(), // Show in printing & design section
+  // Variant UI (SHEIN-style) fields
+  enableVariantUI: boolean("enable_variant_ui").default(false).notNull(), // Enable SHEIN-style variant product page for this product
+  colorImages: text("color_images"), // JSON: [{ color: "أبيض", hex: "#FFFFFF", imageUrl: "...", imageUrls: [] }]
 });
 
 export const settings = pgTable("settings", {
@@ -377,6 +380,7 @@ export const navigationSettings = pgTable("navigation_settings", {
   id: serial("id").primaryKey(),
   showPrintingSection: boolean("show_printing_section").default(true).notNull(),
   showSignupEntryPoint: boolean("show_signup_entry_point").default(true).notNull(),
+  enableVariantProductPage: boolean("enable_variant_product_page").default(false).notNull(), // Master switch: SHEIN-style variant UI
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

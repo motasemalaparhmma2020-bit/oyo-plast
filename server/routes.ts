@@ -162,7 +162,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     stock, colors, sizes, allow_design_upload, bulk_pricing, size_pricing,
     printing_price_per_unit, rating, review_count, sold_count, commission_hold_days,
     marketer_commission_rate, has_printing_options, base_bag_price, single_color_print_price,
-    available_bag_colors, tags, show_reviews, show_in_printing`;
+    available_bag_colors, tags, show_reviews, show_in_printing, enable_variant_ui, color_images`;
 
   function mapProductRow(r: any) {
     const rawImg: string = r.image_url || "";
@@ -194,6 +194,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       tags: r.tags,
       showReviews: r.show_reviews,
       showInPrinting: r.show_in_printing,
+      enableVariantUI: r.enable_variant_ui ?? false,
+      colorImages: r.color_images ?? null,
     };
   }
 
@@ -383,7 +385,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "imageUrl", "imageUrls", "stock", "colors", "sizes",
         "allowDesignUpload", "printingPricePerUnit", "hasPrintingOptions",
         "baseBagPrice", "singleColorPrintPrice", "availableBagColors", "tags",
-        "bulkPricing", "sizePricing", "showReviews"
+        "bulkPricing", "sizePricing", "showReviews", "enableVariantUI", "colorImages"
       ];
       for (const f of fields) {
         if (data[f] !== undefined) update[f] = data[f];
@@ -504,6 +506,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const settings = await storage.updateNavigationSettings({
         showPrintingSection: req.body.showPrintingSection ?? true,
         showSignupEntryPoint: req.body.showSignupEntryPoint ?? true,
+        enableVariantProductPage: req.body.enableVariantProductPage ?? false,
       });
       res.json(settings);
     } catch (e: any) {

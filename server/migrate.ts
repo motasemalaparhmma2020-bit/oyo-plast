@@ -86,6 +86,19 @@ export async function runMigrations(): Promise<void> {
       );
     `);
 
+    // Variant UI columns for products (SHEIN-style feature flags)
+    await client.query(`
+      ALTER TABLE products
+        ADD COLUMN IF NOT EXISTS enable_variant_ui BOOLEAN NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS color_images TEXT;
+    `);
+
+    // Master switch for variant product page in navigation_settings
+    await client.query(`
+      ALTER TABLE navigation_settings
+        ADD COLUMN IF NOT EXISTS enable_variant_product_page BOOLEAN NOT NULL DEFAULT false;
+    `);
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));
