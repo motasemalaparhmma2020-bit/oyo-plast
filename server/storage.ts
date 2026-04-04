@@ -93,15 +93,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProducts(categoryId?: number, search?: string): Promise<Product[]> {
-    let query = db.select().from(products);
     const conditions = [];
-    if (categoryId) {
+    if (categoryId !== undefined && !Number.isNaN(categoryId)) {
       conditions.push(eq(products.categoryId, categoryId));
     }
-    if (conditions.length > 0) {
-      return await db.select().from(products).where(conditions[0]);
+    let rows = conditions.length > 0
+      ? await db.select().from(products).where(conditions[0])
+      : await db.select().from(products);
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      rows = rows.filter((p) =>
+        (p.name || "").toLowerCase().includes(q) ||
+        (p.description || "").toLowerCase().includes(q) ||
+        (Array.isArray(p.tags) ? p.tags : []).some((t) => String(t).toLowerCase().includes(q))
+      );
     }
-    return await db.select().from(products);
+
+    return rows;
   }
 
   async getProduct(id: number): Promise<Product | undefined> {
