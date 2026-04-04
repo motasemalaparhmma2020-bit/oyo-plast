@@ -1,4 +1,4 @@
-const CACHE_NAME = "oyoplast-shell-v1";
+const CACHE_NAME = "oyoplast-shell-v2";
 const PRECACHE_URLS = ["/", "/products", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
