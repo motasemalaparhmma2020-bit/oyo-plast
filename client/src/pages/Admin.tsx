@@ -1936,6 +1936,11 @@ export default function Admin() {
     }
   });
 
+  const refreshAll = () => {
+    refetchProducts();
+    refetchCategories();
+  };
+
   const { data: salesStats } = useQuery<{ totalSales: number; totalOrders: number; averageOrderValue: number }>({
     queryKey: ['/api/admin/stats'],
     enabled: isAuthenticated && !!adminToken,
@@ -2919,8 +2924,7 @@ export default function Admin() {
                   </div>
                 )}
 
-                {/* زر تحديث قائمة المنتجات */}
-                <div className="flex justify-end mb-3">
+                <div className="flex justify-end mb-3 gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -2931,6 +2935,17 @@ export default function Admin() {
                   >
                     {productsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                     تحديث
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={refreshAll}
+                    disabled={productsLoading || categoriesLoading}
+                    data-testid="button-refresh-all"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    تحديث الكل
                   </Button>
                 </div>
 
@@ -3147,8 +3162,7 @@ export default function Admin() {
                   </div>
                 )}
 
-                {/* زر تحديث الأقسام */}
-                <div className="flex justify-end mb-3">
+                <div className="flex justify-end mb-3 gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -3159,6 +3173,17 @@ export default function Admin() {
                   >
                     {categoriesLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                     تحديث
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={refreshAll}
+                    disabled={productsLoading || categoriesLoading}
+                    data-testid="button-refresh-all-categories"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    تحديث الكل
                   </Button>
                 </div>
 
@@ -3260,8 +3285,7 @@ export default function Admin() {
                 <CardTitle>إدارة المخزون</CardTitle>
               </CardHeader>
               <CardContent>
-                {/* زر تحديث المخزون */}
-                <div className="flex justify-end mb-3">
+                <div className="flex justify-end mb-3 gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -3272,6 +3296,17 @@ export default function Admin() {
                   >
                     {productsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                     تحديث
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={refreshAll}
+                    disabled={productsLoading || categoriesLoading}
+                    data-testid="button-refresh-all-inventory"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    تحديث الكل
                   </Button>
                 </div>
 

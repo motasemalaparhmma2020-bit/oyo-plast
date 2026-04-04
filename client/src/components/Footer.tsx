@@ -170,6 +170,15 @@ export function Footer() {
 export function MobileFooter() {
   const phoneNumber = "+967774997589";
   const whatsappLink = `https://wa.me/${phoneNumber.replace('+', '')}`;
+  const { data: homeSettings } = useQuery<any>({
+    queryKey: ["/api/home-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/home-settings", { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    staleTime: 60000,
+  });
 
   return (
     <div className="md:hidden bg-gradient-to-b from-card to-muted/30 border-t pb-20" dir="rtl">
