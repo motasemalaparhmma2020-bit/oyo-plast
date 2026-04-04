@@ -82,6 +82,8 @@ interface SizePricing {
   stock?: number;
 }
 
+interface ColorImageEntry { color: string; hex: string; imageUrl: string; }
+
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
@@ -93,6 +95,16 @@ export default function ProductDetail() {
     queryKey: ['/api/products', id],
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
+  });
+
+  const { data: navSettings } = useQuery<any>({
+    queryKey: ["/api/navigation-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/navigation-settings", { credentials: "include" });
+      if (!res.ok) return {};
+      return res.json();
+    },
+    staleTime: 60000,
   });
 
   const { data: reviews = [] } = useQuery<Review[]>({
@@ -245,6 +257,15 @@ export default function ProductDetail() {
     }
     return product?.colors || [];
   }, [currentSizeData, product?.colors]);
+
+  const colorImages: ColorImageEntry[] = useMemo(() => {
+    if (!(product as any)?.colorImages) return [];
+    try { return JSON.parse((product as any).colorImages); } catch { return []; }
+  }, [(product as any)?.colorImages]);
+
+  const showVariantUI = !!(navSettings?.enableVariantProductPage && (product as any)?.enableVariantUI);
+  const [variantActiveImg, setVariantActiveImg] = useState<string | null>(null);
+  const variantHeroImg = variantActiveImg || product?.imageUrl || "";
 
   useEffect(() => {
     if (sizePricing.length > 0 && !selectedSize) {
@@ -407,6 +428,255 @@ export default function ProductDetail() {
         <Link href="/products">
           <Button>العودة للمنتجات</Button>
         </Link>
+      </div>
+    );
+  }
+
+  /* ───────────────────────────────────────────────────────────────
+     SHEIN-STYLE VARIANT UI  (only when BOTH flags are enabled)
+  ─────────────────────────────────────────────────────────────── */
+  if (showVariantUI) {
+    const displayPrice = currency === 'SAR' && product.priceSar ? product.priceSar : product.price;
+    const displayCurrencyLabel = currency === 'SAR' ? 'ر.س' : 'ر.ي';
+    return (
+      <div className="min-h-screen bg-background pb-28" dir="rtl">
+        {/* ── Top Nav ── */}
+        <div className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b px-3 py-2 flex items-center gap-2">
+          <Link href="/products">
+            <button className="p-2 rounded-full hover:bg-muted transition-colors" data-testid="button-variant-back">
+              <ArrowRight className="h-5 w-5" />
+            </button>
+          </Link>
+          <span className="font-semibold text-sm flex-1 truncate">{product.name}</span>
+          {currentStock > 0 && currentStock <= 10 && (
+            <span className="text-xs text-orange-500 font-bold">متبقي {currentStock}</span>
+          )}
+          {currentStock <= 0 && (
+            <Badge variant="destructive" className="text-xs">نفذت الكمية</Badge>
+          )}
+        </div>
+
+        {/* ── Hero Image ── */}
+        <div className="relative w-full bg-gray-50 dark:bg-gray-900" style={{ aspectRatio: '3/4', maxHeight: '75vw' }}>
+          <img
+            src={variantHeroImg}
+            alt={product.name}
+            className="w-full h-full object-cover"
+            data-testid="img-variant-hero"
+          />
+          {colorImages.length > 0 && (
+            <div className="absolute bottom-3 right-3 flex gap-1.5 flex-wrap max-w-[60%] justify-end">
+              {colorImages.map((ci, i) => (
+                <button
+                  key={i}
+                  onClick={() => { setVariantActiveImg(ci.imageUrl); setSelectedColor(ci.color); }}
+                  className={`w-10 h-10 rounded-lg overflow-hidden border-2 transition-all shadow-sm ${
+                    selectedColor === ci.color ? 'border-white ring-2 ring-primary scale-105' : 'border-white/70 opacity-80'
+                  }`}
+                  title={ci.color}
+                  data-testid={`button-variant-color-thumb-${i}`}
+                >
+                  {ci.imageUrl ? (
+                    <img src={ci.imageUrl} alt={ci.color} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full" style={{ background: ci.hex || '#ccc' }} />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Product Info Card ── */}
+        <div className="px-4 pt-4 space-y-4">
+          {/* Price */}
+          <div className="flex items-baseline gap-3">
+            <span className="text-2xl font-extrabold text-primary" data-testid="text-variant-price">
+              {formatPrice(displayPrice)} {displayCurrencyLabel}
+            </span>
+            {sizePricing.length > 0 && selectedSize && currentSizeData && (
+              <span className="text-sm text-muted-foreground line-through">
+                {formatPrice(product.price)} {displayCurrencyLabel}
+              </span>
+            )}
+            {currentStock <= 0 && (
+              <Badge variant="destructive" className="text-xs mr-auto">نفذ المخزون</Badge>
+            )}
+          </div>
+
+          {/* Title */}
+          <h1 className="text-base font-bold leading-snug" data-testid="text-variant-name">{product.name}</h1>
+
+          {/* Ratings */}
+          <div className="flex items-center gap-2">
+            <div className="flex">
+              {[1,2,3,4,5].map(s => (
+                <Star key={s} className={`h-3.5 w-3.5 ${s <= Math.floor(Number(product.rating||5)) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
+              ))}
+            </div>
+            <span className="text-xs text-muted-foreground">{product.rating || "5"} ({product.reviewCount || 0} تقييم)</span>
+            <span className="text-xs text-muted-foreground mr-auto">تم بيع {(product as any).soldCount || 0}</span>
+          </div>
+
+          {/* Colors (from colorImages) */}
+          {colorImages.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-semibold">اللون:</span>
+                {selectedColor && (
+                  <span className="text-sm text-muted-foreground">{selectedColor}</span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {colorImages.map((ci, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { setSelectedColor(ci.color); if (ci.imageUrl) setVariantActiveImg(ci.imageUrl); }}
+                    className={`relative w-10 h-10 rounded-full border-2 overflow-hidden transition-all ${
+                      selectedColor === ci.color ? 'border-primary ring-2 ring-primary/40 scale-110' : 'border-gray-200 hover:border-gray-400'
+                    }`}
+                    title={ci.color}
+                    data-testid={`button-variant-color-${i}`}
+                  >
+                    {ci.imageUrl ? (
+                      <img src={ci.imageUrl} alt={ci.color} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full rounded-full" style={{ background: ci.hex || getColorCode(ci.color) }} />
+                    )}
+                    {selectedColor === ci.color && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Check className="h-3.5 w-3.5 text-white drop-shadow" />
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Sizes */}
+          {sizePricing.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-semibold">الحجم:</span>
+                {selectedSize && <span className="text-sm text-muted-foreground">{selectedSize}</span>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {sizePricing.map((sp) => (
+                  <button
+                    key={sp.size}
+                    onClick={() => setSelectedSize(sp.size)}
+                    className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${
+                      selectedSize === sp.size
+                        ? 'border-primary bg-primary text-primary-foreground shadow'
+                        : 'border-gray-200 hover:border-primary/50 text-foreground'
+                    }`}
+                    data-testid={`button-variant-size-${sp.size}`}
+                  >
+                    <div>{sp.size}</div>
+                    <div className="text-xs opacity-80">{formatPrice(currency==='SAR'&&sp.priceSar?sp.priceSar:sp.price)} {displayCurrencyLabel}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {sizes.length > 0 && sizePricing.length === 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-semibold">الحجم:</span>
+                {selectedSize && <span className="text-sm text-muted-foreground">{selectedSize}</span>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {sizes.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSelectedSize(s)}
+                    className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${
+                      selectedSize === s
+                        ? 'border-primary bg-primary text-primary-foreground shadow'
+                        : 'border-gray-200 hover:border-primary/50 text-foreground'
+                    }`}
+                    data-testid={`button-variant-size-text-${s}`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Colors (legacy, no colorImages) */}
+          {colorImages.length === 0 && availableColors.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-semibold">اللون:</span>
+                {selectedColor && <span className="text-sm text-muted-foreground">{selectedColor}</span>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {availableColors.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setSelectedColor(c)}
+                    className={`w-8 h-8 rounded-full border-2 transition-all ${
+                      selectedColor === c ? 'border-primary ring-2 ring-primary/40 scale-110' : 'border-gray-200'
+                    }`}
+                    style={{ background: getColorCode(c) }}
+                    title={c}
+                    data-testid={`button-variant-legacy-color-${c}`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Description */}
+          {product.description && (
+            <div className="text-sm text-muted-foreground leading-relaxed border-t pt-3">
+              {product.description}
+            </div>
+          )}
+        </div>
+
+        {/* ── Fixed Bottom Bar ── */}
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t px-4 py-3 flex items-center gap-3 shadow-lg">
+          {/* Quantity */}
+          <div className="flex items-center border rounded-lg overflow-hidden">
+            <button
+              onClick={() => setQuantity(q => Math.max(1, q - 1))}
+              className="px-3 py-2 hover:bg-muted text-lg font-bold"
+              data-testid="button-variant-qty-minus"
+            >−</button>
+            <span className="px-3 py-2 text-sm font-bold min-w-[2rem] text-center" data-testid="text-variant-qty">{quantity}</span>
+            <button
+              onClick={() => setQuantity(q => Math.min(currentStock || 999, q + 1))}
+              className="px-3 py-2 hover:bg-muted text-lg font-bold"
+              data-testid="button-variant-qty-plus"
+            >+</button>
+          </div>
+
+          {/* Add to cart */}
+          <Button
+            className="flex-1 gap-2 font-bold"
+            disabled={currentStock <= 0 || isPending}
+            onClick={handleAddToCart}
+            data-testid="button-variant-add-to-cart"
+          >
+            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
+            {currentStock <= 0 ? 'نفذت الكمية' : 'أضف للسلة'}
+          </Button>
+
+          {/* Buy Now */}
+          <Button
+            variant="outline"
+            className="flex-1 gap-2 font-bold border-primary text-primary"
+            disabled={currentStock <= 0 || isPending}
+            onClick={handleBuyNow}
+            data-testid="button-variant-buy-now"
+          >
+            <Zap className="h-4 w-4" />
+            اشتر الآن
+          </Button>
+        </div>
       </div>
     );
   }

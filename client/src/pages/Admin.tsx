@@ -122,6 +122,12 @@ interface Category {
   imageUrl: string;
 }
 
+interface ColorImageEntry {
+  color: string;
+  hex: string;
+  imageUrl: string;
+}
+
 interface ProductFormData {
   name: string;
   description: string;
@@ -141,6 +147,7 @@ interface ProductFormData {
   availableBagColors: string;
   tags: string;
   showReviews: boolean;
+  enableVariantUI: boolean;
 }
 
 const emptyProductForm: ProductFormData = {
@@ -161,7 +168,8 @@ const emptyProductForm: ProductFormData = {
   singleColorPrintPrice: "",
   availableBagColors: "",
   tags: "",
-  showReviews: true
+  showReviews: true,
+  enableVariantUI: false
 };
 
 interface CategoryFormData {
@@ -1128,6 +1136,10 @@ function NavigationSettingsSection({ adminToken }: { adminToken: string | null }
     updateSettingsMutation.mutate({ showSignupEntryPoint: newValue });
   };
 
+  const handleToggleVariantPage = (newValue: boolean) => {
+    updateSettingsMutation.mutate({ enableVariantProductPage: newValue });
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -1160,6 +1172,28 @@ function NavigationSettingsSection({ adminToken }: { adminToken: string | null }
             className="w-5 h-5 cursor-pointer"
             data-testid="checkbox-show-signup-entry"
           />
+        </div>
+        <div className="flex items-center justify-between p-4 border-2 border-amber-200 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs bg-amber-500 text-white px-2 py-0.5 rounded font-bold">مفتاح رئيسي</span>
+              <p className="font-semibold">صفحة المنتج المتطورة (SHEIN-Style)</p>
+            </div>
+            <p className="text-sm text-gray-500">تفعيل/إيقاف واجهة المنتج المتطورة عالمياً — إذا أوقفته يعود المتجر للواجهة الأصلية فوراً دون أي أثر</p>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <input
+              type="checkbox"
+              checked={settings?.enableVariantProductPage ?? false}
+              onChange={(e) => handleToggleVariantPage(e.target.checked)}
+              disabled={updateSettingsMutation.isPending}
+              className="w-6 h-6 cursor-pointer accent-amber-500"
+              data-testid="checkbox-enable-variant-product-page"
+            />
+            <span className={`text-xs font-bold ${settings?.enableVariantProductPage ? 'text-green-600' : 'text-gray-400'}`}>
+              {settings?.enableVariantProductPage ? 'مفعّل' : 'موقوف'}
+            </span>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -1703,6 +1737,7 @@ export default function Admin() {
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productForm, setProductForm] = useState<ProductFormData>(emptyProductForm);
+  const [colorImagesList, setColorImagesList] = useState<ColorImageEntry[]>([]);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryForm, setCategoryForm] = useState<CategoryFormData>(emptyCategoryForm);
@@ -1999,7 +2034,9 @@ export default function Admin() {
           singleColorPrintPrice: numOrNull(data.singleColorPrintPrice),
           availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()).filter(c => c) : null,
           tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
-          showReviews: data.showReviews
+          showReviews: data.showReviews,
+          enableVariantUI: data.enableVariantUI,
+          colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
         })
       });
       if (!res.ok) {
@@ -2016,6 +2053,7 @@ export default function Admin() {
       toast({ title: "تم إضافة المنتج بنجاح" });
       setShowProductForm(false);
       setProductForm(emptyProductForm);
+      setColorImagesList([]);
     },
     onError: () => {
       toast({ title: "حدث خطأ أثناء إضافة المنتج", variant: "destructive" });
@@ -2041,7 +2079,9 @@ export default function Admin() {
         sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()).filter(s => s) : null,
         availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()).filter(c => c) : null,
         tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
-        showReviews: data.showReviews
+        showReviews: data.showReviews,
+        enableVariantUI: data.enableVariantUI,
+        colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
       };
       
       if (data.imageUrls && data.imageUrls.length > 0) {
@@ -2074,6 +2114,7 @@ export default function Admin() {
       setShowProductForm(false);
       setEditingProduct(null);
       setProductForm(emptyProductForm);
+      setColorImagesList([]);
     },
     onError: (error: any) => {
       toast({ 
@@ -2228,8 +2269,16 @@ export default function Admin() {
       baseBagPrice: product.baseBagPrice != null ? String(product.baseBagPrice) : "",
       singleColorPrintPrice: product.singleColorPrintPrice != null ? String(product.singleColorPrintPrice) : "",
       availableBagColors: product.availableBagColors ? product.availableBagColors.join(', ') : "",
-      tags: product.tags ? product.tags.join(', ') : ""
+      tags: product.tags ? product.tags.join(', ') : "",
+      enableVariantUI: (product as any).enableVariantUI ?? false,
     });
+    // Parse colorImages JSON if present
+    try {
+      const ci = (product as any).colorImages;
+      setColorImagesList(ci ? JSON.parse(ci) : []);
+    } catch {
+      setColorImagesList([]);
+    }
     setShowProductForm(true);
   };
 
@@ -2894,6 +2943,116 @@ export default function Admin() {
                         <p className="text-xs text-muted-foreground mt-1">تُستخدم للبحث وتصنيف المنتجات في صفحة الطباعة</p>
                       </div>
 
+                      {/* ─── قسم الواجهة المتطورة (SHEIN-Style) ─── */}
+                      <div className="border-2 border-amber-200 bg-amber-50 dark:bg-amber-900/10 rounded-lg p-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs bg-amber-500 text-white px-2 py-0.5 rounded font-bold">اختياري</span>
+                              <Label className="font-bold text-base">الواجهة المتطورة (SHEIN-Style)</Label>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">عند التفعيل يظهر صورة كبيرة + تغيير الصورة حسب اللون المختار. يشترط تفعيل المفتاح الرئيسي من إعدادات التنقل أيضاً.</p>
+                          </div>
+                          <div className="flex flex-col items-center gap-1">
+                            <input
+                              type="checkbox"
+                              id="enable-variant-ui"
+                              checked={productForm.enableVariantUI}
+                              onChange={(e) => setProductForm({...productForm, enableVariantUI: e.target.checked})}
+                              className="w-6 h-6 cursor-pointer accent-amber-500"
+                              data-testid="checkbox-enable-variant-ui"
+                            />
+                            <span className={`text-xs font-bold ${productForm.enableVariantUI ? 'text-green-600' : 'text-gray-400'}`}>
+                              {productForm.enableVariantUI ? 'مفعّل' : 'موقوف'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {productForm.enableVariantUI && (
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <Label className="font-semibold">ربط الألوان بصور مختلفة</Label>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="gap-1 h-7 text-xs"
+                                onClick={() => setColorImagesList([...colorImagesList, { color: "", hex: "#000000", imageUrl: "" }])}
+                                data-testid="button-add-color-image"
+                              >
+                                <Plus className="h-3 w-3" />
+                                إضافة لون
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">اربط كل لون بصورة مختلفة — عند اختيار اللون تتغير الصورة الرئيسية تلقائياً</p>
+                            {colorImagesList.length === 0 && (
+                              <p className="text-xs text-amber-600 text-center py-2 border border-dashed border-amber-300 rounded">لا يوجد ربط بعد — يمكنك الإضافة لاحقاً</p>
+                            )}
+                            {colorImagesList.map((entry, idx) => (
+                              <div key={idx} className="grid grid-cols-[auto_1fr_1fr_auto] gap-2 items-center bg-white dark:bg-gray-800 rounded p-2 border">
+                                <div className="flex flex-col items-center gap-1">
+                                  <input
+                                    type="color"
+                                    value={entry.hex || "#000000"}
+                                    onChange={(e) => {
+                                      const updated = [...colorImagesList];
+                                      updated[idx] = { ...updated[idx], hex: e.target.value };
+                                      setColorImagesList(updated);
+                                    }}
+                                    className="w-8 h-8 cursor-pointer rounded border"
+                                    title="اختر اللون"
+                                  />
+                                </div>
+                                <Input
+                                  placeholder="اسم اللون (مثال: أزرق)"
+                                  value={entry.color}
+                                  onChange={(e) => {
+                                    const updated = [...colorImagesList];
+                                    updated[idx] = { ...updated[idx], color: e.target.value };
+                                    setColorImagesList(updated);
+                                  }}
+                                  className="h-8 text-xs"
+                                  data-testid={`input-color-name-${idx}`}
+                                />
+                                <Input
+                                  placeholder="رابط صورة هذا اللون"
+                                  value={entry.imageUrl}
+                                  onChange={(e) => {
+                                    const updated = [...colorImagesList];
+                                    updated[idx] = { ...updated[idx], imageUrl: e.target.value };
+                                    setColorImagesList(updated);
+                                  }}
+                                  className="h-8 text-xs"
+                                  data-testid={`input-color-imageurl-${idx}`}
+                                />
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 text-destructive"
+                                  onClick={() => setColorImagesList(colorImagesList.filter((_, i) => i !== idx))}
+                                  data-testid={`button-remove-color-${idx}`}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ))}
+                            {colorImagesList.some(e => e.imageUrl) && (
+                              <div className="flex gap-2 flex-wrap mt-2">
+                                {colorImagesList.filter(e => e.imageUrl).map((entry, idx) => (
+                                  <div key={idx} className="flex flex-col items-center gap-1">
+                                    <div className="w-12 h-12 rounded overflow-hidden border">
+                                      <img src={entry.imageUrl} alt={entry.color} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0.3'; }} />
+                                    </div>
+                                    <span className="text-[10px] text-center" style={{ color: entry.hex }}>{entry.color || '—'}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
                       <div className="flex gap-2 pt-4">
                         <Button 
                           type="submit" 
@@ -2915,6 +3074,7 @@ export default function Admin() {
                             setShowProductForm(false);
                             setEditingProduct(null);
                             setProductForm(emptyProductForm);
+                            setColorImagesList([]);
                           }}
                         >
                           إلغاء
