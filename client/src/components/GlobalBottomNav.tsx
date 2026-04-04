@@ -8,7 +8,7 @@ export function GlobalBottomNav() {
   const { data: cart } = useCart();
   const cartCount = cart?.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0) || 0;
 
-  const { data: navSettings = { showPrintingSection: true } } = useQuery<any>({
+  const { data: navSettings = { showPrintingSection: true, showSignupEntryPoint: true } } = useQuery<any>({
     queryKey: ["/api/navigation-settings"],
     queryFn: async () => {
       const res = await fetch("/api/navigation-settings", { credentials: "include" });
@@ -29,7 +29,7 @@ export function GlobalBottomNav() {
   });
 
   const primaryColor = homeSettings?.primaryColor || "#06B6D4";
-  const isHome = location === "/";
+  const signupHref = navSettings?.showSignupEntryPoint === false ? "/profile" : "/auth";
 
   const navItemClass = (active: boolean) =>
     `flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-colors flex-1 min-w-0`;
@@ -134,7 +134,7 @@ export function GlobalBottomNav() {
         </Link>
 
         {/* أنا */}
-        <Link href="/profile">
+        <Link href={signupHref}>
           <button
             className={navItemClass(location.startsWith("/profile"))}
             data-testid="nav-profile"

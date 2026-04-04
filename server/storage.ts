@@ -193,7 +193,13 @@ export class DatabaseStorage implements IStorage {
 
   async getNavigationSettings(): Promise<NavigationSettings> {
     const [settings] = await db.select().from(navigationSettings).limit(1);
-    return settings || { id: 1, showPrintingSection: true, showSignupEntryPoint: true, updatedAt: new Date() };
+    if (settings) return settings;
+    const [created] = await db.insert(navigationSettings).values({
+      showPrintingSection: true,
+      showSignupEntryPoint: true,
+      updatedAt: new Date(),
+    }).returning();
+    return created;
   }
 
   async updateNavigationSettings(data: any): Promise<NavigationSettings> {
@@ -207,8 +213,8 @@ export class DatabaseStorage implements IStorage {
 
   async getHomePageSettings(): Promise<HomePageSettings> {
     const [settings] = await db.select().from(homePageSettings).limit(1);
-    return settings || {
-      id: 1,
+    if (settings) return settings;
+    const [created] = await db.insert(homePageSettings).values({
       primaryColor: "#06B6D4",
       accentColor: "#0891B2",
       showHeader: true,
@@ -221,7 +227,8 @@ export class DatabaseStorage implements IStorage {
       footerBottomText: "أويو بلاست - مستلزمات التغليف",
       signupEntryMode: "cart",
       updatedAt: new Date(),
-    };
+    }).returning();
+    return created;
   }
 
   async getDisplaySettings(): Promise<DisplaySettings> {

@@ -1124,6 +1124,10 @@ function NavigationSettingsSection({ adminToken }: { adminToken: string | null }
     updateSettingsMutation.mutate({ showPrintingSection: newValue });
   };
 
+  const handleToggleSignup = (newValue: boolean) => {
+    updateSettingsMutation.mutate({ showSignupEntryPoint: newValue });
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -1141,6 +1145,20 @@ function NavigationSettingsSection({ adminToken }: { adminToken: string | null }
             onChange={(e) => handleTogglePrinting(e.target.checked)}
             disabled={updateSettingsMutation.isPending}
             className="w-5 h-5 cursor-pointer"
+          />
+        </div>
+        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+          <div>
+            <p className="font-semibold">زر الدخول/التسجيل</p>
+            <p className="text-sm text-gray-500">إظهار أو إخفاء زر الحساب في الشريط السفلي</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={settings?.showSignupEntryPoint ?? true}
+            onChange={(e) => handleToggleSignup(e.target.checked)}
+            disabled={updateSettingsMutation.isPending}
+            className="w-5 h-5 cursor-pointer"
+            data-testid="checkbox-show-signup-entry"
           />
         </div>
       </CardContent>
@@ -1493,6 +1511,12 @@ function HomePageSettingsSection({ adminToken }: { adminToken: string | null }) 
     });
   };
 
+  const handleText = (key: string, value: string) => {
+    updateSettingsMutation.mutate({
+      [key]: value,
+    });
+  };
+
   if (loading) {
     return <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
@@ -1551,6 +1575,40 @@ function HomePageSettingsSection({ adminToken }: { adminToken: string | null }) 
         </div>
 
         <Separator />
+
+        <div className="space-y-4">
+          <Label className="text-base font-semibold block">تحكم التذييل</Label>
+          <div className="grid gap-4">
+            <div>
+              <Label>سياسة الخصوصية</Label>
+              <Input value={settings?.footerPrivacyText || ""} onChange={(e) => handleText("footerPrivacyText", e.target.value)} data-testid="input-footer-privacy" />
+            </div>
+            <div>
+              <Label>التسويق بالعمولة</Label>
+              <Input value={settings?.footerAffiliateText || ""} onChange={(e) => handleText("footerAffiliateText", e.target.value)} data-testid="input-footer-affiliate" />
+            </div>
+            <div>
+              <Label>سياسة الاسترجاع</Label>
+              <Input value={settings?.footerReturnsText || ""} onChange={(e) => handleText("footerReturnsText", e.target.value)} data-testid="input-footer-returns" />
+            </div>
+            <div>
+              <Label>النص السفلي</Label>
+              <Input value={settings?.footerBottomText || ""} onChange={(e) => handleText("footerBottomText", e.target.value)} data-testid="input-footer-bottom" />
+            </div>
+            <div>
+              <Label>مكان إظهار التسجيل</Label>
+              <Select value={settings?.signupEntryMode || "cart"} onValueChange={(value) => handleText("signupEntryMode", value)}>
+                <SelectTrigger data-testid="select-signup-entry-mode">
+                  <SelectValue placeholder="اختر" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cart">من السلة</SelectItem>
+                  <SelectItem value="profile">من صفحة أنا</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
 
         {/* Visibility Toggles */}
         <div className="space-y-4">
