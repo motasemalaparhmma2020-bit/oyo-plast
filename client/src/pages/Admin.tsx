@@ -3177,10 +3177,11 @@ export default function Admin() {
                       إعادة المحاولة
                     </Button>
                   </div>
-                ) : productsList.length > 0 ? (
+                ) : (() => {
+                  const displayedProducts = productsList.filter(p => selectedCategoryFilter === null || p.categoryId === selectedCategoryFilter);
+                  return displayedProducts.length > 0 ? (
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {productsList
-                      .filter(p => selectedCategoryFilter === null || p.categoryId === selectedCategoryFilter)
+                    {displayedProducts
                       .map((product) => (
                       <div
                         key={product.id}
@@ -3261,6 +3262,12 @@ export default function Admin() {
                       </div>
                     ))}
                   </div>
+                ) : selectedCategoryFilter !== null ? (
+                  <div className="text-center py-10 text-muted-foreground" data-testid="empty-category-products">
+                    <Package className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                    <p>لا توجد منتجات في هذا القسم</p>
+                    <p className="text-xs mt-1">اختر قسماً آخر أو أضف منتجاً جديداً</p>
+                  </div>
                 ) : (
                   <div className="text-center py-10 text-muted-foreground">
                     <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -3274,7 +3281,8 @@ export default function Admin() {
                       إضافة أول منتج
                     </Button>
                   </div>
-                )}
+                );
+                })()}
               </CardContent>
             </Card>
           </TabsContent>

@@ -179,6 +179,15 @@ export default function Cart() {
     enabled: !isAuthenticated,
   });
 
+  const { data: homeSettings } = useQuery<any>({
+    queryKey: ["/api/home-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/home-settings", { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+
   const guestCartWithProducts = useMemo(
     () =>
       guestCart
@@ -263,15 +272,6 @@ export default function Cart() {
   const itemCount = isAuthenticated
     ? (cartItems?.length ?? 0)
     : guestCart.length;
-
-  const { data: homeSettings } = useQuery<any>({
-    queryKey: ["/api/home-settings"],
-    queryFn: async () => {
-      const res = await fetch("/api/home-settings", { credentials: "include" });
-      if (!res.ok) return null;
-      return res.json();
-    },
-  });
 
   /* ─── وجهة زر "إتمام الطلب" بناءً على إعداد loginFlow ─── */
   const loginFlow: string = homeSettings?.loginFlow || "checkout";
