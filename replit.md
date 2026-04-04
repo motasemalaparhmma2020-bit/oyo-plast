@@ -155,6 +155,23 @@ npm run dev     # Start development server
 npm run db:push # Push schema changes
 ```
 
+## Backup and Recovery
+- Keep a private git copy of the project at all times.
+- Export or snapshot the database regularly.
+- Save the admin password and environment variables in a secure place.
+- If the site is deleted or broken, restore in this order:
+  1. Reopen the saved project or git copy
+  2. Restore the database backup
+  3. Reapply environment variables
+  4. Restart the app
+- Keep a tagged backup before every major change.
+
+## Security Notes
+- Admin access is protected by a token-based check.
+- Public users cannot access admin data without the admin token.
+- No system is 100% hack-proof; use strong passwords and limit who knows them.
+- Best protection: private backups, secret management, and regular updates.
+
 ## Design Guidelines
 - Primary color: Sky blue (#2196F3)
 - RTL Arabic layout
