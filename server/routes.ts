@@ -111,24 +111,165 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ─── Products (Public) ───────────────────────────────────────────
+  // ─── Image serving (converts base64 DB data to real HTTP images) ──
+  app.get("/api/products/image/:id", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const id = parseInt(req.params.id);
+      if (Number.isNaN(id)) return res.status(400).send("Invalid ID");
+      const result = await dbPool.query("SELECT image_url FROM products WHERE id = $1", [id]);
+      if (!result.rows.length) return res.status(404).send("Not found");
+      const imageUrl = result.rows[0].image_url;
+      if (!imageUrl) return res.status(404).send("No image");
+      if (!imageUrl.startsWith("data:")) return res.redirect(imageUrl);
+      const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/s);
+      if (!matches) return res.status(400).send("Invalid image data");
+      const mimeType = matches[1];
+      const imageData = Buffer.from(matches[2], "base64");
+      res.set("Content-Type", mimeType);
+      res.set("Cache-Control", "public, max-age=604800");
+      res.send(imageData);
+    } catch (err: any) {
+      res.status(500).send("Error");
+    }
+  });
+
+  app.get("/api/products/image/:id/:imgIndex", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const id = parseInt(req.params.id);
+      const imgIndex = parseInt(req.params.imgIndex);
+      if (Number.isNaN(id) || Number.isNaN(imgIndex)) return res.status(400).send("Invalid params");
+      const result = await dbPool.query("SELECT image_urls FROM products WHERE id = $1", [id]);
+      if (!result.rows.length) return res.status(404).send("Not found");
+      const imageUrls = result.rows[0].image_urls;
+      if (!imageUrls || !imageUrls[imgIndex]) return res.status(404).send("No image at index");
+      const imageUrl = imageUrls[imgIndex];
+      if (!imageUrl.startsWith("data:")) return res.redirect(imageUrl);
+      const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/s);
+      if (!matches) return res.status(400).send("Invalid image data");
+      const mimeType = matches[1];
+      const imageData = Buffer.from(matches[2], "base64");
+      res.set("Content-Type", mimeType);
+      res.set("Cache-Control", "public, max-age=604800");
+      res.send(imageData);
+    } catch (err: any) {
+      res.status(500).send("Error");
+    }
+  });
+
+  const LITE_COLS = `id, name, description, price, price_sar, category_id, image_url,
+    stock, colors, sizes, allow_design_upload, bulk_pricing, size_pricing,
+    printing_price_per_unit, rating, review_count, sold_count, commission_hold_days,
+    marketer_commission_rate, has_printing_options, base_bag_price, single_color_print_price,
+    available_bag_colors, tags, show_reviews, show_in_printing`;
+
+  function mapProductRow(r: any) {
+    const rawImg: string = r.image_url || "";
+    return {
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      price: r.price,
+      priceSar: r.price_sar,
+      categoryId: r.category_id,
+      imageUrl: rawImg.startsWith("data:") ? `/api/products/image/${r.id}` : (rawImg || null),
+      imageUrls: [],
+      stock: r.stock,
+      colors: r.colors,
+      sizes: r.sizes,
+      allowDesignUpload: r.allow_design_upload,
+      bulkPricing: r.bulk_pricing,
+      sizePricing: r.size_pricing,
+      printingPricePerUnit: r.printing_price_per_unit,
+      rating: r.rating,
+      reviewCount: r.review_count,
+      soldCount: r.sold_count,
+      commissionHoldDays: r.commission_hold_days,
+      marketerCommissionRate: r.marketer_commission_rate,
+      hasPrintingOptions: r.has_printing_options,
+      baseBagPrice: r.base_bag_price,
+      singleColorPrintPrice: r.single_color_print_price,
+      availableBagColors: r.available_bag_colors,
+      tags: r.tags,
+      showReviews: r.show_reviews,
+      showInPrinting: r.show_in_printing,
+    };
+  }
+
   app.get("/api/products", async (req, res) => {
-    const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
-    const search = req.query.search as string | undefined;
-    const products = await storage.getProducts(categoryId, search);
-    res.json(products);
+    try {
+      const { pool: dbPool } = await import("./db");
+      const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
+      const search = req.query.search as string | undefined;
+
+      let query = `SELECT ${LITE_COLS} FROM products`;
+      const params: any[] = [];
+      const conditions: string[] = [];
+      let idx = 1;
+
+      if (categoryId !== undefined && !Number.isNaN(categoryId)) {
+        conditions.push(`category_id = $${idx++}`);
+        params.push(categoryId);
+      }
+      if (conditions.length > 0) query += ` WHERE ${conditions.join(" AND ")}`;
+      query += ` ORDER BY id DESC`;
+
+      const result = await dbPool.query(query, params);
+      let rows = result.rows.map(mapProductRow);
+
+      if (search && search.trim()) {
+        const q = search.trim().toLowerCase();
+        rows = rows.filter((p: any) =>
+          (p.name || "").toLowerCase().includes(q) ||
+          (p.description || "").toLowerCase().includes(q) ||
+          (Array.isArray(p.tags) ? p.tags : []).some((t: any) => String(t).toLowerCase().includes(q))
+        );
+      }
+
+      res.json(rows);
+    } catch (error: any) {
+      console.error("خطأ في جلب المنتجات:", error);
+      res.status(500).json({ message: "فشل في جلب المنتجات", details: error.message });
+    }
   });
 
   app.get("/api/products/bestselling", async (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit as string) : 8;
-    const products = await storage.getProducts();
-    const sorted = [...products].sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0));
-    res.json(sorted.slice(0, limit));
+    try {
+      const { pool: dbPool } = await import("./db");
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 8;
+      const result = await dbPool.query(
+        `SELECT ${LITE_COLS} FROM products ORDER BY sold_count DESC NULLS LAST LIMIT $1`,
+        [limit]
+      );
+      res.json(result.rows.map(mapProductRow));
+    } catch (error: any) {
+      console.error("خطأ في جلب الأكثر مبيعاً:", error);
+      res.status(500).json({ message: "فشل في جلب الأكثر مبيعاً", details: error.message });
+    }
   });
 
   app.get("/api/products/:id", async (req, res) => {
-    const product = await storage.getProduct(parseInt(req.params.id));
-    if (!product) return res.status(404).json({ message: "المنتج غير موجود" });
-    res.json(product);
+    try {
+      const { pool: dbPool } = await import("./db");
+      const id = parseInt(req.params.id);
+      if (Number.isNaN(id)) return res.status(404).json({ message: "المنتج غير موجود" });
+      const result = await dbPool.query(
+        `SELECT ${LITE_COLS}, cardinality(image_urls) as extra_count FROM products WHERE id = $1`,
+        [id]
+      );
+      if (!result.rows.length) return res.status(404).json({ message: "المنتج غير موجود" });
+      const r = result.rows[0];
+      const extraCount = r.extra_count || 0;
+      const product = {
+        ...mapProductRow(r),
+        imageUrls: Array.from({ length: extraCount }, (_: any, i: number) => `/api/products/image/${id}/${i}`),
+      };
+      res.json(product);
+    } catch (error: any) {
+      console.error("خطأ في جلب المنتج:", error);
+      res.status(500).json({ message: "فشل في جلب المنتج", details: error.message });
+    }
   });
 
   // ─── Admin Categories ────────────────────────────────────────────
