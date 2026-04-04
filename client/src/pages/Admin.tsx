@@ -1736,6 +1736,7 @@ export default function Admin() {
   const [exchangeRate, setExchangeRate] = useState("140");
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<number | null>(null);
   const [productForm, setProductForm] = useState<ProductFormData>(emptyProductForm);
   const [colorImagesList, setColorImagesList] = useState<ColorImageEntry[]>([]);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
@@ -2389,74 +2390,14 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="bg-primary text-white p-6">
-        <div className="container mx-auto flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold">لوحة تحكم OYO PLAST</h1>
-            <p className="text-primary-foreground/80">إدارة الطلبات والمنتجات</p>
-          </div>
-          <Button
-            variant="outline"
-            className="bg-white/10 border-white/30 text-white hover:bg-white/20 gap-2"
-            onClick={() => {
-              window.open('/', '_blank');
-            }}
-            data-testid="button-experience-as-customer"
-          >
-            <UserCircle2 className="h-4 w-4" />
-            تجربة الموقع كعميل
-            <ExternalLink className="h-3 w-3" />
-          </Button>
+      <div className="bg-primary text-white px-4 py-3">
+        <div className="container mx-auto">
+          <h1 className="text-lg font-bold">لوحة تحكم OYO PLAST</h1>
+          <p className="text-primary-foreground/80 text-xs">إدارة الطلبات والمنتجات</p>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6">
-        <div className="grid md:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="bg-blue-100 p-3 rounded-xl">
-                <ShoppingBag className="h-6 w-6 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">إجمالي الطلبات</p>
-                <p className="text-2xl font-bold">{orders?.length || 0}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="bg-yellow-100 p-3 rounded-xl">
-                <Clock className="h-6 w-6 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">طلبات معلقة</p>
-                <p className="text-2xl font-bold">{pendingOrders}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="bg-green-100 p-3 rounded-xl">
-                <TrendingUp className="h-6 w-6 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">إجمالي المبيعات</p>
-                <p className="text-2xl font-bold">{formatPrice(totalRevenue)} ر.ي</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="bg-purple-100 p-3 rounded-xl">
-                <Package className="h-6 w-6 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">المنتجات</p>
-                <p className="text-2xl font-bold">{products?.length || 0}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      <div className="container mx-auto px-4 py-4">
 
         {/* Admin Navigation Grid */}
         <AdminNav activeSection={activeSection} onSelectSection={setActiveSection} />
@@ -3109,6 +3050,60 @@ export default function Admin() {
                   </Button>
                 </div>
 
+                {/* ── مربعات الأقسام ── */}
+                {!productsLoading && categoriesList.length > 0 && (
+                  <div className="mb-5">
+                    <p className="text-xs text-muted-foreground mb-2 font-medium">تصفية حسب القسم:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {/* زر الكل */}
+                      <button
+                        onClick={() => setSelectedCategoryFilter(null)}
+                        className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2 transition-all min-w-[72px] ${
+                          selectedCategoryFilter === null
+                            ? 'border-primary bg-primary/10 shadow-sm'
+                            : 'border-border hover:border-primary/50 bg-card'
+                        }`}
+                        data-testid="button-filter-all"
+                      >
+                        <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                          <Package className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                        <span className="text-[11px] font-semibold text-center leading-tight">الكل</span>
+                        <span className="text-[10px] text-muted-foreground">{productsList.length}</span>
+                      </button>
+                      {/* زر لكل قسم */}
+                      {categoriesList.map((cat) => {
+                        const count = productsList.filter(p => p.categoryId === cat.id).length;
+                        const firstImg = productsList.find(p => p.categoryId === cat.id)?.imageUrl;
+                        return (
+                          <button
+                            key={cat.id}
+                            onClick={() => setSelectedCategoryFilter(selectedCategoryFilter === cat.id ? null : cat.id)}
+                            className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2 transition-all min-w-[72px] ${
+                              selectedCategoryFilter === cat.id
+                                ? 'border-primary bg-primary/10 shadow-sm'
+                                : 'border-border hover:border-primary/50 bg-card'
+                            }`}
+                            data-testid={`button-filter-cat-${cat.id}`}
+                          >
+                            <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden flex items-center justify-center">
+                              {cat.imageUrl ? (
+                                <img src={cat.imageUrl} alt={cat.name} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                              ) : firstImg ? (
+                                <img src={firstImg} alt={cat.name} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                              ) : (
+                                <Package className="h-5 w-5 text-muted-foreground" />
+                              )}
+                            </div>
+                            <span className="text-[11px] font-semibold text-center leading-tight max-w-[70px] truncate">{cat.name}</span>
+                            <span className="text-[10px] text-muted-foreground">{count} منتج</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {productsLoading ? (
                   <div className="flex justify-center py-10">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -3130,7 +3125,9 @@ export default function Admin() {
                   </div>
                 ) : productsList.length > 0 ? (
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {productsList.map((product) => (
+                    {productsList
+                      .filter(p => selectedCategoryFilter === null || p.categoryId === selectedCategoryFilter)
+                      .map((product) => (
                       <div
                         key={product.id}
                         className="flex items-start gap-3 rounded-xl border bg-card p-3 shadow-sm hover:shadow-md transition-shadow"
@@ -3170,7 +3167,17 @@ export default function Admin() {
                           </div>
 
                           {/* أزرار الإجراءات */}
-                          <div className="flex gap-1">
+                          <div className="flex gap-1 flex-wrap">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 gap-1 text-xs text-blue-600 border-blue-200 hover:border-blue-400"
+                              onClick={() => window.open(`/products/${product.id}`, '_blank')}
+                              data-testid={`button-view-product-${product.id}`}
+                            >
+                              <Eye className="h-3 w-3" />
+                              عرض
+                            </Button>
                             <Button
                               size="sm"
                               variant="outline"
@@ -3618,6 +3625,28 @@ export default function Admin() {
 
           <TabsContent value="settings">
             <div className="space-y-4">
+              {/* زر تصفح الموقع كعميل */}
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                      <p className="font-semibold">تصفح الموقع كعميل</p>
+                      <p className="text-sm text-muted-foreground">افتح الموقع بنظرة العميل في تبويب جديد</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => window.open('/', '_blank')}
+                      data-testid="button-experience-as-customer"
+                    >
+                      <UserCircle2 className="h-4 w-4" />
+                      تصفح كعميل
+                      <ExternalLink className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
               <DisplaySettingsSection adminToken={adminToken} />
               <HomePageSettingsSection adminToken={adminToken} />
               
