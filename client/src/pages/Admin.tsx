@@ -560,7 +560,7 @@ function BannersOffersSection({ adminToken }: { adminToken: string | null }) {
   });
 
   const { data: categories } = useQuery<Category[]>({
-    queryKey: ['/api/categories'],
+    queryKey: ['/api/admin/categories'],
     enabled: !!adminToken,
     queryFn: async () => {
       const res = await fetch('/api/admin/categories', {
@@ -1153,8 +1153,20 @@ function PrintingProductsSection({ adminToken }: { adminToken: string | null }) 
   const queryClient = useQueryClient();
 
   const { data: products = [], isLoading } = useQuery<any[]>({
-    queryKey: ['/api/products'],
+    queryKey: ['/api/admin/printing-products'],
     enabled: !!adminToken,
+    queryFn: async () => {
+      const res = await fetch('/api/admin/products', {
+        headers: { 'x-admin-token': adminToken || '' }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.details || err.message || `Failed to fetch printing products: ${res.status}`);
+      }
+      return res.json();
+    },
+    retry: false,
+    placeholderData: [],
   });
 
   const updatePrintingStatusMutation = useMutation({
