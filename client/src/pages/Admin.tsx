@@ -96,10 +96,10 @@ function ColorCircles({ colorsString }: { colorsString: string }) {
       {colors.map((color, index) => (
         <div 
           key={index}
-          className="flex items-center gap-1.5 bg-muted/50 rounded-full px-2 py-1"
+          className="flex items-center gap-1.5 bg-blue-50 text-blue-900 border border-blue-200 rounded-full px-2 py-1"
         >
           <div 
-            className="w-5 h-5 rounded-full border-2 border-gray-300 shadow-sm"
+            className="w-5 h-5 rounded-full border-2 border-blue-300 shadow-sm"
             style={{ 
               backgroundColor: getColorCode(color),
               backgroundImage: color === 'شفاف' ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)' : 'none',
@@ -107,7 +107,7 @@ function ColorCircles({ colorsString }: { colorsString: string }) {
               backgroundPosition: '0 0, 4px 4px'
             }}
           />
-          <span className="text-xs font-medium">{color}</span>
+          <span className="text-xs font-medium text-blue-900">{color}</span>
         </div>
       ))}
     </div>
