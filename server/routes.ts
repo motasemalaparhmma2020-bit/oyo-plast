@@ -326,8 +326,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ─── Admin Products ──────────────────────────────────────────────
   app.get("/api/admin/products", requireAdmin, async (_req, res) => {
     try {
-      const prods = await storage.getProducts();
-      res.json(prods);
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        `SELECT ${LITE_COLS}, cardinality(image_urls) as extra_count FROM products ORDER BY id DESC`
+      );
+      const rows = result.rows.map((r: any) => ({
+        ...mapProductRow(r),
+        imageUrls: Array.from({ length: r.extra_count || 0 }, (_: any, i: number) => `/api/products/image/${r.id}/${i}`),
+      }));
+      res.json(rows);
     } catch (e: any) {
       res.status(500).json({ message: "فشل تحميل المنتجات", details: e.message });
     }
