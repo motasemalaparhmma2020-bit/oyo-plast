@@ -12,7 +12,21 @@ export function useProducts(categoryId?: string, search?: string) {
       if (search) url.searchParams.append("search", search);
       
       const res = await fetch(url.toString(), { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch products");
+      if (!res.ok) throw new Error(`Failed to fetch products: ${res.status}`);
+      return await res.json();
+    },
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// GET /api/categories
+export function useCategories() {
+  return useQuery({
+    queryKey: [api.categories.list.path],
+    queryFn: async () => {
+      const res = await fetch(api.categories.list.path, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch categories");
       return await res.json();
     },
     staleTime: 30_000,
@@ -40,23 +54,9 @@ export function useProduct(id: number) {
       const url = buildUrl(api.products.get.path, { id });
       const res = await fetch(url, { credentials: "include" });
       if (res.status === 404) return null;
-      if (!res.ok) throw new Error("Failed to fetch product");
+      if (!res.ok) throw new Error(`Failed to fetch product: ${res.status}`);
       return api.products.get.responses[200].parse(await res.json());
     },
-  });
-}
-
-// GET /api/categories
-export function useCategories() {
-  return useQuery({
-    queryKey: [api.categories.list.path],
-    queryFn: async () => {
-      const res = await fetch(api.categories.list.path, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch categories");
-      return await res.json();
-    },
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
   });
 }
 
