@@ -1820,7 +1820,6 @@ export default function Admin() {
   });
 
   const productsList = Array.isArray(products) ? products : [];
-  const categoriesList = Array.isArray(categories) ? categories : [];
 
   const updateOrderStatus = useMutation({
     mutationFn: async ({ orderId, status, trackingNumber }: { orderId: number; status: string; trackingNumber?: string }) => {
@@ -1884,6 +1883,8 @@ export default function Admin() {
       return res.json();
     },
   });
+
+  const categoriesList = Array.isArray(categories) ? categories : [];
 
   const createProductMutation = useMutation({
     mutationFn: async (data: ProductFormData) => {
@@ -2179,7 +2180,7 @@ export default function Admin() {
         const data = await response.json();
         setAdminToken(data.token);
         setIsAuthenticated(true);
-        sessionStorage.setItem("admin_token", data.token);
+        localStorage.setItem("admin_token", data.token);
         toast({ title: "مرحباً بك في لوحة التحكم" });
       } else {
         toast({ title: "كلمة المرور غير صحيحة", variant: "destructive" });

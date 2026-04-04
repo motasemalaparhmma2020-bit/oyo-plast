@@ -82,7 +82,7 @@ export default function Products() {
           </Button>
 
           {/* Dynamic Categories from Database */}
-          {categories?.filter(c => c?.isActive).map((category) => {
+          {categories?.filter((c: any) => c?.isActive).map((category: any) => {
             const isActive = selectedCategory === String(category?.id);
             return (
               <Button
