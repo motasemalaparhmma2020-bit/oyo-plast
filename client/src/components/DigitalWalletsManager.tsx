@@ -255,7 +255,7 @@ export function DigitalWalletsManager({ adminToken }: { adminToken: string | nul
                   <TableRow key={wallet.id}>
                     <TableCell>
                       {wallet.logoUrl && (
-                        <img src={wallet.logoUrl} alt={wallet.name} className="h-8 w-8 rounded" />
+                        <img src={wallet.logoUrl} alt={wallet.name} className="h-8 w-8 rounded object-contain bg-white" />
                       )}
                     </TableCell>
                     <TableCell className="font-medium">{wallet.name}</TableCell>
