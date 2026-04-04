@@ -1807,7 +1807,7 @@ export default function Admin() {
     }
   });
 
-  const { data: products, isLoading: productsLoading } = useQuery<Product[]>({
+  const { data: products, isLoading: productsLoading, isError: productsError } = useQuery<Product[]>({
     queryKey: ['/api/products'],
     enabled: isAuthenticated && !!adminToken,
     queryFn: async () => {
@@ -1819,8 +1819,8 @@ export default function Admin() {
     },
   });
 
-  const productsList = products ?? [];
-  const categoriesList = categories ?? [];
+  const productsList = Array.isArray(products) ? products : [];
+  const categoriesList = Array.isArray(categories) ? categories : [];
 
   const updateOrderStatus = useMutation({
     mutationFn: async ({ orderId, status, trackingNumber }: { orderId: number; status: string; trackingNumber?: string }) => {
@@ -2833,6 +2833,10 @@ export default function Admin() {
                   <div className="flex justify-center py-10">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
+                ) : productsError ? (
+                  <div className="text-center py-10 text-destructive">
+                    حدث خطأ أثناء تحميل المنتجات
+                  </div>
                 ) : productsList.length > 0 ? (
                   <div className="overflow-x-auto">
                     <Table>
@@ -3101,6 +3105,10 @@ export default function Admin() {
                 {productsLoading ? (
                   <div className="flex justify-center py-10">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : productsError ? (
+                  <div className="text-center py-10 text-destructive">
+                    حدث خطأ أثناء تحميل المخزون
                   </div>
                 ) : productsList.length > 0 ? (
                   <div className="overflow-x-auto">
