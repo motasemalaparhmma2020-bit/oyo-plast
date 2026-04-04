@@ -181,12 +181,11 @@ export function DigitalWalletsManager({ adminToken }: { adminToken: string | nul
               </div>
 
               <div>
-                <Label>كود الشراء *</Label>
+                <Label>كود الشراء (اختياري)</Label>
                 <Input
                   value={form.purchaseCode}
                   onChange={(e) => setForm({ ...form, purchaseCode: e.target.value })}
-                  placeholder="رمز التحقق"
-                  required
+                  placeholder="رمز التحقق (اتركه فارغاً إن لم يكن لديك)"
                 />
               </div>
 
