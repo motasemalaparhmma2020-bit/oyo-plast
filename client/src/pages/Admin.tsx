@@ -1175,6 +1175,7 @@ function PrintingProductsSection({ adminToken }: { adminToken: string | null }) 
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
           queryClient.invalidateQueries({ queryKey: ['/api/printing-products'] });
           toast({ title: "تم تحديث المنتج بنجاح" });
         },
