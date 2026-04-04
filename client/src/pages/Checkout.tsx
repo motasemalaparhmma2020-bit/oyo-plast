@@ -375,7 +375,12 @@ export default function Checkout() {
         });
         return;
       }
-      if (!formData.purchaseCode || formData.purchaseCode.trim() === "") {
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      if (formData.paymentMethod === "digital_wallet" && (!formData.purchaseCode || formData.purchaseCode.trim() === "")) {
         toast({
           title: "خطأ",
           description: "يرجى إدخال رقم الحوالة أو كود الشراء",
@@ -383,11 +388,7 @@ export default function Checkout() {
         });
         return;
       }
-    }
 
-    setIsSubmitting(true);
-
-    try {
       const orderData = {
         ...formData,
         total: finalTotal.toString(),

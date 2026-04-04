@@ -1819,6 +1819,9 @@ export default function Admin() {
     },
   });
 
+  const productsList = products ?? [];
+  const categoriesList = categories ?? [];
+
   const updateOrderStatus = useMutation({
     mutationFn: async ({ orderId, status, trackingNumber }: { orderId: number; status: string; trackingNumber?: string }) => {
       const res = await fetch(`/api/admin/orders/${orderId}/status`, {
@@ -1853,6 +1856,7 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       toast({ title: "تم تحديث المخزون" });
     }
   });
@@ -1919,6 +1923,7 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       toast({ title: "تم إضافة المنتج بنجاح" });
       setShowProductForm(false);
       setProductForm(emptyProductForm);
@@ -1973,6 +1978,7 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       toast({ title: "تم تحديث المنتج بنجاح" });
       setShowProductForm(false);
       setEditingProduct(null);
@@ -2004,6 +2010,7 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       toast({ title: "تم حذف المنتج بنجاح" });
     },
     onError: (error: any) => {
@@ -2826,7 +2833,7 @@ export default function Admin() {
                   <div className="flex justify-center py-10">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
-                ) : products && products.length > 0 ? (
+                ) : productsList.length > 0 ? (
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
@@ -2839,7 +2846,7 @@ export default function Admin() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {products.map((product) => (
+                        {productsList.map((product) => (
                           <TableRow key={product.id}>
                             <TableCell>
                               <div className="flex items-center gap-3">
@@ -2850,7 +2857,7 @@ export default function Admin() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              {categories?.find(c => c.id === product.categoryId)?.name || '-'}
+                              {categoriesList.find(c => c.id === product.categoryId)?.name || '-'}
                             </TableCell>
                             <TableCell>{formatPrice(product.price)}</TableCell>
                             <TableCell>
@@ -3009,7 +3016,7 @@ export default function Admin() {
                   </div>
                 )}
 
-                {categories && categories.length > 0 ? (
+                {categoriesList.length > 0 ? (
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
@@ -3021,7 +3028,7 @@ export default function Admin() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {categories.map((category) => (
+                        {categoriesList.map((category) => (
                           <TableRow key={category.id}>
                             <TableCell>
                               <div className="flex items-center gap-3">
@@ -3034,7 +3041,7 @@ export default function Admin() {
                             <TableCell>{category.slug}</TableCell>
                             <TableCell>
                               <Badge>
-                                {products?.filter(p => p.categoryId === category.id).length || 0} منتج
+                                {productsList.filter(p => p.categoryId === category.id).length} منتج
                               </Badge>
                             </TableCell>
                             <TableCell>
@@ -3095,7 +3102,7 @@ export default function Admin() {
                   <div className="flex justify-center py-10">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
-                ) : products && products.length > 0 ? (
+                ) : productsList.length > 0 ? (
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
@@ -3108,7 +3115,7 @@ export default function Admin() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {products.map((product) => (
+                        {productsList.map((product) => (
                           <TableRow key={product.id}>
                             <TableCell>
                               <div className="flex items-center gap-3">
