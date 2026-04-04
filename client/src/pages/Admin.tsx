@@ -562,6 +562,13 @@ function BannersOffersSection({ adminToken }: { adminToken: string | null }) {
   const { data: categories } = useQuery<Category[]>({
     queryKey: ['/api/categories'],
     enabled: !!adminToken,
+    queryFn: async () => {
+      const res = await fetch('/api/admin/categories', {
+        headers: { 'x-admin-token': adminToken || '' }
+      });
+      if (!res.ok) throw new Error('Failed to fetch categories');
+      return res.json();
+    },
   });
 
   const handleBannerImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1801,7 +1808,14 @@ export default function Admin() {
 
   const { data: products, isLoading: productsLoading } = useQuery<Product[]>({
     queryKey: ['/api/products'],
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && !!adminToken,
+    queryFn: async () => {
+      const res = await fetch('/api/admin/products', {
+        headers: { 'x-admin-token': adminToken || '' }
+      });
+      if (!res.ok) throw new Error('Failed to fetch products');
+      return res.json();
+    },
   });
 
   const updateOrderStatus = useMutation({
@@ -1856,7 +1870,14 @@ export default function Admin() {
 
   const { data: categories } = useQuery<Category[]>({
     queryKey: ['/api/categories'],
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && !!adminToken,
+    queryFn: async () => {
+      const res = await fetch('/api/admin/categories', {
+        headers: { 'x-admin-token': adminToken || '' }
+      });
+      if (!res.ok) throw new Error('Failed to fetch categories');
+      return res.json();
+    },
   });
 
   const createProductMutation = useMutation({
