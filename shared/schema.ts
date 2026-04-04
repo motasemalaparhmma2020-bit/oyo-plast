@@ -376,6 +376,7 @@ export const offers = pgTable("offers", {
 export const navigationSettings = pgTable("navigation_settings", {
   id: serial("id").primaryKey(),
   showPrintingSection: boolean("show_printing_section").default(true).notNull(),
+  showSignupEntryPoint: boolean("show_signup_entry_point").default(true).notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -404,6 +405,11 @@ export const homePageSettings = pgTable("home_page_settings", {
   showBanners: boolean("show_banners").default(true).notNull(),
   showOffers: boolean("show_offers").default(true).notNull(),
   showCategories: boolean("show_categories").default(true).notNull(),
+  footerPrivacyText: text("footer_privacy_text").default("سياسة الخصوصية").notNull(),
+  footerAffiliateText: text("footer_affiliate_text").default("التسويق بالعمولة").notNull(),
+  footerReturnsText: text("footer_returns_text").default("سياسة الاسترجاع").notNull(),
+  footerBottomText: text("footer_bottom_text").default("أويو بلاست - مستلزمات التغليف").notNull(),
+  signupEntryMode: text("signup_entry_mode").default("cart").notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

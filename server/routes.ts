@@ -503,6 +503,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const settings = await storage.updateNavigationSettings({
         showPrintingSection: req.body.showPrintingSection ?? true,
+        showSignupEntryPoint: req.body.showSignupEntryPoint ?? true,
       });
       res.json(settings);
     } catch (e: any) {
@@ -529,6 +530,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         showBanners: req.body.showBanners ?? true,
         showOffers: req.body.showOffers ?? true,
         showCategories: req.body.showCategories ?? true,
+        footerPrivacyText: req.body.footerPrivacyText ?? "سياسة الخصوصية",
+        footerAffiliateText: req.body.footerAffiliateText ?? "التسويق بالعمولة",
+        footerReturnsText: req.body.footerReturnsText ?? "سياسة الاسترجاع",
+        footerBottomText: req.body.footerBottomText ?? "أويو بلاست - مستلزمات التغليف",
+        signupEntryMode: req.body.signupEntryMode ?? "cart",
       });
       res.json(settings);
     } catch (e: any) {

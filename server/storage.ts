@@ -193,7 +193,7 @@ export class DatabaseStorage implements IStorage {
 
   async getNavigationSettings(): Promise<NavigationSettings> {
     const [settings] = await db.select().from(navigationSettings).limit(1);
-    return settings || { id: 1, showPrintingSection: true, updatedAt: new Date() };
+    return settings || { id: 1, showPrintingSection: true, showSignupEntryPoint: true, updatedAt: new Date() };
   }
 
   async updateNavigationSettings(data: any): Promise<NavigationSettings> {
@@ -215,6 +215,11 @@ export class DatabaseStorage implements IStorage {
       showBanners: true,
       showOffers: true,
       showCategories: true,
+      footerPrivacyText: "سياسة الخصوصية",
+      footerAffiliateText: "التسويق بالعمولة",
+      footerReturnsText: "سياسة الاسترجاع",
+      footerBottomText: "أويو بلاست - مستلزمات التغليف",
+      signupEntryMode: "cart",
       updatedAt: new Date(),
     };
   }

@@ -1,6 +1,7 @@
 import { Phone, MapPin, FileText, Shield } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 
 import jawalyLogo from "@assets/stock_images/jawaly_yemen_mobile__6c3cc5d2.jpg";
 import jeebLogo from "@assets/stock_images/jeeb_mobile_wallet_p_6fad2c62.jpg";
@@ -19,6 +20,15 @@ const paymentMethods = [
 export function Footer() {
   const phoneNumber = "+967774997589";
   const whatsappLink = `https://wa.me/${phoneNumber.replace('+', '')}`;
+  const { data: homeSettings } = useQuery<any>({
+    queryKey: ["/api/home-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/home-settings", { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    staleTime: 60000,
+  });
 
   return (
     <footer className="bg-gradient-to-b from-card to-muted/30 border-t mt-auto hidden md:block" dir="rtl">
@@ -91,18 +101,22 @@ export function Footer() {
               <Shield className="w-4 h-4" />
               من نحن
             </Link>
-            <Link href="/terms" className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors" data-testid="link-terms">
+              <Link href="/terms" className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors" data-testid="link-terms">
               <FileText className="w-4 h-4" />
-              سياسة الأحكام والشروط
+              {homeSettings?.footerAffiliateText || "التسويق بالعمولة"}
             </Link>
             <Link href="/privacy" className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors" data-testid="link-privacy">
               <Shield className="w-4 h-4" />
-              سياسة الخصوصية
+              {homeSettings?.footerPrivacyText || "سياسة الخصوصية"}
+            </Link>
+            <Link href="/returns" className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors" data-testid="link-returns">
+              <Shield className="w-4 h-4" />
+              {homeSettings?.footerReturnsText || "سياسة الاسترجاع"}
             </Link>
           </div>
           <div className="text-center">
             <p className="text-muted-foreground">
-              جميع الحقوق محفوظة © متجر <span className="font-bold text-primary">أويو بلاست</span> 2025
+              {homeSettings?.footerBottomText || "أويو بلاست - مستلزمات التغليف"}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
               رقم توثيق الاسم التجاري: <strong>139688</strong>
@@ -199,17 +213,20 @@ export function MobileFooter() {
             من نحن
           </Link>
           <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary" data-testid="mobile-link-terms">
-            الأحكام والشروط
+            {homeSettings?.footerAffiliateText || "التسويق بالعمولة"}
           </Link>
           <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary" data-testid="mobile-link-privacy">
-            سياسة الخصوصية
+            {homeSettings?.footerPrivacyText || "سياسة الخصوصية"}
+          </Link>
+          <Link href="/returns" className="text-sm text-muted-foreground hover:text-primary" data-testid="mobile-link-returns">
+            {homeSettings?.footerReturnsText || "سياسة الاسترجاع"}
           </Link>
         </div>
 
         {/* Copyright */}
         <div className="text-center pt-4 border-t">
           <p className="text-sm text-muted-foreground">
-            جميع الحقوق محفوظة © متجر <span className="font-bold text-primary">أويو بلاست</span> 2025
+            {homeSettings?.footerBottomText || "أويو بلاست - مستلزمات التغليف"}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             رقم توثيق الاسم التجاري: <strong>139688</strong>
