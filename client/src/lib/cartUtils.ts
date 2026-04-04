@@ -26,7 +26,6 @@ export function getGuestCart(): GuestCartItem[] {
     const saved = localStorage.getItem(GUEST_CART_KEY);
     return saved ? JSON.parse(saved) : [];
   } catch (error) {
-    console.error('❌ Error reading guest cart:', error);
     return [];
   }
 }
@@ -39,7 +38,6 @@ export function setGuestCart(cart: GuestCartItem[]): void {
   try {
     localStorage.setItem(GUEST_CART_KEY, JSON.stringify(cart));
   } catch (error) {
-    console.error('❌ Error saving guest cart:', error);
   }
 }
 
