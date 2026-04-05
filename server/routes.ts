@@ -463,7 +463,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/admin/home-sections/:id", requireAdmin, async (req, res) => {
     try {
-      const section = await storage.updateHomeSection(parseInt(req.params.id), req.body);
+      // حذف الحقول التلقائية لمنع خطأ التحويل
+      const { id: _id, createdAt: _createdAt, ...data } = req.body;
+      const section = await storage.updateHomeSection(parseInt(req.params.id), data);
       res.json(section);
     } catch (e: any) {
       res.status(500).json({ message: "فشل تحديث القسم", details: e.message });
