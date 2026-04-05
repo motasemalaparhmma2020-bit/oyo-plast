@@ -233,7 +233,13 @@ function Router() {
   // 1. صفحة الإدارة دائماً
   // 2. صفحة المنتج عند تفعيل الشريط الثابت (بديله يكون زر شراء)
   const isProductDetail = /^\/products\/[^/]+$/.test(location);
-  const hideBottomNav = location === '/admin' ||
+  // إخفاء شريط التنقل السفلي في الصفحات التي لها شريط ثابت خاص بها
+  const hideBottomNav =
+    location === '/admin' ||
+    location === '/checkout' ||
+    location === '/guest-checkout' ||
+    location === '/cart' ||
+    location.startsWith('/order-confirmation') ||
     (isProductDetail && displaySettingsForNav?.showStickyCartBar === true);
 
   return (
