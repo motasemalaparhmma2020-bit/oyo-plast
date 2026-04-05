@@ -50,6 +50,12 @@ export const products = pgTable("products", {
   // Variant UI (SHEIN-style) fields
   enableVariantUI: boolean("enable_variant_ui").default(false).notNull(), // Enable SHEIN-style variant product page for this product
   colorImages: text("color_images"), // JSON: [{ color: "أبيض", hex: "#FFFFFF", imageUrl: "...", imageUrls: [] }]
+  // ── حقول الخصم ──────────────────────────────────────────────────────────────
+  originalPrice: numeric("original_price"),           // السعر الأصلي قبل الخصم (ر.ي)
+  originalPriceSar: numeric("original_price_sar"),    // السعر الأصلي بالريال السعودي
+  discountPercent: integer("discount_percent"),        // نسبة الخصم يدوياً (تتغلب على الحسابي)
+  // ── التصنيفات الترويجية ─────────────────────────────────────────────────────
+  promotionalTags: text("promotional_tags").array(),  // ['new','offers','exclusive','discounts','deals','clearance','featured']
 });
 
 export const settings = pgTable("settings", {
