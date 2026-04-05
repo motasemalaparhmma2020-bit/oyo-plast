@@ -216,6 +216,29 @@ export async function runMigrations(): Promise<void> {
     await client.query(`ALTER TABLE digital_wallets ADD COLUMN IF NOT EXISTS requires_proof BOOLEAN NOT NULL DEFAULT true;`);
     await client.query(`ALTER TABLE digital_wallets ADD COLUMN IF NOT EXISTS instructions TEXT;`);
 
+    // ─── Seed المحافظ الأربعة إذا لم تكن موجودة ──────────────────
+    const walletCountRes = await client.query('SELECT COUNT(*) FROM digital_wallets');
+    if (parseInt(walletCountRes.rows[0].count) === 0) {
+      const jawaliSvg = `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="#E53935" rx="14"/><text x="50" y="42" font-family="Arial" font-size="20" font-weight="bold" text-anchor="middle" fill="white">جوالي</text></svg>').toString('base64')}`;
+      const jeebSvg = `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="#2E7D32" rx="14"/><text x="50" y="58" font-family="Arial" font-size="26" font-weight="bold" text-anchor="middle" fill="white">جيب</text></svg>').toString('base64')}`;
+      const oneCashSvg = `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="#1565C0" rx="14"/><text x="50" y="42" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle" fill="white">ون كاش</text></svg>').toString('base64')}`;
+      const karamiSvg = `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="#00695C" rx="14"/><text x="50" y="36" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="white">بنك</text><text x="50" y="58" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="white">الكريمي</text></svg>').toString('base64')}`;
+
+      const seedWallets = [
+        { name: 'محفظة جوالي', logo: jawaliSvg, order: 1 },
+        { name: 'محفظة جيب', logo: jeebSvg, order: 2 },
+        { name: 'ون كاش', logo: oneCashSvg, order: 3 },
+        { name: 'بنك الكريمي', logo: karamiSvg, order: 4 },
+      ];
+      for (const w of seedWallets) {
+        await client.query(
+          `INSERT INTO digital_wallets (name, logo_url, receiver_name, phone_number, purchase_code, is_active, sort_order, requires_proof, instructions)
+           VALUES ($1, $2, 'معتصم محمد احمد الاهدل', '774997589', '', true, $3, true, 'حوّل المبلغ ثم أرسل صورة الإيصال')`,
+          [w.name, w.logo, w.order]
+        );
+      }
+    }
+
     // ─── إدخال صف افتراضي إذا كان الجدول فارغاً ──────────────────
     await client.query(`
       INSERT INTO display_settings (

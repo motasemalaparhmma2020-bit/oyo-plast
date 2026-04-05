@@ -1,25 +1,30 @@
-import { Phone, MapPin, FileText, Shield } from "lucide-react";
+import { Phone, MapPin, FileText, Shield, Wallet } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 
-import jawalyLogo from "@assets/stock_images/jawaly_yemen_mobile__6c3cc5d2.jpg";
-import jeebLogo from "@assets/stock_images/jeeb_mobile_wallet_p_6fad2c62.jpg";
-import onecashLogo from "@assets/stock_images/onecash_mobile_payme_acff727b.jpg";
-import floosLogo from "@assets/stock_images/flooos_mobile_money__ad887803.jpg";
-import kuraimiLogo from "@assets/stock_images/kuraimi_bank_yemen_l_d7702f30.jpg";
+interface ActiveWallet {
+  id: number;
+  name: string;
+  logoUrl: string | null;
+}
 
-const paymentMethods = [
-  { name: "جوالي", nameEn: "Jawaly", logo: jawalyLogo },
-  { name: "جيب", nameEn: "Jeeb", logo: jeebLogo },
-  { name: "ون كاش", nameEn: "OneCash", logo: onecashLogo },
-  { name: "فلوسك", nameEn: "Flooos", logo: floosLogo },
-  { name: "الكريمي", nameEn: "Kuraimi", logo: kuraimiLogo },
-];
+function useActiveWallets() {
+  return useQuery<ActiveWallet[]>({
+    queryKey: ["/api/digital-wallets"],
+    queryFn: async () => {
+      const res = await fetch("/api/digital-wallets");
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 60000,
+  });
+}
 
 export function Footer() {
   const phoneNumber = "+967774997589";
   const whatsappLink = `https://wa.me/${phoneNumber.replace('+', '')}`;
+  const { data: activeWallets = [] } = useActiveWallets();
   const { data: homeSettings } = useQuery<any>({
     queryKey: ["/api/home-settings"],
     queryFn: async () => {
@@ -126,31 +131,35 @@ export function Footer() {
       </div>
 
       {/* وسائل الدفع - شريط أفقي في الأسفل */}
-      <div className="bg-muted/50 border-t py-4">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-center gap-6">
-            <span className="text-sm text-muted-foreground font-medium">وسائل الدفع المقبولة:</span>
-            <div className="flex items-center justify-center gap-4">
-              {paymentMethods.map((method) => (
-                <div 
-                  key={method.nameEn}
-                  className="flex items-center gap-2 bg-white dark:bg-gray-800 border rounded-lg px-3 py-2 shadow-sm"
-                  data-testid={`payment-${method.nameEn.toLowerCase()}`}
-                >
-                  <div className="w-8 h-8 rounded overflow-hidden bg-white flex items-center justify-center shrink-0">
-                    <img 
-                      src={method.logo} 
-                      alt={method.name} 
-                      className="w-full h-full object-contain"
-                    />
+      {activeWallets.length > 0 && (
+        <div className="bg-muted/50 border-t py-4">
+          <div className="container mx-auto px-4">
+            <div className="flex items-center justify-center gap-6 flex-wrap">
+              <span className="text-sm text-muted-foreground font-medium">
+                وسائل الدفع المقبولة ({activeWallets.length}):
+              </span>
+              <div className="flex items-center justify-center gap-3 flex-wrap">
+                {activeWallets.map((w) => (
+                  <div
+                    key={w.id}
+                    className="flex items-center gap-2 bg-white dark:bg-gray-800 border rounded-lg px-3 py-2 shadow-sm"
+                    data-testid={`payment-wallet-${w.id}`}
+                  >
+                    <div className="w-8 h-8 rounded overflow-hidden flex items-center justify-center shrink-0 bg-muted">
+                      {w.logoUrl ? (
+                        <img src={w.logoUrl} alt={w.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Wallet className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </div>
+                    <span className="text-sm font-medium text-foreground whitespace-nowrap">{w.name}</span>
                   </div>
-                  <span className="text-sm font-medium text-foreground whitespace-nowrap">{method.name}</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* WhatsApp Floating Button */}
       <a
@@ -170,6 +179,7 @@ export function Footer() {
 export function MobileFooter() {
   const phoneNumber = "+967774997589";
   const whatsappLink = `https://wa.me/${phoneNumber.replace('+', '')}`;
+  const { data: activeWallets = [] } = useActiveWallets();
   const { data: homeSettings } = useQuery<any>({
     queryKey: ["/api/home-settings"],
     queryFn: async () => {
@@ -244,29 +254,33 @@ export function MobileFooter() {
       </div>
 
       {/* وسائل الدفع - شريط أفقي قابل للتمرير */}
-      <div className="bg-muted/50 border-t py-3">
-        <div className="container mx-auto px-4">
-          <p className="text-xs text-muted-foreground text-center mb-2">وسائل الدفع المقبولة</p>
-          <div className="flex items-center justify-start gap-3 overflow-x-auto pb-1">
-            {paymentMethods.map((method) => (
-              <div 
-                key={method.nameEn}
-                className="flex items-center gap-1.5 bg-white dark:bg-gray-800 border rounded-lg px-2 py-1.5 shadow-sm shrink-0"
-                data-testid={`mobile-payment-${method.nameEn.toLowerCase()}`}
-              >
-                <div className="w-6 h-6 rounded overflow-hidden bg-white flex items-center justify-center shrink-0">
-                  <img 
-                    src={method.logo} 
-                    alt={method.name} 
-                    className="w-full h-full object-contain"
-                  />
+      {activeWallets.length > 0 && (
+        <div className="bg-muted/50 border-t py-3">
+          <div className="container mx-auto px-4">
+            <p className="text-xs text-muted-foreground text-center mb-2">
+              وسائل الدفع المقبولة ({activeWallets.length})
+            </p>
+            <div className="flex items-center justify-start gap-3 overflow-x-auto pb-1">
+              {activeWallets.map((w) => (
+                <div
+                  key={w.id}
+                  className="flex items-center gap-1.5 bg-white dark:bg-gray-800 border rounded-lg px-2 py-1.5 shadow-sm shrink-0"
+                  data-testid={`mobile-payment-wallet-${w.id}`}
+                >
+                  <div className="w-6 h-6 rounded overflow-hidden flex items-center justify-center shrink-0 bg-muted">
+                    {w.logoUrl ? (
+                      <img src={w.logoUrl} alt={w.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Wallet className="w-3 h-3 text-muted-foreground" />
+                    )}
+                  </div>
+                  <span className="text-xs font-medium text-foreground whitespace-nowrap">{w.name}</span>
                 </div>
-                <span className="text-xs font-medium text-foreground whitespace-nowrap">{method.name}</span>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* WhatsApp Floating Button */}
       <a

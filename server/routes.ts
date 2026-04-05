@@ -1430,11 +1430,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ─── Digital Wallets (Public read, Admin write) ────────────────────
+  // Public: only active wallets
   app.get("/api/digital-wallets", async (_req, res) => {
     try {
       const { pool: dbPool } = await import("./db");
       const result = await dbPool.query(
-        "SELECT id, name, logo_url as logoUrl, receiver_name as receiverName, phone_number as phoneNumber, purchase_code as purchaseCode, is_active as isActive, sort_order as sortOrder, requires_proof as requiresProof, instructions FROM digital_wallets WHERE is_active = true ORDER BY sort_order ASC, id ASC"
+        `SELECT id, name, logo_url as "logoUrl", receiver_name as "receiverName", phone_number as "phoneNumber", purchase_code as "purchaseCode", is_active as "isActive", sort_order as "sortOrder", requires_proof as "requiresProof", instructions FROM digital_wallets WHERE is_active = true ORDER BY sort_order ASC, id ASC`
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب المحافظ", details: e.message });
+    }
+  });
+
+  // Admin: ALL wallets (including inactive) for management
+  app.get("/api/admin/digital-wallets", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        `SELECT id, name, logo_url as "logoUrl", receiver_name as "receiverName", phone_number as "phoneNumber", purchase_code as "purchaseCode", is_active as "isActive", sort_order as "sortOrder", requires_proof as "requiresProof", instructions FROM digital_wallets ORDER BY sort_order ASC, id ASC`
       );
       res.json(result.rows);
     } catch (e: any) {
@@ -1457,7 +1471,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { pool: dbPool } = await import("./db");
       const result = await dbPool.query(
         `INSERT INTO digital_wallets (name, logo_url, receiver_name, phone_number, purchase_code, is_active, sort_order, requires_proof, instructions)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, name, logo_url as logoUrl, receiver_name as receiverName, phone_number as phoneNumber, purchase_code as purchaseCode, is_active as isActive, sort_order as sortOrder, requires_proof as requiresProof, instructions`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, name, logo_url as "logoUrl", receiver_name as "receiverName", phone_number as "phoneNumber", purchase_code as "purchaseCode", is_active as "isActive", sort_order as "sortOrder", requires_proof as "requiresProof", instructions`,
         [name, logoUrl, receiverName, phoneNumber, purchaseCode || "", isActive !== "false", parseInt(sortOrder) || 0, requiresProof !== "false", instructions || null]
       );
       res.status(201).json(result.rows[0]);
@@ -1497,7 +1511,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       values.push(parseInt(id));
       const result = await dbPool.query(
-        `UPDATE digital_wallets SET ${setClauses.join(", ")} WHERE id = $${idx} RETURNING id, name, logo_url as logoUrl, receiver_name as receiverName, phone_number as phoneNumber, purchase_code as purchaseCode, is_active as isActive, sort_order as sortOrder, requires_proof as requiresProof, instructions`,
+        `UPDATE digital_wallets SET ${setClauses.join(", ")} WHERE id = $${idx} RETURNING id, name, logo_url as "logoUrl", receiver_name as "receiverName", phone_number as "phoneNumber", purchase_code as "purchaseCode", is_active as "isActive", sort_order as "sortOrder", requires_proof as "requiresProof", instructions`,
         values
       );
 

@@ -215,22 +215,37 @@ export default function Checkout() {
     try {
       const normalizedPaymentMethod = isWalletPayment ? "digital_wallet" : formData.paymentMethod;
       const deliveryNote = deliveryTime === "later" ? "\n[وقت التسليم: لاحقاً]" : "";
-      const response = await apiRequest("POST", "/api/orders/create", {
-        customerName: formData.customerName || user?.fullName || "عميل",
-        customerEmail: user?.email || "guest@oyoplast.com",
-        customerPhone: formData.customerPhone,
-        shippingCity: formData.shippingCity,
-        shippingAddress: formData.shippingAddress,
-        shippingOption: "standard",
-        shippingCost: effectiveShippingFee,
-        paymentMethod: normalizedPaymentMethod,
-        purchaseCode: formData.purchaseCode || undefined,
-        notes: (formData.notes || "") + deliveryNote,
-        total: finalTotal,
-        items: cartItems,
-        couponCode: couponData?.code || null,
-        discountAmount: discountAmount > 0 ? discountAmount : null,
+      const rawRes = await fetch("/api/orders/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          customerName: formData.customerName || user?.fullName || "عميل",
+          customerEmail: user?.email || "guest@oyoplast.com",
+          customerPhone: formData.customerPhone,
+          shippingCity: formData.shippingCity,
+          shippingAddress: formData.shippingAddress,
+          shippingOption: "standard",
+          shippingCost: effectiveShippingFee,
+          paymentMethod: normalizedPaymentMethod,
+          purchaseCode: formData.purchaseCode || undefined,
+          notes: (formData.notes || "") + deliveryNote,
+          total: finalTotal,
+          items: cartItems,
+          couponCode: couponData?.code || null,
+          discountAmount: discountAmount > 0 ? discountAmount : null,
+        }),
       });
+
+      const orderData = await rawRes.json();
+      if (!rawRes.ok) {
+        throw new Error(orderData?.message || "فشل إنشاء الطلب");
+      }
+
+      const orderId = orderData?.id;
+      if (!orderId) {
+        throw new Error("لم يتم إرجاع رقم الطلب من الخادم");
+      }
 
       try {
         localStorage.setItem(savedKey, JSON.stringify({
@@ -247,16 +262,11 @@ export default function Checkout() {
         }
       } catch { /* non-fatal */ }
 
-      const orderId = (response as any)?.id;
-      if (!orderId) {
-        throw new Error("لم يتم إرجاع رقم الطلب من الخادم");
-      }
-
       clearGuestCart();
       await queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
       setLocation(`/order-confirmation/${orderId}`);
-    } catch {
-      toast({ title: "خطأ", description: "حدث خطأ أثناء إنشاء الطلب", variant: "destructive" });
+    } catch (err: any) {
+      toast({ title: "خطأ", description: err.message || "حدث خطأ أثناء إنشاء الطلب", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
