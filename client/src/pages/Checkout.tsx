@@ -790,26 +790,27 @@ export default function Checkout() {
       </div>
 
       {/* ── أزرار الأسفل الثابتة ── */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t px-4 py-3 flex gap-3 shadow-lg">
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t px-4 py-4 flex gap-3 shadow-xl">
+        <Link href="/cart" className="flex-1">
+          <Button
+            variant="outline"
+            className="w-full h-13 text-base font-bold rounded-xl border-2"
+            data-testid="button-edit-cart"
+          >
+            🛒 تعديل السلة
+          </Button>
+        </Link>
         <Button
-          className="flex-1 h-12 font-extrabold text-base rounded-xl"
+          className="flex-1 h-13 font-extrabold text-base rounded-xl"
+          style={{ minHeight: '52px' }}
           onClick={handleSubmit}
           disabled={isSubmitting}
           data-testid="button-submit-order"
         >
           {isSubmitting ? (
             <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري الإرسال...</>
-          ) : "تنفيذ الطلب"}
+          ) : "✅ تنفيذ الطلب"}
         </Button>
-        <Link href="/cart">
-          <Button
-            variant="outline"
-            className="flex-1 h-12 font-bold rounded-xl"
-            data-testid="button-edit-cart"
-          >
-            تعديل السلة
-          </Button>
-        </Link>
       </div>
     </div>
   );
