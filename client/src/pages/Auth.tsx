@@ -70,13 +70,31 @@ export default function Auth() {
 
   useEffect(() => () => clearInterval(timerRef.current), []);
 
+  // ── مساعد: استخراج رسالة الخطأ بوضوح من أي استجابة ──────────────
+  const extractErrorMessage = (err: Error): string => {
+    // الخطأ يأتي بشكل "500: {"message":"..."}" — نستخرج الرسالة العربية
+    try {
+      const match = err.message.match(/^\d+:\s*(.+)$/s);
+      if (match) {
+        const parsed = JSON.parse(match[1]);
+        if (parsed.message) return parsed.message;
+      }
+    } catch {}
+    return err.message;
+  };
+
   // ── إرسال OTP ──────────────────────────────────────────────────
   const sendOtpMutation = useMutation({
     mutationFn: async () => {
       const rawPhone = `${countryCode.code}${phone.replace(/^0/, "")}`;
-      const res = await apiRequest("POST", "/api/auth/send-otp", { phone: rawPhone, channel });
+      const res = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ phone: rawPhone, channel }),
+      });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "فشل الإرسال");
+      if (!res.ok) throw new Error(data.message || "فشل إرسال الرمز");
       return data;
     },
     onSuccess: (data) => {
@@ -99,7 +117,7 @@ export default function Auth() {
       }
     },
     onError: (err: Error) => {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+      toast({ title: "تعذّر إرسال الرمز", description: extractErrorMessage(err), variant: "destructive" });
     },
   });
 
@@ -107,10 +125,11 @@ export default function Auth() {
   const verifyOtpMutation = useMutation({
     mutationFn: async (nameOverride?: string) => {
       const code = otp.join("");
-      const res = await apiRequest("POST", "/api/auth/verify-otp", {
-        phone: normalizedPhone,
-        code,
-        fullName: nameOverride || fullName || undefined,
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ phone: normalizedPhone, code, fullName: nameOverride || fullName || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "الرمز غير صحيح");
@@ -126,8 +145,7 @@ export default function Auth() {
       window.location.href = "/";
     },
     onError: (err: Error) => {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
-      // إعادة تركيز الإدخال الأول إذا كان الكود خاطئاً
+      toast({ title: "رمز غير صحيح", description: err.message, variant: "destructive" });
       setOtp(["", "", "", "", "", ""]);
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
     },
@@ -136,7 +154,12 @@ export default function Auth() {
   // ── تسجيل دخول بالبريد ──────────────────────────────────────────
   const emailLoginMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/auth/login", { email, password });
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "فشل تسجيل الدخول");
       return data;
@@ -146,7 +169,7 @@ export default function Auth() {
       window.location.href = "/";
     },
     onError: (err: Error) => {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+      toast({ title: "فشل تسجيل الدخول", description: err.message, variant: "destructive" });
     },
   });
 

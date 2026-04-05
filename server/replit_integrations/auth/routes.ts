@@ -208,11 +208,27 @@ export function registerAuthRoutes(app: Express): void {
 
         if (!result.success) {
           console.error("[OTP] Send failed:", result.error);
-          // في وضع التطوير، نعيد الكود في الاستجابة
+
+          // في وضع التطوير، نعيد الكود في الاستجابة دون Twilio
           if (process.env.NODE_ENV !== "production") {
             return res.json({ message: "تم إرسال الرمز (وضع التطوير)", devCode: code, phone: normalizedPhone });
           }
-          return res.status(500).json({ message: "فشل إرسال الرمز. تحقق من الرقم وأعد المحاولة.", error: result.error });
+
+          // تحويل أخطاء Twilio لرسائل عربية واضحة
+          const twilioError = result.error || "";
+          let userMessage = "فشل إرسال الرمز. تحقق من الرقم وأعد المحاولة.";
+
+          if (twilioError.includes("exceeded") || twilioError.includes("limit")) {
+            userMessage = "تم تجاوز الحد اليومي لإرسال الرسائل. يرجى المحاولة لاحقاً أو ترقية حساب Twilio.";
+          } else if (twilioError.includes("unverified") || twilioError.includes("verified")) {
+            userMessage = "الرقم غير مسجّل للاستلام في حساب Twilio التجريبي. سجّل الرقم أولاً في لوحة Twilio.";
+          } else if (twilioError.includes("invalid") || twilioError.includes("Invalid")) {
+            userMessage = "رقم الهاتف غير صالح للإرسال. تحقق من الرقم.";
+          } else if (twilioError.includes("blacklist") || twilioError.includes("blocked")) {
+            userMessage = "الرقم محظور من الاستلام. جرّب رقماً آخر.";
+          }
+
+          return res.status(500).json({ message: userMessage });
         }
 
         const usedChannel = result.usedChannel || channel;
