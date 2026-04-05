@@ -424,6 +424,11 @@ export const displaySettings = pgTable("display_settings", {
   // ── إعدادات الخصم ────────────────────────────────────────────────────────────
   discountBadgeBg: text("discount_badge_bg").default("#ef4444").notNull(),        // لون خلفية بادج الخصم
   showStickyCartBar: boolean("show_sticky_cart_bar").default(true).notNull(),     // إظهار شريط السلة الثابت
+  // ── ضوابط التخطيط في صفحة المنتج ────────────────────────────────────────────
+  detailPaddingV: integer("detail_padding_v").default(8).notNull(),               // الحشو العمودي بين العناصر (بكسل)
+  detailMarginH: integer("detail_margin_h").default(16).notNull(),                // الهوامش الجانبية (بكسل)
+  detailDiscountBubbleSize: integer("detail_discount_bubble_size").default(36).notNull(), // حجم فقاعة الخصم (بكسل، 0=مخفية)
+  detailShowThumbnails: boolean("detail_show_thumbnails").default(true).notNull(), // إظهار الصور المصغرة
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

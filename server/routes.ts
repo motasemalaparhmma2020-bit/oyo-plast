@@ -676,11 +676,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         'discountBubbleSize', 'quantityButtonHeight',
         'detailImageHeight', 'detailPriceFontSize',
         'detailAddToCartHeight', 'detailThumbnailSize',
+        'detailPaddingV', 'detailMarginH', 'detailDiscountBubbleSize',
       ];
       // boolean fields
       const boolFields = [
         'showCategories', 'showOfferBanners',
         'detailShowRelated', 'detailShowReviews', 'showStickyCartBar',
+        'detailShowThumbnails',
       ];
       // text fields
       const textFields = ['imageMode', 'detailImageMode', 'discountBadgeBg'];

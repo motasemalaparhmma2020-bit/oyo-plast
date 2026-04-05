@@ -2009,6 +2009,48 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                 <span className="text-sm text-muted-foreground">بكسل</span>
               </div>
             </div>
+            {/* الحشو العمودي بين العناصر */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">الحشو العمودي بين العناصر</Label>
+              <p className="text-xs text-muted-foreground">0 = مضغوط · 8 = عادي · 16 = مريح</p>
+              <div className="flex items-center gap-2">
+                <Input type="number" min={0} max={32}
+                  value={settings?.detailPaddingV ?? 8}
+                  onChange={e => setSettings((s: any) => ({ ...s, detailPaddingV: +e.target.value }))}
+                  onBlur={e => handleUpdate('detailPaddingV', +e.target.value)}
+                  className="w-20" data-testid="input-detail-padding-v" disabled={updateMutation.isPending}
+                />
+                <span className="text-sm text-muted-foreground">بكسل</span>
+              </div>
+            </div>
+            {/* الهوامش الجانبية */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">الهوامش الجانبية</Label>
+              <p className="text-xs text-muted-foreground">0 = Full-Bleed · 8 = ضيق · 16 = عادي</p>
+              <div className="flex items-center gap-2">
+                <Input type="number" min={0} max={32}
+                  value={settings?.detailMarginH ?? 16}
+                  onChange={e => setSettings((s: any) => ({ ...s, detailMarginH: +e.target.value }))}
+                  onBlur={e => handleUpdate('detailMarginH', +e.target.value)}
+                  className="w-20" data-testid="input-detail-margin-h" disabled={updateMutation.isPending}
+                />
+                <span className="text-sm text-muted-foreground">بكسل</span>
+              </div>
+            </div>
+            {/* حجم فقاعة الخصم */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">حجم فقاعة الخصم</Label>
+              <p className="text-xs text-muted-foreground">0 = مخفية · 24 = صغيرة · 36 = عادية · 48 = كبيرة</p>
+              <div className="flex items-center gap-2">
+                <Input type="number" min={0} max={64}
+                  value={settings?.detailDiscountBubbleSize ?? 36}
+                  onChange={e => setSettings((s: any) => ({ ...s, detailDiscountBubbleSize: +e.target.value }))}
+                  onBlur={e => handleUpdate('detailDiscountBubbleSize', +e.target.value)}
+                  className="w-20" data-testid="input-detail-discount-bubble" disabled={updateMutation.isPending}
+                />
+                <span className="text-sm text-muted-foreground">بكسل</span>
+              </div>
+            </div>
           </div>
 
           {/* وضع الصورة */}
@@ -2036,6 +2078,19 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
           {/* مفاتيح الأقسام */}
           <div className="space-y-3 pt-2 border-t">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">إظهار / إخفاء الأقسام</p>
+            {/* الصور المصغرة */}
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>الصور المصغرة تحت الصورة الرئيسية</Label>
+                <p className="text-xs text-muted-foreground">شريط الصور الصغيرة أسفل صورة المنتج الرئيسية</p>
+              </div>
+              <Switch
+                checked={settings?.detailShowThumbnails ?? true}
+                onCheckedChange={v => handleUpdate('detailShowThumbnails', v)}
+                disabled={updateMutation.isPending}
+                data-testid="switch-detail-show-thumbnails"
+              />
+            </div>
             <div className="flex items-center justify-between">
               <div>
                 <Label>المنتجات المشابهة</Label>

@@ -119,6 +119,10 @@ export default function ProductDetail() {
   const detailShowRelatedSetting = displaySettings?.detailShowRelated !== false;
   const detailShowReviewsSetting = displaySettings?.detailShowReviews !== false;
   const showStickyCartBar = displaySettings?.showStickyCartBar === true;
+  const detailPaddingV = displaySettings?.detailPaddingV ?? 8;
+  const detailMarginH  = displaySettings?.detailMarginH ?? 16;
+  const detailDiscountBubble = displaySettings?.detailDiscountBubbleSize ?? 36;
+  const detailShowThumbs = displaySettings?.detailShowThumbnails !== false;
 
   const { data: reviews = [] } = useQuery<Review[]>({
     queryKey: ['/api/products', id, 'reviews'],
@@ -695,7 +699,7 @@ export default function ProductDetail() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6 pb-24">
+    <div className="container mx-auto py-6 pb-24" style={{ paddingLeft: detailMarginH, paddingRight: detailMarginH }}>
       <Link href="/products">
         <Button variant="ghost" className="mb-4 gap-2" data-testid="button-back">
           <ArrowRight className="h-4 w-4" />
@@ -745,21 +749,23 @@ export default function ProductDetail() {
                 <ChevronRight className="h-5 w-5" />
               </Button>
 
-              <div className="flex gap-2 mt-3 justify-center">
-                {allImages.map((img, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => emblaApi?.scrollTo(idx)}
-                    className={`rounded-lg overflow-hidden border-2 transition-all flex-shrink-0 ${
-                      currentImageIndex === idx ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'
-                    }`}
-                    style={{ width: detailThumb, height: detailThumb }}
-                    data-testid={`button-thumbnail-${idx}`}
-                  >
-                    <LazyImage src={img} alt="" className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
+              {detailShowThumbs && (
+                <div className="flex gap-2 mt-3 justify-center flex-wrap" data-testid="thumbnails-strip">
+                  {allImages.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => emblaApi?.scrollTo(idx)}
+                      className={`rounded-lg overflow-hidden border-2 transition-all flex-shrink-0 ${
+                        currentImageIndex === idx ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'
+                      }`}
+                      style={{ width: detailThumb, height: detailThumb }}
+                      data-testid={`button-thumbnail-${idx}`}
+                    >
+                      <LazyImage src={img} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <div
@@ -785,9 +791,23 @@ export default function ProductDetail() {
               متبقي {currentStock} فقط
             </Badge>
           )}
+          {detailDiscountBubble > 0 && (product as any).effectiveDiscount > 0 && (
+            <div
+              className="absolute bottom-4 left-4 rounded-full flex items-center justify-center font-extrabold text-white shadow-lg"
+              style={{
+                width: detailDiscountBubble,
+                height: detailDiscountBubble,
+                fontSize: Math.max(10, detailDiscountBubble * 0.28),
+                background: 'var(--discount-badge-bg, #ef4444)',
+              }}
+              data-testid="badge-detail-discount"
+            >
+              -{(product as any).effectiveDiscount}%
+            </div>
+          )}
         </div>
 
-        <div className="space-y-6">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: detailPaddingV * 2 || 24 }}>
           <div>
             <h1 className="text-lg md:text-xl font-extrabold text-foreground mb-2" data-testid="text-product-name">
               {product?.name || 'تحميل المنتج...'}

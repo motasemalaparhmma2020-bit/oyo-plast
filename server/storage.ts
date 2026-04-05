@@ -269,6 +269,10 @@ export class DatabaseStorage implements IStorage {
       detailThumbnailSize: 64,
       discountBadgeBg: '#ef4444',
       showStickyCartBar: true,
+      detailPaddingV: 8,
+      detailMarginH: 16,
+      detailDiscountBubbleSize: 36,
+      detailShowThumbnails: true,
       updatedAt: new Date(),
     };
   }
