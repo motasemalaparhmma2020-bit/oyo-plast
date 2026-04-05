@@ -196,6 +196,20 @@ export async function runMigrations(): Promise<void> {
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS slider_height INTEGER NOT NULL DEFAULT 414;`);
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS offer_banner_cols INTEGER NOT NULL DEFAULT 2;`);
 
+    // ─── جدول رموز التحقق بالهاتف (OTP) ─────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS phone_verifications (
+        id SERIAL PRIMARY KEY,
+        phone TEXT NOT NULL,
+        code TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        verified BOOLEAN NOT NULL DEFAULT false,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_phone_verifications_phone ON phone_verifications(phone);`);
+
     // ─── تحسينات جدول المحافظ الرقمية ───────────────────────────────
     await client.query(`ALTER TABLE digital_wallets ADD COLUMN IF NOT EXISTS requires_proof BOOLEAN NOT NULL DEFAULT true;`);
     await client.query(`ALTER TABLE digital_wallets ADD COLUMN IF NOT EXISTS instructions TEXT;`);

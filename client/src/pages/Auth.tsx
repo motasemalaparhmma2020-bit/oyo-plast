@@ -1,241 +1,519 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { UserPlus, LogIn, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import {
+  Phone, MessageCircle, Smartphone, ArrowRight, Loader2,
+  CheckCircle, RefreshCw, User, Mail, Lock, Eye, EyeOff, ChevronDown
+} from "lucide-react";
 import { Link } from "wouter";
 import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
+
+// ── أكواد الدول الشائعة ──────────────────────────────────────────
+const COUNTRY_CODES = [
+  { code: "+967", flag: "🇾🇪", name: "اليمن" },
+  { code: "+966", flag: "🇸🇦", name: "السعودية" },
+  { code: "+974", flag: "🇶🇦", name: "قطر" },
+  { code: "+971", flag: "🇦🇪", name: "الإمارات" },
+  { code: "+965", flag: "🇰🇼", name: "الكويت" },
+  { code: "+973", flag: "🇧🇭", name: "البحرين" },
+  { code: "+968", flag: "🇴🇲", name: "عُمان" },
+  { code: "+962", flag: "🇯🇴", name: "الأردن" },
+  { code: "+20",  flag: "🇪🇬", name: "مصر" },
+];
+
+type Step = "phone" | "otp" | "name";
+type Channel = "whatsapp" | "sms";
+type LoginMode = "phone" | "email";
 
 export default function Auth() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  const [loginMode, setLoginMode] = useState<LoginMode>("phone");
+  const [step, setStep] = useState<Step>("phone");
+  const [channel, setChannel] = useState<Channel>("whatsapp");
+  const [countryCode, setCountryCode] = useState(COUNTRY_CODES[0]);
+  const [showCountries, setShowCountries] = useState(false);
+  const [normalizedPhone, setNormalizedPhone] = useState("");
+
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [fullName, setFullName] = useState("");
+  const [isNewUser, setIsNewUser] = useState(false);
+
+  // العدّاد
+  const [resendTimer, setResendTimer] = useState(0);
+  const timerRef = useRef<NodeJS.Timeout>();
+
+  // البريد الإلكتروني
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
+
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // بدء عدّاد إعادة الإرسال
+  const startResendTimer = () => {
+    setResendTimer(60);
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setResendTimer(prev => {
+        if (prev <= 1) { clearInterval(timerRef.current); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  useEffect(() => () => clearInterval(timerRef.current), []);
+
+  // ── إرسال OTP ──────────────────────────────────────────────────
+  const sendOtpMutation = useMutation({
+    mutationFn: async () => {
+      const rawPhone = `${countryCode.code}${phone.replace(/^0/, "")}`;
+      const res = await apiRequest("POST", "/api/auth/send-otp", { phone: rawPhone, channel });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "فشل الإرسال");
+      return data;
+    },
+    onSuccess: (data) => {
+      setNormalizedPhone(data.phone || "");
+      setStep("otp");
+      startResendTimer();
+      toast({ title: "✅ تم الإرسال", description: data.message });
+      // في وضع التطوير: عرض الكود تلقائياً
+      if (data.devCode) {
+        const digits = data.devCode.split("");
+        setOtp(digits);
+        setTimeout(() => otpRefs.current[5]?.focus(), 100);
+        toast({ title: `🔧 كود التطوير: ${data.devCode}`, description: "هذا فقط في بيئة التطوير" });
+      } else {
+        setTimeout(() => otpRefs.current[0]?.focus(), 300);
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+    },
   });
 
-  const loginMutation = useMutation({
-    mutationFn: async (data: { email: string; password: string }) => {
-      const response = await apiRequest("POST", "/api/auth/login", data);
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "فشل تسجيل الدخول");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      toast({
-        title: "تم تسجيل الدخول",
-        description: "مرحباً بك في أويو بلاست",
+  // ── التحقق من OTP ──────────────────────────────────────────────
+  const verifyOtpMutation = useMutation({
+    mutationFn: async (nameOverride?: string) => {
+      const code = otp.join("");
+      const res = await apiRequest("POST", "/api/auth/verify-otp", {
+        phone: normalizedPhone,
+        code,
+        fullName: nameOverride || fullName || undefined,
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "الرمز غير صحيح");
+      return data;
+    },
+    onSuccess: (data) => {
+      if (data.isNewUser && !fullName) {
+        setIsNewUser(true);
+        setStep("name");
+        return;
+      }
+      toast({ title: "🎉 مرحباً بك!", description: "تم تسجيل الدخول بنجاح" });
       window.location.href = "/";
     },
-    onError: (error: Error) => {
-      toast({
-        title: "خطأ",
-        description: error.message,
-        variant: "destructive",
-      });
+    onError: (err: Error) => {
+      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+      // إعادة تركيز الإدخال الأول إذا كان الكود خاطئاً
+      setOtp(["", "", "", "", "", ""]);
+      setTimeout(() => otpRefs.current[0]?.focus(), 100);
     },
   });
 
-  const validateEmail = (email: string) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+  // ── تسجيل دخول بالبريد ──────────────────────────────────────────
+  const emailLoginMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/auth/login", { email, password });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "فشل تسجيل الدخول");
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: "✅ تم تسجيل الدخول" });
+      window.location.href = "/";
+    },
+    onError: (err: Error) => {
+      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // ── معالجة إدخال OTP ────────────────────────────────────────────
+  const handleOtpChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    const newOtp = [...otp];
+    newOtp[index] = value.slice(-1);
+    setOtp(newOtp);
+    if (value && index < 5) otpRefs.current[index + 1]?.focus();
+    if (newOtp.every(d => d) && newOtp.join("").length === 6) {
+      setTimeout(() => verifyOtpMutation.mutate(), 100);
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.email || !formData.password) {
-      toast({
-        title: "خطأ",
-        description: "يرجى ملء جميع الحقول",
-        variant: "destructive",
-      });
-      return;
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
     }
-    if (!validateEmail(formData.email)) {
-      toast({
-        title: "خطأ",
-        description: "البريد الإلكتروني غير صالح",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (formData.password.length < 6) {
-      toast({
-        title: "خطأ",
-        description: "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
-        variant: "destructive",
-      });
-      return;
-    }
-    loginMutation.mutate(formData);
   };
 
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    const text = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (text.length === 6) {
+      setOtp(text.split(""));
+      setTimeout(() => verifyOtpMutation.mutate(), 200);
+    }
+  };
+
+  // ── واجهة الخطوة 1: الهاتف ──────────────────────────────────────
+  const renderPhoneStep = () => (
+    <div className="space-y-5">
+      {/* قناة الإرسال */}
+      <div className="flex rounded-xl overflow-hidden border-2 border-primary/20">
+        {(["whatsapp", "sms"] as Channel[]).map((ch) => (
+          <button
+            key={ch}
+            type="button"
+            onClick={() => setChannel(ch)}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold transition-colors ${
+              channel === ch
+                ? "bg-primary text-primary-foreground"
+                : "bg-background text-muted-foreground hover:bg-muted/50"
+            }`}
+            data-testid={`button-channel-${ch}`}
+          >
+            {ch === "whatsapp" ? (
+              <><MessageCircle className="h-4 w-4" /> واتساب</>
+            ) : (
+              <><Smartphone className="h-4 w-4" /> رسالة نصية</>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* حقل الهاتف */}
+      <div>
+        <label className="text-sm font-semibold text-foreground mb-1.5 block">رقم الهاتف</label>
+        <div className="flex gap-2">
+          {/* كود الدولة */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowCountries(!showCountries)}
+              className="flex items-center gap-1.5 px-3 h-11 rounded-lg border-2 border-input bg-background hover:border-primary transition-colors text-sm font-bold min-w-[90px]"
+              data-testid="button-country-code"
+            >
+              <span className="text-lg">{countryCode.flag}</span>
+              <span className="text-xs">{countryCode.code}</span>
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            </button>
+            {showCountries && (
+              <div className="absolute top-12 right-0 z-50 bg-background border rounded-xl shadow-xl overflow-hidden min-w-[180px]">
+                {COUNTRY_CODES.map(c => (
+                  <button
+                    key={c.code}
+                    type="button"
+                    onClick={() => { setCountryCode(c); setShowCountries(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted text-sm"
+                  >
+                    <span className="text-lg">{c.flag}</span>
+                    <span className="font-medium">{c.name}</span>
+                    <span className="text-muted-foreground mr-auto">{c.code}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* رقم الهاتف */}
+          <Input
+            type="tel"
+            value={phone}
+            onChange={e => setPhone(e.target.value.replace(/\D/g, ""))}
+            placeholder={countryCode.code === "+967" ? "7XXXXXXXX" : "5XXXXXXXX"}
+            className="flex-1 h-11 text-base font-mono"
+            dir="ltr"
+            onKeyDown={e => e.key === "Enter" && sendOtpMutation.mutate()}
+            data-testid="input-phone"
+          />
+        </div>
+        <p className="text-xs text-muted-foreground mt-1.5">
+          سيصلك رمز التحقق على {channel === "whatsapp" ? "واتساب" : "رسالة نصية"}
+        </p>
+      </div>
+
+      <Button
+        className="w-full h-12 text-base font-extrabold rounded-xl shadow-lg"
+        onClick={() => sendOtpMutation.mutate()}
+        disabled={sendOtpMutation.isPending || phone.length < 7}
+        data-testid="button-send-otp"
+      >
+        {sendOtpMutation.isPending ? (
+          <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري الإرسال...</>
+        ) : (
+          <>{channel === "whatsapp" ? <MessageCircle className="h-4 w-4 ml-2" /> : <Smartphone className="h-4 w-4 ml-2" />}إرسال رمز التحقق</>
+        )}
+      </Button>
+    </div>
+  );
+
+  // ── واجهة الخطوة 2: OTP ────────────────────────────────────────
+  const renderOtpStep = () => (
+    <div className="space-y-5">
+      <div className="text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-3">
+          {channel === "whatsapp" ? (
+            <MessageCircle className="h-8 w-8 text-primary" />
+          ) : (
+            <Smartphone className="h-8 w-8 text-primary" />
+          )}
+        </div>
+        <h3 className="font-extrabold text-lg">أدخل رمز التحقق</h3>
+        <p className="text-sm text-muted-foreground mt-1">
+          أُرسل إلى <span className="font-bold text-foreground dir-ltr">{normalizedPhone}</span>
+          {" "}عبر {channel === "whatsapp" ? "واتساب" : "رسالة نصية"}
+        </p>
+      </div>
+
+      {/* حقول OTP */}
+      <div className="flex gap-2 justify-center" dir="ltr">
+        {otp.map((digit, i) => (
+          <input
+            key={i}
+            ref={el => { otpRefs.current[i] = el; }}
+            type="text"
+            inputMode="numeric"
+            maxLength={1}
+            value={digit}
+            onChange={e => handleOtpChange(i, e.target.value)}
+            onKeyDown={e => handleOtpKeyDown(i, e)}
+            onPaste={i === 0 ? handleOtpPaste : undefined}
+            className={`w-12 h-14 text-center text-2xl font-extrabold border-2 rounded-xl outline-none transition-colors ${
+              digit ? "border-primary bg-primary/5 text-primary" : "border-input bg-background"
+            } focus:border-primary`}
+            data-testid={`input-otp-${i}`}
+          />
+        ))}
+      </div>
+
+      {/* زر التحقق */}
+      <Button
+        className="w-full h-12 text-base font-extrabold rounded-xl"
+        onClick={() => verifyOtpMutation.mutate()}
+        disabled={verifyOtpMutation.isPending || otp.join("").length < 6}
+        data-testid="button-verify-otp"
+      >
+        {verifyOtpMutation.isPending ? (
+          <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري التحقق...</>
+        ) : (
+          <><CheckCircle className="h-4 w-4 ml-2" />تأكيد الرمز</>
+        )}
+      </Button>
+
+      {/* إعادة الإرسال */}
+      <div className="text-center space-y-2">
+        {resendTimer > 0 ? (
+          <p className="text-sm text-muted-foreground">
+            يمكنك إعادة الإرسال بعد <span className="font-bold text-primary">{resendTimer}</span> ثانية
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={() => sendOtpMutation.mutate()}
+            disabled={sendOtpMutation.isPending}
+            className="text-sm text-primary hover:underline font-semibold flex items-center justify-center gap-1 mx-auto"
+            data-testid="button-resend-otp"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            إعادة إرسال الرمز
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => { setStep("phone"); setOtp(["", "", "", "", "", ""]); }}
+          className="text-xs text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 mx-auto"
+          data-testid="button-back-to-phone"
+        >
+          <ArrowRight className="h-3 w-3" />
+          تغيير رقم الهاتف
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── واجهة الخطوة 3: الاسم (مستخدم جديد) ──────────────────────
+  const renderNameStep = () => (
+    <div className="space-y-5">
+      <div className="text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 mb-3">
+          <CheckCircle className="h-8 w-8 text-green-600" />
+        </div>
+        <h3 className="font-extrabold text-lg">تم التحقق ✅</h3>
+        <p className="text-sm text-muted-foreground mt-1">أدخل اسمك لإكمال إنشاء الحساب</p>
+      </div>
+
+      <div>
+        <label className="text-sm font-semibold mb-1.5 block">الاسم الكامل</label>
+        <div className="relative">
+          <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            value={fullName}
+            onChange={e => setFullName(e.target.value)}
+            placeholder="مثال: محمد أحمد"
+            className="h-11 pr-10"
+            onKeyDown={e => e.key === "Enter" && fullName.trim().length >= 2 && verifyOtpMutation.mutate(fullName)}
+            data-testid="input-full-name"
+          />
+        </div>
+      </div>
+
+      <Button
+        className="w-full h-12 text-base font-extrabold rounded-xl"
+        onClick={() => verifyOtpMutation.mutate(fullName)}
+        disabled={verifyOtpMutation.isPending || fullName.trim().length < 2}
+        data-testid="button-complete-profile"
+      >
+        {verifyOtpMutation.isPending ? (
+          <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري الإنشاء...</>
+        ) : "إنشاء الحساب والدخول"}
+      </Button>
+
+      <button
+        type="button"
+        onClick={() => verifyOtpMutation.mutate("")}
+        className="w-full text-xs text-muted-foreground hover:text-foreground py-2"
+        data-testid="button-skip-name"
+      >
+        تخطي (يمكن إضافة الاسم لاحقاً)
+      </button>
+    </div>
+  );
+
+  // ── واجهة تسجيل دخول بالبريد ────────────────────────────────────
+  const renderEmailLogin = () => (
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-semibold mb-1.5 block">البريد الإلكتروني</label>
+        <div className="relative">
+          <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="example@email.com"
+            className="h-11 pr-10"
+            dir="ltr"
+            data-testid="input-email"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="text-sm font-semibold mb-1.5 block">كلمة المرور</label>
+        <div className="relative">
+          <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="كلمة المرور"
+            className="h-11 pr-10 pl-10"
+            dir="ltr"
+            onKeyDown={e => e.key === "Enter" && emailLoginMutation.mutate()}
+            data-testid="input-password"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+      <Button
+        className="w-full h-12 text-base font-extrabold rounded-xl"
+        onClick={() => emailLoginMutation.mutate()}
+        disabled={emailLoginMutation.isPending}
+        data-testid="button-login"
+      >
+        {emailLoginMutation.isPending ? (
+          <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري الدخول...</>
+        ) : "تسجيل الدخول"}
+      </Button>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-background flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
-        <div className="text-center mb-8">
-          <div className="mx-auto w-24 h-24 mb-4">
+    <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background flex flex-col items-center justify-center p-4" dir="rtl">
+      <div className="w-full max-w-sm">
+        {/* الشعار */}
+        <div className="text-center mb-6">
+          <div className="mx-auto w-20 h-20 mb-3">
             <img src={oyoLogo} alt="OYO PLAST" className="w-full h-full object-contain rounded-2xl shadow-lg" />
           </div>
-          <h1 className="text-3xl font-extrabold text-foreground">أويو بلاست</h1>
-          <p className="text-muted-foreground mt-2">لطباعة ومستلزمات البلاستيك</p>
+          <h1 className="text-2xl font-extrabold">أويو بلاست</h1>
+          <p className="text-sm text-muted-foreground mt-1">لمستلزمات التغليف</p>
         </div>
-        
-        <Card className="border-none shadow-xl">
-          <CardHeader className="text-center pb-2">
-            <CardTitle className="text-2xl">تسجيل الدخول</CardTitle>
-            <CardDescription>
-              أدخل بريدك الإلكتروني وكلمة المرور للمتابعة
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">البريد الإلكتروني</Label>
-                <div className="relative">
-                  <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="pr-10"
-                    placeholder="example@email.com"
-                    dir="ltr"
-                    data-testid="input-email"
-                  />
-                </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password">كلمة المرور</Label>
-                <div className="relative">
-                  <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="pr-10 pl-10"
-                    placeholder="كلمة المرور"
-                    dir="ltr"
-                    data-testid="input-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
+        {/* البطاقة الرئيسية */}
+        <div className="bg-card border rounded-2xl shadow-xl p-6">
+          {/* تبديل بين الهاتف والبريد */}
+          <div className="flex rounded-xl overflow-hidden border mb-5">
+            <button
+              type="button"
+              onClick={() => { setLoginMode("phone"); setStep("phone"); }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors ${
+                loginMode === "phone" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground"
+              }`}
+              data-testid="button-mode-phone"
+            >
+              <Phone className="h-4 w-4" /> رقم الهاتف
+            </button>
+            <button
+              type="button"
+              onClick={() => setLoginMode("email")}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors ${
+                loginMode === "email" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground"
+              }`}
+              data-testid="button-mode-email"
+            >
+              <Mail className="h-4 w-4" /> البريد الإلكتروني
+            </button>
+          </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="rememberMe"
-                    checked={rememberMe}
-                    onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-                    data-testid="checkbox-remember-me"
-                  />
-                  <Label htmlFor="rememberMe" className="font-normal text-sm cursor-pointer">
-                    تذكرني
-                  </Label>
-                </div>
-                <Link href="/forgot-password">
-                  <button 
-                    type="button"
-                    className="text-sm text-[#2196F3] hover:underline"
-                    data-testid="link-forgot-password"
-                  >
-                    هل نسيت كلمتك؟
-                  </button>
-                </Link>
-              </div>
+          {/* المحتوى */}
+          {loginMode === "phone" ? (
+            <>
+              {step === "phone" && renderPhoneStep()}
+              {step === "otp"   && renderOtpStep()}
+              {step === "name"  && renderNameStep()}
+            </>
+          ) : (
+            renderEmailLogin()
+          )}
+        </div>
 
-              <Button 
-                type="submit"
-                className="w-full h-12 text-lg font-bold shadow-lg bg-[#2196F3] hover:bg-[#1976D2]" 
-                disabled={loginMutation.isPending}
-                data-testid="button-login"
-              >
-                {loginMutation.isPending ? (
-                  "جاري تسجيل الدخول..."
-                ) : (
-                  <>
-                    <LogIn className="h-5 w-5 ml-2" />
-                    تسجيل الدخول
-                  </>
-                )}
-              </Button>
-            </form>
-
-            <div className="mt-6 space-y-4">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">طرق أخرى</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  variant="outline"
-                  className="h-12 font-bold"
-                  data-testid="button-google-login"
-                >
-                  <svg className="w-5 h-5 ml-2" viewBox="0 0 24 24">
-                    <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                    <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                  </svg>
-                  Google
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-12 font-bold"
-                  data-testid="button-apple-login"
-                >
-                  <svg className="w-5 h-5 ml-2" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M17.05 13.5c-.91 0-1.82.55-2.25 1.51.93.64 1.86 1.89 1.86 3.78 0 2.18-1.36 3.66-3.41 3.66-1.95 0-3.66-1.59-3.66-4.04 0-3.27 2.18-5.54 5.4-5.54.51 0 1.02.05 1.5.15-.09.6-.14 1.15-.14 1.82 0 2.05 1.3 4.07 3.41 4.07.81 0 1.64-.27 2.3-.81-1.02-2.08-2.55-3.6-4.01-3.6zm2.45.18c1.28 0 2.3-1.02 2.3-2.3 0-1.28-1.02-2.3-2.3-2.3s-2.3 1.02-2.3 2.3c0 1.28 1.02 2.3 2.3 2.3zm-11-4.54c-1.09 0-2.07-.79-2.3-1.86h6.64c.19-2.27 1.89-4.02 4.04-4.02 2.3 0 4.03 1.89 4.03 4.04 0 .29-.02.58-.07.86.07.81.13 1.61.13 2.44 0 3.02-1.55 4.53-3.36 4.53-1.7 0-2.89-1.02-3.91-2.35.74 1.28 2.44 2.04 4.04 2.04 2.55 0 4.25-1.64 4.25-4.33 0-1.46-.69-2.73-1.75-3.59-.79 1.16-1.86 2.08-3.16 2.08-2.34 0-3.59-1.87-3.59-4.04 0-.51.05-1.02.14-1.51-.62-.19-1.27-.27-1.93-.27z"/>
-                  </svg>
-                  Apple
-                </Button>
-              </div>
-              
-              <Link href="/register">
-                <Button 
-                  variant="outline"
-                  className="w-full h-12 text-lg font-bold border-2 border-[#2196F3] text-[#2196F3] hover:bg-[#2196F3]/10"
-                  data-testid="button-register"
-                >
-                  <UserPlus className="h-5 w-5 ml-2" />
-                  إنشاء حساب جديد
-                </Button>
-              </Link>
-
-              <p className="text-xs text-center text-muted-foreground mt-4">
-                منصة آمنة وموثوقة لجميع احتياجات التغليف الخاصة بك
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        {/* روابط أسفل البطاقة */}
+        <div className="text-center mt-4 space-y-2">
+          {loginMode === "email" && (
+            <Link href="/register">
+              <button className="text-sm text-primary hover:underline font-semibold" data-testid="link-register">
+                إنشاء حساب جديد بالبريد الإلكتروني
+              </button>
+            </Link>
+          )}
+          <p className="text-xs text-muted-foreground">
+            منصة آمنة وموثوقة لجميع احتياجات التغليف
+          </p>
+        </div>
       </div>
     </div>
   );

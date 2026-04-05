@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 export interface IAuthStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByPhone(phone: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   createEmailUser(userData: {
     email: string;
@@ -15,6 +16,11 @@ export interface IAuthStorage {
     phone?: string;
     accountType?: string;
   }): Promise<User>;
+  createPhoneUser(userData: {
+    phone: string;
+    fullName?: string;
+  }): Promise<User>;
+  markPhoneVerified(userId: string): Promise<void>;
 }
 
 class AuthStorage implements IAuthStorage {
@@ -26,6 +32,29 @@ class AuthStorage implements IAuthStorage {
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
+  }
+
+  async getUserByPhone(phone: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.phone, phone));
+    return user;
+  }
+
+  async createPhoneUser(userData: { phone: string; fullName?: string }): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values({
+        phone: userData.phone,
+        fullName: userData.fullName || null,
+        accountType: "customer",
+        authProvider: "phone",
+        isPhoneVerified: "true",
+      })
+      .returning();
+    return user;
+  }
+
+  async markPhoneVerified(userId: string): Promise<void> {
+    await db.update(users).set({ isPhoneVerified: "true" }).where(eq(users.id, userId));
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
