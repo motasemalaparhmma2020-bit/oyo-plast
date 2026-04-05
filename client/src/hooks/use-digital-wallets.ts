@@ -10,6 +10,8 @@ export interface DigitalWallet {
   purchaseCode: string;
   isActive: boolean;
   sortOrder: number;
+  requiresProof?: boolean;
+  instructions?: string | null;
 }
 
 export function useDigitalWallets() {

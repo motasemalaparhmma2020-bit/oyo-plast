@@ -1097,7 +1097,7 @@ export default function ProductDetail() {
                         </Badge>
                       </div>
                       <p className="font-extrabold text-primary" style={{ fontSize: detailPriceFs }} data-testid="text-product-price">
-                        {formatPrice(Math.round(currentPrice * (1 - sadeemMarketerDiscount / 100)))}
+                        {formatPrice(Math.round(Number(currentPrice) * (1 - sadeemMarketerDiscount / 100)))}
                         <span className="text-lg font-normal text-muted-foreground mr-2">
                           {currency === 'YER' ? 'ر.ي' : 'ر.س'}
                         </span>

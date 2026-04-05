@@ -74,7 +74,7 @@ export default function Auth() {
   const extractErrorMessage = (err: Error): string => {
     // الخطأ يأتي بشكل "500: {"message":"..."}" — نستخرج الرسالة العربية
     try {
-      const match = err.message.match(/^\d+:\s*(.+)$/s);
+      const match = err.message.match(/^\d+:\s*([\s\S]+)$/);
       if (match) {
         const parsed = JSON.parse(match[1]);
         if (parsed.message) return parsed.message;

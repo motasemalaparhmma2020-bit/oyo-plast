@@ -769,7 +769,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const userOrders = await dbInstance
         .select()
         .from(ordersTable)
-        .where(eqFn(ordersTable.userId, getUserId(user)))
+        .where(eqFn(ordersTable.userId, getUserId(user) as string))
         .orderBy(descFn(ordersTable.createdAt));
 
       res.json(userOrders);
@@ -1129,7 +1129,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const addresses = await dbInstance
         .select()
         .from(addressTable)
-        .where(eqFn(addressTable.userId, getUserId(user)));
+        .where(eqFn(addressTable.userId, getUserId(user) as string));
 
       res.json(addresses);
     } catch (e: any) {
@@ -1151,13 +1151,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { userAddresses: addressTable } = await import("@shared/schema");
       const { eq: eqFn } = await import("drizzle-orm");
 
+      const uid = getUserId(user) as string;
       if (isDefault) {
-        await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, getUserId(user)));
+        await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, uid));
       }
 
       const [newAddress] = await dbInstance
         .insert(addressTable)
-        .values({ userId: getUserId(user), name, city, address, phone, isDefault: isDefault || false })
+        .values({ userId: uid, name, city, address, phone, isDefault: isDefault || false })
         .returning();
 
       res.status(201).json(newAddress);
@@ -1180,14 +1181,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { userAddresses: addressTable } = await import("@shared/schema");
       const { eq: eqFn } = await import("drizzle-orm");
 
+      const uid = getUserId(user) as string;
       if (isDefault) {
-        await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, getUserId(user)));
+        await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, uid));
       }
 
       const existing = await dbInstance
         .select()
         .from(addressTable)
-        .where(eqFn(addressTable.userId, getUserId(user)));
+        .where(eqFn(addressTable.userId, uid));
 
       const match = existing.find((row) =>
         row.phone === phone &&
@@ -1207,7 +1209,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const [newAddress] = await dbInstance
         .insert(addressTable)
-        .values({ userId: getUserId(user), name, city, address, phone, isDefault: !!isDefault })
+        .values({ userId: uid, name, city, address, phone, isDefault: !!isDefault })
         .returning();
 
       res.status(201).json(newAddress);
@@ -1226,9 +1228,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { eq: eqFn } = await import("drizzle-orm");
 
       const { name, city, address, phone, isDefault } = req.body;
-
+      const uid = getUserId(user) as string;
       if (isDefault) {
-        await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, getUserId(user)));
+        await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, uid));
       }
 
       const [updated] = await dbInstance
