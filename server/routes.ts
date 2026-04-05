@@ -721,6 +721,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(allOrders);
   });
 
+  // ─── Admin: Get Order Items (with full product details for invoice) ──────────
+  app.get("/api/admin/orders/:id/items", requireAdmin, async (req, res) => {
+    try {
+      const { db: dbInstance } = await import("./db");
+      const { orderItems: orderItemsTable, products: productsTable } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+
+      const items = await dbInstance
+        .select({
+          id: orderItemsTable.id,
+          productId: orderItemsTable.productId,
+          productName: productsTable.name,
+          quantity: orderItemsTable.quantity,
+          price: orderItemsTable.price,
+          selectedSize: orderItemsTable.selectedSize,
+          selectedColor: orderItemsTable.selectedColor,
+          customPrinting: orderItemsTable.customPrinting,
+          designNotes: orderItemsTable.designNotes,
+        })
+        .from(orderItemsTable)
+        .leftJoin(productsTable, eqFn(orderItemsTable.productId, productsTable.id))
+        .where(eqFn(orderItemsTable.orderId, parseInt(req.params.id)));
+
+      res.json(items);
+    } catch (e: any) {
+      res.status(500).json({ message: "Failed to fetch admin order items", details: e.message });
+    }
+  });
+
   app.patch("/api/admin/orders/:id/status", requireAdmin, async (req, res) => {
     try {
       const { db: dbInstance } = await import("./db");
