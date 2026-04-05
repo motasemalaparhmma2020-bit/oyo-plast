@@ -60,6 +60,16 @@ function generateSlug(name: string): string {
     .toLowerCase() + "-" + Date.now();
 }
 
+/**
+ * استخراج معرّف المستخدم من كائن req.user
+ * يدعم: Replit OIDC (claims.sub) + Email auth (claims.sub)
+ */
+function getUserId(user: any): string | undefined {
+  if (!user) return undefined;
+  // Replit OIDC + Email auth both store userId in claims.sub
+  return user.claims?.sub ?? undefined;
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<void> {
   await setupAuth(app);
   registerAuthRoutes(app);
@@ -725,7 +735,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/orders", async (req, res) => {
     try {
       const user = (req as any).user;
-      if (!user || !user.id) {
+      if (!user || !getUserId(user)) {
         return res.status(401).json({ message: "Not authenticated" });
       }
 
@@ -737,7 +747,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const userOrders = await dbInstance
         .select()
         .from(ordersTable)
-        .where(eqFn(ordersTable.userId, user.id))
+        .where(eqFn(ordersTable.userId, getUserId(user)))
         .orderBy(descFn(ordersTable.createdAt));
 
       res.json(userOrders);
@@ -775,7 +785,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         notes,
         total,
         items,
-        userId: user?.id,
+        userId: getUserId(user),
       });
 
       logOrderCreation(order.id, {
@@ -949,7 +959,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { cartItems: cartTable } = await import("@shared/schema");
       const { eq: eqFn } = await import("drizzle-orm");
       
-      const items = await dbInstance.select().from(cartTable).where(eqFn(cartTable.userId, user.id));
+      const items = await dbInstance.select().from(cartTable).where(eqFn(cartTable.userId, getUserId(user)));
       res.json(items);
     } catch (e: any) {
       res.status(500).json({ message: "فشل جلب السلة", details: e.message });
@@ -963,6 +973,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // For guests, just return success - cart is stored in localStorage
       if (!user) return res.status(201).json({ success: true, guest: true });
       
+      const userId = getUserId(user);
+      if (!userId) return res.status(401).json({ message: "Not authenticated" });
+      
       const { db: dbInstance } = await import("./db");
       const { cartItems: cartTable } = await import("@shared/schema");
       const { eq: eqFn } = await import("drizzle-orm");
@@ -971,7 +984,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       
       // Check if item exists
       const existing = await dbInstance.select().from(cartTable)
-        .where(eqFn(cartTable.userId, user.id));
+        .where(eqFn(cartTable.userId, userId));
       
       const existingItem = existing.find(item =>
         item.productId === productId &&
@@ -994,7 +1007,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const [newItem] = await dbInstance
         .insert(cartTable)
         .values({
-          userId: user.id,
+          userId,
           productId,
           quantity,
           selectedSize: selectedSize || null,
@@ -1055,7 +1068,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/profile", async (req, res) => {
     try {
       const user = (req as any).user;
-      if (!user || !user.id) return res.status(401).json({ message: "Not authenticated" });
+      if (!user || !getUserId(user)) return res.status(401).json({ message: "Not authenticated" });
       
       res.json({ user });
     } catch (e: any) {
@@ -1066,7 +1079,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/addresses", async (req, res) => {
     try {
       const user = (req as any).user;
-      if (!user || !user.id) return res.status(401).json({ message: "Not authenticated" });
+      if (!user || !getUserId(user)) return res.status(401).json({ message: "Not authenticated" });
 
       const { db: dbInstance } = await import("./db");
       const { userAddresses: addressTable } = await import("@shared/schema");
@@ -1075,7 +1088,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const addresses = await dbInstance
         .select()
         .from(addressTable)
-        .where(eqFn(addressTable.userId, user.id));
+        .where(eqFn(addressTable.userId, getUserId(user)));
 
       res.json(addresses);
     } catch (e: any) {
@@ -1086,7 +1099,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/addresses", async (req, res) => {
     try {
       const user = (req as any).user;
-      if (!user || !user.id) return res.status(401).json({ message: "Not authenticated" });
+      if (!user || !getUserId(user)) return res.status(401).json({ message: "Not authenticated" });
 
       const { name, city, address, phone, isDefault } = req.body;
       if (!name || !city || !address || !phone) {
@@ -1098,12 +1111,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { eq: eqFn } = await import("drizzle-orm");
 
       if (isDefault) {
-        await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, user.id));
+        await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, getUserId(user)));
       }
 
       const [newAddress] = await dbInstance
         .insert(addressTable)
-        .values({ userId: user.id, name, city, address, phone, isDefault: isDefault || false })
+        .values({ userId: getUserId(user), name, city, address, phone, isDefault: isDefault || false })
         .returning();
 
       res.status(201).json(newAddress);
@@ -1115,7 +1128,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/checkout/save-address", async (req, res) => {
     try {
       const user = (req as any).user;
-      if (!user || !user.id) return res.status(401).json({ message: "Not authenticated" });
+      if (!user || !getUserId(user)) return res.status(401).json({ message: "Not authenticated" });
 
       const { name, city, address, phone, isDefault = true } = req.body;
       if (!name || !city || !address || !phone) {
@@ -1127,13 +1140,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { eq: eqFn } = await import("drizzle-orm");
 
       if (isDefault) {
-        await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, user.id));
+        await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, getUserId(user)));
       }
 
       const existing = await dbInstance
         .select()
         .from(addressTable)
-        .where(eqFn(addressTable.userId, user.id));
+        .where(eqFn(addressTable.userId, getUserId(user)));
 
       const match = existing.find((row) =>
         row.phone === phone &&
@@ -1153,7 +1166,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const [newAddress] = await dbInstance
         .insert(addressTable)
-        .values({ userId: user.id, name, city, address, phone, isDefault: !!isDefault })
+        .values({ userId: getUserId(user), name, city, address, phone, isDefault: !!isDefault })
         .returning();
 
       res.status(201).json(newAddress);
@@ -1165,7 +1178,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/addresses/:id", async (req, res) => {
     try {
       const user = (req as any).user;
-      if (!user || !user.id) return res.status(401).json({ message: "Not authenticated" });
+      if (!user || !getUserId(user)) return res.status(401).json({ message: "Not authenticated" });
 
       const { db: dbInstance } = await import("./db");
       const { userAddresses: addressTable } = await import("@shared/schema");
@@ -1174,7 +1187,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { name, city, address, phone, isDefault } = req.body;
 
       if (isDefault) {
-        await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, user.id));
+        await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, getUserId(user)));
       }
 
       const [updated] = await dbInstance
@@ -1192,7 +1205,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/addresses/:id", async (req, res) => {
     try {
       const user = (req as any).user;
-      if (!user || !user.id) return res.status(401).json({ message: "Not authenticated" });
+      if (!user || !getUserId(user)) return res.status(401).json({ message: "Not authenticated" });
 
       const { db: dbInstance } = await import("./db");
       const { userAddresses: addressTable } = await import("@shared/schema");
