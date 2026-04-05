@@ -253,6 +253,13 @@ export class DatabaseStorage implements IStorage {
       discountBubbleSize: 28,
       quantityButtonHeight: 40,
       imageMode: 'card',
+      detailImageHeight: 380,
+      detailImageMode: 'contain',
+      detailPriceFontSize: 22,
+      detailAddToCartHeight: 52,
+      detailShowRelated: true,
+      detailShowReviews: true,
+      detailThumbnailSize: 64,
       updatedAt: new Date(),
     };
   }

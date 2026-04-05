@@ -407,6 +407,14 @@ export const displaySettings = pgTable("display_settings", {
   discountBubbleSize: integer("discount_bubble_size").default(28).notNull(),     // حجم فقاعة الخصم (0=مخفية)
   quantityButtonHeight: integer("quantity_button_height").default(40).notNull(), // ارتفاع الأزرار
   imageMode: text("image_mode").default("card").notNull(),                       // card | full-bleed
+  // ── إعدادات صفحة المنتج (Product Detail Page) ──────────────────────────────
+  detailImageHeight: integer("detail_image_height").default(380).notNull(),       // ارتفاع الصورة الرئيسية
+  detailImageMode: text("detail_image_mode").default("contain").notNull(),        // contain | cover
+  detailPriceFontSize: integer("detail_price_font_size").default(22).notNull(),   // حجم خط السعر في صفحة المنتج
+  detailAddToCartHeight: integer("detail_add_to_cart_height").default(52).notNull(), // ارتفاع زر الإضافة للسلة
+  detailShowRelated: boolean("detail_show_related").default(true).notNull(),      // إظهار المنتجات المشابهة
+  detailShowReviews: boolean("detail_show_reviews").default(true).notNull(),      // إظهار قسم التقييمات
+  detailThumbnailSize: integer("detail_thumbnail_size").default(64).notNull(),    // حجم الصور المصغرة
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

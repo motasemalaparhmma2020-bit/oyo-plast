@@ -1653,6 +1653,123 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
           </div>
         </div>
 
+        {/* ═══ إعدادات صفحة المنتج ═══ */}
+        <div className="border-2 border-blue-200 rounded-lg p-4 space-y-4 bg-blue-50/30">
+          <h3 className="font-semibold text-base flex items-center gap-2 text-blue-700">
+            <Package className="h-4 w-4" />
+            إعدادات صفحة المنتج
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            {/* ارتفاع الصورة الرئيسية */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">ارتفاع الصورة الرئيسية</Label>
+              <p className="text-xs text-muted-foreground">280 = مضغوط · 380 = عادي · 500 = كبير</p>
+              <div className="flex items-center gap-2">
+                <Input type="number" min={200} max={600}
+                  value={settings?.detailImageHeight ?? 380}
+                  onChange={e => setSettings((s: any) => ({ ...s, detailImageHeight: +e.target.value }))}
+                  onBlur={e => handleUpdate('detailImageHeight', +e.target.value)}
+                  className="w-20" data-testid="input-detail-image-height" disabled={updateMutation.isPending}
+                />
+                <span className="text-sm text-muted-foreground">بكسل</span>
+              </div>
+            </div>
+            {/* حجم الصور المصغرة */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">حجم الصور المصغرة</Label>
+              <p className="text-xs text-muted-foreground">48 = صغير · 64 = عادي · 80 = كبير</p>
+              <div className="flex items-center gap-2">
+                <Input type="number" min={36} max={100}
+                  value={settings?.detailThumbnailSize ?? 64}
+                  onChange={e => setSettings((s: any) => ({ ...s, detailThumbnailSize: +e.target.value }))}
+                  onBlur={e => handleUpdate('detailThumbnailSize', +e.target.value)}
+                  className="w-20" data-testid="input-detail-thumb-size" disabled={updateMutation.isPending}
+                />
+                <span className="text-sm text-muted-foreground">بكسل</span>
+              </div>
+            </div>
+            {/* حجم خط السعر */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">حجم خط السعر</Label>
+              <p className="text-xs text-muted-foreground">18 = عادي · 22 = بارز · 28 = ضخم</p>
+              <div className="flex items-center gap-2">
+                <Input type="number" min={14} max={40}
+                  value={settings?.detailPriceFontSize ?? 22}
+                  onChange={e => setSettings((s: any) => ({ ...s, detailPriceFontSize: +e.target.value }))}
+                  onBlur={e => handleUpdate('detailPriceFontSize', +e.target.value)}
+                  className="w-20" data-testid="input-detail-price-size" disabled={updateMutation.isPending}
+                />
+                <span className="text-sm text-muted-foreground">بكسل</span>
+              </div>
+            </div>
+            {/* ارتفاع زر أضف للسلة */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">ارتفاع زر الإضافة للسلة</Label>
+              <p className="text-xs text-muted-foreground">44 = عادي · 52 = كبير · 64 = ضخم</p>
+              <div className="flex items-center gap-2">
+                <Input type="number" min={36} max={80}
+                  value={settings?.detailAddToCartHeight ?? 52}
+                  onChange={e => setSettings((s: any) => ({ ...s, detailAddToCartHeight: +e.target.value }))}
+                  onBlur={e => handleUpdate('detailAddToCartHeight', +e.target.value)}
+                  className="w-20" data-testid="input-detail-cart-btn-height" disabled={updateMutation.isPending}
+                />
+                <span className="text-sm text-muted-foreground">بكسل</span>
+              </div>
+            </div>
+          </div>
+
+          {/* وضع الصورة */}
+          <div className="space-y-1.5">
+            <Label className="text-sm">وضع عرض الصورة الرئيسية</Label>
+            <p className="text-xs text-muted-foreground">contain = كاملة مع حواف · cover = ملء الإطار</p>
+            <div className="flex gap-2 mt-1">
+              <button
+                onClick={() => handleUpdate('detailImageMode', 'contain')}
+                className={`flex-1 text-xs py-2 px-3 rounded-lg border-2 transition-all ${(settings?.detailImageMode ?? 'contain') === 'contain' ? 'border-blue-500 bg-blue-50 text-blue-700 font-bold' : 'border-gray-200 text-gray-500'}`}
+                data-testid="button-detail-image-contain"
+              >
+                📦 Contain (كاملة)
+              </button>
+              <button
+                onClick={() => handleUpdate('detailImageMode', 'cover')}
+                className={`flex-1 text-xs py-2 px-3 rounded-lg border-2 transition-all ${(settings?.detailImageMode ?? 'contain') === 'cover' ? 'border-orange-500 bg-orange-50 text-orange-600 font-bold' : 'border-gray-200 text-gray-500'}`}
+                data-testid="button-detail-image-cover"
+              >
+                🖼️ Cover (ملء)
+              </button>
+            </div>
+          </div>
+
+          {/* مفاتيح الأقسام */}
+          <div className="space-y-3 pt-2 border-t">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">إظهار / إخفاء الأقسام</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>المنتجات المشابهة</Label>
+                <p className="text-xs text-muted-foreground">قسم "منتجات مشابهة" أسفل الصفحة</p>
+              </div>
+              <Switch
+                checked={settings?.detailShowRelated ?? true}
+                onCheckedChange={v => handleUpdate('detailShowRelated', v)}
+                disabled={updateMutation.isPending}
+                data-testid="switch-detail-show-related"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>التقييمات والمراجعات</Label>
+                <p className="text-xs text-muted-foreground">قسم التقييمات أسفل الصفحة</p>
+              </div>
+              <Switch
+                checked={settings?.detailShowReviews ?? true}
+                onCheckedChange={v => handleUpdate('detailShowReviews', v)}
+                disabled={updateMutation.isPending}
+                data-testid="switch-detail-show-reviews"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Offer Banners Settings */}
         <div className="border rounded-lg p-4 space-y-4">
           <h3 className="font-semibold text-base flex items-center gap-2">

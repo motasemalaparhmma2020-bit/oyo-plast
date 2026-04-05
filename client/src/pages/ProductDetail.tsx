@@ -107,6 +107,18 @@ export default function ProductDetail() {
     staleTime: 60000,
   });
 
+  const { data: displaySettings } = useQuery<any>({
+    queryKey: ["/api/display-settings"],
+    staleTime: 60000,
+  });
+  const detailImgH   = displaySettings?.detailImageHeight    ?? 380;
+  const detailImgMode = displaySettings?.detailImageMode     ?? "contain";
+  const detailPriceFs = displaySettings?.detailPriceFontSize ?? 22;
+  const detailCartH  = displaySettings?.detailAddToCartHeight ?? 52;
+  const detailThumb  = displaySettings?.detailThumbnailSize  ?? 64;
+  const detailShowRelatedSetting = displaySettings?.detailShowRelated !== false;
+  const detailShowReviewsSetting = displaySettings?.detailShowReviews !== false;
+
   const { data: reviews = [] } = useQuery<Review[]>({
     queryKey: ['/api/products', id, 'reviews'],
     enabled: !!id,
@@ -698,11 +710,14 @@ export default function ProductDetail() {
                 <div className="flex">
                   {allImages.map((img, idx) => (
                     <div key={idx} className="flex-[0_0_100%] min-w-0">
-                      <div className="aspect-[3/4] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-4 flex items-center justify-center">
+                      <div
+                        className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 flex items-center justify-center"
+                        style={{ height: detailImgH, padding: detailImgMode === 'contain' ? 16 : 0 }}
+                      >
                         <LazyImage
                           src={img}
                           alt={`${product?.name || 'منتج'} - صورة ${idx + 1}`}
-                          className="w-full h-full object-contain"
+                          className={`w-full h-full ${detailImgMode === 'cover' ? 'object-cover' : 'object-contain'}`}
                         />
                       </div>
                     </div>
@@ -734,9 +749,10 @@ export default function ProductDetail() {
                   <button
                     key={idx}
                     onClick={() => emblaApi?.scrollTo(idx)}
-                    className={`w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                    className={`rounded-lg overflow-hidden border-2 transition-all flex-shrink-0 ${
                       currentImageIndex === idx ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'
                     }`}
+                    style={{ width: detailThumb, height: detailThumb }}
                     data-testid={`button-thumbnail-${idx}`}
                   >
                     <LazyImage src={img} alt="" className="w-full h-full object-cover" />
@@ -745,11 +761,14 @@ export default function ProductDetail() {
               </div>
             </div>
           ) : (
-            <div className="aspect-[3/4] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-2xl overflow-hidden p-4 flex items-center justify-center">
+            <div
+              className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-2xl overflow-hidden flex items-center justify-center"
+              style={{ height: detailImgH, padding: detailImgMode === 'contain' ? 16 : 0 }}
+            >
               <LazyImage
                 src={product?.imageUrl || ''}
                 alt={product?.name || 'منتج'}
-                className="w-full h-full object-contain"
+                className={`w-full h-full ${detailImgMode === 'cover' ? 'object-cover' : 'object-contain'}`}
               />
             </div>
           )}
@@ -901,7 +920,7 @@ export default function ProductDetail() {
               <div className="flex items-end justify-between gap-4 flex-wrap">
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">السعر للوحدة</p>
-                  <p className="text-3xl font-extrabold text-primary" data-testid="text-product-price">
+                  <p className="font-extrabold text-primary" style={{ fontSize: detailPriceFs }} data-testid="text-product-price">
                     {formatPrice(currentPrice)} 
                     <span className="text-lg font-normal text-muted-foreground mr-2">
                       {currency === 'YER' ? 'ر.ي' : 'ر.س'}
@@ -1062,7 +1081,8 @@ export default function ProductDetail() {
           <div className="flex gap-3">
             <Button
               size="lg"
-              className="flex-1 h-14 text-lg font-extrabold gap-3 rounded-xl shadow-lg shadow-primary/20"
+              className="flex-1 text-lg font-extrabold gap-3 rounded-xl shadow-lg shadow-primary/20"
+              style={{ height: detailCartH }}
               disabled={currentStock <= 0 || isPending}
               onClick={handleAddToCart}
               data-testid="button-add-to-cart"
@@ -1081,7 +1101,7 @@ export default function ProductDetail() {
 
       <Separator className="my-8" />
       
-      {product.showReviews !== false && (
+      {product.showReviews !== false && detailShowReviewsSetting && (
       <div className="space-y-6">
         <h2 className="text-2xl font-bold">التقييمات والمراجعات</h2>
         
@@ -1247,7 +1267,7 @@ export default function ProductDetail() {
       </div>
       )}
 
-      {filteredRelatedProducts.length > 0 && (
+      {filteredRelatedProducts.length > 0 && detailShowRelatedSetting && (
         <>
           <Separator className="my-8" />
           <div>

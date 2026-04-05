@@ -133,6 +133,15 @@ export async function runMigrations(): Promise<void> {
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS quantity_button_height INTEGER NOT NULL DEFAULT 40;`);
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS image_mode TEXT NOT NULL DEFAULT 'card';`);
 
+    // ─── إعدادات صفحة المنتج (Product Detail Page) ─────────────────
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_image_height INTEGER NOT NULL DEFAULT 380;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_image_mode TEXT NOT NULL DEFAULT 'contain';`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_price_font_size INTEGER NOT NULL DEFAULT 22;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_add_to_cart_height INTEGER NOT NULL DEFAULT 52;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_show_related BOOLEAN NOT NULL DEFAULT true;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_show_reviews BOOLEAN NOT NULL DEFAULT true;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_thumbnail_size INTEGER NOT NULL DEFAULT 64;`);
+
     // ─── إدخال صف افتراضي إذا كان الجدول فارغاً ──────────────────
     await client.query(`
       INSERT INTO display_settings (
