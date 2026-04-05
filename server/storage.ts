@@ -281,6 +281,8 @@ export class DatabaseStorage implements IStorage {
       sadeemShowReturns: true,
       sadeemFreeShippingMin: 0,
       sadeemMarketerDiscount: 0,
+      sliderHeight: 414,
+      offerBannerCols: 2,
       shippingFee: 0,
       codEnabled: true,
       updatedAt: new Date(),

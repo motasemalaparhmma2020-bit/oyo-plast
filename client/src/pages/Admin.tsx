@@ -2181,37 +2181,164 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
           </div>
         </div>
 
-        {/* Offer Banners Settings */}
-        <div className="border rounded-lg p-4 space-y-4">
-          <h3 className="font-semibold text-base flex items-center gap-2">
-            <Zap className="h-4 w-4" />
-            إعدادات بنرات العروض
-          </h3>
-          <div className="space-y-2">
-            <Label>ارتفاع البنر (بكسل)</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                min={40}
-                max={200}
-                value={settings?.offerBannerHeight ?? 72}
-                onChange={e => setSettings((s: any) => ({ ...s, offerBannerHeight: +e.target.value }))}
-                onBlur={e => handleUpdate('offerBannerHeight', +e.target.value)}
-                className="w-24"
-                data-testid="input-offer-banner-height"
-                disabled={updateMutation.isPending}
-              />
-              <span className="text-sm text-muted-foreground">بكسل</span>
+        {/* ─── تحكم البنرات والعروض ─────────────────────────────────────── */}
+        <div className="border-2 border-blue-200 dark:border-blue-800 rounded-xl overflow-hidden">
+          <div className="bg-gradient-to-l from-blue-600 to-cyan-600 px-5 py-4 flex items-center gap-3">
+            <Zap className="h-5 w-5 text-white flex-shrink-0" />
+            <div>
+              <h3 className="font-bold text-white text-base">تحكم البنرات والعروض</h3>
+              <p className="text-blue-100 text-xs">ضبط الأبعاد (عرض + ارتفاع) للسلايدر وبنرات العروض</p>
             </div>
           </div>
-          <div className="flex items-center justify-between">
-            <Label>إظهار بنرات العروض</Label>
-            <Switch
-              checked={settings?.showOfferBanners ?? true}
-              onCheckedChange={v => handleUpdate('showOfferBanners', v)}
-              disabled={updateMutation.isPending}
-              data-testid="switch-show-offer-banners"
-            />
+
+          <div className="p-5 space-y-6 bg-blue-50/30 dark:bg-blue-950/20">
+
+            {/* ── البنرات الرئيسية (Slider) ── */}
+            <div className="space-y-4">
+              <p className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide">
+                🖼 البنرات الرئيسية (السلايدر)
+              </p>
+
+              {/* الارتفاع */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium">الارتفاع</Label>
+                  <p className="text-xs text-muted-foreground">ارتفاع صورة السلايدر (بكسل)</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Input
+                    type="number"
+                    min={120}
+                    max={700}
+                    step={10}
+                    value={settings?.sliderHeight ?? 414}
+                    onChange={e => setSettings((s: any) => ({ ...s, sliderHeight: +e.target.value }))}
+                    onBlur={e => handleUpdate('sliderHeight', +e.target.value)}
+                    className="w-24 text-center font-bold"
+                    data-testid="input-slider-height"
+                    disabled={updateMutation.isPending}
+                  />
+                  <span className="text-xs text-muted-foreground">px</span>
+                </div>
+              </div>
+
+              {/* العرض — معلومة */}
+              <div className="flex items-center justify-between py-2 border-t border-blue-100 dark:border-blue-900">
+                <div>
+                  <Label className="text-sm font-medium">العرض</Label>
+                  <p className="text-xs text-muted-foreground">السلايدر دائماً بعرض الشاشة كاملاً (100%)</p>
+                </div>
+                <span className="text-xs font-bold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full">
+                  100%
+                </span>
+              </div>
+
+              {/* معاينة الارتفاع */}
+              <div className="bg-blue-100/50 dark:bg-blue-900/20 rounded-xl p-3 text-center">
+                <p className="text-xs text-blue-600 dark:text-blue-400">
+                  معاينة: السلايدر بارتفاع{" "}
+                  <span className="font-bold text-sm">{settings?.sliderHeight ?? 414}px</span>
+                  {" "}× عرض الشاشة كاملاً
+                </p>
+                <div
+                  className="mt-2 bg-blue-300/40 rounded-lg flex items-center justify-center text-blue-600 font-bold text-xs"
+                  style={{ height: `${Math.min((settings?.sliderHeight ?? 414) / 4, 80)}px` }}
+                >
+                  {settings?.sliderHeight ?? 414}px
+                </div>
+              </div>
+            </div>
+
+            {/* ── بنرات العروض الخاصة ── */}
+            <div className="space-y-4 pt-4 border-t-2 border-blue-100 dark:border-blue-900">
+              <p className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide">
+                ⚡ بنرات العروض (شحن مجاني / عروض سريعة)
+              </p>
+
+              {/* الارتفاع */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium">الارتفاع</Label>
+                  <p className="text-xs text-muted-foreground">ارتفاع كل بطاقة عرض (بكسل)</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Input
+                    type="number"
+                    min={40}
+                    max={200}
+                    step={4}
+                    value={settings?.offerBannerHeight ?? 72}
+                    onChange={e => setSettings((s: any) => ({ ...s, offerBannerHeight: +e.target.value }))}
+                    onBlur={e => handleUpdate('offerBannerHeight', +e.target.value)}
+                    className="w-24 text-center font-bold"
+                    data-testid="input-offer-banner-height"
+                    disabled={updateMutation.isPending}
+                  />
+                  <span className="text-xs text-muted-foreground">px</span>
+                </div>
+              </div>
+
+              {/* العرض — عدد الأعمدة */}
+              <div className="flex items-center justify-between py-3 border-t border-blue-100 dark:border-blue-900">
+                <div>
+                  <Label className="text-sm font-medium">العرض (عدد الأعمدة)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {(settings?.offerBannerCols ?? 2) === 1
+                      ? "عمود واحد — كل بطاقة بعرض الشاشة كاملاً"
+                      : "عمودان — كل بطاقة بنصف عرض الشاشة"}
+                  </p>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  {[1, 2].map(col => (
+                    <button
+                      key={col}
+                      type="button"
+                      onClick={() => { handleUpdate('offerBannerCols', col); setSettings((s: any) => ({ ...s, offerBannerCols: col })); }}
+                      disabled={updateMutation.isPending}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                        (settings?.offerBannerCols ?? 2) === col
+                          ? "bg-blue-600 text-white shadow-sm"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                      data-testid={`button-offer-cols-${col}`}
+                    >
+                      {col === 1 ? "□ عمود" : "□□ عمودان"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* إظهار / إخفاء */}
+              <div className="flex items-center justify-between py-3 border-t border-blue-100 dark:border-blue-900">
+                <div>
+                  <Label className="text-sm font-medium">إظهار بنرات العروض</Label>
+                  <p className="text-xs text-muted-foreground">إخفاء هذا القسم من الصفحة الرئيسية</p>
+                </div>
+                <Switch
+                  checked={settings?.showOfferBanners ?? true}
+                  onCheckedChange={v => handleUpdate('showOfferBanners', v)}
+                  disabled={updateMutation.isPending}
+                  data-testid="switch-show-offer-banners"
+                />
+              </div>
+
+              {/* معاينة مصغّرة */}
+              <div className="bg-blue-100/50 dark:bg-blue-900/20 rounded-xl p-3">
+                <p className="text-xs text-blue-600 dark:text-blue-400 text-center mb-2">معاينة التخطيط</p>
+                <div className={`grid gap-1 ${(settings?.offerBannerCols ?? 2) === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+                  {[0, 1].slice(0, (settings?.offerBannerCols ?? 2) > 1 ? 2 : 1).map(i => (
+                    <div
+                      key={i}
+                      className="bg-blue-200/60 dark:bg-blue-800/40 rounded flex items-center justify-center text-blue-600 text-xs font-bold"
+                      style={{ height: `${Math.min((settings?.offerBannerHeight ?? 72) / 2.5, 48)}px` }}
+                    >
+                      {i === 0 ? "🚚 شحن" : "⚡ عروض"}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
 

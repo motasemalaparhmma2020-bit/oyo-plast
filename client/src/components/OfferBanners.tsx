@@ -11,6 +11,7 @@ interface OfferBanner {
 interface OfferBannersProps {
   offers?: OfferBanner[];
   height?: number;
+  columns?: number;
 }
 
 export function OfferBanners({
@@ -31,10 +32,13 @@ export function OfferBanners({
     },
   ],
   height = 72,
+  columns = 2,
 }: OfferBannersProps) {
+  const gridCols = columns === 1 ? "grid-cols-1" : "grid-cols-2";
+
   return (
     <div
-      className="grid grid-cols-2 gap-2 px-4 py-2 w-full"
+      className={`grid ${gridCols} gap-2 px-4 py-2 w-full`}
       data-testid="offer-banners"
     >
       {offers.map((offer) => (

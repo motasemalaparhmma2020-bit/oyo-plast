@@ -684,7 +684,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         'detailAddToCartHeight', 'detailThumbnailSize',
         'detailPaddingV', 'detailMarginH', 'detailDiscountBubbleSize',
         'sadeemFreeShippingMin', 'sadeemMarketerDiscount',
-        'shippingFee',
+        'shippingFee', 'sliderHeight', 'offerBannerCols',
       ];
       // boolean fields
       const boolFields = [

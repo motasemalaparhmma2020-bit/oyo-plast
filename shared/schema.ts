@@ -441,6 +441,9 @@ export const displaySettings = pgTable("display_settings", {
   sadeemShowReturns: boolean("sadeem_show_returns").default(true).notNull(),             // سياسة الإرجاع المجاني
   sadeemFreeShippingMin: integer("sadeem_free_shipping_min").default(0).notNull(),       // الحد الأدنى للشحن المجاني (0=دائماً مجاني)
   sadeemMarketerDiscount: integer("sadeem_marketer_discount").default(0).notNull(),      // خصم المسوقين الإضافي %
+  // ── إعدادات البنرات والعروض (الأبعاد) ────────────────────────────────────
+  sliderHeight: integer("slider_height").default(414).notNull(),                        // ارتفاع السلايدر الرئيسي (بكسل)
+  offerBannerCols: integer("offer_banner_cols").default(2).notNull(),                   // عدد أعمدة العروض (1=عرض كامل، 2=نصف)
   // ── إعدادات الدفع والشحن ──────────────────────────────────────────────────
   shippingFee: integer("shipping_fee").default(0).notNull(),                            // رسوم الشحن الثابتة (0=مجاني)
   codEnabled: boolean("cod_enabled").default(true).notNull(),                           // تفعيل الدفع عند الاستلام

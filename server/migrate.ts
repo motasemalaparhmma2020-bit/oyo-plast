@@ -192,6 +192,10 @@ export async function runMigrations(): Promise<void> {
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS shipping_fee INTEGER NOT NULL DEFAULT 0;`);
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS cod_enabled BOOLEAN NOT NULL DEFAULT true;`);
 
+    // ─── تحكم أبعاد البنرات والعروض ──────────────────────────────────
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS slider_height INTEGER NOT NULL DEFAULT 414;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS offer_banner_cols INTEGER NOT NULL DEFAULT 2;`);
+
     // ─── تحسينات جدول المحافظ الرقمية ───────────────────────────────
     await client.query(`ALTER TABLE digital_wallets ADD COLUMN IF NOT EXISTS requires_proof BOOLEAN NOT NULL DEFAULT true;`);
     await client.query(`ALTER TABLE digital_wallets ADD COLUMN IF NOT EXISTS instructions TEXT;`);

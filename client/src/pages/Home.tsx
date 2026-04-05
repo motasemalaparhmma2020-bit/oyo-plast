@@ -187,12 +187,15 @@ export default function Home() {
     <div className="flex flex-col pb-20 bg-white dark:bg-background min-h-screen">
       {/* Banner Carousel Section */}
       {homeSettings?.showBanners !== false && banners.length > 0 && (
-        <BannerCarousel banners={banners} height={414} />
+        <BannerCarousel banners={banners} height={displaySettings.sliderHeight ?? 414} />
       )}
 
       {/* Offer Banners Section */}
       {displaySettings.showOfferBanners && (
-        <OfferBanners height={displaySettings.offerBannerHeight} />
+        <OfferBanners
+          height={displaySettings.offerBannerHeight}
+          columns={displaySettings.offerBannerCols ?? 2}
+        />
       )}
 
       {/* Category Circles Section */}
