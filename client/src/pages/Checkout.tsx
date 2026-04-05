@@ -247,9 +247,14 @@ export default function Checkout() {
         }
       } catch { /* non-fatal */ }
 
+      const orderId = (response as any)?.id;
+      if (!orderId) {
+        throw new Error("لم يتم إرجاع رقم الطلب من الخادم");
+      }
+
       clearGuestCart();
       await queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
-      setLocation(`/order-confirmation/${(response as any)?.id ?? ""}`);
+      setLocation(`/order-confirmation/${orderId}`);
     } catch {
       toast({ title: "خطأ", description: "حدث خطأ أثناء إنشاء الطلب", variant: "destructive" });
     } finally {
