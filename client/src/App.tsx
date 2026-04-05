@@ -153,6 +153,39 @@ function CartMerger() {
   return null;
 }
 
+// تحميل إعدادات العرض وتطبيقها كـ CSS Variables على مستوى الجذر
+function DisplaySettingsInjector() {
+  useEffect(() => {
+    const applySettings = (data: any) => {
+      const root = document.documentElement;
+      root.style.setProperty('--card-image-height', `${data.productCardHeight ?? 200}px`);
+      root.style.setProperty('--card-margin', `${data.productCardMargin ?? 8}px`);
+      root.style.setProperty('--card-padding-v', `${data.productCardPaddingV ?? 8}px`);
+      root.style.setProperty('--price-font-size', `${data.priceFontSize ?? 16}px`);
+      root.style.setProperty('--qty-btn-height', `${data.quantityButtonHeight ?? 40}px`);
+      const bubbleSize = data.discountBubbleSize ?? 28;
+      root.style.setProperty('--discount-bubble', `${bubbleSize}px`);
+      root.style.setProperty('--discount-bubble-display', bubbleSize > 0 ? 'flex' : 'none');
+      const isFullBleed = (data.imageMode ?? 'card') === 'full-bleed';
+      root.style.setProperty('--card-border-radius', isFullBleed ? '4px' : '16px');
+      root.style.setProperty('--card-width', `${data.productCardWidth ?? 160}px`);
+    };
+    fetch('/api/display-settings')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) applySettings(data); });
+
+    // إعادة التطبيق عند تغيير الإعدادات (poll كل 10 ثوانٍ فقط في الإدارة)
+    const interval = setInterval(() => {
+      if (window.location.pathname === '/admin') return;
+      fetch('/api/display-settings')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data) applySettings(data); });
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+  return null;
+}
+
 function OfflineSyncProvider() {
   const { isOnline, syncedCount } = useOfflineSync();
   
@@ -194,6 +227,7 @@ function Router() {
     <>
       <SplashScreen />
       <CartMerger />
+      <DisplaySettingsInjector />
       <OfflineSyncProvider />
       <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16 md:pb-0">
         <Navbar />

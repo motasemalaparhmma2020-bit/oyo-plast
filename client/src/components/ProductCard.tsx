@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAddToCart } from "@/hooks/use-cart";
-import { ShoppingCart, Loader2, Eye, Star } from "lucide-react";
+import { ShoppingCart, Loader2, Eye, Star, Tag } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface ProductCardProps {
@@ -32,27 +32,66 @@ export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProp
     return Number(price).toLocaleString('ar-YE');
   };
 
+  // حساب أقصى خصم من بيانات الشراء الجماعي
+  const getMaxDiscount = (): number => {
+    if (!product.bulkPricing) return 0;
+    try {
+      const tiers = typeof product.bulkPricing === 'string'
+        ? JSON.parse(product.bulkPricing)
+        : product.bulkPricing;
+      if (Array.isArray(tiers) && tiers.length > 0) {
+        return Math.max(...tiers.map((t: any) => Number(t.discount || 0)));
+      }
+    } catch { }
+    return 0;
+  };
+
+  const maxDiscount = getMaxDiscount();
+
   return (
     <Card
-      className="group overflow-hidden border-none shadow-md hover:shadow-2xl transition-all duration-300 rounded-2xl bg-white flex flex-col h-full"
+      className="group overflow-hidden border-none shadow-md hover:shadow-2xl transition-all duration-300 bg-white flex flex-col h-full"
       data-testid={`card-product-${product.id}`}
-      style={cardWidth ? { minWidth: `${cardWidth}px`, maxWidth: `${cardWidth}px` } : undefined}
+      style={{
+        minWidth: cardWidth ? `${cardWidth}px` : 'var(--card-width, auto)',
+        maxWidth: cardWidth ? `${cardWidth}px` : 'var(--card-width, none)',
+        borderRadius: 'var(--card-border-radius, 16px)',
+      }}
     >
       <Link href={`/product/${product.id}`}>
         <div
-          className="relative overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 cursor-pointer rounded-t-2xl p-2"
-          style={imageHeight ? { height: `${imageHeight}px` } : { aspectRatio: '4/5' }}
+          className="relative overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 cursor-pointer"
+          style={{
+            height: imageHeight ? `${imageHeight}px` : 'var(--card-image-height, 200px)',
+            padding: 'var(--card-margin, 8px)',
+            borderRadius: 'var(--card-border-radius, 16px) var(--card-border-radius, 16px) 0 0',
+          }}
         >
-          <img 
-            src={product.imageUrl} 
+          <img
+            src={product.imageUrl}
             alt={product.name}
             loading="lazy"
             decoding="async"
             className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+            style={{ borderRadius: 'calc(var(--card-border-radius, 16px) - var(--card-margin, 8px))' }}
           />
           {product.stock <= 0 && (
             <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center">
-              <Badge variant="destructive" className="text-xs md:text-sm px-3 py-1">نفذت الكمية</Badge>
+              <Badge variant="destructive" className="text-xs px-3 py-1">نفذت الكمية</Badge>
+            </div>
+          )}
+          {/* فقاعة الخصم */}
+          {maxDiscount > 0 && (
+            <div
+              className="absolute top-2 right-2 bg-orange-500 text-white font-black rounded-full flex items-center justify-center text-xs shadow-lg"
+              style={{
+                width: 'var(--discount-bubble, 28px)',
+                height: 'var(--discount-bubble, 28px)',
+                fontSize: 'calc(var(--discount-bubble, 28px) * 0.35)',
+                display: 'var(--discount-bubble-display, flex)',
+              }}
+            >
+              {maxDiscount}%
             </div>
           )}
           <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -62,24 +101,29 @@ export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProp
           </div>
         </div>
       </Link>
-      
-      <CardContent className="p-2 md:p-3 flex-grow">
+
+      <CardContent
+        className="flex-grow"
+        style={{ padding: 'var(--card-padding-v, 8px) 8px' }}
+      >
         <Link href={`/product/${product.id}`}>
-          <h3 className="font-extrabold text-xs md:text-sm mb-1 text-foreground line-clamp-2 leading-tight min-h-[2rem] cursor-pointer hover:text-primary transition-colors">
+          <h3
+            className="font-extrabold text-xs md:text-sm mb-1 text-foreground line-clamp-2 leading-tight min-h-[2rem] cursor-pointer hover:text-primary transition-colors"
+          >
             {product.name}
           </h3>
         </Link>
-        
-        {/* Rating Stars */}
+
+        {/* النجوم */}
         {product.rating && (
           <div className="flex items-center gap-1 mb-1">
             <div className="flex items-center">
               {[1, 2, 3, 4, 5].map((star) => (
-                <Star 
+                <Star
                   key={star}
                   className={`h-2 w-2 ${
                     star <= Math.floor(Number(product.rating))
-                      ? 'text-yellow-400 fill-yellow-400' 
+                      ? 'text-yellow-400 fill-yellow-400'
                       : star - 0.5 <= Number(product.rating)
                         ? 'text-yellow-400 fill-yellow-400/50'
                         : 'text-gray-300'
@@ -87,15 +131,16 @@ export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProp
                 />
               ))}
             </div>
-            <span className="text-xs text-muted-foreground">
-              ({product.reviewCount || 0})
-            </span>
+            <span className="text-xs text-muted-foreground">({product.reviewCount || 0})</span>
           </div>
         )}
-        
+
         <div className="space-y-0.5">
           <div className="flex items-baseline gap-1 flex-wrap">
-            <span className="text-base md:text-lg font-extrabold text-primary">
+            <span
+              className="font-extrabold text-primary"
+              style={{ fontSize: 'var(--price-font-size, 16px)' }}
+            >
               {formatPrice(currency === 'SAR' ? product.priceSar : product.price)}
             </span>
             <span className="text-xs font-medium text-muted-foreground">
@@ -117,9 +162,10 @@ export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProp
         </div>
       </CardContent>
 
-      <CardFooter className="p-2 md:p-3 pt-0">
-        <Button 
-          className="w-full gap-2 font-bold shadow-md shadow-primary/20 text-xs md:text-sm h-9 md:h-10 rounded-lg"
+      <CardFooter className="p-2 pt-0">
+        <Button
+          className="w-full gap-2 font-bold shadow-md shadow-primary/20 text-xs rounded-lg"
+          style={{ height: 'var(--qty-btn-height, 40px)' }}
           disabled={product.stock <= 0 || isPending}
           onClick={(e) => {
             e.preventDefault();

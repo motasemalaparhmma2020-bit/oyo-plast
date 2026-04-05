@@ -563,7 +563,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/admin/display-settings", requireAdmin, async (req, res) => {
     try {
-      const { categorySize, categoriesPerRow, showCategories, productCardWidth, productCardHeight, offerBannerHeight, showOfferBanners } = req.body;
+      const {
+        categorySize, categoriesPerRow, showCategories,
+        productCardWidth, productCardHeight,
+        offerBannerHeight, showOfferBanners,
+        productCardMargin, productCardPaddingV, priceFontSize,
+        discountBubbleSize, quantityButtonHeight, imageMode,
+      } = req.body;
       const settings = await storage.updateDisplaySettings({
         ...(categorySize !== undefined && { categorySize: parseInt(categorySize) }),
         ...(categoriesPerRow !== undefined && { categoriesPerRow: parseInt(categoriesPerRow) }),
@@ -572,6 +578,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ...(productCardHeight !== undefined && { productCardHeight: parseInt(productCardHeight) }),
         ...(offerBannerHeight !== undefined && { offerBannerHeight: parseInt(offerBannerHeight) }),
         ...(showOfferBanners !== undefined && { showOfferBanners }),
+        ...(productCardMargin !== undefined && { productCardMargin: parseInt(productCardMargin) }),
+        ...(productCardPaddingV !== undefined && { productCardPaddingV: parseInt(productCardPaddingV) }),
+        ...(priceFontSize !== undefined && { priceFontSize: parseInt(priceFontSize) }),
+        ...(discountBubbleSize !== undefined && { discountBubbleSize: parseInt(discountBubbleSize) }),
+        ...(quantityButtonHeight !== undefined && { quantityButtonHeight: parseInt(quantityButtonHeight) }),
+        ...(imageMode !== undefined && { imageMode }),
       });
       res.json(settings);
     } catch (e: any) {

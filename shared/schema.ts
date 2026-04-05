@@ -397,6 +397,13 @@ export const displaySettings = pgTable("display_settings", {
   // إعدادات العروض
   offerBannerHeight: integer("offer_banner_height").default(72).notNull(), // ارتفاع بنر العروض
   showOfferBanners: boolean("show_offer_banners").default(true).notNull(),
+  // إعدادات التصميم البصري الديناميكية
+  productCardMargin: integer("product_card_margin").default(8).notNull(),        // الهوامش الجانبية (بكسل)
+  productCardPaddingV: integer("product_card_padding_v").default(8).notNull(),   // الحشو العمودي بين العناصر
+  priceFontSize: integer("price_font_size").default(16).notNull(),               // حجم خط السعر
+  discountBubbleSize: integer("discount_bubble_size").default(28).notNull(),     // حجم فقاعة الخصم (0=مخفية)
+  quantityButtonHeight: integer("quantity_button_height").default(40).notNull(), // ارتفاع الأزرار
+  imageMode: text("image_mode").default("card").notNull(),                       // card | full-bleed
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

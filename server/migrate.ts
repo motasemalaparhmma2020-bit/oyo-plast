@@ -119,6 +119,28 @@ export async function runMigrations(): Promise<void> {
         ADD COLUMN IF NOT EXISTS login_flow TEXT NOT NULL DEFAULT 'checkout';
     `);
 
+    // ─── إضافة أعمدة التصميم البصري الديناميكي ─────────────────────
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS product_card_margin INTEGER NOT NULL DEFAULT 8;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS product_card_padding_v INTEGER NOT NULL DEFAULT 8;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS price_font_size INTEGER NOT NULL DEFAULT 16;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS discount_bubble_size INTEGER NOT NULL DEFAULT 28;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS quantity_button_height INTEGER NOT NULL DEFAULT 40;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS image_mode TEXT NOT NULL DEFAULT 'card';`);
+
+    // ─── إدخال صف افتراضي إذا كان الجدول فارغاً ──────────────────
+    await client.query(`
+      INSERT INTO display_settings (
+        category_size, categories_per_row, show_categories,
+        product_card_width, product_card_height,
+        offer_banner_height, show_offer_banners,
+        product_card_margin, product_card_padding_v,
+        price_font_size, discount_bubble_size,
+        quantity_button_height, image_mode
+      )
+      SELECT 72, 4, true, 160, 200, 72, true, 8, 8, 16, 28, 40, 'card'
+      WHERE NOT EXISTS (SELECT 1 FROM display_settings LIMIT 1);
+    `);
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

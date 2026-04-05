@@ -1303,6 +1303,17 @@ function PrintingProductsSection({ adminToken }: { adminToken: string | null }) 
 }
 
 // Home Page Settings Section (Madeline Theme)
+const OYO_PRESET = {
+  productCardHeight: 200, productCardWidth: 160, productCardMargin: 8,
+  productCardPaddingV: 12, priceFontSize: 16, discountBubbleSize: 0,
+  quantityButtonHeight: 40, imageMode: 'card',
+};
+const SHEIN_PRESET = {
+  productCardHeight: 380, productCardWidth: 200, productCardMargin: 0,
+  productCardPaddingV: 4, priceFontSize: 22, discountBubbleSize: 36,
+  quantityButtonHeight: 48, imageMode: 'full-bleed',
+};
+
 function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
   const { toast } = useToast();
   const [settings, setSettings] = useState<any>(null);
@@ -1338,6 +1349,38 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
     updateMutation.mutate({ [key]: value });
   };
 
+  const applyPreset = (preset: Record<string, any>) => {
+    setSettings((s: any) => ({ ...s, ...preset }));
+    updateMutation.mutate(preset);
+  };
+
+  // تطبيق CSS Variables فوراً بعد التحديث (للمعاينة المباشرة)
+  const applyLiveCSS = (key: string, value: any) => {
+    const root = document.documentElement;
+    const cssMap: Record<string, string> = {
+      productCardHeight: '--card-image-height',
+      productCardMargin: '--card-margin',
+      productCardPaddingV: '--card-padding-v',
+      priceFontSize: '--price-font-size',
+      quantityButtonHeight: '--qty-btn-height',
+      discountBubbleSize: '--discount-bubble',
+      productCardWidth: '--card-width',
+    };
+    if (cssMap[key]) root.style.setProperty(cssMap[key], typeof value === 'number' ? `${value}px` : String(value));
+    if (key === 'discountBubbleSize') root.style.setProperty('--discount-bubble-display', Number(value) > 0 ? 'flex' : 'none');
+    if (key === 'imageMode') root.style.setProperty('--card-border-radius', value === 'full-bleed' ? '4px' : '16px');
+  };
+
+  const handleUpdateLive = (key: string, value: any) => {
+    applyLiveCSS(key, value);
+    handleUpdate(key, value);
+  };
+
+  const applyPresetLive = (preset: Record<string, any>) => {
+    Object.entries(preset).forEach(([k, v]) => applyLiveCSS(k, v));
+    applyPreset(preset);
+  };
+
   if (loading) return <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
   return (
@@ -1349,6 +1392,48 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
+
+        {/* ═══ أزرار الإعداد السريع ═══ */}
+        <div className="bg-gradient-to-l from-primary/5 to-blue-50 border border-primary/20 rounded-xl p-4">
+          <h3 className="font-bold mb-3 text-primary flex items-center gap-2">
+            <Zap className="h-4 w-4" />
+            إعداد سريع — تطبيق نمط كامل بضغطة واحدة
+          </h3>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => applyPresetLive(OYO_PRESET)}
+              disabled={updateMutation.isPending}
+              className="flex flex-col items-center gap-2 bg-white border-2 border-gray-200 hover:border-primary rounded-xl p-4 transition-all hover:shadow-md disabled:opacity-50"
+              data-testid="button-preset-oyo"
+            >
+              <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                <span className="text-lg">🟦</span>
+              </div>
+              <div className="text-center">
+                <p className="font-bold text-sm">وضع OYO</p>
+                <p className="text-xs text-muted-foreground">صورة مرتفعة · هوامش طبيعية</p>
+              </div>
+            </button>
+            <button
+              onClick={() => applyPresetLive(SHEIN_PRESET)}
+              disabled={updateMutation.isPending}
+              className="flex flex-col items-center gap-2 bg-white border-2 border-orange-200 hover:border-orange-500 rounded-xl p-4 transition-all hover:shadow-md disabled:opacity-50"
+              data-testid="button-preset-shein"
+            >
+              <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                <span className="text-lg">🟧</span>
+              </div>
+              <div className="text-center">
+                <p className="font-bold text-sm text-orange-600">وضع SHEIN</p>
+                <p className="text-xs text-muted-foreground">Full-Bleed · سعر كبير · خصم بارز</p>
+              </div>
+            </button>
+          </div>
+          {updateMutation.isPending && (
+            <p className="text-xs text-center text-muted-foreground mt-2 animate-pulse">جاري الحفظ...</p>
+          )}
+        </div>
+
         {/* Category Settings */}
         <div className="border rounded-lg p-4 space-y-4">
           <h3 className="font-semibold text-base flex items-center gap-2">
@@ -1418,7 +1503,7 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                   max={400}
                   value={settings?.productCardWidth ?? 160}
                   onChange={e => setSettings((s: any) => ({ ...s, productCardWidth: +e.target.value }))}
-                  onBlur={e => handleUpdate('productCardWidth', +e.target.value)}
+                  onBlur={e => handleUpdateLive('productCardWidth', +e.target.value)}
                   className="w-24"
                   data-testid="input-product-card-width"
                   disabled={updateMutation.isPending}
@@ -1432,15 +1517,107 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                 <Input
                   type="number"
                   min={100}
-                  max={500}
+                  max={600}
                   value={settings?.productCardHeight ?? 200}
                   onChange={e => setSettings((s: any) => ({ ...s, productCardHeight: +e.target.value }))}
-                  onBlur={e => handleUpdate('productCardHeight', +e.target.value)}
+                  onBlur={e => handleUpdateLive('productCardHeight', +e.target.value)}
                   className="w-24"
                   data-testid="input-product-card-height"
                   disabled={updateMutation.isPending}
                 />
                 <span className="text-sm text-muted-foreground">بكسل</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ─── التصميم البصري الديناميكي ─── */}
+          <div className="bg-gray-50 rounded-lg p-3 space-y-4 mt-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">التصميم البصري</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-sm">الهوامش الجانبية (بكسل)</Label>
+                <p className="text-xs text-muted-foreground">0 = Full-Bleed · 8 = عادي</p>
+                <div className="flex items-center gap-2">
+                  <Input type="number" min={0} max={32}
+                    value={settings?.productCardMargin ?? 8}
+                    onChange={e => setSettings((s: any) => ({ ...s, productCardMargin: +e.target.value }))}
+                    onBlur={e => handleUpdateLive('productCardMargin', +e.target.value)}
+                    className="w-20" data-testid="input-card-margin" disabled={updateMutation.isPending}
+                  />
+                  <span className="text-sm text-muted-foreground">بكسل</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">الحشو العمودي بين العناصر</Label>
+                <p className="text-xs text-muted-foreground">4 = مضغوط · 12 = مريح</p>
+                <div className="flex items-center gap-2">
+                  <Input type="number" min={2} max={24}
+                    value={settings?.productCardPaddingV ?? 8}
+                    onChange={e => setSettings((s: any) => ({ ...s, productCardPaddingV: +e.target.value }))}
+                    onBlur={e => handleUpdateLive('productCardPaddingV', +e.target.value)}
+                    className="w-20" data-testid="input-card-padding-v" disabled={updateMutation.isPending}
+                  />
+                  <span className="text-sm text-muted-foreground">بكسل</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">حجم خط السعر</Label>
+                <p className="text-xs text-muted-foreground">16 = عادي · 22 = بارز · 28 = ضخم</p>
+                <div className="flex items-center gap-2">
+                  <Input type="number" min={12} max={36}
+                    value={settings?.priceFontSize ?? 16}
+                    onChange={e => setSettings((s: any) => ({ ...s, priceFontSize: +e.target.value }))}
+                    onBlur={e => handleUpdateLive('priceFontSize', +e.target.value)}
+                    className="w-20" data-testid="input-price-font-size" disabled={updateMutation.isPending}
+                  />
+                  <span className="text-sm text-muted-foreground">بكسل</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">حجم فقاعة الخصم</Label>
+                <p className="text-xs text-muted-foreground">0 = مخفية · 28 = عادي · 40 = كبيرة</p>
+                <div className="flex items-center gap-2">
+                  <Input type="number" min={0} max={60}
+                    value={settings?.discountBubbleSize ?? 28}
+                    onChange={e => setSettings((s: any) => ({ ...s, discountBubbleSize: +e.target.value }))}
+                    onBlur={e => handleUpdateLive('discountBubbleSize', +e.target.value)}
+                    className="w-20" data-testid="input-discount-bubble" disabled={updateMutation.isPending}
+                  />
+                  <span className="text-sm text-muted-foreground">بكسل</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">ارتفاع زر الإضافة للسلة</Label>
+                <p className="text-xs text-muted-foreground">40 = عادي · 56 = كبير</p>
+                <div className="flex items-center gap-2">
+                  <Input type="number" min={32} max={72}
+                    value={settings?.quantityButtonHeight ?? 40}
+                    onChange={e => setSettings((s: any) => ({ ...s, quantityButtonHeight: +e.target.value }))}
+                    onBlur={e => handleUpdateLive('quantityButtonHeight', +e.target.value)}
+                    className="w-20" data-testid="input-qty-btn-height" disabled={updateMutation.isPending}
+                  />
+                  <span className="text-sm text-muted-foreground">بكسل</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">وضع الصورة</Label>
+                <p className="text-xs text-muted-foreground">card = مستدير · full-bleed = حواف حادة</p>
+                <div className="flex gap-2 mt-1">
+                  <button
+                    onClick={() => handleUpdateLive('imageMode', 'card')}
+                    className={`flex-1 text-xs py-1.5 px-3 rounded-lg border-2 transition-all ${(settings?.imageMode ?? 'card') === 'card' ? 'border-primary bg-primary/10 text-primary font-bold' : 'border-gray-200 text-gray-500'}`}
+                    data-testid="button-image-mode-card"
+                  >
+                    📦 Card
+                  </button>
+                  <button
+                    onClick={() => handleUpdateLive('imageMode', 'full-bleed')}
+                    className={`flex-1 text-xs py-1.5 px-3 rounded-lg border-2 transition-all ${(settings?.imageMode ?? 'card') === 'full-bleed' ? 'border-orange-500 bg-orange-50 text-orange-600 font-bold' : 'border-gray-200 text-gray-500'}`}
+                    data-testid="button-image-mode-full-bleed"
+                  >
+                    🖼️ Full-Bleed
+                  </button>
+                </div>
               </div>
             </div>
           </div>
