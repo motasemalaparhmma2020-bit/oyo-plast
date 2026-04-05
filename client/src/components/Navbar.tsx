@@ -75,19 +75,26 @@ function SearchBar({ compact, onClose }: { compact?: boolean; onClose?: () => vo
     setQuery("");
   };
 
+  const h = compact ? 36 : 40;
+
   return (
     <div ref={containerRef} className="relative w-full" data-testid="search-container">
-      <form onSubmit={handleSubmit} className="flex items-center gap-0 rounded-full overflow-hidden border border-gray-200 bg-white shadow-sm">
-        {/* Search button on LEFT side */}
+      <form
+        onSubmit={handleSubmit}
+        className="flex items-center rounded-full overflow-hidden border border-gray-200 bg-white shadow-sm"
+        style={{ height: h }}
+      >
+        {/* زر البحث — على اليسار */}
         <button
           type="submit"
           className="flex-shrink-0 bg-[#1a3a4a] hover:bg-[#0f2b3a] text-white flex items-center justify-center transition-colors"
-          style={{ width: compact ? 36 : 42, height: compact ? 36 : 42 }}
+          style={{ width: h, height: h }}
           data-testid="button-search-submit"
         >
-          <Search className={compact ? "h-4 w-4" : "h-4 w-4"} />
+          <Search className="h-4 w-4" />
         </button>
-        {/* Input on RIGHT */}
+
+        {/* حقل البحث */}
         <input
           ref={inputRef}
           type="text"
@@ -98,23 +105,25 @@ function SearchBar({ compact, onClose }: { compact?: boolean; onClose?: () => vo
           }}
           onFocus={() => query.length >= 2 && setOpen(true)}
           placeholder="ابحث عن منتج..."
-          className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none px-3 text-right"
-          style={{ height: compact ? 36 : 42, direction: "rtl" }}
+          className="flex-1 min-w-0 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none px-3 text-right"
+          style={{ direction: "rtl" }}
           data-testid="input-search"
           autoComplete="off"
         />
+
+        {/* زر المسح */}
         {query && (
           <button
             type="button"
             className="flex-shrink-0 px-2 text-gray-400 hover:text-gray-600"
             onClick={() => { setQuery(""); setOpen(false); }}
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5" />
           </button>
         )}
       </form>
 
-      {/* Dropdown Results */}
+      {/* نتائج البحث */}
       {open && (
         <div className="absolute top-full right-0 left-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-100 z-[200] overflow-hidden">
           {isLoading && (
@@ -200,11 +209,11 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white dark:bg-background shadow-sm">
-      {/* ── Main Row ───────────────────────────────────────────── */}
+      {/* ── السطر الوحيد (موبايل + ديسكتوب) ───────────────────── */}
       <div className="container mx-auto px-3 h-14 flex items-center gap-2">
 
-        {/* Mobile Menu */}
-        <div className="flex items-center md:hidden">
+        {/* زر القائمة — موبايل فقط */}
+        <div className="flex items-center md:hidden flex-shrink-0">
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="md:hidden" data-testid="button-mobile-menu">
@@ -234,9 +243,9 @@ export function Navbar() {
           </Sheet>
         </div>
 
-        {/* Logo */}
+        {/* الشعار */}
         <div className="flex-shrink-0">
-          <Link href="/" className="flex items-center gap-2" data-testid="link-logo">
+          <Link href="/" className="flex items-center gap-1.5" data-testid="link-logo">
             <img
               src={logoSrc}
               alt="OYO PLAST"
@@ -249,22 +258,22 @@ export function Navbar() {
           </Link>
         </div>
 
-        {/* Search Bar — Desktop: grows to fill space */}
-        <div className="hidden md:flex flex-1 max-w-md">
-          <SearchBar />
+        {/* ── شريط البحث — ممتد بين الشعار وأزرار الإجراءات ── */}
+        <div className="flex-1 min-w-0 md:max-w-md">
+          <SearchBar compact />
         </div>
 
-        {/* Desktop Nav */}
+        {/* روابط الديسكتوب */}
         <nav className="hidden md:flex items-center gap-6 flex-shrink-0">
           <NavLink href="/">الرئيسية</NavLink>
           <NavLink href="/products">المنتجات</NavLink>
           <NavLink href="/about">من نحن</NavLink>
         </nav>
 
-        {/* Actions */}
-        <div className="flex items-center gap-1 md:gap-2 mr-auto md:mr-0">
+        {/* أزرار الإجراءات */}
+        <div className="flex items-center gap-1 flex-shrink-0">
 
-          {/* Currency toggle */}
+          {/* تغيير العملة */}
           <Button
             variant="outline"
             size="sm"
@@ -275,6 +284,7 @@ export function Navbar() {
             {currency === 'YER' ? 'SAR' : 'YER'}
           </Button>
 
+          {/* الإشعارات — للمسجلين فقط */}
           {isAuthenticated && (
             <Link href="/notifications">
               <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
@@ -288,6 +298,7 @@ export function Navbar() {
             </Link>
           )}
 
+          {/* السلة */}
           <Link href="/cart">
             <Button variant="ghost" size="icon" className="relative" data-testid="button-cart">
               <ShoppingCart className="h-5 w-5 text-[#2196F3]" />
@@ -299,10 +310,11 @@ export function Navbar() {
             </Button>
           </Link>
 
+          {/* المستخدم */}
           {isAuthenticated ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full" data-testid="button-user-menu">
+                <Button variant="ghost" size="icon" className="rounded-full hidden md:flex" data-testid="button-user-menu">
                   <UserIcon className="h-5 w-5 text-[#2196F3]" />
                 </Button>
               </DropdownMenuTrigger>
@@ -343,11 +355,7 @@ export function Navbar() {
           )}
         </div>
       </div>
-
-      {/* ── Mobile Search Row — always visible ─────────────────── */}
-      <div className="md:hidden px-3 pb-2.5 bg-white dark:bg-background">
-        <SearchBar compact />
-      </div>
+      {/* لا يوجد سطر ثانٍ — شريط البحث داخل السطر الرئيسي */}
     </header>
   );
 }
