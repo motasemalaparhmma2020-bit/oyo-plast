@@ -681,12 +681,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         'detailImageHeight', 'detailPriceFontSize',
         'detailAddToCartHeight', 'detailThumbnailSize',
         'detailPaddingV', 'detailMarginH', 'detailDiscountBubbleSize',
+        'sadeemFreeShippingMin', 'sadeemMarketerDiscount',
       ];
       // boolean fields
       const boolFields = [
         'showCategories', 'showOfferBanners',
         'detailShowRelated', 'detailShowReviews', 'showStickyCartBar',
         'detailShowThumbnails',
+        'sadeemShowOldPrice', 'sadeemShowDiscountBadge',
+        'sadeemShowRating', 'sadeemShowSoldCount',
+        'sadeemShowShipping', 'sadeemShowReturns',
       ];
       // text fields
       const textFields = ['imageMode', 'detailImageMode', 'discountBadgeBg'];

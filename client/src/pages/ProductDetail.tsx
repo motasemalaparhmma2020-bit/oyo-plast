@@ -124,6 +124,23 @@ export default function ProductDetail() {
   const detailDiscountBubble = displaySettings?.detailDiscountBubbleSize ?? 36;
   const detailShowThumbs = displaySettings?.detailShowThumbnails !== false;
 
+  // ── سديم الذكية ──────────────────────────────────────────────────────────
+  const sadeemShowOldPrice      = displaySettings?.sadeemShowOldPrice !== false;
+  const sadeemShowDiscountBadge = displaySettings?.sadeemShowDiscountBadge !== false;
+  const sadeemShowRating        = displaySettings?.sadeemShowRating !== false;
+  const sadeemShowSoldCount     = displaySettings?.sadeemShowSoldCount !== false;
+  const sadeemShowShipping      = displaySettings?.sadeemShowShipping !== false;
+  const sadeemShowReturns       = displaySettings?.sadeemShowReturns !== false;
+  const sadeemFreeShippingMin   = displaySettings?.sadeemFreeShippingMin ?? 0;
+  const sadeemMarketerDiscount  = displaySettings?.sadeemMarketerDiscount ?? 0;
+
+  // كشف رابط المسوق ?ref=CODE أو ?promo=CODE
+  const marketerRef = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('ref') || params.get('promo') || null;
+  }, []);
+  const isMarketerLink = !!marketerRef && sadeemMarketerDiscount > 0;
+
   const { data: reviews = [] } = useQuery<Review[]>({
     queryKey: ['/api/products', id, 'reviews'],
     enabled: !!id,
@@ -556,16 +573,24 @@ export default function ProductDetail() {
           {/* Title */}
           <h1 className="text-base font-bold leading-snug" data-testid="text-variant-name">{product.name}</h1>
 
-          {/* Ratings */}
-          <div className="flex items-center gap-2">
-            <div className="flex">
-              {[1,2,3,4,5].map(s => (
-                <Star key={s} className={`h-3.5 w-3.5 ${s <= Math.floor(Number(product.rating||5)) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
-              ))}
+          {/* Ratings — يتحكم بها سديم الذكية */}
+          {(sadeemShowRating || sadeemShowSoldCount) && (
+            <div className="flex items-center gap-2">
+              {sadeemShowRating && (
+                <>
+                  <div className="flex">
+                    {[1,2,3,4,5].map(s => (
+                      <Star key={s} className={`h-3.5 w-3.5 ${s <= Math.floor(Number(product.rating||5)) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
+                    ))}
+                  </div>
+                  <span className="text-xs text-muted-foreground">{product.rating || "5"} ({product.reviewCount || 0} تقييم)</span>
+                </>
+              )}
+              {sadeemShowSoldCount && (
+                <span className="text-xs text-muted-foreground mr-auto">تم بيع {(product as any).soldCount || 0}</span>
+              )}
             </div>
-            <span className="text-xs text-muted-foreground">{product.rating || "5"} ({product.reviewCount || 0} تقييم)</span>
-            <span className="text-xs text-muted-foreground mr-auto">تم بيع {(product as any).soldCount || 0}</span>
-          </div>
+          )}
 
           {/* Colors (from colorImages) */}
           {colorImages.length > 0 && (
@@ -845,35 +870,41 @@ export default function ProductDetail() {
               {product?.name || 'تحميل المنتج...'}
             </h1>
             
-            <div className="flex flex-wrap items-center gap-4 mb-4 p-3 bg-muted/30 rounded-lg">
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-0.5">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Star 
-                      key={star}
-                      className={`h-5 w-5 ${
-                        star <= Math.floor(Number(product.rating || 5))
-                          ? 'text-yellow-400 fill-yellow-400' 
-                          : star - 0.5 <= Number(product.rating || 5)
-                            ? 'text-yellow-400 fill-yellow-400/50'
-                            : 'text-gray-300'
-                      }`}
-                    />
-                  ))}
-                </div>
-                <span className="text-lg font-bold text-foreground">{product.rating || "5"}</span>
-                <span className="text-sm text-muted-foreground">
-                  ({product.reviewCount || 0} تقييم)
-                </span>
+            {/* تقييم ومبيعات — يتحكم بها سديم الذكية */}
+            {(sadeemShowRating || sadeemShowSoldCount) && (
+              <div className="flex flex-wrap items-center gap-4 mb-4 p-3 bg-muted/30 rounded-lg">
+                {sadeemShowRating && (
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star 
+                          key={star}
+                          className={`h-5 w-5 ${
+                            star <= Math.floor(Number(product.rating || 5))
+                              ? 'text-yellow-400 fill-yellow-400' 
+                              : star - 0.5 <= Number(product.rating || 5)
+                                ? 'text-yellow-400 fill-yellow-400/50'
+                                : 'text-gray-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-lg font-bold text-foreground">{product.rating || "5"}</span>
+                    <span className="text-sm text-muted-foreground">
+                      ({product.reviewCount || 0} تقييم)
+                    </span>
+                  </div>
+                )}
+                {sadeemShowSoldCount && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Badge variant="secondary" className="gap-1.5 font-semibold">
+                      <ShoppingCart className="h-3.5 w-3.5" />
+                      تم بيع {(product as any).soldCount || 0} قطعة
+                    </Badge>
+                  </div>
+                )}
               </div>
-              
-              <div className="flex items-center gap-2 text-sm">
-                <Badge variant="secondary" className="gap-1.5 font-semibold">
-                  <ShoppingCart className="h-3.5 w-3.5" />
-                  تم بيع {(product as any).soldCount || 0} قطعة
-                </Badge>
-              </div>
-            </div>
+            )}
             
             <p className="text-muted-foreground leading-relaxed" data-testid="text-product-description">
               {product?.description || 'لا توجد وصفة متاحة'}

@@ -432,6 +432,15 @@ export const displaySettings = pgTable("display_settings", {
   detailMarginH: integer("detail_margin_h").default(16).notNull(),                // الهوامش الجانبية (بكسل)
   detailDiscountBubbleSize: integer("detail_discount_bubble_size").default(36).notNull(), // حجم فقاعة الخصم (بكسل، 0=مخفية)
   detailShowThumbnails: boolean("detail_show_thumbnails").default(true).notNull(), // إظهار الصور المصغرة
+  // ── سديم الذكية — تحكم متقدم بصفحة المنتج ──────────────────────────────────
+  sadeemShowOldPrice: boolean("sadeem_show_old_price").default(true).notNull(),         // السعر القديم المشطوب
+  sadeemShowDiscountBadge: boolean("sadeem_show_discount_badge").default(true).notNull(), // بادج الخصم %
+  sadeemShowRating: boolean("sadeem_show_rating").default(true).notNull(),               // تقييم النجوم
+  sadeemShowSoldCount: boolean("sadeem_show_sold_count").default(true).notNull(),        // عدد الوحدات المباعة
+  sadeemShowShipping: boolean("sadeem_show_shipping").default(true).notNull(),           // بطاقة معلومات الشحن
+  sadeemShowReturns: boolean("sadeem_show_returns").default(true).notNull(),             // سياسة الإرجاع المجاني
+  sadeemFreeShippingMin: integer("sadeem_free_shipping_min").default(0).notNull(),       // الحد الأدنى للشحن المجاني (0=دائماً مجاني)
+  sadeemMarketerDiscount: integer("sadeem_marketer_discount").default(0).notNull(),      // خصم المسوقين الإضافي %
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

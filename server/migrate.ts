@@ -178,6 +178,16 @@ export async function runMigrations(): Promise<void> {
     await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS enable_smart_variants BOOLEAN NOT NULL DEFAULT false;`);
     await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS smart_variants TEXT;`);
 
+    // ─── سديم الذكية ─────────────────────────────────────────────────
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS sadeem_show_old_price BOOLEAN NOT NULL DEFAULT true;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS sadeem_show_discount_badge BOOLEAN NOT NULL DEFAULT true;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS sadeem_show_rating BOOLEAN NOT NULL DEFAULT true;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS sadeem_show_sold_count BOOLEAN NOT NULL DEFAULT true;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS sadeem_show_shipping BOOLEAN NOT NULL DEFAULT true;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS sadeem_show_returns BOOLEAN NOT NULL DEFAULT true;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS sadeem_free_shipping_min INTEGER NOT NULL DEFAULT 0;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS sadeem_marketer_discount INTEGER NOT NULL DEFAULT 0;`);
+
     // ─── إدخال صف افتراضي إذا كان الجدول فارغاً ──────────────────
     await client.query(`
       INSERT INTO display_settings (
