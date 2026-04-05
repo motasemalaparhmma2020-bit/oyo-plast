@@ -115,6 +115,7 @@ export default function Checkout() {
   } | null>(null);
   const [couponError, setCouponError] = useState("");
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+  const savedCheckoutAddressKey = isAuthenticated && user?.id ? `oyo_saved_address_${user.id}` : "oyo_saved_guest_address";
   
   const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
     return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
@@ -127,6 +128,43 @@ export default function Checkout() {
     window.addEventListener('currencyChange', handleCurrencyChange);
     return () => window.removeEventListener('currencyChange', handleCurrencyChange);
   }, []);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(savedCheckoutAddressKey);
+      if (!saved) return;
+      const parsed = JSON.parse(saved);
+      setFormData((prev) => ({
+        ...prev,
+        customerName: parsed.customerName ?? prev.customerName,
+        customerPhone: parsed.customerPhone ?? prev.customerPhone,
+        shippingCity: parsed.shippingCity ?? prev.shippingCity,
+        shippingAddress: parsed.shippingAddress ?? prev.shippingAddress,
+      }));
+    } catch {
+    }
+  }, [savedCheckoutAddressKey]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/addresses", { credentials: "include" });
+        if (!res.ok) return;
+        const addresses = await res.json();
+        const preferred = addresses.find((a: any) => a.isDefault) || addresses[0];
+        if (!preferred) return;
+        setFormData((prev) => ({
+          ...prev,
+          customerName: prev.customerName || preferred.name || "",
+          customerPhone: prev.customerPhone || preferred.phone || "",
+          shippingCity: prev.shippingCity || preferred.city || "",
+          shippingAddress: prev.shippingAddress || preferred.address || "",
+        }));
+      } catch {
+      }
+    })();
+  }, [isAuthenticated, user?.id]);
 
   // Update guest cart from localStorage
   useEffect(() => {
@@ -380,6 +418,26 @@ export default function Checkout() {
         total: finalTotal,
         items: cartItems,
       });
+
+      try {
+        const payload = {
+          customerName: formData.customerName,
+          customerPhone: formData.customerPhone,
+          shippingCity: formData.shippingCity,
+          shippingAddress: formData.shippingAddress,
+        };
+        localStorage.setItem(savedCheckoutAddressKey, JSON.stringify(payload));
+        if (isAuthenticated) {
+          await apiRequest("POST", "/api/checkout/save-address", {
+            name: formData.customerName,
+            city: formData.shippingCity,
+            address: formData.shippingAddress,
+            phone: formData.customerPhone,
+            isDefault: true,
+          });
+        }
+      } catch {
+      }
 
       clearGuestCart();
 

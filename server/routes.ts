@@ -668,6 +668,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
 
       const { customerName, customerEmail, customerPhone, shippingCity, shippingAddress, shippingOption, shippingCost, notes, total, items, paymentMethod = "cash_on_delivery" } = req.body;
+      const user = (req as any).user;
 
       const order = await storage.createOrder({
         customerName,
@@ -680,6 +681,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         notes,
         total,
         items,
+        userId: user?.id,
       });
 
       logOrderCreation(order.id, {
@@ -1013,6 +1015,56 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(201).json(newAddress);
     } catch (e: any) {
       res.status(500).json({ message: "Failed to add address", details: e.message });
+    }
+  });
+
+  app.post("/api/checkout/save-address", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !user.id) return res.status(401).json({ message: "Not authenticated" });
+
+      const { name, city, address, phone, isDefault = true } = req.body;
+      if (!name || !city || !address || !phone) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      const { db: dbInstance } = await import("./db");
+      const { userAddresses: addressTable } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+
+      if (isDefault) {
+        await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, user.id));
+      }
+
+      const existing = await dbInstance
+        .select()
+        .from(addressTable)
+        .where(eqFn(addressTable.userId, user.id));
+
+      const match = existing.find((row) =>
+        row.phone === phone &&
+        row.city === city &&
+        row.address === address &&
+        row.name === name
+      );
+
+      if (match) {
+        const [updated] = await dbInstance
+          .update(addressTable)
+          .set({ isDefault: !!isDefault, updatedAt: new Date() })
+          .where(eqFn(addressTable.id, match.id))
+          .returning();
+        return res.json(updated);
+      }
+
+      const [newAddress] = await dbInstance
+        .insert(addressTable)
+        .values({ userId: user.id, name, city, address, phone, isDefault: !!isDefault })
+        .returning();
+
+      res.status(201).json(newAddress);
+    } catch (e: any) {
+      res.status(500).json({ message: "Failed to save checkout address", details: e.message });
     }
   });
 
