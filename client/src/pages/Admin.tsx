@@ -2393,7 +2393,7 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                   </div>
                 )}
                 {(settings?.sadeemMarketerDiscount ?? 0) === 0 && (
-                  <p className="text-xs text-muted-foreground italic">اضبط نسبة > 0 لتفعيل نظام المسوقين</p>
+                  <p className="text-xs text-muted-foreground italic">اضبط نسبة {'>'} 0 لتفعيل نظام المسوقين</p>
                 )}
               </div>
             </div>
