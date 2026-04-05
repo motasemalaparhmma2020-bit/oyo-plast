@@ -969,12 +969,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Guests have no persistent cart in DB
       if (!user) return res.json([]);
       
-      const { db: dbInstance } = await import("./db");
-      const { cartItems: cartTable } = await import("@shared/schema");
-      const { eq: eqFn } = await import("drizzle-orm");
+      const { pool: dbPool } = await import("./db");
+      const uid = getUserId(user);
       
-      const items = await dbInstance.select().from(cartTable).where(eqFn(cartTable.userId, getUserId(user)));
-      res.json(items);
+      const result = await dbPool.query(
+        `SELECT
+           ci.*,
+           json_build_object(
+             'id', p.id,
+             'name', p.name,
+             'price', p.price,
+             'priceSar', p.price_sar,
+             'imageUrl', CASE WHEN p.image_url LIKE 'data:%' THEN '/api/products/image/' || p.id ELSE p.image_url END,
+             'stock', p.stock,
+             'categoryId', p.category_id
+           ) AS product
+         FROM cart_items ci
+         LEFT JOIN products p ON p.id = ci.product_id
+         WHERE ci.user_id = $1`,
+        [uid]
+      );
+      res.json(result.rows);
     } catch (e: any) {
       res.status(500).json({ message: "فشل جلب السلة", details: e.message });
     }
