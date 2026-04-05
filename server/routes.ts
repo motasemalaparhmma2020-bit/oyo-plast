@@ -790,7 +790,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         Object.entries(validation.errors).forEach(([field, message]) => {
           logValidationError(field, message);
         });
-        return res.status(400).json({ message: "Missing or invalid fields", errors: validation.errors });
+        return res.status(400).json({ message: "بيانات الطلب غير مكتملة", errors: validation.errors });
       }
 
       const { customerName, customerEmail, customerPhone, shippingCity, shippingAddress, shippingOption, shippingCost, notes, total, items, paymentMethod = "cash_on_delivery" } = req.body;
@@ -807,6 +807,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         notes,
         total,
         items,
+        paymentMethod,
         userId: getUserId(user),
       });
 
@@ -825,7 +826,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       res.json(order);
     } catch (e: any) {
-      res.status(500).json({ message: "Failed to create order", details: e.message });
+      const userMessage = e.message?.includes("لم يعد متاحاً") || e.message?.includes("غير صالحة")
+        ? e.message
+        : "حدث خطأ أثناء إنشاء الطلب، يرجى المحاولة مرة أخرى";
+      res.status(500).json({ message: userMessage, details: e.message });
     }
   });
 

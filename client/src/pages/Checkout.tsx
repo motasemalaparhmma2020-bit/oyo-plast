@@ -15,7 +15,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
 import type { Product } from "@shared/schema";
 import { useDigitalWallets } from "@/hooks/use-digital-wallets";
-import { GuestCartItem, getGuestCart, clearGuestCart } from "@/lib/cartUtils";
+import { GuestCartItem, getGuestCart, setGuestCart as saveGuestCart, clearGuestCart } from "@/lib/cartUtils";
 
 const YEMENI_CITIES = [
   "صنعاء","عدن","تعز","الحديدة","إب","ذمار","المكلا","سيئون",
@@ -31,9 +31,12 @@ export default function Checkout() {
   const addressRef = useRef<HTMLDivElement>(null);
 
   const [guestCart, setGuestCart] = useState<GuestCartItem[]>(() => getGuestCart());
+
+  // جلب المنتجات دائماً للضيوف — للتحقق من صلاحية سلتهم وعرض الأسعار
   const { data: allProducts = [] } = useQuery<Product[]>({
     queryKey: ["/api/products"],
-    enabled: !isAuthenticated && guestCart.length > 0,
+    enabled: !isAuthenticated,
+    staleTime: 60_000,
   });
 
   const cartItems = isAuthenticated ? authCartItems : guestCart;
@@ -119,6 +122,23 @@ export default function Checkout() {
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
+
+  // ── تنظيف سلة الضيف: إزالة المنتجات المحذوفة أو غير المتاحة ──────────
+  useEffect(() => {
+    if (isAuthenticated || allProducts.length === 0 || guestCart.length === 0) return;
+    const validIds = new Set(allProducts.map(p => p.id));
+    const invalid = guestCart.filter(item => !validIds.has(item.productId));
+    if (invalid.length > 0) {
+      const cleaned = guestCart.filter(item => validIds.has(item.productId));
+      setGuestCart(cleaned);
+      // حفظ السلة المنظفة في localStorage
+      saveGuestCart(cleaned);
+      toast({
+        title: "⚠️ تم تحديث السلة",
+        description: `تم إزالة ${invalid.length} منتج لم يعد متاحاً من سلتك`,
+      });
+    }
+  }, [allProducts, isAuthenticated]);
 
   useEffect(() => {
     if (!codEnabled && formData.paymentMethod === "cash_on_delivery") {
@@ -237,14 +257,19 @@ export default function Checkout() {
         }),
       });
 
-      const orderData = await rawRes.json();
+      let orderData: any;
+      try {
+        orderData = await rawRes.json();
+      } catch {
+        throw new Error("حدث خطأ في الاتصال بالخادم، يرجى المحاولة مرة أخرى");
+      }
       if (!rawRes.ok) {
-        throw new Error(orderData?.message || "فشل إنشاء الطلب");
+        throw new Error(orderData?.message || "حدث خطأ أثناء إنشاء الطلب، يرجى المحاولة مرة أخرى");
       }
 
       const orderId = orderData?.id;
       if (!orderId) {
-        throw new Error("لم يتم إرجاع رقم الطلب من الخادم");
+        throw new Error("لم يتم إرجاع رقم الطلب من الخادم، يرجى المحاولة مرة أخرى");
       }
 
       try {

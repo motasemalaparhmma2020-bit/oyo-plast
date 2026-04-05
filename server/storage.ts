@@ -347,54 +347,72 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createOrder(data: any): Promise<Order> {
-    const [order] = await db.insert(orders).values({
-      customerName: data.customerName,
-      customerEmail: data.customerEmail,
-      customerPhone: data.customerPhone,
-      shippingCity: data.shippingCity,
-      shippingAddress: data.shippingAddress,
-      shippingOption: data.shippingOption,
-      shippingCost: data.shippingCost,
-      notes: data.notes,
-      total: data.total,
-      paymentMethod: data.paymentMethod || "cash_on_delivery",
-      status: "pending",
-    }).returning();
+    return await db.transaction(async (tx) => {
+      // ── 1. التحقق من وجود جميع المنتجات قبل إنشاء أي سجل ───────────
+      const itemsList: any[] = data.items ?? [];
+      for (const item of itemsList) {
+        const pid = item.productId ?? (item as any).product_id ?? item.product?.id;
+        if (!pid) {
+          throw new Error("بعض منتجات الطلب غير صالحة، يرجى تحديث السلة وإعادة المحاولة");
+        }
+        const [found] = await tx
+          .select({ id: products.id })
+          .from(products)
+          .where(eq(products.id, Number(pid)))
+          .limit(1);
+        if (!found) {
+          throw new Error(`منتج في سلتك لم يعد متاحاً (رقم ${pid})، يرجى إزالته من السلة وإعادة المحاولة`);
+        }
+      }
 
-    // Add order items — fetch price from DB if not provided (guest cart)
-    if (data.items && data.items.length > 0) {
-      for (const item of data.items) {
-        let price = item.price ?? item.unitPrice ?? null;
+      // ── 2. إنشاء الطلب ──────────────────────────────────────────────
+      const [order] = await tx.insert(orders).values({
+        customerName: data.customerName,
+        customerEmail: data.customerEmail,
+        customerPhone: data.customerPhone,
+        shippingCity: data.shippingCity,
+        shippingAddress: data.shippingAddress,
+        shippingOption: data.shippingOption,
+        shippingCost: data.shippingCost,
+        notes: data.notes,
+        total: data.total,
+        paymentMethod: data.paymentMethod || "cash_on_delivery",
+        status: "pending",
+      }).returning();
 
-        // If price is missing, look it up from products table
-        if (price === null || price === undefined) {
-          const productId = item.productId ?? item.product?.id;
-          if (productId) {
-            const [prod] = await db
-              .select({ price: products.price })
-              .from(products)
-              .where(eq(products.id, productId))
-              .limit(1);
-            price = prod?.price ?? "0";
-          }
+      // ── 3. إضافة عناصر الطلب (داخل نفس الـ transaction) ────────────
+      for (const item of itemsList) {
+        const pid = Number(item.productId ?? (item as any).product_id ?? item.product?.id);
+
+        // السعر: يُستخرج من العنصر أو يُجلب من قاعدة البيانات
+        let price: string = "0";
+        const rawPrice = item.price ?? item.unitPrice ?? (item as any).unit_price ?? null;
+        if (rawPrice !== null && rawPrice !== undefined) {
+          price = String(rawPrice);
+        } else {
+          const [prod] = await tx
+            .select({ price: products.price })
+            .from(products)
+            .where(eq(products.id, pid))
+            .limit(1);
+          price = prod?.price ?? "0";
         }
 
-        const productId = item.productId ?? item.product?.id;
-        await db.insert(orderItems).values({
+        await tx.insert(orderItems).values({
           orderId: order.id,
-          productId: productId,
+          productId: pid,
           quantity: item.quantity,
-          price: String(price ?? "0"),
-          selectedSize: item.selectedSize,
-          selectedColor: item.selectedColor,
-          customPrinting: item.customPrinting ?? false,
-          designNotes: item.designNotes,
-          designFileUrl: item.designFileUrl,
+          price,
+          selectedSize: item.selectedSize ?? (item as any).selected_size ?? null,
+          selectedColor: item.selectedColor ?? (item as any).selected_color ?? null,
+          customPrinting: item.customPrinting ?? (item as any).custom_printing ?? false,
+          designNotes: item.designNotes ?? (item as any).design_notes ?? null,
+          designFileUrl: item.designFileUrl ?? (item as any).design_file_url ?? null,
         });
       }
-    }
 
-    return order;
+      return order;
+    });
   }
 }
 
