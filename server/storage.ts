@@ -271,6 +271,8 @@ export class DatabaseStorage implements IStorage {
       showStickyCartBar: true,
       detailPaddingV: 8,
       detailMarginH: 16,
+      detailSectionGap: 12,
+      detailTopPadding: 8,
       detailDiscountBubbleSize: 36,
       detailShowThumbnails: true,
       sadeemShowOldPrice: true,

@@ -430,6 +430,8 @@ export const displaySettings = pgTable("display_settings", {
   // ── ضوابط التخطيط في صفحة المنتج ────────────────────────────────────────────
   detailPaddingV: integer("detail_padding_v").default(8).notNull(),               // الحشو العمودي بين العناصر (بكسل)
   detailMarginH: integer("detail_margin_h").default(16).notNull(),                // الهوامش الجانبية (بكسل)
+  detailSectionGap: integer("detail_section_gap").default(12).notNull(),          // المسافة بين أقسام صفحة المنتج (بكسل)
+  detailTopPadding: integer("detail_top_padding").default(8).notNull(),           // المسافة من أعلى المحتوى (بكسل)
   detailDiscountBubbleSize: integer("detail_discount_bubble_size").default(36).notNull(), // حجم فقاعة الخصم (بكسل، 0=مخفية)
   detailShowThumbnails: boolean("detail_show_thumbnails").default(true).notNull(), // إظهار الصور المصغرة
   // ── سديم الذكية — تحكم متقدم بصفحة المنتج ──────────────────────────────────

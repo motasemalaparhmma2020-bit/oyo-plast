@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useAddToCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
-import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star, Camera, X, Zap, Package, ChevronLeft, ChevronRight, Printer, Truck, RefreshCcw, Shield } from "lucide-react";
+import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star, Camera, X, Zap, Package, ChevronLeft, ChevronRight, Printer, Truck, RefreshCcw, Shield, Heart } from "lucide-react";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -119,8 +119,10 @@ export default function ProductDetail() {
   const detailShowRelatedSetting = displaySettings?.detailShowRelated !== false;
   const detailShowReviewsSetting = displaySettings?.detailShowReviews !== false;
   const showStickyCartBar = displaySettings?.showStickyCartBar === true;
-  const detailPaddingV = displaySettings?.detailPaddingV ?? 8;
-  const detailMarginH  = displaySettings?.detailMarginH ?? 16;
+  const detailPaddingV  = displaySettings?.detailPaddingV  ?? 8;
+  const detailMarginH   = displaySettings?.detailMarginH   ?? 16;
+  const detailSectionGap = displaySettings?.detailSectionGap ?? 12;
+  const detailTopPadding = displaySettings?.detailTopPadding ?? 8;
   const detailDiscountBubble = displaySettings?.detailDiscountBubbleSize ?? 36;
   const detailShowThumbs = displaySettings?.detailShowThumbnails !== false;
 
@@ -756,7 +758,7 @@ export default function ProductDetail() {
   }
 
   return (
-    <div className="container mx-auto py-6 pb-24" style={{ paddingLeft: detailMarginH, paddingRight: detailMarginH }}>
+    <div className="container mx-auto pb-28" style={{ paddingLeft: detailMarginH, paddingRight: detailMarginH, paddingTop: detailTopPadding }}>
       <Link href="/products">
         <Button variant="ghost" className="mb-4 gap-2" data-testid="button-back">
           <ArrowRight className="h-4 w-4" />
@@ -864,7 +866,7 @@ export default function ProductDetail() {
           )}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: detailPaddingV * 2 || 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: detailSectionGap }}>
           <div>
             <h1 className="text-lg md:text-xl font-extrabold text-foreground mb-2" data-testid="text-product-name">
               {product?.name || 'تحميل المنتج...'}
@@ -1520,35 +1522,54 @@ export default function ProductDetail() {
       {/* ── الشريط اللاصق السفلي (يظهر عند تفعيل الإعداد) ── */}
       {showStickyCartBar && (
         <div
-          className="fixed bottom-0 left-0 right-0 z-50 flex gap-0 shadow-2xl"
-          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          className="fixed bottom-0 left-0 right-0 z-[60] flex items-stretch shadow-2xl border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)', minHeight: 64 }}
           data-testid="sticky-cart-bar"
         >
-          {/* أضف للسلة */}
+          {/* أضف للسلة — داكن/أسود، ممتد */}
           <button
-            className="flex-1 flex items-center justify-center gap-2 text-white font-bold text-base py-4 transition-opacity disabled:opacity-50"
-            style={{ background: 'var(--primary, #06B6D4)' }}
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 text-white font-extrabold text-sm transition-opacity disabled:opacity-50 px-4 py-3"
+            style={{ background: '#111' }}
             disabled={currentStock <= 0 || isPending}
             onClick={handleAddToCart}
             data-testid="sticky-button-add-to-cart"
           >
-            {isPending ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <ShoppingCart className="h-5 w-5" />
+            {/* بادج الخصم فوق النص */}
+            {(product as any).effectiveDiscount > 0 && (
+              <span className="text-yellow-400 text-xs font-bold leading-none mb-0.5 flex items-center gap-1">
+                <Zap className="h-3 w-3 inline" />
+                {(product as any).effectiveDiscount}% خصم!
+              </span>
             )}
-            {currentStock <= 0 ? "غير متوفر" : "أضف للسلة"}
+            <span className="flex items-center gap-1.5">
+              {isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ShoppingCart className="h-4 w-4" />
+              )}
+              {currentStock <= 0 ? "نفذ المخزون" : "أضف للسلة"}
+            </span>
           </button>
 
-          {/* تسوق الآن */}
+          {/* تسوق الآن — إطار أبيض */}
           <button
-            className="w-36 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold text-base py-4 transition-colors disabled:opacity-50"
+            className="flex items-center justify-center gap-1.5 border-r border-gray-200 dark:border-gray-700 px-5 font-extrabold text-sm text-foreground bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+            style={{ minWidth: 110 }}
             disabled={currentStock <= 0}
             onClick={handleBuyNow}
             data-testid="sticky-button-buy-now"
           >
-            <Zap className="h-5 w-5" />
             تسوق الآن
+          </button>
+
+          {/* قلب/المفضلة */}
+          <button
+            className="flex items-center justify-center px-4 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            data-testid="sticky-button-wishlist"
+            onClick={() => {}}
+            aria-label="أضف للمفضلة"
+          >
+            <Heart className="h-5 w-5 text-gray-500" />
           </button>
         </div>
       )}

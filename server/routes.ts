@@ -682,7 +682,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         'discountBubbleSize', 'quantityButtonHeight',
         'detailImageHeight', 'detailPriceFontSize',
         'detailAddToCartHeight', 'detailThumbnailSize',
-        'detailPaddingV', 'detailMarginH', 'detailDiscountBubbleSize',
+        'detailPaddingV', 'detailMarginH', 'detailSectionGap', 'detailTopPadding', 'detailDiscountBubbleSize',
         'sadeemFreeShippingMin', 'sadeemMarketerDiscount',
         'shippingFee', 'sliderHeight', 'offerBannerCols',
       ];

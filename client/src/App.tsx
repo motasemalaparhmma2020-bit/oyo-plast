@@ -1,6 +1,6 @@
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Navbar } from "@/components/Navbar";
@@ -221,8 +221,19 @@ function Router() {
   
   // Show traditional footer ONLY on the profile page
   const hideFooter = location !== '/profile';
-  // Hide GlobalBottomNav only on admin page
-  const hideBottomNav = location === '/admin';
+
+  // قراءة إعدادات العرض (مخزنة في cache من ProductDetail)
+  const { data: displaySettingsForNav } = useQuery<any>({
+    queryKey: ['/api/display-settings'],
+    staleTime: 60000,
+  });
+
+  // إخفاء زر التنقل السفلي على:
+  // 1. صفحة الإدارة دائماً
+  // 2. صفحة المنتج عند تفعيل الشريط الثابت (بديله يكون زر شراء)
+  const isProductDetail = /^\/products\/[^/]+$/.test(location);
+  const hideBottomNav = location === '/admin' ||
+    (isProductDetail && displaySettingsForNav?.showStickyCartBar === true);
 
   return (
     <>

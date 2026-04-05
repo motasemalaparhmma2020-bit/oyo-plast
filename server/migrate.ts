@@ -171,6 +171,8 @@ export async function runMigrations(): Promise<void> {
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS show_sticky_cart_bar BOOLEAN NOT NULL DEFAULT true;`);
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_padding_v INTEGER NOT NULL DEFAULT 8;`);
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_margin_h INTEGER NOT NULL DEFAULT 16;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_section_gap INTEGER NOT NULL DEFAULT 12;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_top_padding INTEGER NOT NULL DEFAULT 8;`);
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_discount_bubble_size INTEGER NOT NULL DEFAULT 36;`);
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_show_thumbnails BOOLEAN NOT NULL DEFAULT true;`);
 

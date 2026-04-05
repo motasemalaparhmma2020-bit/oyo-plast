@@ -2068,6 +2068,34 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                 <span className="text-sm text-muted-foreground">بكسل</span>
               </div>
             </div>
+            {/* المسافة بين الأقسام */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">المسافة بين أقسام المنتج</Label>
+              <p className="text-xs text-muted-foreground">المسافة بين السعر، المقاس، الألوان، الوصف… · 8=مضغوط · 12=عادي · 20=مريح</p>
+              <div className="flex items-center gap-2">
+                <Input type="number" min={0} max={40}
+                  value={settings?.detailSectionGap ?? 12}
+                  onChange={e => setSettings((s: any) => ({ ...s, detailSectionGap: +e.target.value }))}
+                  onBlur={e => handleUpdate('detailSectionGap', +e.target.value)}
+                  className="w-20" data-testid="input-detail-section-gap" disabled={updateMutation.isPending}
+                />
+                <span className="text-sm text-muted-foreground">بكسل</span>
+              </div>
+            </div>
+            {/* المسافة العلوية */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">المسافة العلوية للصفحة</Label>
+              <p className="text-xs text-muted-foreground">المسافة من أعلى الصفحة حتى بداية المحتوى · 0=بلا · 8=عادي · 16=واسع</p>
+              <div className="flex items-center gap-2">
+                <Input type="number" min={0} max={40}
+                  value={settings?.detailTopPadding ?? 8}
+                  onChange={e => setSettings((s: any) => ({ ...s, detailTopPadding: +e.target.value }))}
+                  onBlur={e => handleUpdate('detailTopPadding', +e.target.value)}
+                  className="w-20" data-testid="input-detail-top-padding" disabled={updateMutation.isPending}
+                />
+                <span className="text-sm text-muted-foreground">بكسل</span>
+              </div>
+            </div>
             {/* حجم فقاعة الخصم */}
             <div className="space-y-1.5">
               <Label className="text-sm">حجم فقاعة الخصم</Label>
