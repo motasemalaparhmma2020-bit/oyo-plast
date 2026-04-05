@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useAddToCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
-import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star, Camera, X, Zap, Package, ChevronLeft, ChevronRight, Printer } from "lucide-react";
+import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star, Camera, X, Zap, Package, ChevronLeft, ChevronRight, Printer, Truck, RefreshCcw, Shield } from "lucide-react";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -1067,25 +1067,48 @@ export default function ProductDetail() {
                   <p className="text-sm text-muted-foreground mb-1">
                     {selectedSmartV ? `سعر ${selectedSmartV.label}` : 'السعر للوحدة'}
                   </p>
-                  {selectedSmartV && Number(selectedSmartV.discount || 0) > 0 && (() => {
+                  {/* سعر قديم + بادج خصم المتغير الذكي — يتحكم بها سديم الذكية */}
+                  {selectedSmartV && Number(selectedSmartV.discount || 0) > 0 && (sadeemShowOldPrice || sadeemShowDiscountBadge) && (() => {
                     const priceNum = Number(currency === 'SAR' && selectedSmartV.priceSar ? selectedSmartV.priceSar : selectedSmartV.price || 0);
                     const discountNum = Number(selectedSmartV.discount);
                     const origPrice = Math.round(priceNum / (1 - discountNum / 100));
                     return (
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm line-through text-muted-foreground">{formatPrice(origPrice)}</span>
-                        <Badge className="text-xs px-1.5 py-0.5" style={{ background: 'var(--discount-badge-bg, #ef4444)', color: 'white' }}>
-                          -{discountNum}%
-                        </Badge>
+                        {sadeemShowOldPrice && (
+                          <span className="text-sm line-through text-muted-foreground">{formatPrice(origPrice)}</span>
+                        )}
+                        {sadeemShowDiscountBadge && (
+                          <Badge className="text-xs px-1.5 py-0.5" style={{ background: 'var(--discount-badge-bg, #ef4444)', color: 'white' }}>
+                            -{discountNum}%
+                          </Badge>
+                        )}
                       </div>
                     );
                   })()}
-                  <p className="font-extrabold text-primary" style={{ fontSize: detailPriceFs }} data-testid="text-product-price">
-                    {formatPrice(currentPrice)} 
-                    <span className="text-lg font-normal text-muted-foreground mr-2">
-                      {currency === 'YER' ? 'ر.ي' : 'ر.س'}
-                    </span>
-                  </p>
+                  {/* السعر الرئيسي — مع خصم المسوق إن وُجد */}
+                  {isMarketerLink ? (
+                    <div>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-sm line-through text-muted-foreground">{formatPrice(currentPrice)}</span>
+                        <Badge className="text-xs px-2 py-0.5 bg-purple-600 text-white">
+                          خصم مسوق -{sadeemMarketerDiscount}%
+                        </Badge>
+                      </div>
+                      <p className="font-extrabold text-primary" style={{ fontSize: detailPriceFs }} data-testid="text-product-price">
+                        {formatPrice(Math.round(currentPrice * (1 - sadeemMarketerDiscount / 100)))}
+                        <span className="text-lg font-normal text-muted-foreground mr-2">
+                          {currency === 'YER' ? 'ر.ي' : 'ر.س'}
+                        </span>
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="font-extrabold text-primary" style={{ fontSize: detailPriceFs }} data-testid="text-product-price">
+                      {formatPrice(currentPrice)} 
+                      <span className="text-lg font-normal text-muted-foreground mr-2">
+                        {currency === 'YER' ? 'ر.ي' : 'ر.س'}
+                      </span>
+                    </p>
+                  )}
                 </div>
                 <div className="text-left">
                   <p className="text-sm text-muted-foreground mb-1">الإجمالي</p>
@@ -1121,6 +1144,47 @@ export default function ProductDetail() {
               )}
             </CardContent>
           </Card>
+
+          {/* ── سديم الذكية: بطاقة الشحن ── */}
+          {sadeemShowShipping && (
+            <div className="border border-blue-200 dark:border-blue-800 rounded-xl p-4 bg-blue-50/50 dark:bg-blue-950/30 space-y-2" data-testid="card-sadeem-shipping">
+              <div className="flex items-center gap-2 mb-1">
+                <Truck className="h-4 w-4 text-blue-600" />
+                <span className="font-semibold text-sm">معلومات الشحن</span>
+              </div>
+              {sadeemFreeShippingMin === 0 ? (
+                <p className="text-sm text-green-700 dark:text-green-400 font-semibold flex items-center gap-1">
+                  <span>🎁</span> شحن مجاني لجميع الطلبات
+                </p>
+              ) : (
+                <div>
+                  {totalPrice >= sadeemFreeShippingMin ? (
+                    <p className="text-sm text-green-700 dark:text-green-400 font-semibold flex items-center gap-1" data-testid="text-shipping-free">
+                      ✅ مبروك! طلبك يستحق شحناً مجانياً
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground" data-testid="text-shipping-condition">
+                      أضف <strong className="text-foreground">{formatPrice(sadeemFreeShippingMin - totalPrice)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</strong> للحصول على شحن مجاني
+                      <span className="block text-xs text-muted-foreground mt-0.5">
+                        (الحد الأدنى: {formatPrice(sadeemFreeShippingMin)} {currency === 'YER' ? 'ر.ي' : 'ر.س'})
+                      </span>
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── سديم الذكية: بطاقة الإرجاع ── */}
+          {sadeemShowReturns && (
+            <div className="border border-green-200 dark:border-green-800 rounded-xl p-4 bg-green-50/50 dark:bg-green-950/30 flex items-center gap-3" data-testid="card-sadeem-returns">
+              <RefreshCcw className="h-5 w-5 text-green-600 flex-shrink-0" />
+              <div>
+                <p className="font-semibold text-sm">إرجاع مجاني</p>
+                <p className="text-xs text-muted-foreground">يمكنك إرجاع المنتج خلال 7 أيام من الاستلام</p>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-4">
             <div>

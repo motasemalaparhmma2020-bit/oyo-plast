@@ -43,7 +43,11 @@ import {
   Palette,
   RefreshCw,
   Edit,
-  LayoutDashboard
+  LayoutDashboard,
+  Truck,
+  RefreshCcw,
+  Percent,
+  Sparkles
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
@@ -2209,6 +2213,194 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
             />
           </div>
         </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* 🌌 سديم الذكية — لوحة التحكم المتقدمة لصفحة المنتج          */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="border-2 border-purple-200 dark:border-purple-800 rounded-xl overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-l from-purple-600 to-indigo-600 px-5 py-4 flex items-center gap-3">
+            <Sparkles className="h-5 w-5 text-white flex-shrink-0" />
+            <div>
+              <h3 className="font-bold text-white text-base">سديم الذكية</h3>
+              <p className="text-purple-100 text-xs">تحكم ديناميكي كامل بعناصر صفحة المنتج</p>
+            </div>
+          </div>
+
+          <div className="p-5 space-y-6 bg-purple-50/30 dark:bg-purple-950/20">
+
+            {/* ─── 1. قسم السعر والخصم ─────────────────────────────────── */}
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wide flex items-center gap-2">
+                <Percent className="h-3.5 w-3.5" /> السعر والخصم
+              </p>
+
+              <div className="flex items-center justify-between py-2 border-b border-purple-100 dark:border-purple-900">
+                <div>
+                  <Label className="text-sm font-medium">السعر القديم المشطوب</Label>
+                  <p className="text-xs text-muted-foreground">عرض السعر الأصلي مشطوباً بجانب السعر الجديد</p>
+                </div>
+                <Switch
+                  checked={settings?.sadeemShowOldPrice ?? true}
+                  onCheckedChange={v => handleUpdate('sadeemShowOldPrice', v)}
+                  disabled={updateMutation.isPending}
+                  data-testid="switch-sadeem-show-old-price"
+                />
+              </div>
+
+              <div className="flex items-center justify-between py-2 border-b border-purple-100 dark:border-purple-900">
+                <div>
+                  <Label className="text-sm font-medium">بادج نسبة الخصم (-%)</Label>
+                  <p className="text-xs text-muted-foreground">الشارة الحمراء التي تُظهر نسبة الخصم</p>
+                </div>
+                <Switch
+                  checked={settings?.sadeemShowDiscountBadge ?? true}
+                  onCheckedChange={v => handleUpdate('sadeemShowDiscountBadge', v)}
+                  disabled={updateMutation.isPending}
+                  data-testid="switch-sadeem-show-discount-badge"
+                />
+              </div>
+            </div>
+
+            {/* ─── 2. قسم معلومات المنتج ───────────────────────────────── */}
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wide flex items-center gap-2">
+                <Star className="h-3.5 w-3.5" /> معلومات المنتج
+              </p>
+
+              <div className="flex items-center justify-between py-2 border-b border-purple-100 dark:border-purple-900">
+                <div>
+                  <Label className="text-sm font-medium">تقييم النجوم</Label>
+                  <p className="text-xs text-muted-foreground">عرض نجوم التقييم وعدد المراجعات</p>
+                </div>
+                <Switch
+                  checked={settings?.sadeemShowRating ?? true}
+                  onCheckedChange={v => handleUpdate('sadeemShowRating', v)}
+                  disabled={updateMutation.isPending}
+                  data-testid="switch-sadeem-show-rating"
+                />
+              </div>
+
+              <div className="flex items-center justify-between py-2 border-b border-purple-100 dark:border-purple-900">
+                <div>
+                  <Label className="text-sm font-medium">عدد الوحدات المباعة</Label>
+                  <p className="text-xs text-muted-foreground">شارة "تم بيع X قطعة"</p>
+                </div>
+                <Switch
+                  checked={settings?.sadeemShowSoldCount ?? true}
+                  onCheckedChange={v => handleUpdate('sadeemShowSoldCount', v)}
+                  disabled={updateMutation.isPending}
+                  data-testid="switch-sadeem-show-sold-count"
+                />
+              </div>
+            </div>
+
+            {/* ─── 3. قسم الشحن والخدمات ───────────────────────────────── */}
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wide flex items-center gap-2">
+                <Truck className="h-3.5 w-3.5" /> الشحن والخدمات
+              </p>
+
+              <div className="flex items-center justify-between py-2 border-b border-purple-100 dark:border-purple-900">
+                <div>
+                  <Label className="text-sm font-medium">بطاقة معلومات الشحن</Label>
+                  <p className="text-xs text-muted-foreground">تُظهر حالة الشحن المجاني أو شرطه</p>
+                </div>
+                <Switch
+                  checked={settings?.sadeemShowShipping ?? true}
+                  onCheckedChange={v => handleUpdate('sadeemShowShipping', v)}
+                  disabled={updateMutation.isPending}
+                  data-testid="switch-sadeem-show-shipping"
+                />
+              </div>
+
+              {/* الحد الأدنى للشحن المجاني */}
+              <div className="py-2 border-b border-purple-100 dark:border-purple-900 space-y-2">
+                <Label className="text-sm font-medium">الحد الأدنى للشحن المجاني</Label>
+                <p className="text-xs text-muted-foreground">اضبط على 0 للشحن المجاني الدائم لجميع الطلبات</p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1000}
+                    value={settings?.sadeemFreeShippingMin ?? 0}
+                    onChange={e => setSettings((s: any) => ({ ...s, sadeemFreeShippingMin: +e.target.value }))}
+                    onBlur={e => handleUpdate('sadeemFreeShippingMin', +e.target.value)}
+                    className="w-36"
+                    disabled={updateMutation.isPending}
+                    data-testid="input-sadeem-free-shipping-min"
+                  />
+                  <span className="text-sm text-muted-foreground">ريال يمني (0 = مجاني دائماً)</span>
+                </div>
+                {(settings?.sadeemFreeShippingMin ?? 0) > 0 && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2 py-1 rounded">
+                    💡 الشحن مجاني للطلبات فوق {Number(settings?.sadeemFreeShippingMin ?? 0).toLocaleString('ar')} ريال يمني
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between py-2 border-b border-purple-100 dark:border-purple-900">
+                <div>
+                  <Label className="text-sm font-medium">سياسة الإرجاع المجاني</Label>
+                  <p className="text-xs text-muted-foreground">بطاقة "إرجاع مجاني خلال 7 أيام"</p>
+                </div>
+                <Switch
+                  checked={settings?.sadeemShowReturns ?? true}
+                  onCheckedChange={v => handleUpdate('sadeemShowReturns', v)}
+                  disabled={updateMutation.isPending}
+                  data-testid="switch-sadeem-show-returns"
+                />
+              </div>
+            </div>
+
+            {/* ─── 4. نظام المسوقين ─────────────────────────────────────── */}
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wide flex items-center gap-2">
+                <Users className="h-3.5 w-3.5" /> نظام المسوقين
+              </p>
+
+              <div className="py-2 space-y-2">
+                <Label className="text-sm font-medium">نسبة خصم المسوقين الإضافي</Label>
+                <p className="text-xs text-muted-foreground">
+                  هذا الخصم يظهر فقط للزوار القادمين عبر رابط المسوق
+                  <span className="font-mono text-purple-600 dark:text-purple-400 mx-1">?ref=CODE</span>
+                  أو
+                  <span className="font-mono text-purple-600 dark:text-purple-400 mx-1">?promo=CODE</span>
+                </p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={80}
+                    value={settings?.sadeemMarketerDiscount ?? 0}
+                    onChange={e => setSettings((s: any) => ({ ...s, sadeemMarketerDiscount: +e.target.value }))}
+                    onBlur={e => handleUpdate('sadeemMarketerDiscount', +e.target.value)}
+                    className="w-24"
+                    disabled={updateMutation.isPending}
+                    data-testid="input-sadeem-marketer-discount"
+                  />
+                  <span className="text-sm text-muted-foreground">% خصم إضافي</span>
+                </div>
+                {(settings?.sadeemMarketerDiscount ?? 0) > 0 && (
+                  <div className="bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 rounded-lg p-3 space-y-1">
+                    <p className="text-xs font-semibold text-purple-700 dark:text-purple-300">مثال على رابط المسوق:</p>
+                    <code className="text-xs text-purple-600 dark:text-purple-400 break-all">
+                      oyoplast.com/product/123?ref=AHMED
+                    </code>
+                    <p className="text-xs text-muted-foreground">
+                      عند فتح هذا الرابط سيظهر للزائر خصم {settings?.sadeemMarketerDiscount}% إضافي على السعر
+                    </p>
+                  </div>
+                )}
+                {(settings?.sadeemMarketerDiscount ?? 0) === 0 && (
+                  <p className="text-xs text-muted-foreground italic">اضبط نسبة > 0 لتفعيل نظام المسوقين</p>
+                )}
+              </div>
+            </div>
+
+          </div>
+        </div>
+        {/* ═══════════════════════════════════════════════════════════════ */}
 
         {updateMutation.isPending && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
