@@ -41,7 +41,9 @@ import {
   LayoutGrid,
   Zap,
   Palette,
-  RefreshCw
+  RefreshCw,
+  Edit,
+  LayoutDashboard
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
@@ -148,6 +150,10 @@ interface ProductFormData {
   tags: string;
   showReviews: boolean;
   enableVariantUI: boolean;
+  originalPrice: string;
+  originalPriceSar: string;
+  discountPercent: string;
+  promotionalTags: string[];
 }
 
 const emptyProductForm: ProductFormData = {
@@ -169,7 +175,11 @@ const emptyProductForm: ProductFormData = {
   availableBagColors: "",
   tags: "",
   showReviews: true,
-  enableVariantUI: false
+  enableVariantUI: false,
+  originalPrice: "",
+  originalPriceSar: "",
+  discountPercent: "",
+  promotionalTags: [],
 };
 
 interface CategoryFormData {
@@ -1344,6 +1354,288 @@ const SHEIN_PRESET = {
   quantityButtonHeight: 48, imageMode: 'full-bleed',
 };
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Home Sections Manager — إدارة أقسام الصفحة الرئيسية
+// ──────────────────────────────────────────────────────────────────────────────
+const PROMO_TAG_OPTIONS = [
+  { value: 'bestsellers', label: 'الأكثر مبيعاً' },
+  { value: 'new', label: 'إصدارات جديدة' },
+  { value: 'offers', label: 'عروض حصرية' },
+  { value: 'discounts', label: 'تخفيضات' },
+  { value: 'deals', label: 'صفقات' },
+  { value: 'clearance', label: 'تصفيات مخزون' },
+  { value: 'featured', label: 'عروض مميزة' },
+];
+
+const emptySection = {
+  title: '',
+  promotionalTag: 'bestsellers',
+  enabled: true,
+  priority: 0,
+  itemCount: 6,
+  displayMode: 'grid2',
+  bannerHeight: 180,
+  bannerItemWidth: 160,
+  bannerPriceFontSize: 14,
+  bannerNameFontSize: 12,
+};
+
+function HomeSectionsSection({ adminToken }: { adminToken: string | null }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [editingSection, setEditingSection] = useState<any | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState<any>({ ...emptySection });
+
+  const { data: sections = [], isLoading } = useQuery<any[]>({
+    queryKey: ['/api/home-sections'],
+    staleTime: 0,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch('/api/admin/home-sections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('فشل الإنشاء');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/home-sections'] });
+      toast({ title: 'تم إضافة القسم بنجاح' });
+      setShowForm(false);
+      setForm({ ...emptySection });
+    },
+    onError: () => toast({ title: 'حدث خطأ', variant: 'destructive' }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await fetch(`/api/admin/home-sections/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('فشل التحديث');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/home-sections'] });
+      toast({ title: 'تم التحديث' });
+      setEditingSection(null);
+      setShowForm(false);
+    },
+    onError: () => toast({ title: 'حدث خطأ', variant: 'destructive' }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await fetch(`/api/admin/home-sections/${id}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-token': adminToken || '' },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/home-sections'] });
+      toast({ title: 'تم الحذف' });
+    },
+  });
+
+  const toggleEnabled = (section: any) => {
+    updateMutation.mutate({ id: section.id, data: { enabled: !section.enabled } });
+  };
+
+  const openEdit = (section: any) => {
+    setForm({ ...section });
+    setEditingSection(section);
+    setShowForm(true);
+  };
+
+  const openNew = () => {
+    setForm({ ...emptySection });
+    setEditingSection(null);
+    setShowForm(true);
+  };
+
+  const handleSubmit = () => {
+    const payload = {
+      ...form,
+      priority: Number(form.priority),
+      itemCount: Number(form.itemCount),
+      bannerHeight: Number(form.bannerHeight),
+      bannerItemWidth: Number(form.bannerItemWidth),
+      bannerPriceFontSize: Number(form.bannerPriceFontSize),
+      bannerNameFontSize: Number(form.bannerNameFontSize),
+    };
+    if (editingSection) {
+      updateMutation.mutate({ id: editingSection.id, data: payload });
+    } else {
+      createMutation.mutate(payload);
+    }
+  };
+
+  return (
+    <div className="space-y-4" dir="rtl">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-lg">أقسام الصفحة الرئيسية</CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">أضف وأدر الأقسام التي تظهر في الصفحة الرئيسية تحت الأقسام الدائرية</p>
+          </div>
+          <Button size="sm" onClick={openNew} className="gap-2">
+            <Plus className="h-4 w-4" /> إضافة قسم
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="text-center py-8 text-muted-foreground">جاري التحميل...</div>
+          ) : sections.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>لا توجد أقسام بعد. أضف أول قسم!</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {[...sections].sort((a, b) => a.priority - b.priority).map((section) => (
+                <div key={section.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${section.enabled ? 'border-primary/30 bg-primary/5' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
+                  <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                    <span className="text-xs text-muted-foreground">أولوية</span>
+                    <span className="font-bold text-lg w-8 text-center">{section.priority}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-sm">{section.title}</span>
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                        {PROMO_TAG_OPTIONS.find(t => t.value === section.promotionalTag)?.label || section.promotionalTag}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded ${section.displayMode === 'banner' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
+                        {section.displayMode === 'banner' ? '🎠 بنر متحرك' : '⊞ شبكة 2×2'}
+                      </span>
+                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{section.itemCount} منتجات</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => toggleEnabled(section)}
+                      className={`relative w-10 h-6 rounded-full transition-colors ${section.enabled ? 'bg-green-500' : 'bg-gray-300'}`}
+                      data-testid={`toggle-section-${section.id}`}
+                    >
+                      <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${section.enabled ? 'right-1' : 'left-1'}`} />
+                    </button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(section)}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500 hover:text-red-700" onClick={() => deleteMutation.mutate(section.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* نموذج الإضافة/التعديل */}
+      {showForm && (
+        <Card className="border-2 border-primary">
+          <CardHeader>
+            <CardTitle className="text-base">{editingSection ? 'تعديل القسم' : 'إضافة قسم جديد'}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">عنوان القسم *</Label>
+                <Input value={form.title} onChange={(e) => setForm({...form, title: e.target.value})} placeholder="مثال: عروض مميزة" data-testid="input-section-title" />
+              </div>
+              <div>
+                <Label className="text-xs">الأولوية (ترتيب الظهور)</Label>
+                <Input type="number" value={form.priority} onChange={(e) => setForm({...form, priority: Number(e.target.value)})} placeholder="0" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">التصنيف الترويجي</Label>
+                <select
+                  value={form.promotionalTag}
+                  onChange={(e) => setForm({...form, promotionalTag: e.target.value})}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                  data-testid="select-promo-tag"
+                >
+                  {PROMO_TAG_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs">عدد المنتجات في الرئيسية</Label>
+                <select
+                  value={form.itemCount}
+                  onChange={(e) => setForm({...form, itemCount: Number(e.target.value)})}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                  data-testid="select-item-count"
+                >
+                  <option value={4}>4 منتجات</option>
+                  <option value={6}>6 منتجات</option>
+                  <option value={8}>8 منتجات</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs font-semibold block mb-2">طريقة العرض</Label>
+              <div className="flex gap-3">
+                <label className={`flex-1 flex items-center gap-2 border-2 rounded-xl p-3 cursor-pointer transition-all ${form.displayMode === 'grid2' ? 'border-primary bg-primary/10' : 'border-gray-200'}`}>
+                  <input type="radio" name="displayMode" value="grid2" checked={form.displayMode === 'grid2'} onChange={() => setForm({...form, displayMode: 'grid2'})} className="accent-primary" />
+                  <div>
+                    <p className="font-bold text-sm">⊞ شبكة 2×2</p>
+                    <p className="text-xs text-muted-foreground">منتجان جنباً لجنب</p>
+                  </div>
+                </label>
+                <label className={`flex-1 flex items-center gap-2 border-2 rounded-xl p-3 cursor-pointer transition-all ${form.displayMode === 'banner' ? 'border-primary bg-primary/10' : 'border-gray-200'}`}>
+                  <input type="radio" name="displayMode" value="banner" checked={form.displayMode === 'banner'} onChange={() => setForm({...form, displayMode: 'banner'})} className="accent-primary" />
+                  <div>
+                    <p className="font-bold text-sm">🎠 بنر متحرك</p>
+                    <p className="text-xs text-muted-foreground">سكرول أفقي تلقائي</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+            {form.displayMode === 'banner' && (
+              <div className="grid grid-cols-2 gap-3 p-3 bg-purple-50 dark:bg-purple-900/10 rounded-lg border border-purple-200">
+                <div>
+                  <Label className="text-xs">ارتفاع البنر (px)</Label>
+                  <Input type="number" value={form.bannerHeight} onChange={(e) => setForm({...form, bannerHeight: Number(e.target.value)})} placeholder="180" />
+                </div>
+                <div>
+                  <Label className="text-xs">عرض بطاقة المنتج (px)</Label>
+                  <Input type="number" value={form.bannerItemWidth} onChange={(e) => setForm({...form, bannerItemWidth: Number(e.target.value)})} placeholder="160" />
+                </div>
+                <div>
+                  <Label className="text-xs">حجم خط اسم المنتج (px)</Label>
+                  <Input type="number" value={form.bannerNameFontSize} onChange={(e) => setForm({...form, bannerNameFontSize: Number(e.target.value)})} placeholder="12" />
+                </div>
+                <div>
+                  <Label className="text-xs">حجم خط السعر (px)</Label>
+                  <Input type="number" value={form.bannerPriceFontSize} onChange={(e) => setForm({...form, bannerPriceFontSize: Number(e.target.value)})} placeholder="14" />
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="section-enabled" checked={form.enabled} onChange={(e) => setForm({...form, enabled: e.target.checked})} className="rounded" />
+              <Label htmlFor="section-enabled">تفعيل القسم (ظاهر في الرئيسية)</Label>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSubmit} disabled={!form.title} data-testid="button-save-section">
+                {editingSection ? 'حفظ التعديلات' : 'إضافة القسم'}
+              </Button>
+              <Button variant="outline" onClick={() => { setShowForm(false); setEditingSection(null); }}>إلغاء</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
   const { toast } = useToast();
   const [settings, setSettings] = useState<any>(null);
@@ -1395,6 +1687,7 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
       quantityButtonHeight: '--qty-btn-height',
       discountBubbleSize: '--discount-bubble',
       productCardWidth: '--card-width',
+      discountBadgeBg: '--discount-badge-bg',
     };
     if (cssMap[key]) root.style.setProperty(cssMap[key], typeof value === 'number' ? `${value}px` : String(value));
     if (key === 'discountBubbleSize') root.style.setProperty('--discount-bubble-display', Number(value) > 0 ? 'flex' : 'none');
@@ -1766,6 +2059,38 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                 disabled={updateMutation.isPending}
                 data-testid="switch-detail-show-reviews"
               />
+            </div>
+            {/* شريط السلة الثابت */}
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>شريط "أضف للسلة" الثابت أسفل الشاشة</Label>
+                <p className="text-xs text-muted-foreground">يظهر شريط لاصق بزرَّي "أضف للسلة" و"تسوق الآن" في صفحة المنتج</p>
+              </div>
+              <Switch
+                checked={settings?.showStickyCartBar ?? true}
+                onCheckedChange={v => handleUpdate('showStickyCartBar', v)}
+                disabled={updateMutation.isPending}
+                data-testid="switch-show-sticky-cart-bar"
+              />
+            </div>
+
+            {/* لون بادج الخصم */}
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>لون بادج الخصم</Label>
+                <p className="text-xs text-muted-foreground">لون خلفية فقاعة النسبة المئوية للخصم على بطاقة المنتج</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={settings?.discountBadgeBg ?? '#ef4444'}
+                  onChange={e => setSettings((s: any) => ({ ...s, discountBadgeBg: e.target.value }))}
+                  onBlur={e => handleUpdate('discountBadgeBg', e.target.value)}
+                  className="w-10 h-10 rounded-lg border cursor-pointer"
+                  data-testid="input-discount-badge-bg"
+                />
+                <span className="text-xs font-mono">{settings?.discountBadgeBg ?? '#ef4444'}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -2416,6 +2741,10 @@ export default function Admin() {
           showReviews: data.showReviews,
           enableVariantUI: data.enableVariantUI,
           colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
+          originalPrice: data.originalPrice || null,
+          originalPriceSar: data.originalPriceSar || null,
+          discountPercent: data.discountPercent ? Number(data.discountPercent) : null,
+          promotionalTags: data.promotionalTags.length > 0 ? data.promotionalTags : null,
         })
       });
       if (!res.ok) {
@@ -2461,6 +2790,10 @@ export default function Admin() {
         showReviews: data.showReviews,
         enableVariantUI: data.enableVariantUI,
         colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
+        originalPrice: data.originalPrice || null,
+        originalPriceSar: data.originalPriceSar || null,
+        discountPercent: data.discountPercent ? Number(data.discountPercent) : null,
+        promotionalTags: data.promotionalTags.length > 0 ? data.promotionalTags : null,
       };
       
       if (data.imageUrls && data.imageUrls.length > 0) {
@@ -2650,6 +2983,10 @@ export default function Admin() {
       availableBagColors: product.availableBagColors ? product.availableBagColors.join(', ') : "",
       tags: product.tags ? product.tags.join(', ') : "",
       enableVariantUI: (product as any).enableVariantUI ?? false,
+      originalPrice: (product as any).originalPrice != null ? String((product as any).originalPrice) : "",
+      originalPriceSar: (product as any).originalPriceSar != null ? String((product as any).originalPriceSar) : "",
+      discountPercent: (product as any).discountPercent != null ? String((product as any).discountPercent) : "",
+      promotionalTags: (product as any).promotionalTags ?? [],
     });
     // Parse colorImages JSON if present
     try {
@@ -3268,6 +3605,98 @@ export default function Admin() {
                           data-testid="input-product-tags"
                         />
                         <p className="text-xs text-muted-foreground mt-1">تُستخدم للبحث وتصنيف المنتجات في صفحة الطباعة</p>
+                      </div>
+
+                      {/* ─── قسم الخصومات ─── */}
+                      <div className="border-2 border-red-200 bg-red-50 dark:bg-red-900/10 rounded-lg p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded font-bold">خصم</span>
+                          <Label className="font-bold text-base">إعدادات الخصم والتصنيفات الترويجية</Label>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label htmlFor="original-price" className="text-xs">السعر الأصلي قبل الخصم (ر.ي)</Label>
+                            <Input
+                              id="original-price"
+                              type="number"
+                              value={productForm.originalPrice}
+                              onChange={(e) => {
+                                const newOrig = e.target.value;
+                                setProductForm(prev => {
+                                  let disc = prev.discountPercent;
+                                  if (newOrig && prev.price) {
+                                    const orig = Number(newOrig);
+                                    const curr = Number(prev.price);
+                                    if (orig > curr && orig > 0) disc = String(Math.round(((orig - curr) / orig) * 100));
+                                  }
+                                  return {...prev, originalPrice: newOrig, discountPercent: disc};
+                                });
+                              }}
+                              placeholder="مثال: 5000"
+                              data-testid="input-original-price"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="original-price-sar" className="text-xs">السعر الأصلي (ر.س)</Label>
+                            <Input
+                              id="original-price-sar"
+                              type="number"
+                              value={productForm.originalPriceSar}
+                              onChange={(e) => setProductForm({...productForm, originalPriceSar: e.target.value})}
+                              placeholder="مثال: 35"
+                              data-testid="input-original-price-sar"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs">نسبة الخصم % (تُحسب تلقائياً أو أدخلها يدوياً)</Label>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="99"
+                              value={productForm.discountPercent}
+                              onChange={(e) => setProductForm({...productForm, discountPercent: e.target.value})}
+                              placeholder="0"
+                              className="w-24"
+                              data-testid="input-discount-percent"
+                            />
+                            <span className="text-sm font-bold text-red-600">%</span>
+                            {productForm.discountPercent && Number(productForm.discountPercent) > 0 && (
+                              <span className="text-xs bg-red-500 text-white px-2 py-1 rounded font-bold">
+                                -{productForm.discountPercent}%
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs font-semibold block mb-2">التصنيفات الترويجية (يظهر في أقسام الرئيسية)</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              { value: 'new', label: '🆕 إصدارات جديدة' },
+                              { value: 'offers', label: '🎁 عروض حصرية' },
+                              { value: 'discounts', label: '💸 تخفيضات' },
+                              { value: 'deals', label: '🤝 صفقات' },
+                              { value: 'clearance', label: '🏷️ تصفيات مخزون' },
+                              { value: 'featured', label: '⭐ عروض مميزة' },
+                            ].map(tag => (
+                              <label key={tag.value} className={`flex items-center gap-1.5 cursor-pointer border rounded-lg px-3 py-1.5 transition-colors text-xs ${productForm.promotionalTags.includes(tag.value) ? 'bg-red-100 border-red-400 font-bold' : 'bg-white dark:bg-gray-800 hover:bg-gray-50'}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={productForm.promotionalTags.includes(tag.value)}
+                                  onChange={(e) => {
+                                    const tags = e.target.checked
+                                      ? [...productForm.promotionalTags, tag.value]
+                                      : productForm.promotionalTags.filter(t => t !== tag.value);
+                                    setProductForm({...productForm, promotionalTags: tags});
+                                  }}
+                                  className="rounded"
+                                />
+                                {tag.label}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
                       </div>
 
                       {/* ─── قسم الواجهة المتطورة (SHEIN-Style) ─── */}
@@ -3949,6 +4378,10 @@ export default function Admin() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="home-sections">
+            <HomeSectionsSection adminToken={adminToken} />
           </TabsContent>
 
           <TabsContent value="banners-offers">

@@ -421,7 +421,27 @@ export const displaySettings = pgTable("display_settings", {
   detailShowRelated: boolean("detail_show_related").default(true).notNull(),      // إظهار المنتجات المشابهة
   detailShowReviews: boolean("detail_show_reviews").default(true).notNull(),      // إظهار قسم التقييمات
   detailThumbnailSize: integer("detail_thumbnail_size").default(64).notNull(),    // حجم الصور المصغرة
+  // ── إعدادات الخصم ────────────────────────────────────────────────────────────
+  discountBadgeBg: text("discount_badge_bg").default("#ef4444").notNull(),        // لون خلفية بادج الخصم
+  showStickyCartBar: boolean("show_sticky_cart_bar").default(true).notNull(),     // إظهار شريط السلة الثابت
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ── أقسام الصفحة الرئيسية الديناميكية ───────────────────────────────────────
+export const homeSections = pgTable("home_sections", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  promotionalTag: text("promotional_tag").notNull().default("bestsellers"),
+  // قيم مقبولة: bestsellers | new | offers | exclusive | discounts | deals | clearance | featured
+  enabled: boolean("enabled").default(true).notNull(),
+  priority: integer("priority").default(0).notNull(),
+  itemCount: integer("item_count").default(6).notNull(),              // 4 | 6 | 8
+  displayMode: text("display_mode").default("grid2").notNull(),       // grid2 | banner
+  bannerHeight: integer("banner_height").default(180).notNull(),
+  bannerItemWidth: integer("banner_item_width").default(160).notNull(),
+  bannerPriceFontSize: integer("banner_price_font_size").default(14).notNull(),
+  bannerNameFontSize: integer("banner_name_font_size").default(12).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Home Page Settings (Madeline Theme)
@@ -472,6 +492,10 @@ export const coupons = pgTable("coupons", {
 });
 
 // Schemas
+export const insertHomeSectionSchema = createInsertSchema(homeSections).omit({ id: true, createdAt: true });
+export type InsertHomeSection = z.infer<typeof insertHomeSectionSchema>;
+export type HomeSection = typeof homeSections.$inferSelect;
+
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
 export const insertBannerSchema = createInsertSchema(banners).omit({ id: true, createdAt: true });
 export const insertOfferSchema = createInsertSchema(offers).omit({ id: true, createdAt: true });

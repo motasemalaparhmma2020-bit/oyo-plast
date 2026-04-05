@@ -108,7 +108,7 @@ export default function Products() {
           </div>
         ) : products && products.length > 0 ? (
           <div className="grid grid-cols-2 gap-3">
-            {products.map((product) => (
+            {products.map((product: any) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>

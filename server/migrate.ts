@@ -142,6 +142,34 @@ export async function runMigrations(): Promise<void> {
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_show_reviews BOOLEAN NOT NULL DEFAULT true;`);
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_thumbnail_size INTEGER NOT NULL DEFAULT 64;`);
 
+    // ─── جدول أقسام الصفحة الرئيسية الديناميكية ──────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS home_sections (
+        id SERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        promotional_tag TEXT NOT NULL DEFAULT 'bestsellers',
+        enabled BOOLEAN NOT NULL DEFAULT true,
+        priority INTEGER NOT NULL DEFAULT 0,
+        item_count INTEGER NOT NULL DEFAULT 6,
+        display_mode TEXT NOT NULL DEFAULT 'grid2',
+        banner_height INTEGER NOT NULL DEFAULT 180,
+        banner_item_width INTEGER NOT NULL DEFAULT 160,
+        banner_price_font_size INTEGER NOT NULL DEFAULT 14,
+        banner_name_font_size INTEGER NOT NULL DEFAULT 12,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    // ─── حقول الخصم والتصنيفات الترويجية للمنتجات ──────────────────
+    await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS original_price NUMERIC;`);
+    await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS original_price_sar NUMERIC;`);
+    await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent INTEGER;`);
+    await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS promotional_tags TEXT[];`);
+
+    // ─── إعدادات الخصم في display_settings ──────────────────────────
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS discount_badge_bg TEXT NOT NULL DEFAULT '#ef4444';`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS show_sticky_cart_bar BOOLEAN NOT NULL DEFAULT true;`);
+
     // ─── إدخال صف افتراضي إذا كان الجدول فارغاً ──────────────────
     await client.query(`
       INSERT INTO display_settings (

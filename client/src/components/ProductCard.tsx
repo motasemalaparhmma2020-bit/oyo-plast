@@ -4,16 +4,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAddToCart } from "@/hooks/use-cart";
-import { ShoppingCart, Loader2, Eye, Star, Tag } from "lucide-react";
+import { ShoppingCart, Loader2, Eye, Star } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface ProductCardProps {
   product: Product;
   cardWidth?: number;
   imageHeight?: number;
+  /** Override for banner mode: explicit px sizes */
+  bannerNameFontSize?: number;
+  bannerPriceFontSize?: number;
 }
 
-export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProps) {
+export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSize, bannerPriceFontSize }: ProductCardProps) {
   const { mutate: addToCart, isPending } = useAddToCart();
   const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
     return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
@@ -32,25 +35,21 @@ export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProp
     return Number(price).toLocaleString('ar-YE');
   };
 
-  // حساب أقصى خصم من بيانات الشراء الجماعي
-  const getMaxDiscount = (): number => {
-    if (!product.bulkPricing) return 0;
-    try {
-      const tiers = typeof product.bulkPricing === 'string'
-        ? JSON.parse(product.bulkPricing)
-        : product.bulkPricing;
-      if (Array.isArray(tiers) && tiers.length > 0) {
-        return Math.max(...tiers.map((t: any) => Number(t.discount || 0)));
-      }
-    } catch { }
-    return 0;
-  };
+  // حساب الخصم الفعلي: effectiveDiscount من الباكند أو من bulkPricing
+  const effectiveDiscount: number = (product as any).effectiveDiscount ?? 0;
 
-  const maxDiscount = getMaxDiscount();
+  // السعر الأصلي (قبل الخصم)
+  const originalPrice: string | null = (product as any).originalPrice ?? null;
+  const originalPriceSar: string | null = (product as any).originalPriceSar ?? null;
+  const showOriginalPrice = originalPrice && Number(originalPrice) > Number(product.price);
+  const showOriginalPriceSar = originalPriceSar && product.priceSar && Number(originalPriceSar) > Number(product.priceSar);
+
+  // لون بادج الخصم من CSS variable (يُطبَّق مباشرةً في الـ style)
+  const discountBadgeBg = 'var(--discount-badge-bg, #ef4444)';
 
   return (
     <Card
-      className="group overflow-hidden border-none shadow-md hover:shadow-2xl transition-all duration-300 bg-white flex flex-col h-full"
+      className="group overflow-hidden border-none shadow-md hover:shadow-2xl transition-all duration-300 bg-white dark:bg-gray-900 flex flex-col h-full"
       data-testid={`card-product-${product.id}`}
       style={{
         minWidth: cardWidth ? `${cardWidth}px` : 'var(--card-width, auto)',
@@ -60,7 +59,7 @@ export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProp
     >
       <Link href={`/product/${product.id}`}>
         <div
-          className="relative overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 cursor-pointer"
+          className="relative overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 cursor-pointer"
           style={{
             height: imageHeight ? `${imageHeight}px` : 'var(--card-image-height, 200px)',
             padding: 'var(--card-margin, 8px)',
@@ -76,24 +75,28 @@ export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProp
             style={{ borderRadius: 'calc(var(--card-border-radius, 16px) - var(--card-margin, 8px))' }}
           />
           {product.stock <= 0 && (
-            <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center">
+            <div className="absolute inset-0 bg-white/70 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center">
               <Badge variant="destructive" className="text-xs px-3 py-1">نفذت الكمية</Badge>
             </div>
           )}
-          {/* فقاعة الخصم */}
-          {maxDiscount > 0 && (
+
+          {/* ── فقاعة الخصم ── */}
+          {effectiveDiscount > 0 && (
             <div
-              className="absolute top-2 right-2 bg-orange-500 text-white font-black rounded-full flex items-center justify-center text-xs shadow-lg"
+              className="absolute top-2 right-2 text-white font-black rounded-full flex items-center justify-center shadow-lg"
               style={{
-                width: 'var(--discount-bubble, 28px)',
-                height: 'var(--discount-bubble, 28px)',
-                fontSize: 'calc(var(--discount-bubble, 28px) * 0.35)',
+                width: 'var(--discount-bubble, 36px)',
+                height: 'var(--discount-bubble, 36px)',
+                fontSize: 'calc(var(--discount-bubble, 36px) * 0.32)',
                 display: 'var(--discount-bubble-display, flex)',
+                backgroundColor: discountBadgeBg || '#ef4444',
               }}
+              data-testid={`badge-discount-${product.id}`}
             >
-              {maxDiscount}%
+              -{effectiveDiscount}%
             </div>
           )}
+
           <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button size="icon" variant="secondary" className="rounded-full h-8 w-8">
               <Eye className="h-4 w-4" />
@@ -108,7 +111,8 @@ export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProp
       >
         <Link href={`/product/${product.id}`}>
           <h3
-            className="font-extrabold text-xs md:text-sm mb-1 text-foreground line-clamp-2 leading-tight min-h-[2rem] cursor-pointer hover:text-primary transition-colors"
+            className="font-extrabold mb-1 text-foreground line-clamp-2 leading-tight min-h-[2rem] cursor-pointer hover:text-primary transition-colors"
+            style={{ fontSize: bannerNameFontSize ? `${bannerNameFontSize}px` : 'var(--card-name-font-size, 0.75rem)' }}
           >
             {product.name}
           </h3>
@@ -139,22 +143,34 @@ export function ProductCard({ product, cardWidth, imageHeight }: ProductCardProp
           <div className="flex items-baseline gap-1 flex-wrap">
             <span
               className="font-extrabold text-primary"
-              style={{ fontSize: 'var(--price-font-size, 16px)' }}
+              style={{ fontSize: bannerPriceFontSize ? `${bannerPriceFontSize}px` : 'var(--price-font-size, 16px)' }}
+              data-testid={`price-${product.id}`}
             >
               {formatPrice(currency === 'SAR' ? product.priceSar : product.price)}
             </span>
             <span className="text-xs font-medium text-muted-foreground">
               {currency === 'YER' ? 'ر.ي' : 'ر.س'}
             </span>
+            {/* السعر الأصلي مشطوب */}
+            {currency === 'YER' && showOriginalPrice && (
+              <span className="text-xs line-through text-gray-400" data-testid={`original-price-${product.id}`}>
+                {formatPrice(originalPrice)} ر.ي
+              </span>
+            )}
+            {currency === 'SAR' && showOriginalPriceSar && (
+              <span className="text-xs line-through text-gray-400">
+                {formatPrice(originalPriceSar)} ر.س
+              </span>
+            )}
           </div>
           <div className="text-xs text-muted-foreground">
-            {currency === 'YER' && product.priceSar && (
-              <span className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">
+            {currency === 'YER' && product.priceSar && !showOriginalPriceSar && (
+              <span className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-xs">
                 {formatPrice(product.priceSar)} ر.س
               </span>
             )}
-            {currency === 'SAR' && (
-              <span className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">
+            {currency === 'SAR' && !showOriginalPrice && (
+              <span className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-xs">
                 {formatPrice(product.price)} ر.ي
               </span>
             )}

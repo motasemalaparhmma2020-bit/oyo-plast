@@ -169,6 +169,7 @@ function DisplaySettingsInjector() {
       const isFullBleed = (data.imageMode ?? 'card') === 'full-bleed';
       root.style.setProperty('--card-border-radius', isFullBleed ? '4px' : '16px');
       root.style.setProperty('--card-width', `${data.productCardWidth ?? 160}px`);
+      root.style.setProperty('--discount-badge-bg', data.discountBadgeBg ?? '#ef4444');
     };
     fetch('/api/display-settings')
       .then(r => r.ok ? r.json() : null)

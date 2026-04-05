@@ -118,6 +118,7 @@ export default function ProductDetail() {
   const detailThumb  = displaySettings?.detailThumbnailSize  ?? 64;
   const detailShowRelatedSetting = displaySettings?.detailShowRelated !== false;
   const detailShowReviewsSetting = displaySettings?.detailShowReviews !== false;
+  const showStickyCartBar = displaySettings?.showStickyCartBar === true;
 
   const { data: reviews = [] } = useQuery<Review[]>({
     queryKey: ['/api/products', id, 'reviews'],
@@ -1291,6 +1292,42 @@ export default function ProductDetail() {
             </div>
           </div>
         </>
+      )}
+
+      {/* ── الشريط اللاصق السفلي (يظهر عند تفعيل الإعداد) ── */}
+      {showStickyCartBar && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-50 flex gap-0 shadow-2xl"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          data-testid="sticky-cart-bar"
+        >
+          {/* أضف للسلة */}
+          <button
+            className="flex-1 flex items-center justify-center gap-2 text-white font-bold text-base py-4 transition-opacity disabled:opacity-50"
+            style={{ background: 'var(--primary, #06B6D4)' }}
+            disabled={currentStock <= 0 || isPending}
+            onClick={handleAddToCart}
+            data-testid="sticky-button-add-to-cart"
+          >
+            {isPending ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <ShoppingCart className="h-5 w-5" />
+            )}
+            {currentStock <= 0 ? "غير متوفر" : "أضف للسلة"}
+          </button>
+
+          {/* تسوق الآن */}
+          <button
+            className="w-36 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold text-base py-4 transition-colors disabled:opacity-50"
+            disabled={currentStock <= 0}
+            onClick={handleBuyNow}
+            data-testid="sticky-button-buy-now"
+          >
+            <Zap className="h-5 w-5" />
+            تسوق الآن
+          </button>
+        </div>
       )}
     </div>
   );

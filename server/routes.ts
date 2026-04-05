@@ -162,10 +162,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     stock, colors, sizes, allow_design_upload, bulk_pricing, size_pricing,
     printing_price_per_unit, rating, review_count, sold_count, commission_hold_days,
     marketer_commission_rate, has_printing_options, base_bag_price, single_color_print_price,
-    available_bag_colors, tags, show_reviews, show_in_printing, enable_variant_ui, color_images`;
+    available_bag_colors, tags, show_reviews, show_in_printing, enable_variant_ui, color_images,
+    original_price, original_price_sar, discount_percent, promotional_tags`;
 
   function mapProductRow(r: any) {
     const rawImg: string = r.image_url || "";
+    // حساب نسبة الخصم الفعلية
+    let effectiveDiscount: number | null = null;
+    if (r.discount_percent != null) {
+      effectiveDiscount = Number(r.discount_percent);
+    } else if (r.original_price != null && r.price != null) {
+      const orig = Number(r.original_price);
+      const curr = Number(r.price);
+      if (orig > curr && orig > 0) {
+        effectiveDiscount = Math.round(((orig - curr) / orig) * 100);
+      }
+    }
     return {
       id: r.id,
       name: r.name,
@@ -196,6 +208,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       showInPrinting: r.show_in_printing,
       enableVariantUI: r.enable_variant_ui ?? false,
       colorImages: r.color_images ?? null,
+      originalPrice: r.original_price ?? null,
+      originalPriceSar: r.original_price_sar ?? null,
+      discountPercent: r.discount_percent ?? null,
+      effectiveDiscount,
+      promotionalTags: r.promotional_tags ?? [],
     };
   }
 
@@ -368,7 +385,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         singleColorPrintPrice: data.singleColorPrintPrice ? String(data.singleColorPrintPrice) : null,
         availableBagColors: data.availableBagColors || null,
         tags: data.tags || null,
-      });
+        originalPrice: data.originalPrice ? String(data.originalPrice) : null,
+        originalPriceSar: data.originalPriceSar ? String(data.originalPriceSar) : null,
+        discountPercent: data.discountPercent ? Number(data.discountPercent) : null,
+        promotionalTags: data.promotionalTags || null,
+      } as any);
       res.status(201).json(product);
     } catch (e: any) {
       res.status(500).json({ message: "فشل إنشاء المنتج", details: e.message });
@@ -385,7 +406,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "imageUrl", "imageUrls", "stock", "colors", "sizes",
         "allowDesignUpload", "printingPricePerUnit", "hasPrintingOptions",
         "baseBagPrice", "singleColorPrintPrice", "availableBagColors", "tags",
-        "bulkPricing", "sizePricing", "showReviews", "enableVariantUI", "colorImages"
+        "bulkPricing", "sizePricing", "showReviews", "enableVariantUI", "colorImages",
+        "originalPrice", "originalPriceSar", "discountPercent", "promotionalTags"
       ];
       for (const f of fields) {
         if (data[f] !== undefined) update[f] = data[f];
@@ -403,6 +425,78 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ message: "تم الحذف بنجاح" });
     } catch (e: any) {
       res.status(500).json({ message: "فشل حذف المنتج", details: e.message });
+    }
+  });
+
+  // ─── Home Sections (أقسام الصفحة الرئيسية) ───────────────────────
+  app.get("/api/home-sections", async (_req, res) => {
+    try {
+      const sections = await storage.getHomeSections();
+      res.json(sections);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الأقسام", details: e.message });
+    }
+  });
+
+  app.post("/api/admin/home-sections", requireAdmin, async (req, res) => {
+    try {
+      const section = await storage.createHomeSection(req.body);
+      res.status(201).json(section);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إنشاء القسم", details: e.message });
+    }
+  });
+
+  app.patch("/api/admin/home-sections/:id", requireAdmin, async (req, res) => {
+    try {
+      const section = await storage.updateHomeSection(parseInt(req.params.id), req.body);
+      res.json(section);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث القسم", details: e.message });
+    }
+  });
+
+  app.delete("/api/admin/home-sections/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteHomeSection(parseInt(req.params.id));
+      res.json({ message: "تم الحذف" });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل الحذف", details: e.message });
+    }
+  });
+
+  // ─── Products by promotional tag ───────────────────────────────
+  app.get("/api/products/by-tag/:tag", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const tag = req.params.tag;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 8;
+      let rows: any[];
+      if (tag === "bestsellers") {
+        const result = await dbPool.query(
+          `SELECT ${LITE_COLS} FROM products ORDER BY sold_count DESC NULLS LAST LIMIT $1`, [limit]
+        );
+        rows = result.rows.map(mapProductRow);
+      } else if (tag === "new") {
+        const result = await dbPool.query(
+          `SELECT ${LITE_COLS} FROM products ORDER BY id DESC LIMIT $1`, [limit]
+        );
+        rows = result.rows.map(mapProductRow);
+      } else if (tag === "discounts") {
+        const result = await dbPool.query(
+          `SELECT ${LITE_COLS} FROM products WHERE original_price IS NOT NULL OR discount_percent IS NOT NULL ORDER BY id DESC LIMIT $1`, [limit]
+        );
+        rows = result.rows.map(mapProductRow);
+      } else {
+        const result = await dbPool.query(
+          `SELECT ${LITE_COLS} FROM products WHERE $1 = ANY(promotional_tags) ORDER BY id DESC LIMIT $2`,
+          [tag, limit]
+        );
+        rows = result.rows.map(mapProductRow);
+      }
+      res.json(rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب المنتجات", details: e.message });
     }
   });
 

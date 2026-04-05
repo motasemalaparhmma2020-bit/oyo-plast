@@ -1,5 +1,6 @@
 import {
   users, products, categories, banners, offers, orders, orderItems, navigationSettings, homePageSettings, displaySettings,
+  homeSections,
   type User,
   type Product,
   type Category,
@@ -8,6 +9,7 @@ import {
   type NavigationSettings,
   type HomePageSettings,
   type DisplaySettings,
+  type HomeSection,
   insertProductSchema, insertCategorySchema
 } from "@shared/schema";
 import { z } from "zod";
@@ -58,6 +60,11 @@ export interface IStorage {
   updateHomePageSettings(data: any): Promise<HomePageSettings>;
 
   getDisplaySettings(): Promise<DisplaySettings>;
+
+  getHomeSections(): Promise<HomeSection[]>;
+  createHomeSection(data: any): Promise<HomeSection>;
+  updateHomeSection(id: number, data: any): Promise<HomeSection>;
+  deleteHomeSection(id: number): Promise<void>;
   updateDisplaySettings(data: any): Promise<DisplaySettings>;
 
   getOrders(): Promise<Order[]>;
@@ -260,6 +267,8 @@ export class DatabaseStorage implements IStorage {
       detailShowRelated: true,
       detailShowReviews: true,
       detailThumbnailSize: 64,
+      discountBadgeBg: '#ef4444',
+      showStickyCartBar: true,
       updatedAt: new Date(),
     };
   }
@@ -281,6 +290,24 @@ export class DatabaseStorage implements IStorage {
   async updateHomePageSettings(data: any): Promise<HomePageSettings> {
     const [settings] = await db.update(homePageSettings).set({ ...data, updatedAt: new Date() }).where(eq(homePageSettings.id, 1)).returning();
     return settings;
+  }
+
+  async getHomeSections(): Promise<HomeSection[]> {
+    return await db.select().from(homeSections).orderBy(homeSections.priority, homeSections.id);
+  }
+
+  async createHomeSection(data: any): Promise<HomeSection> {
+    const [section] = await db.insert(homeSections).values(data).returning();
+    return section;
+  }
+
+  async updateHomeSection(id: number, data: any): Promise<HomeSection> {
+    const [section] = await db.update(homeSections).set(data).where(eq(homeSections.id, id)).returning();
+    return section;
+  }
+
+  async deleteHomeSection(id: number): Promise<void> {
+    await db.delete(homeSections).where(eq(homeSections.id, id));
   }
 
   async getOrders(): Promise<Order[]> {
