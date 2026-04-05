@@ -197,6 +197,10 @@ export class DatabaseStorage implements IStorage {
     const [created] = await db.insert(navigationSettings).values({
       showPrintingSection: true,
       showSignupEntryPoint: true,
+      enableVariantProductPage: false,
+      lockMobilePwaMode: true,
+      disablePinchZoom: true,
+      disableHorizontalScroll: true,
       updatedAt: new Date(),
     }).returning();
     return created;

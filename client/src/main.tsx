@@ -8,6 +8,15 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+if (typeof document !== "undefined") {
+  const root = document.documentElement;
+  const lock = () => {
+    root.style.overscrollBehavior = "none";
+    root.style.touchAction = "pan-y";
+  };
+  lock();
+}
+
 try {
   const container = document.getElementById("root");
   if (container) {

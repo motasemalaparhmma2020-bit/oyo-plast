@@ -591,6 +591,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.patch("/api/admin/navigation-settings", requireAdmin, async (req, res) => {
+    try {
+      const {
+        showPrintingSection,
+        showSignupEntryPoint,
+        enableVariantProductPage,
+        lockMobilePwaMode,
+        disablePinchZoom,
+        disableHorizontalScroll,
+      } = req.body;
+      const settings = await storage.updateNavigationSettings({
+        ...(showPrintingSection !== undefined && { showPrintingSection }),
+        ...(showSignupEntryPoint !== undefined && { showSignupEntryPoint }),
+        ...(enableVariantProductPage !== undefined && { enableVariantProductPage }),
+        ...(lockMobilePwaMode !== undefined && { lockMobilePwaMode }),
+        ...(disablePinchZoom !== undefined && { disablePinchZoom }),
+        ...(disableHorizontalScroll !== undefined && { disableHorizontalScroll }),
+      });
+      res.json(settings);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث إعدادات التنقل", details: e.message });
+    }
+  });
+
   // ─── Admin Products - Update Printing Status ──────────────────────
   app.patch("/api/admin/products/:id/printing-status", requireAdmin, async (req, res) => {
     try {

@@ -381,6 +381,9 @@ export const navigationSettings = pgTable("navigation_settings", {
   showPrintingSection: boolean("show_printing_section").default(true).notNull(),
   showSignupEntryPoint: boolean("show_signup_entry_point").default(true).notNull(),
   enableVariantProductPage: boolean("enable_variant_product_page").default(false).notNull(), // Master switch: SHEIN-style variant UI
+  lockMobilePwaMode: boolean("lock_mobile_pwa_mode").default(true).notNull(),
+  disablePinchZoom: boolean("disable_pinch_zoom").default(true).notNull(),
+  disableHorizontalScroll: boolean("disable_horizontal_scroll").default(true).notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

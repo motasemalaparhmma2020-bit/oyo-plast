@@ -1140,6 +1140,14 @@ function NavigationSettingsSection({ adminToken }: { adminToken: string | null }
     updateSettingsMutation.mutate({ enableVariantProductPage: newValue });
   };
 
+  const handleToggleMobileLock = (newValue: boolean) => {
+    updateSettingsMutation.mutate({
+      lockMobilePwaMode: newValue,
+      disablePinchZoom: newValue,
+      disableHorizontalScroll: newValue,
+    });
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -1192,6 +1200,28 @@ function NavigationSettingsSection({ adminToken }: { adminToken: string | null }
             />
             <span className={`text-xs font-bold ${settings?.enableVariantProductPage ? 'text-green-600' : 'text-gray-400'}`}>
               {settings?.enableVariantProductPage ? 'مفعّل' : 'موقوف'}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center justify-between p-4 border-2 border-blue-200 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded font-bold">PWA</span>
+              <p className="font-semibold">قفل وضع الموبايل</p>
+            </div>
+            <p className="text-sm text-gray-500">يمنع التكبير باللمس والتمرير الأفقي ويُبقي التطبيق المثبت بمظهر موبايل ثابت.</p>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <input
+              type="checkbox"
+              checked={settings?.lockMobilePwaMode ?? true}
+              onChange={(e) => handleToggleMobileLock(e.target.checked)}
+              disabled={updateSettingsMutation.isPending}
+              className="w-6 h-6 cursor-pointer accent-blue-500"
+              data-testid="checkbox-lock-mobile-pwa-mode"
+            />
+            <span className={`text-xs font-bold ${settings?.lockMobilePwaMode ? 'text-green-600' : 'text-gray-400'}`}>
+              {settings?.lockMobilePwaMode ? 'مفعّل' : 'موقوف'}
             </span>
           </div>
         </div>

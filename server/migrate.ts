@@ -98,6 +98,12 @@ export async function runMigrations(): Promise<void> {
       ALTER TABLE navigation_settings
         ADD COLUMN IF NOT EXISTS enable_variant_product_page BOOLEAN NOT NULL DEFAULT false;
     `);
+    await client.query(`
+      ALTER TABLE navigation_settings
+        ADD COLUMN IF NOT EXISTS lock_mobile_pwa_mode BOOLEAN NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS disable_pinch_zoom BOOLEAN NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS disable_horizontal_scroll BOOLEAN NOT NULL DEFAULT true;
+    `);
 
     // Extra columns for navigation settings
     await client.query(`
