@@ -211,7 +211,14 @@ function OfflineSyncProvider() {
 function Router() {
   const { isAuthenticated, user, isLoading } = useAuth();
   const [location] = useLocation();
-  
+
+  // ⚠️ جميع hooks يجب أن تكون قبل أي return مشروط (قواعد React Hooks)
+  // قراءة إعدادات العرض لإخفاء شريط التنقل السفلي على صفحة المنتج
+  const { data: displaySettingsForNav } = useQuery<any>({
+    queryKey: ['/api/display-settings'],
+    staleTime: 60000,
+  });
+
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center">جاري التحميل...</div>;
   }
@@ -221,12 +228,6 @@ function Router() {
   
   // Show traditional footer ONLY on the profile page
   const hideFooter = location !== '/profile';
-
-  // قراءة إعدادات العرض (مخزنة في cache من ProductDetail)
-  const { data: displaySettingsForNav } = useQuery<any>({
-    queryKey: ['/api/display-settings'],
-    staleTime: 60000,
-  });
 
   // إخفاء زر التنقل السفلي على:
   // 1. صفحة الإدارة دائماً
