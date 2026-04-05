@@ -50,6 +50,9 @@ export const products = pgTable("products", {
   // Variant UI (SHEIN-style) fields
   enableVariantUI: boolean("enable_variant_ui").default(false).notNull(), // Enable SHEIN-style variant product page for this product
   colorImages: text("color_images"), // JSON: [{ color: "أبيض", hex: "#FFFFFF", imageUrl: "...", imageUrls: [] }]
+  // Smart Variants (الخيارات الذكية)
+  enableSmartVariants: boolean("enable_smart_variants").default(false).notNull(),
+  smartVariants: text("smart_variants"), // JSON: SmartVariantsData
   // ── حقول الخصم ──────────────────────────────────────────────────────────────
   originalPrice: numeric("original_price"),           // السعر الأصلي قبل الخصم (ر.ي)
   originalPriceSar: numeric("original_price_sar"),    // السعر الأصلي بالريال السعودي

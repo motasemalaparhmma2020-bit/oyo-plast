@@ -174,6 +174,10 @@ export async function runMigrations(): Promise<void> {
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_discount_bubble_size INTEGER NOT NULL DEFAULT 36;`);
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS detail_show_thumbnails BOOLEAN NOT NULL DEFAULT true;`);
 
+    // ─── الخيارات الذكية للمنتج ─────────────────────────────────────
+    await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS enable_smart_variants BOOLEAN NOT NULL DEFAULT false;`);
+    await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS smart_variants TEXT;`);
+
     // ─── إدخال صف افتراضي إذا كان الجدول فارغاً ──────────────────
     await client.query(`
       INSERT INTO display_settings (

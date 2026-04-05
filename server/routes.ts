@@ -173,7 +173,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     printing_price_per_unit, rating, review_count, sold_count, commission_hold_days,
     marketer_commission_rate, has_printing_options, base_bag_price, single_color_print_price,
     available_bag_colors, tags, show_reviews, show_in_printing, enable_variant_ui, color_images,
-    original_price, original_price_sar, discount_percent, promotional_tags`;
+    original_price, original_price_sar, discount_percent, promotional_tags,
+    enable_smart_variants, smart_variants`;
 
   function mapProductRow(r: any) {
     const rawImg: string = r.image_url || "";
@@ -223,6 +224,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       discountPercent: r.discount_percent ?? null,
       effectiveDiscount,
       promotionalTags: r.promotional_tags ?? [],
+      enableSmartVariants: r.enable_smart_variants ?? false,
+      smartVariants: r.smart_variants ?? null,
     };
   }
 
@@ -417,7 +420,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "allowDesignUpload", "printingPricePerUnit", "hasPrintingOptions",
         "baseBagPrice", "singleColorPrintPrice", "availableBagColors", "tags",
         "bulkPricing", "sizePricing", "showReviews", "enableVariantUI", "colorImages",
-        "originalPrice", "originalPriceSar", "discountPercent", "promotionalTags"
+        "originalPrice", "originalPriceSar", "discountPercent", "promotionalTags",
+        "enableSmartVariants", "smartVariants"
       ];
       for (const f of fields) {
         if (data[f] !== undefined) update[f] = data[f];

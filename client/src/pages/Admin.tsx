@@ -130,6 +130,30 @@ interface ColorImageEntry {
   imageUrl: string;
 }
 
+type SmartVariantType = "color" | "size" | "weight" | "image";
+interface SmartVariant {
+  id: string;
+  type: SmartVariantType;
+  label: string;
+  price: string;
+  priceSar: string;
+  discount: string;
+  hex: string;
+  imageUrl: string;
+}
+const SMART_VARIANT_TYPE_LABELS: Record<SmartVariantType, string> = {
+  color: "لون",
+  size: "مقاس",
+  weight: "وزن",
+  image: "صورة",
+};
+const SMART_VARIANT_TYPE_ICONS: Record<SmartVariantType, string> = {
+  color: "🎨",
+  size: "📐",
+  weight: "⚖️",
+  image: "🖼️",
+};
+
 interface ProductFormData {
   name: string;
   description: string;
@@ -150,6 +174,7 @@ interface ProductFormData {
   tags: string;
   showReviews: boolean;
   enableVariantUI: boolean;
+  enableSmartVariants: boolean;
   originalPrice: string;
   originalPriceSar: string;
   discountPercent: string;
@@ -176,6 +201,7 @@ const emptyProductForm: ProductFormData = {
   tags: "",
   showReviews: true,
   enableVariantUI: false,
+  enableSmartVariants: false,
   originalPrice: "",
   originalPriceSar: "",
   discountPercent: "",
@@ -2497,6 +2523,8 @@ export default function Admin() {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<number | null>(null);
   const [productForm, setProductForm] = useState<ProductFormData>(emptyProductForm);
   const [colorImagesList, setColorImagesList] = useState<ColorImageEntry[]>([]);
+  const [smartVariantsList, setSmartVariantsList] = useState<SmartVariant[]>([]);
+  const [smartActiveTypes, setSmartActiveTypes] = useState<SmartVariantType[]>([]);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryForm, setCategoryForm] = useState<CategoryFormData>(emptyCategoryForm);
@@ -2796,6 +2824,10 @@ export default function Admin() {
           showReviews: data.showReviews,
           enableVariantUI: data.enableVariantUI,
           colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
+          enableSmartVariants: data.enableSmartVariants,
+          smartVariants: (smartVariantsList.length > 0 || smartActiveTypes.length > 0)
+            ? JSON.stringify({ activeTypes: smartActiveTypes, variants: smartVariantsList })
+            : null,
           originalPrice: data.originalPrice || null,
           originalPriceSar: data.originalPriceSar || null,
           discountPercent: data.discountPercent ? Number(data.discountPercent) : null,
@@ -2817,6 +2849,8 @@ export default function Admin() {
       setShowProductForm(false);
       setProductForm(emptyProductForm);
       setColorImagesList([]);
+      setSmartVariantsList([]);
+      setSmartActiveTypes([]);
     },
     onError: () => {
       toast({ title: "حدث خطأ أثناء إضافة المنتج", variant: "destructive" });
@@ -2845,6 +2879,10 @@ export default function Admin() {
         showReviews: data.showReviews,
         enableVariantUI: data.enableVariantUI,
         colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
+        enableSmartVariants: data.enableSmartVariants,
+        smartVariants: (smartVariantsList.length > 0 || smartActiveTypes.length > 0)
+          ? JSON.stringify({ activeTypes: smartActiveTypes, variants: smartVariantsList })
+          : null,
         originalPrice: data.originalPrice || null,
         originalPriceSar: data.originalPriceSar || null,
         discountPercent: data.discountPercent ? Number(data.discountPercent) : null,
@@ -2882,6 +2920,8 @@ export default function Admin() {
       setEditingProduct(null);
       setProductForm(emptyProductForm);
       setColorImagesList([]);
+      setSmartVariantsList([]);
+      setSmartActiveTypes([]);
     },
     onError: (error: any) => {
       toast({ 
@@ -3038,6 +3078,7 @@ export default function Admin() {
       availableBagColors: product.availableBagColors ? product.availableBagColors.join(', ') : "",
       tags: product.tags ? product.tags.join(', ') : "",
       enableVariantUI: (product as any).enableVariantUI ?? false,
+      enableSmartVariants: (product as any).enableSmartVariants ?? false,
       originalPrice: (product as any).originalPrice != null ? String((product as any).originalPrice) : "",
       originalPriceSar: (product as any).originalPriceSar != null ? String((product as any).originalPriceSar) : "",
       discountPercent: (product as any).discountPercent != null ? String((product as any).discountPercent) : "",
@@ -3049,6 +3090,21 @@ export default function Admin() {
       setColorImagesList(ci ? JSON.parse(ci) : []);
     } catch {
       setColorImagesList([]);
+    }
+    // Parse smartVariants JSON if present
+    try {
+      const sv = (product as any).smartVariants;
+      if (sv) {
+        const parsed = JSON.parse(sv);
+        setSmartVariantsList(parsed.variants ?? []);
+        setSmartActiveTypes(parsed.activeTypes ?? []);
+      } else {
+        setSmartVariantsList([]);
+        setSmartActiveTypes([]);
+      }
+    } catch {
+      setSmartVariantsList([]);
+      setSmartActiveTypes([]);
     }
     setShowProductForm(true);
   };
@@ -3858,6 +3914,264 @@ export default function Admin() {
                                     <span className="text-[10px] text-center" style={{ color: entry.hex }}>{entry.color || '—'}</span>
                                   </div>
                                 ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ─── قسم الخيارات الذكية ─── */}
+                      <div className="border-2 border-emerald-200 bg-emerald-50 dark:bg-emerald-900/10 rounded-lg p-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded font-bold">جديد</span>
+                              <Label className="font-bold text-base">الخيارات الذكية للمنتج</Label>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">أضف خيارات للمقاس أو اللون أو الوزن أو الصورة — كل خيار بسعره وخصمه الخاص. يظهر كمربعات تحت السعر في صفحة المنتج.</p>
+                          </div>
+                          <div className="flex flex-col items-center gap-1">
+                            <input
+                              type="checkbox"
+                              id="enable-smart-variants"
+                              checked={productForm.enableSmartVariants}
+                              onChange={(e) => setProductForm({...productForm, enableSmartVariants: e.target.checked})}
+                              className="w-6 h-6 cursor-pointer accent-emerald-600"
+                              data-testid="checkbox-enable-smart-variants"
+                            />
+                            <span className={`text-xs font-bold ${productForm.enableSmartVariants ? 'text-emerald-600' : 'text-gray-400'}`}>
+                              {productForm.enableSmartVariants ? 'مفعّل' : 'موقوف'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {productForm.enableSmartVariants && (
+                          <div className="space-y-4">
+                            {/* أزرار أنواع الخيارات */}
+                            <div>
+                              <Label className="text-sm font-semibold mb-2 block">أنواع الخيارات المفعّلة</Label>
+                              <div className="flex gap-2 flex-wrap">
+                                {(["size", "weight", "color", "image"] as SmartVariantType[]).map(type => {
+                                  const isActive = smartActiveTypes.includes(type);
+                                  return (
+                                    <button
+                                      key={type}
+                                      type="button"
+                                      onClick={() => {
+                                        setSmartActiveTypes(prev =>
+                                          isActive ? prev.filter(t => t !== type) : [...prev, type]
+                                        );
+                                      }}
+                                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border-2 transition-all ${
+                                        isActive
+                                          ? 'bg-emerald-600 text-white border-emerald-600'
+                                          : 'bg-white dark:bg-gray-800 text-gray-600 border-gray-300 hover:border-emerald-400'
+                                      }`}
+                                      data-testid={`button-toggle-type-${type}`}
+                                    >
+                                      <span>{SMART_VARIANT_TYPE_ICONS[type]}</span>
+                                      <span>{SMART_VARIANT_TYPE_LABELS[type]}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* قائمة الخيارات */}
+                            {smartActiveTypes.length > 0 && (
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <Label className="font-semibold">الخيارات ({smartVariantsList.length})</Label>
+                                  <div className="flex gap-1.5">
+                                    {smartActiveTypes.map(type => (
+                                      <Button
+                                        key={type}
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700"
+                                        onClick={() => {
+                                          const newItem: SmartVariant = {
+                                            id: Date.now().toString(),
+                                            type,
+                                            label: "",
+                                            price: "",
+                                            priceSar: "",
+                                            discount: "",
+                                            hex: "#000000",
+                                            imageUrl: "",
+                                          };
+                                          setSmartVariantsList(prev => [...prev, newItem]);
+                                        }}
+                                        data-testid={`button-add-variant-${type}`}
+                                      >
+                                        <Plus className="h-3 w-3" />
+                                        {SMART_VARIANT_TYPE_ICONS[type]} {SMART_VARIANT_TYPE_LABELS[type]}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {smartVariantsList.length === 0 && (
+                                  <p className="text-xs text-emerald-600 text-center py-3 border border-dashed border-emerald-300 rounded bg-white dark:bg-gray-800">
+                                    اضغط على زر الإضافة أعلاه لإضافة أول خيار
+                                  </p>
+                                )}
+
+                                <div className="space-y-2">
+                                  {smartVariantsList.map((v, idx) => (
+                                    <div key={v.id} className="bg-white dark:bg-gray-800 rounded-lg border p-3 space-y-2">
+                                      {/* الصف الأول: النوع + الاسم + حذف */}
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-lg flex-shrink-0">{SMART_VARIANT_TYPE_ICONS[v.type]}</span>
+                                        <span className="text-xs font-bold text-emerald-700 flex-shrink-0 bg-emerald-100 px-1.5 py-0.5 rounded">
+                                          {SMART_VARIANT_TYPE_LABELS[v.type]}
+                                        </span>
+                                        <Input
+                                          placeholder={
+                                            v.type === 'size' ? 'مثال: 50 جرام' :
+                                            v.type === 'weight' ? 'مثال: 1 كجم' :
+                                            v.type === 'color' ? 'مثال: أحمر' :
+                                            'اسم الصورة'
+                                          }
+                                          value={v.label}
+                                          onChange={(e) => {
+                                            const updated = [...smartVariantsList];
+                                            updated[idx] = { ...updated[idx], label: e.target.value };
+                                            setSmartVariantsList(updated);
+                                          }}
+                                          className="h-8 text-sm flex-1"
+                                          data-testid={`input-variant-label-${idx}`}
+                                        />
+                                        {v.type === 'color' && (
+                                          <input
+                                            type="color"
+                                            value={v.hex || "#000000"}
+                                            onChange={(e) => {
+                                              const updated = [...smartVariantsList];
+                                              updated[idx] = { ...updated[idx], hex: e.target.value };
+                                              setSmartVariantsList(updated);
+                                            }}
+                                            className="w-8 h-8 cursor-pointer rounded border flex-shrink-0"
+                                            title="اختر اللون"
+                                          />
+                                        )}
+                                        <Button
+                                          type="button"
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-8 w-8 text-destructive flex-shrink-0"
+                                          onClick={() => setSmartVariantsList(prev => prev.filter((_, i) => i !== idx))}
+                                          data-testid={`button-remove-variant-${idx}`}
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </div>
+                                      {/* الصف الثاني: السعر + السعر SAR + الخصم */}
+                                      <div className="grid grid-cols-3 gap-2">
+                                        <div>
+                                          <Label className="text-[10px] text-gray-500 mb-0.5 block">سعر YER</Label>
+                                          <Input
+                                            placeholder="السعر ريال يمني"
+                                            value={v.price}
+                                            onChange={(e) => {
+                                              const updated = [...smartVariantsList];
+                                              updated[idx] = { ...updated[idx], price: e.target.value };
+                                              setSmartVariantsList(updated);
+                                            }}
+                                            type="number"
+                                            className="h-8 text-sm"
+                                            data-testid={`input-variant-price-${idx}`}
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-[10px] text-gray-500 mb-0.5 block">سعر SAR</Label>
+                                          <Input
+                                            placeholder="السعر ريال سعودي"
+                                            value={v.priceSar}
+                                            onChange={(e) => {
+                                              const updated = [...smartVariantsList];
+                                              updated[idx] = { ...updated[idx], priceSar: e.target.value };
+                                              setSmartVariantsList(updated);
+                                            }}
+                                            type="number"
+                                            className="h-8 text-sm"
+                                            data-testid={`input-variant-pricestar-${idx}`}
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-[10px] text-gray-500 mb-0.5 block">خصم %</Label>
+                                          <Input
+                                            placeholder="0"
+                                            value={v.discount}
+                                            onChange={(e) => {
+                                              const updated = [...smartVariantsList];
+                                              updated[idx] = { ...updated[idx], discount: e.target.value };
+                                              setSmartVariantsList(updated);
+                                            }}
+                                            type="number"
+                                            min="0"
+                                            max="99"
+                                            className="h-8 text-sm"
+                                            data-testid={`input-variant-discount-${idx}`}
+                                          />
+                                        </div>
+                                      </div>
+                                      {/* رابط الصورة للصورة واللون */}
+                                      {(v.type === 'image' || v.type === 'color') && (
+                                        <div className="flex items-center gap-2">
+                                          <Input
+                                            placeholder="رابط الصورة (اختياري)"
+                                            value={v.imageUrl}
+                                            onChange={(e) => {
+                                              const updated = [...smartVariantsList];
+                                              updated[idx] = { ...updated[idx], imageUrl: e.target.value };
+                                              setSmartVariantsList(updated);
+                                            }}
+                                            className="h-8 text-sm flex-1"
+                                            data-testid={`input-variant-imageurl-${idx}`}
+                                          />
+                                          {v.imageUrl && (
+                                            <div className="w-10 h-10 rounded overflow-hidden border flex-shrink-0">
+                                              <img src={v.imageUrl} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0.3'; }} />
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* معاينة المربعات */}
+                                {smartVariantsList.some(v => v.label) && (
+                                  <div className="bg-white dark:bg-gray-900 rounded border p-3">
+                                    <p className="text-[10px] text-gray-400 mb-2 font-semibold">معاينة كيف ستظهر في صفحة المنتج:</p>
+                                    {smartActiveTypes.map(type => {
+                                      const typeVariants = smartVariantsList.filter(v => v.type === type && v.label);
+                                      if (typeVariants.length === 0) return null;
+                                      return (
+                                        <div key={type} className="mb-2">
+                                          <p className="text-[10px] text-gray-500 mb-1">{SMART_VARIANT_TYPE_ICONS[type]} {SMART_VARIANT_TYPE_LABELS[type]}</p>
+                                          <div className="flex gap-1.5 flex-wrap">
+                                            {typeVariants.map((v, i) => (
+                                              <div key={i} className="flex flex-col items-center gap-0.5">
+                                                <div
+                                                  className="px-2 py-1 rounded border-2 border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 text-xs font-bold text-emerald-800 dark:text-emerald-300 min-w-[44px] text-center"
+                                                >
+                                                  {v.type === 'color' && v.hex && (
+                                                    <span className="inline-block w-3 h-3 rounded-full border border-gray-300 ml-1 align-middle" style={{ background: v.hex }} />
+                                                  )}
+                                                  {v.label}
+                                                </div>
+                                                {v.price && <span className="text-[9px] text-gray-500">{v.price} ر.ي</span>}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>

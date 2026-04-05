@@ -281,6 +281,32 @@ export default function ProductDetail() {
   }, [(product as any)?.colorImages]);
 
   const showVariantUI = !!(navSettings?.enableVariantProductPage && (product as any)?.enableVariantUI);
+
+  // ── الخيارات الذكية ──────────────────────────────────────────────
+  type SmartVType = "color" | "size" | "weight" | "image";
+  interface SmartV { id: string; type: SmartVType; label: string; price: string; priceSar: string; discount: string; hex: string; imageUrl: string; }
+  interface SmartVData { activeTypes: SmartVType[]; variants: SmartV[]; }
+  const SMART_V_LABELS: Record<SmartVType, string> = { color: "اللون", size: "المقاس", weight: "الوزن", image: "الصورة" };
+
+  const smartVariantsData: SmartVData | null = useMemo(() => {
+    const sv = (product as any)?.smartVariants;
+    if (!sv) return null;
+    try { return JSON.parse(sv); } catch { return null; }
+  }, [(product as any)?.smartVariants]);
+
+  const showSmartVariants = !!(product as any)?.enableSmartVariants && !!smartVariantsData;
+
+  const [selectedSmartVariant, setSelectedSmartVariant] = useState<Record<string, string>>({});
+
+  const selectedSmartV: SmartV | null = useMemo(() => {
+    if (!smartVariantsData) return null;
+    const ids = Object.values(selectedSmartVariant);
+    for (const id of ids) {
+      const v = smartVariantsData.variants.find(v => v.id === id);
+      if (v) return v;
+    }
+    return null;
+  }, [selectedSmartVariant, smartVariantsData]);
   const [variantActiveImg, setVariantActiveImg] = useState<string | null>(null);
   const variantHeroImg = variantActiveImg || product?.imageUrl || "";
 
@@ -298,6 +324,12 @@ export default function ProductDetail() {
 
   const currentPrice = useMemo(() => {
     if (!product) return '0';
+
+    // الخيارات الذكية لها الأولوية إذا كان هناك خيار محدد
+    if (selectedSmartV?.price) {
+      if (currency === 'SAR' && selectedSmartV.priceSar) return selectedSmartV.priceSar;
+      return selectedSmartV.price;
+    }
     
     if (currentSizeData) {
       return currency === 'SAR' && currentSizeData.priceSar 
@@ -320,7 +352,7 @@ export default function ProductDetail() {
     }
 
     return basePrice;
-  }, [product, quantity, currency, bulkPricing, currentSizeData]);
+  }, [product, quantity, currency, bulkPricing, currentSizeData, selectedSmartV]);
 
   const printingCost = useMemo(() => {
     if (!enableCustomPrinting || !product?.printingPricePerUnit) return 0;
@@ -936,11 +968,87 @@ export default function ProductDetail() {
             </div>
           )}
 
+          {/* ── الخيارات الذكية ────────────────────────────────────── */}
+          {showSmartVariants && smartVariantsData && (
+            <div className="space-y-3" data-testid="smart-variants-section">
+              {smartVariantsData.activeTypes.map(type => {
+                const typeVariants = smartVariantsData.variants.filter(v => v.type === type && v.label);
+                if (typeVariants.length === 0) return null;
+                const selectedId = selectedSmartVariant[type];
+                return (
+                  <div key={type}>
+                    <Label className="text-base font-semibold mb-2 block">
+                      {SMART_V_LABELS[type]}
+                      {selectedId && (() => {
+                        const sv = typeVariants.find(v => v.id === selectedId);
+                        return sv ? <span className="mr-2 text-sm font-normal text-muted-foreground">— {sv.label}</span> : null;
+                      })()}
+                    </Label>
+                    <div className="flex flex-wrap gap-2">
+                      {typeVariants.map((v) => {
+                        const isSelected = selectedSmartVariant[type] === v.id;
+                        const discountNum = Number(v.discount || 0);
+                        const priceNum = Number(currency === 'SAR' && v.priceSar ? v.priceSar : v.price || 0);
+                        const origPrice = discountNum > 0 ? Math.round(priceNum / (1 - discountNum / 100)) : 0;
+                        return (
+                          <button
+                            key={v.id}
+                            onClick={() => {
+                              setSelectedSmartVariant(prev => ({ ...prev, [type]: v.id }));
+                              if (v.imageUrl) setVariantActiveImg(v.imageUrl);
+                            }}
+                            className={`px-3 py-2 rounded-xl border-2 transition-all font-medium flex flex-col items-center min-w-[72px] text-center ${
+                              isSelected
+                                ? 'border-primary bg-primary/10 text-primary shadow-md ring-2 ring-primary/30'
+                                : 'border-gray-200 hover:border-gray-400 text-foreground hover:bg-gray-50 dark:hover:bg-gray-800'
+                            }`}
+                            data-testid={`button-smart-variant-${type}-${v.id}`}
+                          >
+                            {type === 'color' && v.hex && (
+                              <span className="w-5 h-5 rounded-full border-2 border-white shadow mb-1 block mx-auto" style={{ background: v.hex }} />
+                            )}
+                            {type === 'image' && v.imageUrl && (
+                              <img src={v.imageUrl} alt={v.label} className="w-10 h-10 object-cover rounded mb-1 mx-auto" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                            )}
+                            <span className="font-bold text-sm leading-tight">{v.label}</span>
+                            {priceNum > 0 && (
+                              <span className="text-xs text-muted-foreground mt-0.5 leading-tight">
+                                {formatPrice(priceNum)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
+                              </span>
+                            )}
+                            {discountNum > 0 && (
+                              <span className="text-[10px] font-bold text-red-500 mt-0.5">-{discountNum}%</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <Card className="border-primary/20">
             <CardContent className="p-4 space-y-4">
               <div className="flex items-end justify-between gap-4 flex-wrap">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">السعر للوحدة</p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    {selectedSmartV ? `سعر ${selectedSmartV.label}` : 'السعر للوحدة'}
+                  </p>
+                  {selectedSmartV && Number(selectedSmartV.discount || 0) > 0 && (() => {
+                    const priceNum = Number(currency === 'SAR' && selectedSmartV.priceSar ? selectedSmartV.priceSar : selectedSmartV.price || 0);
+                    const discountNum = Number(selectedSmartV.discount);
+                    const origPrice = Math.round(priceNum / (1 - discountNum / 100));
+                    return (
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm line-through text-muted-foreground">{formatPrice(origPrice)}</span>
+                        <Badge className="text-xs px-1.5 py-0.5" style={{ background: 'var(--discount-badge-bg, #ef4444)', color: 'white' }}>
+                          -{discountNum}%
+                        </Badge>
+                      </div>
+                    );
+                  })()}
                   <p className="font-extrabold text-primary" style={{ fontSize: detailPriceFs }} data-testid="text-product-price">
                     {formatPrice(currentPrice)} 
                     <span className="text-lg font-normal text-muted-foreground mr-2">
