@@ -667,28 +667,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/admin/display-settings", requireAdmin, async (req, res) => {
     try {
-      const {
-        categorySize, categoriesPerRow, showCategories,
-        productCardWidth, productCardHeight,
-        offerBannerHeight, showOfferBanners,
-        productCardMargin, productCardPaddingV, priceFontSize,
-        discountBubbleSize, quantityButtonHeight, imageMode,
-      } = req.body;
-      const settings = await storage.updateDisplaySettings({
-        ...(categorySize !== undefined && { categorySize: parseInt(categorySize) }),
-        ...(categoriesPerRow !== undefined && { categoriesPerRow: parseInt(categoriesPerRow) }),
-        ...(showCategories !== undefined && { showCategories }),
-        ...(productCardWidth !== undefined && { productCardWidth: parseInt(productCardWidth) }),
-        ...(productCardHeight !== undefined && { productCardHeight: parseInt(productCardHeight) }),
-        ...(offerBannerHeight !== undefined && { offerBannerHeight: parseInt(offerBannerHeight) }),
-        ...(showOfferBanners !== undefined && { showOfferBanners }),
-        ...(productCardMargin !== undefined && { productCardMargin: parseInt(productCardMargin) }),
-        ...(productCardPaddingV !== undefined && { productCardPaddingV: parseInt(productCardPaddingV) }),
-        ...(priceFontSize !== undefined && { priceFontSize: parseInt(priceFontSize) }),
-        ...(discountBubbleSize !== undefined && { discountBubbleSize: parseInt(discountBubbleSize) }),
-        ...(quantityButtonHeight !== undefined && { quantityButtonHeight: parseInt(quantityButtonHeight) }),
-        ...(imageMode !== undefined && { imageMode }),
-      });
+      // حقول صحيحة معروفة — integer fields
+      const intFields = [
+        'categorySize', 'categoriesPerRow',
+        'productCardWidth', 'productCardHeight',
+        'offerBannerHeight',
+        'productCardMargin', 'productCardPaddingV', 'priceFontSize',
+        'discountBubbleSize', 'quantityButtonHeight',
+        'detailImageHeight', 'detailPriceFontSize',
+        'detailAddToCartHeight', 'detailThumbnailSize',
+      ];
+      // boolean fields
+      const boolFields = [
+        'showCategories', 'showOfferBanners',
+        'detailShowRelated', 'detailShowReviews', 'showStickyCartBar',
+      ];
+      // text fields
+      const textFields = ['imageMode', 'detailImageMode', 'discountBadgeBg'];
+
+      const patch: Record<string, any> = {};
+      for (const f of intFields) {
+        if (req.body[f] !== undefined) patch[f] = parseInt(req.body[f]);
+      }
+      for (const f of boolFields) {
+        if (req.body[f] !== undefined) patch[f] = req.body[f];
+      }
+      for (const f of textFields) {
+        if (req.body[f] !== undefined) patch[f] = req.body[f];
+      }
+
+      const settings = await storage.updateDisplaySettings(patch);
       res.json(settings);
     } catch (e: any) {
       res.status(500).json({ message: "فشل تحديث إعدادات العرض", details: e.message });

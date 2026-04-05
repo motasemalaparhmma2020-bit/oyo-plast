@@ -1659,7 +1659,7 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
       return res.json();
     },
     onSuccess: (data) => {
-      setSettings(data);
+      setSettings((prev: any) => ({ ...prev, ...data }));
       toast({ title: "تم تحديث إعدادات العرض بنجاح" });
     },
     onError: () => {
