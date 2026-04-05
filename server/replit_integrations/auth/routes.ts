@@ -212,10 +212,15 @@ export function registerAuthRoutes(app: Express): void {
           if (process.env.NODE_ENV !== "production") {
             return res.json({ message: "تم إرسال الرمز (وضع التطوير)", devCode: code, phone: normalizedPhone });
           }
-          return res.status(500).json({ message: "فشل إرسال الرمز. تحقق من الرقم وأعد المحاولة." });
+          return res.status(500).json({ message: "فشل إرسال الرمز. تحقق من الرقم وأعد المحاولة.", error: result.error });
         }
 
-        res.json({ message: `تم إرسال رمز التحقق إلى ${channel === "whatsapp" ? "واتساب" : "رسالة نصية"}`, phone: normalizedPhone });
+        const usedChannel = result.usedChannel || channel;
+        res.json({
+          message: `تم إرسال رمز التحقق إلى ${usedChannel === "whatsapp" ? "واتساب" : "رسالة نصية"}`,
+          phone: normalizedPhone,
+          channel: usedChannel,
+        });
       } finally {
         client.release();
       }

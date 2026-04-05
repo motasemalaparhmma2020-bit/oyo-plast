@@ -28,6 +28,7 @@ export default function Checkout() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const addressRef = useRef<HTMLDivElement>(null);
 
   const [guestCart, setGuestCart] = useState<GuestCartItem[]>(() => getGuestCart());
   const { data: allProducts = [] } = useQuery<Product[]>({
@@ -195,11 +196,13 @@ export default function Checkout() {
     if (!formData.customerPhone.trim()) {
       toast({ title: "خطأ", description: "رقم الهاتف مطلوب", variant: "destructive" }); return;
     }
-    if (!formData.shippingCity) {
-      toast({ title: "خطأ", description: "اختر المدينة", variant: "destructive" }); return;
-    }
-    if (!formData.shippingAddress.trim() || formData.shippingAddress.trim().length < 5) {
-      toast({ title: "خطأ", description: "العنوان التفصيلي مطلوب", variant: "destructive" }); return;
+    if (!formData.shippingCity || !formData.shippingAddress.trim() || formData.shippingAddress.trim().length < 5) {
+      setShowAddressForm(true);
+      setTimeout(() => {
+        addressRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 100);
+      toast({ title: "⚠️ العنوان مطلوب", description: "يرجى إضافة عنوان التوصيل قبل تنفيذ الطلب", variant: "destructive" });
+      return;
     }
     if (isWalletPayment && !formData.purchaseCode?.trim()) {
       toast({ title: "خطأ", description: "أدخل رقم الحوالة أو كود الدفع", variant: "destructive" }); return;
@@ -332,7 +335,7 @@ export default function Checkout() {
         <div className="h-px bg-border mx-4" />
 
         {/* ── عنوان التوصيل ── */}
-        <div className="bg-background">
+        <div className="bg-background" ref={addressRef}>
           <button
             className="w-full flex items-center justify-between px-4 py-3"
             onClick={() => setShowAddressForm(!showAddressForm)}
@@ -719,11 +722,9 @@ export default function Checkout() {
 
           {/* جدول المنتجات */}
           <div className="border-t mx-0">
-            <div className="grid grid-cols-4 bg-muted/50 px-4 py-2 text-xs font-bold text-muted-foreground">
+            <div className="px-4 py-2 bg-muted/50 flex justify-between text-xs font-bold text-muted-foreground">
               <span>المنتج</span>
-              <span className="text-center">السعر</span>
-              <span className="text-center">الكمية</span>
-              <span className="text-left">الإجمالي</span>
+              <span>الكمية × السعر</span>
             </div>
             {cartItems.map((item: any, idx: number) => {
               const isAuthItem = item.id && item.product;
@@ -732,16 +733,55 @@ export default function Checkout() {
               const price = currency === "SAR" && product.priceSar
                 ? Number(product.priceSar) : Number(product.price);
               const qty = isAuthItem ? item.quantity : item.quantity;
+              const selectedColor = item.selectedColor || item.color || "";
+              const selectedSize  = item.selectedSize  || item.size  || "";
+              const imageUrl = product.imageUrl?.startsWith("http")
+                ? product.imageUrl
+                : product.imageUrl
+                  ? product.imageUrl
+                  : null;
               return (
                 <div
                   key={isAuthItem ? item.id : idx}
-                  className="grid grid-cols-4 px-4 py-2.5 text-sm border-t items-center"
+                  className="flex items-center gap-3 px-4 py-3 border-t"
                   data-testid={`checkout-item-${isAuthItem ? item.id : idx}`}
                 >
-                  <span className="font-medium text-xs line-clamp-2 leading-tight">{product.name}</span>
-                  <span className="text-center text-xs">{formatPrice(price)}</span>
-                  <span className="text-center font-bold">{qty}</span>
-                  <span className="text-left text-xs font-bold text-primary">{formatPrice(price * qty)}</span>
+                  {/* صورة المنتج */}
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt={product.name}
+                      className="w-14 h-14 object-cover rounded-lg shrink-0 border"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  ) : (
+                    <div className="w-14 h-14 bg-muted rounded-lg shrink-0 flex items-center justify-center text-xs text-muted-foreground">
+                      📦
+                    </div>
+                  )}
+
+                  {/* اسم المنتج + تفاصيل */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm line-clamp-2 leading-tight">{product.name}</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {selectedColor && (
+                        <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground">
+                          اللون: {selectedColor}
+                        </span>
+                      )}
+                      {selectedSize && (
+                        <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground">
+                          المقاس: {selectedSize}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* الكمية والإجمالي */}
+                  <div className="text-left shrink-0">
+                    <p className="text-xs text-muted-foreground">{qty} × {formatPrice(price)}</p>
+                    <p className="font-extrabold text-sm text-primary">{formatPrice(price * qty)} {currLabel}</p>
+                  </div>
                 </div>
               );
             })}

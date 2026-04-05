@@ -35,7 +35,7 @@ export default function Auth() {
 
   const [loginMode, setLoginMode] = useState<LoginMode>("phone");
   const [step, setStep] = useState<Step>("phone");
-  const [channel, setChannel] = useState<Channel>("whatsapp");
+  const [channel, setChannel] = useState<Channel>("sms");
   const [countryCode, setCountryCode] = useState(COUNTRY_CODES[0]);
   const [showCountries, setShowCountries] = useState(false);
   const [normalizedPhone, setNormalizedPhone] = useState("");
@@ -81,6 +81,10 @@ export default function Auth() {
     },
     onSuccess: (data) => {
       setNormalizedPhone(data.phone || "");
+      // تحديث القناة الفعلية إن غيّرها السيرفر (مثلاً من واتساب لـ SMS تلقائياً)
+      if (data.channel && (data.channel === "sms" || data.channel === "whatsapp")) {
+        setChannel(data.channel as Channel);
+      }
       setStep("otp");
       startResendTimer();
       toast({ title: "✅ تم الإرسال", description: data.message });
@@ -89,7 +93,7 @@ export default function Auth() {
         const digits = data.devCode.split("");
         setOtp(digits);
         setTimeout(() => otpRefs.current[5]?.focus(), 100);
-        toast({ title: `🔧 كود التطوير: ${data.devCode}`, description: "هذا فقط في بيئة التطوير" });
+        toast({ title: `كود التطوير: ${data.devCode}`, description: "هذا فقط في بيئة التطوير" });
       } else {
         setTimeout(() => otpRefs.current[0]?.focus(), 300);
       }
@@ -177,7 +181,7 @@ export default function Auth() {
     <div className="space-y-5">
       {/* قناة الإرسال */}
       <div className="flex rounded-xl overflow-hidden border-2 border-primary/20">
-        {(["whatsapp", "sms"] as Channel[]).map((ch) => (
+        {(["sms", "whatsapp"] as Channel[]).map((ch) => (
           <button
             key={ch}
             type="button"
@@ -247,6 +251,11 @@ export default function Auth() {
         <p className="text-xs text-muted-foreground mt-1.5">
           سيصلك رمز التحقق على {channel === "whatsapp" ? "واتساب" : "رسالة نصية"}
         </p>
+        {channel === "whatsapp" && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+            ⚠️ إذا لم تستلم عبر واتساب، جرّب "رسالة نصية"
+          </p>
+        )}
       </div>
 
       <Button
