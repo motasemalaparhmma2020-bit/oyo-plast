@@ -29,7 +29,7 @@ export function GlobalBottomNav() {
   });
 
   const primaryColor = homeSettings?.primaryColor || "#06B6D4";
-  const signupHref = navSettings?.showSignupEntryPoint === false ? "/profile" : "/auth";
+  const signupHref = "/profile";
 
   const navItemClass = (active: boolean) =>
     `flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-colors flex-1 min-w-0`;

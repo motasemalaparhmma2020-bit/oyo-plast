@@ -218,8 +218,8 @@ function Router() {
   // Check if user needs to complete registration (no accountType set)
   const needsAccountType = isAuthenticated && user && !user.accountType;
   
-  // Hide traditional footer on mobile-first pages (they use GlobalBottomNav instead)
-  const hideFooter = location === '/' || location === '/products' || location.startsWith('/product/');
+  // Show traditional footer ONLY on the profile page
+  const hideFooter = location !== '/profile';
   // Hide GlobalBottomNav only on admin page
   const hideBottomNav = location === '/admin';
 
@@ -270,9 +270,7 @@ function Router() {
             <Route path="/orders">
               <RequireAccountType><Orders /></RequireAccountType>
             </Route>
-            <Route path="/profile">
-              <RequireAccountType><Profile /></RequireAccountType>
-            </Route>
+            <Route path="/profile" component={Profile} />
             <Route path="/wishlist">
               <RequireAccountType><Wishlist /></RequireAccountType>
             </Route>

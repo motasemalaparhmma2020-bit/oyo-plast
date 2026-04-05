@@ -2,7 +2,6 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { 
   ShoppingCart, 
   Menu, 
@@ -29,7 +28,7 @@ import { useLogoSettings } from "@/hooks/use-logo-settings";
 import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
 
 // ─── Search Bar Component ────────────────────────────────────────
-function SearchBar({ onClose }: { onClose?: () => void }) {
+function SearchBar({ compact, onClose }: { compact?: boolean; onClose?: () => void }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -78,9 +77,18 @@ function SearchBar({ onClose }: { onClose?: () => void }) {
 
   return (
     <div ref={containerRef} className="relative w-full" data-testid="search-container">
-      <form onSubmit={handleSubmit} className="relative flex items-center">
-        <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-        <Input
+      <form onSubmit={handleSubmit} className="flex items-center gap-0 rounded-full overflow-hidden border border-gray-200 bg-white shadow-sm">
+        {/* Search button on LEFT side */}
+        <button
+          type="submit"
+          className="flex-shrink-0 bg-[#1a3a4a] hover:bg-[#0f2b3a] text-white flex items-center justify-center transition-colors"
+          style={{ width: compact ? 36 : 42, height: compact ? 36 : 42 }}
+          data-testid="button-search-submit"
+        >
+          <Search className={compact ? "h-4 w-4" : "h-4 w-4"} />
+        </button>
+        {/* Input on RIGHT */}
+        <input
           ref={inputRef}
           type="text"
           value={query}
@@ -90,15 +98,15 @@ function SearchBar({ onClose }: { onClose?: () => void }) {
           }}
           onFocus={() => query.length >= 2 && setOpen(true)}
           placeholder="ابحث عن منتج..."
-          className="pr-9 pl-8 h-9 bg-gray-50 border-gray-200 focus:bg-white text-sm w-full"
-          dir="rtl"
+          className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none px-3 text-right"
+          style={{ height: compact ? 36 : 42, direction: "rtl" }}
           data-testid="input-search"
           autoComplete="off"
         />
         {query && (
           <button
             type="button"
-            className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            className="flex-shrink-0 px-2 text-gray-400 hover:text-gray-600"
             onClick={() => { setQuery(""); setOpen(false); }}
           >
             <X className="h-4 w-4" />
@@ -156,7 +164,6 @@ export function Navbar() {
   const { data: cart } = useCart();
   const { data: logoSettings } = useLogoSettings();
   const [isOpen, setIsOpen] = useState(false);
-  const [mobileSearch, setMobileSearch] = useState(false);
   const [location] = useLocation();
   
   const logoSrc = logoSettings?.logoUrl || oyoLogo;
@@ -193,7 +200,8 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white dark:bg-background shadow-sm">
-      <div className="container mx-auto px-4 h-16 flex items-center gap-3">
+      {/* ── Main Row ───────────────────────────────────────────── */}
+      <div className="container mx-auto px-3 h-14 flex items-center gap-2">
 
         {/* Mobile Menu */}
         <div className="flex items-center md:hidden">
@@ -229,10 +237,10 @@ export function Navbar() {
         {/* Logo */}
         <div className="flex-shrink-0">
           <Link href="/" className="flex items-center gap-2" data-testid="link-logo">
-            <img 
-              src={logoSrc} 
-              alt="OYO PLAST" 
-              className="h-10 w-10 md:h-12 md:w-12 object-contain rounded-lg shadow-md"
+            <img
+              src={logoSrc}
+              alt="OYO PLAST"
+              className="h-9 w-9 md:h-11 md:w-11 object-contain rounded-lg shadow-md"
             />
             <div className="hidden sm:flex flex-col">
               <span className="text-base font-extrabold text-[#2196F3] leading-tight">OYO PLAST</span>
@@ -241,7 +249,7 @@ export function Navbar() {
           </Link>
         </div>
 
-        {/* Search Bar — Desktop: next to logo, grows to fill space */}
+        {/* Search Bar — Desktop: grows to fill space */}
         <div className="hidden md:flex flex-1 max-w-md">
           <SearchBar />
         </div>
@@ -256,21 +264,10 @@ export function Navbar() {
         {/* Actions */}
         <div className="flex items-center gap-1 md:gap-2 mr-auto md:mr-0">
 
-          {/* Mobile search toggle */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden"
-            onClick={() => setMobileSearch(!mobileSearch)}
-            data-testid="button-mobile-search"
-          >
-            {mobileSearch ? <X className="h-5 w-5" /> : <Search className="h-5 w-5 text-muted-foreground" />}
-          </Button>
-
           {/* Currency toggle */}
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             onClick={toggleCurrency}
             className="font-bold border-2 border-[#2196F3] text-[#2196F3] hover:bg-[#2196F3] hover:text-white transition-all text-xs px-2"
             data-testid="button-toggle-currency"
@@ -279,18 +276,16 @@ export function Navbar() {
           </Button>
 
           {isAuthenticated && (
-            <>
-              <Link href="/notifications">
-                <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
-                  <Bell className="h-5 w-5 text-[#2196F3]" />
-                  {unreadCount && unreadCount.count > 0 && (
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-500 text-white rounded-full text-xs">
-                      {unreadCount.count}
-                    </Badge>
-                  )}
-                </Button>
-              </Link>
-            </>
+            <Link href="/notifications">
+              <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
+                <Bell className="h-5 w-5 text-[#2196F3]" />
+                {unreadCount && unreadCount.count > 0 && (
+                  <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-500 text-white rounded-full text-xs">
+                    {unreadCount.count}
+                  </Badge>
+                )}
+              </Button>
+            </Link>
           )}
 
           <Link href="/cart">
@@ -349,12 +344,10 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Search Bar — slides down when toggled */}
-      {mobileSearch && (
-        <div className="md:hidden px-4 pb-3 border-t pt-3 bg-white">
-          <SearchBar onClose={() => setMobileSearch(false)} />
-        </div>
-      )}
+      {/* ── Mobile Search Row — always visible ─────────────────── */}
+      <div className="md:hidden px-3 pb-2.5 bg-white dark:bg-background">
+        <SearchBar compact />
+      </div>
     </header>
   );
 }

@@ -1,338 +1,248 @@
 import { useAuth } from "@/hooks/use-auth";
+import { useCart } from "@/hooks/use-cart";
 import { useOrders } from "@/hooks/use-orders";
-import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { useState } from "react";
-import { 
-  Loader2, 
-  Settings, 
-  Ticket, 
-  Star, 
-  Wallet, 
-  Gift,
-  CreditCard,
-  Package,
-  Truck,
-  MessageSquare,
-  RotateCcw,
-  Users,
-  History,
-  ChevronLeft,
-  User,
-  LogOut,
-  Globe
+import {
+  Moon, Sun, User, MapPin, Ticket, LayoutGrid, Bell, Settings,
+  Phone, MessageSquare, HelpCircle, FileText, Heart, ShoppingCart,
+  Tag, ChevronLeft, LogIn, LogOut, Truck, Package, CreditCard,
+  RotateCcw
 } from "lucide-react";
+
+const APP_VERSION = "1.0.0";
 
 export default function Profile() {
   const { user, isLoading: isAuthLoading, logout, isAuthenticated } = useAuth();
-  const { data: orders, isLoading: isOrdersLoading } = useOrders();
-  const [currency, setCurrency] = useState<'YER' | 'SAR'>('YER');
-  const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
+  const { data: orders } = useOrders();
+  const { data: cart } = useCart();
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
 
-  const toggleCurrency = () => {
-    const newCurrency = currency === 'YER' ? 'SAR' : 'YER';
-    setCurrency(newCurrency);
-    localStorage.setItem('preferred_currency', newCurrency);
+  const toggleDark = () => {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.classList.toggle("dark", next);
+    localStorage.setItem("theme", next ? "dark" : "light");
   };
 
-  if (isAuthLoading) {
-    return (
-      <div className="min-h-screen flex justify-center items-center pb-20">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const cartCount = (cart as any[])?.reduce((acc, item) => acc + (item.quantity || 0), 0) || 0;
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-background pb-20">
-        {/* Header */}
-        <div className="bg-white dark:bg-card px-4 py-3 flex items-center justify-between border-b">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" data-testid="button-settings">
-              <Settings className="h-5 w-5 text-gray-600" strokeWidth={1.5} />
-            </Button>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-lg font-extrabold tracking-wider text-blue-500 dark:text-blue-400" data-testid="text-store-name-guest">
-              OYO PLAST
-            </span>
-          </div>
-        </div>
+  const pendingOrders = (orders as any[])?.filter(o => o.status === "pending").length || 0;
+  const processingOrders = (orders as any[])?.filter(o => o.status === "processing").length || 0;
+  const shippedOrders = (orders as any[])?.filter(o => o.status === "shipped").length || 0;
+  const reviewOrders = (orders as any[])?.filter(o => o.status === "review").length || 0;
+  const returnedOrders = (orders as any[])?.filter(o => ["returned","cancelled"].includes(o.status)).length || 0;
 
-        {/* Login Prompt */}
-        <div className="bg-white dark:bg-card p-8 text-center mt-2">
-          <div className="w-20 h-20 bg-gray-100 dark:bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-            <User className="h-10 w-10 text-gray-400" strokeWidth={1.5} />
-          </div>
-          <h2 className="text-lg font-bold mb-2">مرحباً بك في أويو بلاست</h2>
-          <p className="text-sm text-gray-500 mb-4">سجل دخولك للوصول إلى حسابك وتتبع طلباتك</p>
-          <Link href="/auth">
-            <Button className="rounded-full px-8 bg-primary" data-testid="button-login">
-              تسجيل الدخول
-            </Button>
-          </Link>
-        </div>
+  const userName = isAuthenticated
+    ? (user?.firstName && user?.lastName
+        ? `${user.firstName} ${user.lastName}`
+        : user?.firstName || user?.email?.split("@")[0] || "مستخدم")
+    : "Guest";
 
-        {/* Quick Actions - Disabled State */}
-        <div className="bg-white dark:bg-card px-4 py-6 mt-2 border-t border-b">
-          <div className="grid grid-cols-4 gap-4 opacity-50">
-            {[
-              { icon: Ticket, label: "كوبونات" },
-              { icon: Star, label: "نقاط" },
-              { icon: Wallet, label: "محفظة" },
-              { icon: Gift, label: "بطاقة هدية" },
-            ].map((action, index) => (
-              <div key={index} className="flex flex-col items-center gap-2">
-                <action.icon className="h-7 w-7 text-gray-600" strokeWidth={1.5} />
-                <span className="text-xs text-gray-600">{action.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Calculate order counts from database
-  const pendingOrders = orders?.filter(o => o.status === 'pending').length || 0;
-  const processingOrders = orders?.filter(o => o.status === 'processing').length || 0;
-  const shippedOrders = orders?.filter(o => o.status === 'shipped').length || 0;
-  const reviewOrders = orders?.filter(o => o.status === 'review').length || 0;
-  const returnedOrders = orders?.filter(o => o.status === 'returned' || o.status === 'cancelled').length || 0;
-  const totalOrders = orders?.length || 0;
-
-  const quickActions = [
-    { icon: Ticket, label: "كوبونات", value: "0", href: "/marketer/coupons" },
-    { icon: Star, label: "نقاط", value: "0", href: "/account" },
-    { icon: Wallet, label: "محفظة", value: null, href: "/account" },
-    { icon: Gift, label: "بطاقة هدية", value: null, href: null },
+  const topCards = [
+    { icon: Heart,        label: "قائمة المفضلة", href: "/wishlist", badge: null },
+    { icon: ShoppingCart, label: "السلة",          href: "/cart",     badge: cartCount > 0 ? cartCount : null },
+    { icon: Tag,          label: "العروض",          href: "/products", badge: null },
   ];
 
   const orderStatuses = [
-    { icon: CreditCard, label: "غير مدفوع", count: pendingOrders, status: "pending" },
-    { icon: Package, label: "قيد التجهيز", count: processingOrders, status: "processing" },
-    { icon: Truck, label: "تم الشحن", count: shippedOrders, status: "shipped" },
-    { icon: MessageSquare, label: "تعليق", count: reviewOrders, status: "review" },
-    { icon: RotateCcw, label: "المنتجات المسترجعة", count: returnedOrders, status: "returned" },
+    { icon: CreditCard,  label: "غير مدفوع",           count: pendingOrders,    href: "/orders" },
+    { icon: Package,     label: "قيد التجهيز",          count: processingOrders, href: "/orders" },
+    { icon: Truck,       label: "تم الشحن",              count: shippedOrders,    href: "/orders" },
+    { icon: MessageSquare, label: "تعليق",              count: reviewOrders,     href: "/orders" },
+    { icon: RotateCcw,   label: "مسترجع",               count: returnedOrders,   href: "/orders" },
   ];
 
-  const bottomActions = [
-    { icon: Users, label: "متابع", count: 0, suffix: "متابع" },
-    { icon: History, label: "تاريخ", count: totalOrders, suffix: "منتج" },
+  const generalItems = [
+    { icon: Truck,       label: "تتبع الطلب",   href: "/orders" },
+    { icon: MapPin,      label: "العناوين",      href: "/account" },
+    { icon: Ticket,      label: "الكوبونات",     href: "/marketer/coupons" },
+    { icon: LayoutGrid,  label: "الفئات",        href: "/products" },
+    { icon: Bell,        label: "الإشعارات",     href: "/notifications" },
+    { icon: Settings,    label: "الإعدادات",     href: "/account" },
   ];
+
+  const supportItems = [
+    { icon: Phone,       label: "تواصل معنا",       href: "/about" },
+    { icon: MessageSquare, label: "تذاكر الدعم",   href: null },
+    { icon: HelpCircle,  label: "الأسئلة الشائعة",  href: null },
+    { icon: FileText,    label: "سياسة الخصوصية",   href: "/privacy" },
+  ];
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-background pb-20">
-      {/* Header */}
-      <div className="bg-white dark:bg-card px-4 py-3 flex items-center justify-between border-b">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" data-testid="button-settings">
-            <Settings className="h-5 w-5 text-gray-600" strokeWidth={1.5} />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={toggleCurrency}
-            className="relative"
-            data-testid="button-currency"
-            title={`تغيير العملة: ${currency}`}
-          >
-            <div className="relative">
-              <Globe className="h-5 w-5 text-gray-600" strokeWidth={1.5} />
-              <span className="absolute -bottom-1 -right-1 text-xs font-bold bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center">
-                {currency === 'YER' ? 'ي' : 'س'}
-              </span>
-            </div>
-          </Button>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-lg font-extrabold tracking-wider text-blue-500 dark:text-blue-400" data-testid="text-store-name">
-            OYO PLAST
-          </span>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gray-100 dark:bg-background pb-24" dir="rtl">
 
-      {/* Quick Actions - Top Bar */}
-      <div className="bg-white dark:bg-card px-4 py-6 border-b">
-        <div className="grid grid-cols-4 gap-4">
-          {quickActions.map((action, index) => {
-            const content = (
-              <>
-                <div className="relative">
-                  <action.icon className="h-7 w-7 text-gray-700 dark:text-gray-300" strokeWidth={1.5} />
-                </div>
-                {action.value !== null && (
-                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{action.value}</span>
-                )}
-                <span className="text-xs text-gray-600 dark:text-gray-400">{action.label}</span>
-              </>
-            );
-            
-            return action.href ? (
-              <Link key={index} href={action.href}>
-                <div 
-                  className="flex flex-col items-center gap-2 hover-elevate active-elevate-2 rounded-lg p-2 cursor-pointer"
-                  data-testid={`quick-action-${action.label}`}
-                >
-                  {content}
-                </div>
-              </Link>
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <div className="bg-[#1a3a4a] dark:bg-[#0f2230] relative pt-10 pb-8 px-5">
+        <button
+          onClick={toggleDark}
+          className="absolute top-4 left-4 w-9 h-9 flex items-center justify-center rounded-full bg-white/10 text-white/80 hover:bg-white/20 transition-colors"
+          data-testid="button-dark-mode"
+        >
+          {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+        </button>
+
+        <div className="flex items-center justify-end gap-4">
+          <div className="text-right">
+            <h2 className="text-white font-bold text-xl leading-tight">{userName}</h2>
+            {isAuthenticated && user?.email && (
+              <p className="text-white/50 text-xs mt-0.5">{user.email}</p>
+            )}
+            {!isAuthenticated && (
+              <p className="text-white/50 text-xs mt-0.5">ضيف</p>
+            )}
+          </div>
+          <div className="w-16 h-16 rounded-full border-2 border-white/30 overflow-hidden bg-white/20 flex items-center justify-center flex-shrink-0">
+            {isAuthenticated && user?.profileImageUrl ? (
+              <img src={user.profileImageUrl} alt="" className="w-full h-full object-cover" />
             ) : (
-              <div 
-                key={index} 
-                className="flex flex-col items-center gap-2 rounded-lg p-2 opacity-50"
-                data-testid={`quick-action-${action.label}`}
-              >
-                {content}
-              </div>
-            );
-          })}
+              <User className="h-9 w-9 text-white/80" strokeWidth={1.5} />
+            )}
+          </div>
         </div>
       </div>
 
-      {/* My Orders Section */}
-      <div className="bg-white dark:bg-card mt-2">
-        <div className="px-4 py-3 flex items-center justify-between border-b">
-          <Link href="/orders" className="flex items-center gap-1 text-sm text-gray-500 hover:text-primary transition-colors">
-            <span>الاراء الكاملة</span>
-            <ChevronLeft className="h-4 w-4" />
+      {/* ── Top Quick-Access Cards ─────────────────────────────── */}
+      <div className="bg-white dark:bg-card px-4 py-4 grid grid-cols-3 gap-3 shadow-sm">
+        {topCards.map((card, i) => (
+          <Link key={i} href={card.href}>
+            <div
+              className="flex flex-col items-center gap-2 p-3 rounded-xl bg-gray-50 dark:bg-muted hover:bg-primary/5 transition-colors relative cursor-pointer"
+              data-testid={`card-${i}`}
+            >
+              <div className="relative">
+                <card.icon className="h-7 w-7 text-gray-600 dark:text-gray-300" strokeWidth={1.5} />
+                {card.badge !== null && (
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                    {card.badge}
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-center text-gray-600 dark:text-gray-400 leading-tight">{card.label}</span>
+            </div>
           </Link>
-          <h3 className="font-bold text-gray-800 dark:text-foreground">طلبي</h3>
-        </div>
-        
-        <div className="px-2 py-4">
-          <div className="grid grid-cols-5 gap-1">
-            {orderStatuses.map((status, index) => (
-              <button 
-                key={index} 
-                className="flex flex-col items-center gap-2 relative p-2 hover-elevate active-elevate-2 rounded-lg"
-                data-testid={`order-status-${status.status}`}
-              >
-                <div className="relative">
-                  <status.icon className="h-6 w-6 text-gray-700 dark:text-gray-300" strokeWidth={1.5} />
-                  {status.count > 0 && (
-                    <span className="absolute -top-2 -right-2 h-5 min-w-5 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-medium px-1">
-                      {status.count}
-                    </span>
-                  )}
-                </div>
-                <span className="text-[11px] text-gray-600 dark:text-gray-400 text-center leading-tight">{status.label}</span>
-              </button>
+        ))}
+      </div>
+
+      {/* ── Order Statuses (for logged-in users) ──────────────── */}
+      {isAuthenticated && (
+        <div className="mt-3 bg-white dark:bg-card mx-3 rounded-2xl overflow-hidden shadow-sm">
+          <div className="px-4 py-2.5 border-b border-gray-100 dark:border-border flex items-center justify-between">
+            <Link href="/orders">
+              <span className="text-xs text-primary flex items-center gap-1">
+                كل الطلبات <ChevronLeft className="h-3 w-3" />
+              </span>
+            </Link>
+            <span className="text-sm font-bold text-gray-800 dark:text-foreground">طلباتي</span>
+          </div>
+          <div className="grid grid-cols-5 gap-1 px-2 py-3">
+            {orderStatuses.map((s, i) => (
+              <Link key={i} href={s.href}>
+                <button
+                  className="flex flex-col items-center gap-1.5 w-full p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-muted transition-colors relative"
+                  data-testid={`order-status-${i}`}
+                >
+                  <div className="relative">
+                    <s.icon className="h-6 w-6 text-gray-600 dark:text-gray-300" strokeWidth={1.5} />
+                    {s.count > 0 && (
+                      <span className="absolute -top-2 -right-2 h-5 min-w-5 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-medium px-1">
+                        {s.count}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400 text-center leading-tight">{s.label}</span>
+                </button>
+              </Link>
             ))}
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Bottom Actions - Personal Lists */}
-      <div className="bg-white dark:bg-card mt-2">
-        <div className="grid grid-cols-2 divide-x divide-x-reverse divide-gray-200 dark:divide-border">
-          {bottomActions.map((action, index) => (
-            <button 
-              key={index} 
-              className="flex flex-col items-center justify-center py-4 hover-elevate active-elevate-2"
-              data-testid={`bottom-action-${action.label}`}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <action.icon className="h-5 w-5 text-gray-700 dark:text-gray-300" strokeWidth={1.5} />
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{action.label}</span>
-                <ChevronLeft className="h-4 w-4 text-gray-400" />
-              </div>
-              <span className="text-xs text-gray-500">
-                {action.count} {action.suffix}
-              </span>
-            </button>
-          ))}
+      {/* ── General Section ───────────────────────────────────── */}
+      <div className="mt-3 bg-white dark:bg-card mx-3 rounded-2xl overflow-hidden shadow-sm">
+        <div className="px-4 py-2.5 border-b border-gray-100 dark:border-border">
+          <span className="text-xs font-bold text-gray-400 tracking-widest">عام</span>
         </div>
+        {generalItems.map((item, i) => {
+          const Row = (
+            <div
+              className="flex items-center justify-between px-4 py-3.5 border-b border-gray-50 dark:border-border last:border-0 hover:bg-gray-50 dark:hover:bg-muted cursor-pointer transition-colors"
+              data-testid={`menu-${i}`}
+            >
+              <ChevronLeft className="h-4 w-4 text-gray-300" />
+              <div className="flex items-center gap-3 flex-1 justify-end">
+                <span className="text-sm text-gray-700 dark:text-foreground">{item.label}</span>
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <item.icon className="h-4 w-4 text-primary" strokeWidth={1.5} />
+                </div>
+              </div>
+            </div>
+          );
+          return item.href
+            ? <Link key={i} href={item.href}>{Row}</Link>
+            : <div key={i} className="opacity-50">{Row}</div>;
+        })}
       </div>
 
-      {/* User Info Card */}
-      <div className="bg-white dark:bg-card mt-2 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center border-2 border-primary/20">
-              {user?.profileImageUrl ? (
-                <img src={user.profileImageUrl} alt="Profile" className="w-full h-full rounded-full object-cover" />
-              ) : (
-                <span className="text-xl font-bold text-primary">
-                  {user?.firstName?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "م"}
-                </span>
-              )}
+      {/* ── Support Section ───────────────────────────────────── */}
+      <div className="mt-3 bg-white dark:bg-card mx-3 rounded-2xl overflow-hidden shadow-sm">
+        {supportItems.map((item, i) => {
+          const Row = (
+            <div
+              className="flex items-center justify-between px-4 py-3.5 border-b border-gray-50 dark:border-border last:border-0 hover:bg-gray-50 dark:hover:bg-muted cursor-pointer transition-colors"
+              data-testid={`support-${i}`}
+            >
+              <ChevronLeft className="h-4 w-4 text-gray-300" />
+              <div className="flex items-center gap-3 flex-1 justify-end">
+                <span className="text-sm text-gray-700 dark:text-foreground">{item.label}</span>
+                <div className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-muted flex items-center justify-center">
+                  <item.icon className="h-4 w-4 text-gray-500 dark:text-gray-400" strokeWidth={1.5} />
+                </div>
+              </div>
             </div>
-            <div>
-              <h3 className="font-bold text-gray-800 dark:text-foreground">
-                {user?.firstName && user?.lastName 
-                  ? `${user.firstName} ${user.lastName}` 
-                  : user?.firstName || user?.email?.split('@')[0] || "مستخدم"}
-              </h3>
-              <p className="text-xs text-gray-500">{user?.email || ""}</p>
-            </div>
-          </div>
-          <Button 
-            variant="outline" 
-            size="sm" 
+          );
+          return item.href
+            ? <Link key={i} href={item.href}>{Row}</Link>
+            : <div key={i}>{Row}</div>;
+        })}
+      </div>
+
+      {/* ── Login / Logout ────────────────────────────────────── */}
+      <div className="mt-3 mx-3">
+        {isAuthenticated ? (
+          <button
             onClick={() => logout()}
-            className="gap-2 text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+            className="w-full flex items-center justify-between px-4 py-4 bg-white dark:bg-card rounded-2xl shadow-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
             data-testid="button-logout"
           >
-            <LogOut className="h-4 w-4" />
-            خروج
-          </Button>
-        </div>
+            <LogOut className="h-5 w-5" />
+            <span className="font-semibold text-sm">تسجيل الخروج</span>
+          </button>
+        ) : (
+          <Link href="/auth">
+            <div
+              className="w-full flex items-center justify-between px-4 py-4 bg-white dark:bg-card rounded-2xl shadow-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-muted transition-colors"
+              data-testid="button-login"
+            >
+              <LogIn className="h-5 w-5 text-primary" />
+              <span className="font-semibold text-sm text-gray-700 dark:text-foreground">تسجيل الدخول</span>
+            </div>
+          </Link>
+        )}
       </div>
 
-      {/* Recent Orders Preview */}
-      {orders && orders.length > 0 && (
-        <div className="bg-white dark:bg-card mt-2 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <Link href="/orders" className="flex items-center gap-1 text-sm text-gray-500 hover:text-primary">
-              <span>عرض الكل</span>
-              <ChevronLeft className="h-4 w-4" />
-            </Link>
-            <h3 className="font-bold text-gray-800 dark:text-foreground">آخر الطلبات</h3>
-          </div>
-          <div className="space-y-3">
-            {orders.slice(0, 3).map((order) => (
-              <div 
-                key={order.id} 
-                className="flex items-center justify-between p-3 bg-gray-50 dark:bg-muted rounded-lg hover-elevate"
-                data-testid={`order-item-${order.id}`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                    <Package className="h-5 w-5 text-primary" strokeWidth={1.5} />
-                  </div>
-                  <div>
-                    <p className="font-bold text-sm text-gray-800 dark:text-foreground">طلب #{order.id}</p>
-                    <p className="text-xs text-gray-500">
-                      {order.status === 'pending' && 'غير مدفوع'}
-                      {order.status === 'processing' && 'قيد التجهيز'}
-                      {order.status === 'shipped' && 'تم الشحن'}
-                      {order.status === 'completed' && 'مكتمل'}
-                      {order.status === 'cancelled' && 'ملغي'}
-                      {order.status === 'review' && 'تعليق'}
-                      {order.status === 'returned' && 'مسترجع'}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-left">
-                  <span className="font-bold text-primary text-sm">
-                    {Number(order.total).toLocaleString()}
-                  </span>
-                  <span className="text-xs text-gray-500 mr-1">ر.ي</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Loading State for Orders */}
-      {isOrdersLoading && (
-        <div className="bg-white dark:bg-card mt-2 p-8 flex justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        </div>
-      )}
+      {/* ── Version ───────────────────────────────────────────── */}
+      <div className="text-center mt-6 mb-2">
+        <span className="text-xs text-gray-400">الإصدار {APP_VERSION}</span>
+      </div>
     </div>
   );
 }
