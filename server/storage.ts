@@ -273,6 +273,16 @@ export class DatabaseStorage implements IStorage {
       detailMarginH: 16,
       detailDiscountBubbleSize: 36,
       detailShowThumbnails: true,
+      sadeemShowOldPrice: true,
+      sadeemShowDiscountBadge: true,
+      sadeemShowRating: true,
+      sadeemShowSoldCount: true,
+      sadeemShowShipping: true,
+      sadeemShowReturns: true,
+      sadeemFreeShippingMin: 0,
+      sadeemMarketerDiscount: 0,
+      shippingFee: 0,
+      codEnabled: true,
       updatedAt: new Date(),
     };
   }

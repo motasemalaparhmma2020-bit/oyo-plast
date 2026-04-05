@@ -1,16 +1,14 @@
 import { useCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
-import { ArrowRight, Upload, Check, Loader2, Banknote, MapPin, Wallet, Smartphone, CreditCard, Building2, CheckCircle, X, Copy, ChevronDown, ChevronUp, UserPlus } from "lucide-react";
+import {
+  ArrowRight, Upload, Check, Loader2, Banknote,
+  MapPin, Smartphone, Copy, ChevronDown, ChevronUp,
+  Clock, MessageSquare, Wallet, Tag, X, CheckCircle
+} from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -18,42 +16,10 @@ import { useQuery } from "@tanstack/react-query";
 import type { Product } from "@shared/schema";
 import { useDigitalWallets } from "@/hooks/use-digital-wallets";
 import { GuestCartItem, getGuestCart, clearGuestCart } from "@/lib/cartUtils";
-import { validateCheckoutForm } from "@shared/schemas/checkout";
 
 const YEMENI_CITIES = [
-  "صنعاء",
-  "عدن",
-  "تعز",
-  "الحديدة",
-  "إب",
-  "ذمار",
-  "المكلا",
-  "سيئون",
-  "البيضاء",
-  "حجة",
-  "صعدة",
-  "لحج",
-  "الضالع",
-  "المحويت",
-  "عمران",
-  "شبوة",
-  "أبين",
-  "الجوف"
-];
-
-// طرق الدفع الأساسية — المحافظ تأتي من قاعدة البيانات
-const BASE_PAYMENT_METHODS = [
-  {
-    id: "cash_on_delivery",
-    name: "الدفع عند الاستلام",
-    description: "ادفع المبلغ كاملاً لمندوب التوصيل عند استلام الطلب",
-    icon: Banknote,
-    requiresDeposit: false,
-    instructions: null,
-    logoUrl: null,
-    receiverName: null,
-    phoneNumber: null,
-  }
+  "صنعاء","عدن","تعز","الحديدة","إب","ذمار","المكلا","سيئون",
+  "البيضاء","حجة","صعدة","لحج","الضالع","المحويت","عمران","شبوة","أبين","الجوف"
 ];
 
 export default function Checkout() {
@@ -61,22 +27,27 @@ export default function Checkout() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const { isAuthenticated, user } = useAuth();
-  // Guests can checkout without authentication
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Support for guest cart
+
   const [guestCart, setGuestCart] = useState<GuestCartItem[]>(() => getGuestCart());
-  
-  // Fetch all products for guest cart display
   const { data: allProducts = [] } = useQuery<Product[]>({
     queryKey: ["/api/products"],
     enabled: !isAuthenticated && guestCart.length > 0,
   });
 
-  // Use guest cart if not authenticated, otherwise use auth cart
   const cartItems = isAuthenticated ? authCartItems : guestCart;
-  const isLoading_checkout = !isAuthenticated ? false : isLoading;
-  
+  const isLoadingCart = !isAuthenticated ? false : isLoading;
+
+  const { data: digitalWallets = [] } = useDigitalWallets();
+
+  const { data: displaySettings } = useQuery<any>({
+    queryKey: ["/api/display-settings"],
+  });
+
+  const shippingFee: number = displaySettings?.shippingFee ?? 0;
+  const freeShippingMin: number = displaySettings?.sadeemFreeShippingMin ?? 0;
+  const codEnabled: boolean = displaySettings?.codEnabled ?? true;
+
   const [formData, setFormData] = useState({
     customerName: "",
     customerPhone: "",
@@ -85,65 +56,42 @@ export default function Checkout() {
     paymentMethod: "cash_on_delivery",
     notes: "",
     gpsCoordinates: "",
-    selectedWalletId: null as number | null,
-    purchaseCode: ""
-  });
-
-  // المستلم البديل
-  const [showAlternate, setShowAlternate] = useState(false);
-  const [alternateRecipient, setAlternateRecipient] = useState({
-    name: "",
-    phone: "",
-    address: "",
-    neighborhood: "",
-    city: ""
+    purchaseCode: "",
   });
 
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isGettingLocation, setIsGettingLocation] = useState(false);
-  
-  // Fetch digital wallets
-  const { data: digitalWallets = [] } = useDigitalWallets();
-  
-  // Coupon state
+  const [deliveryTime, setDeliveryTime] = useState<"now" | "later">("now");
+  const [currency] = useState<"YER" | "SAR">(() =>
+    (localStorage.getItem("currency") as "YER" | "SAR") || "YER"
+  );
+
+  const [showCoupon, setShowCoupon] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [showWallets, setShowWallets] = useState(false);
+
   const [couponCode, setCouponCode] = useState("");
-  const [couponData, setCouponData] = useState<{
-    code: string;
-    discountPercent: number;
-    marketerCommissionPercent: number;
-  } | null>(null);
+  const [couponData, setCouponData] = useState<{ code: string; discountPercent: number } | null>(null);
   const [couponError, setCouponError] = useState("");
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
-  const savedCheckoutAddressKey = isAuthenticated && user?.id ? `oyo_saved_address_${user.id}` : "oyo_saved_guest_address";
-  
-  const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
-    return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
-  });
 
-  useEffect(() => {
-    const handleCurrencyChange = () => {
-      setCurrency((localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER');
-    };
-    window.addEventListener('currencyChange', handleCurrencyChange);
-    return () => window.removeEventListener('currencyChange', handleCurrencyChange);
-  }, []);
+  const savedKey = isAuthenticated && user?.id ? `oyo_saved_address_${user.id}` : "oyo_saved_guest_address";
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(savedCheckoutAddressKey);
+      const saved = localStorage.getItem(savedKey);
       if (!saved) return;
-      const parsed = JSON.parse(saved);
-      setFormData((prev) => ({
+      const p = JSON.parse(saved);
+      setFormData(prev => ({
         ...prev,
-        customerName: parsed.customerName ?? prev.customerName,
-        customerPhone: parsed.customerPhone ?? prev.customerPhone,
-        shippingCity: parsed.shippingCity ?? prev.shippingCity,
-        shippingAddress: parsed.shippingAddress ?? prev.shippingAddress,
+        customerName: p.customerName ?? prev.customerName,
+        customerPhone: p.customerPhone ?? prev.customerPhone,
+        shippingCity: p.shippingCity ?? prev.shippingCity,
+        shippingAddress: p.shippingAddress ?? prev.shippingAddress,
       }));
-    } catch {
-    }
-  }, [savedCheckoutAddressKey]);
+    } catch { /* ignore */ }
+  }, [savedKey]);
 
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return;
@@ -154,315 +102,161 @@ export default function Checkout() {
         const addresses = await res.json();
         const preferred = addresses.find((a: any) => a.isDefault) || addresses[0];
         if (!preferred) return;
-        setFormData((prev) => ({
+        setFormData(prev => ({
           ...prev,
           customerName: prev.customerName || preferred.name || "",
           customerPhone: prev.customerPhone || preferred.phone || "",
           shippingCity: prev.shippingCity || preferred.city || "",
           shippingAddress: prev.shippingAddress || preferred.address || "",
         }));
-      } catch {
-      }
+      } catch { /* ignore */ }
     })();
   }, [isAuthenticated, user?.id]);
 
-  // Update guest cart from localStorage
   useEffect(() => {
-    const handleStorageChange = () => {
-      setGuestCart(getGuestCart());
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    const handleStorage = () => setGuestCart(getGuestCart());
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, []);
+
+  useEffect(() => {
+    if (!codEnabled && formData.paymentMethod === "cash_on_delivery") {
+      const firstWallet = digitalWallets.find((w: any) => w.isActive);
+      if (firstWallet) setFormData(prev => ({ ...prev, paymentMethod: `wallet_${firstWallet.id}` }));
+    }
+  }, [codEnabled, digitalWallets]);
 
   const subtotal = useMemo(() => {
     if (isAuthenticated) {
-      return authCartItems?.reduce((acc, item) => {
-        const price = currency === 'SAR' && item.product.priceSar 
-          ? Number(item.product.priceSar) 
-          : Number(item.product.price);
-        return acc + (price * item.quantity);
+      return authCartItems?.reduce((acc, item: any) => {
+        const price = currency === "SAR" && item.product.priceSar
+          ? Number(item.product.priceSar) : Number(item.product.price);
+        return acc + price * item.quantity;
       }, 0) || 0;
-    } else {
-      // For guests, calculate from guest cart with product data
-      return guestCart.reduce((acc, item) => {
-        const product = allProducts.find(p => p.id === item.productId);
-        if (!product) return acc;
-        const price = currency === 'SAR' && product.priceSar 
-          ? Number(product.priceSar) 
-          : Number(product.price);
-        return acc + (price * item.quantity);
-      }, 0);
     }
+    return guestCart.reduce((acc, item) => {
+      const product = allProducts.find(p => p.id === item.productId);
+      if (!product) return acc;
+      const price = currency === "SAR" && product.priceSar
+        ? Number(product.priceSar) : Number(product.price);
+      return acc + price * item.quantity;
+    }, 0);
   }, [authCartItems, guestCart, currency, isAuthenticated, allProducts]);
 
-  const discountAmount = useMemo(() => {
-    if (couponData) {
-      return Math.floor(subtotal * (couponData.discountPercent / 100));
-    }
-    return 0;
-  }, [subtotal, couponData]);
+  const discountAmount = useMemo(() =>
+    couponData ? Math.floor(subtotal * (couponData.discountPercent / 100)) : 0,
+    [subtotal, couponData]
+  );
 
-  const finalTotal = useMemo(() => {
-    return subtotal - discountAmount;
-  }, [subtotal, discountAmount]);
+  const effectiveShippingFee = useMemo(() => {
+    if (freeShippingMin === 0) return 0;
+    return subtotal - discountAmount >= freeShippingMin ? 0 : shippingFee;
+  }, [subtotal, discountAmount, shippingFee, freeShippingMin]);
 
-  const depositAmount = useMemo(() => {
-    return Math.ceil(finalTotal * 0.3);
-  }, [finalTotal]);
+  const finalTotal = useMemo(() =>
+    subtotal - discountAmount + effectiveShippingFee,
+    [subtotal, discountAmount, effectiveShippingFee]
+  );
 
-  // دمج طريقة الدفع الكاش مع المحافظ الديناميكية من قاعدة البيانات
-  const allPaymentMethods = useMemo(() => [
-    ...BASE_PAYMENT_METHODS,
-    ...digitalWallets.filter((w: any) => w.isActive).map((w: any) => ({
-      id: `wallet_${w.id}`,
-      name: w.name,
-      description: `التحويل عبر ${w.name}`,
-      icon: Smartphone,
-      requiresDeposit: true,
-      instructions: `حوّل العربون (30%) إلى: ${w.phoneNumber} — باسم: ${w.receiverName}`,
-      logoUrl: w.logoUrl,
-      receiverName: w.receiverName,
-      phoneNumber: w.phoneNumber,
-    }))
-  ], [digitalWallets]);
+  const formatPrice = (n: number) => n.toLocaleString("ar-YE");
+  const currLabel = currency === "YER" ? "ر.ي" : "ر.س";
 
-  const selectedPayment = allPaymentMethods.find(p => p.id === formData.paymentMethod);
-  const selectedWalletData = formData.paymentMethod.startsWith("wallet_")
+  const isWalletPayment = formData.paymentMethod.startsWith("wallet_");
+  const selectedWallet = isWalletPayment
     ? digitalWallets.find((w: any) => `wallet_${w.id}` === formData.paymentMethod)
     : null;
-  
+
   const validateCoupon = async () => {
-    if (!couponCode.trim()) {
-      setCouponError("الرجاء إدخال كود الخصم");
-      return;
-    }
-    
-    setIsValidatingCoupon(true);
-    setCouponError("");
-    
+    if (!couponCode.trim()) { setCouponError("أدخل كود الخصم"); return; }
+    setIsValidatingCoupon(true); setCouponError("");
     try {
-      const response = await fetch(`/api/coupons/validate/${encodeURIComponent(couponCode.trim())}`);
-      const data = await response.json();
-      
+      const res = await fetch(`/api/coupons/validate/${encodeURIComponent(couponCode.trim())}`);
+      const data = await res.json();
       if (data.valid) {
         setCouponData(data.coupon);
-        toast({
-          title: "تم تطبيق الخصم",
-          description: `خصم ${data.coupon.discountPercent}% تم تطبيقه بنجاح`,
-        });
+        setShowCoupon(false);
+        toast({ title: `✅ خصم ${data.coupon.discountPercent}% تم تطبيقه` });
       } else {
         setCouponError(data.error || "كود الخصم غير صالح");
-        setCouponData(null);
       }
-    } catch (error) {
-      setCouponError("حدث خطأ أثناء التحقق من الكود");
-      setCouponData(null);
-    } finally {
-      setIsValidatingCoupon(false);
-    }
-  };
-
-  const removeCoupon = () => {
-    setCouponData(null);
-    setCouponCode("");
-    setCouponError("");
-    toast({
-      title: "تم إزالة الخصم",
-      description: "تم إزالة كود الخصم من طلبك",
-    });
-  };
-
-  const formatPrice = (price: number) => {
-    return price.toLocaleString('ar-YE');
+    } catch { setCouponError("خطأ في التحقق"); }
+    finally { setIsValidatingCoupon(false); }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setReceiptFile(file);
-      toast({
-        title: "تم رفع الإشعار",
-        description: "تم رفع صورة إشعار التحويل بنجاح",
-      });
-    }
+    if (file) { setReceiptFile(file); toast({ title: "✅ تم رفع الإيصال" }); }
   };
 
-  const getCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      toast({
-        title: "غير متاح",
-        description: "المتصفح لا يدعم تحديد الموقع",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsGettingLocation(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const coordinates = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-        setFormData(prev => ({
-          ...prev,
-          gpsCoordinates: coordinates
-        }));
-        toast({
-          title: "تم تحديد الموقع",
-          description: "تم الحصول على إحداثيات موقعك بنجاح"
-        });
-        setIsGettingLocation(false);
-      },
-      (error) => {
-        let errorMessage = "حدث خطأ في تحديد الموقع";
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMessage = "تم رفض الإذن بتحديد الموقع";
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMessage = "معلومات الموقع غير متاحة";
-            break;
-          case error.TIMEOUT:
-            errorMessage = "انتهت مهلة تحديد الموقع";
-            break;
-        }
-        toast({
-          title: "فشل تحديد الموقع",
-          description: errorMessage,
-          variant: "destructive"
-        });
-        setIsGettingLocation(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-      }
-    );
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // تحقق يدوي بسيط يدعم أرقام اليمن والسعودية
+  const handleSubmit = async () => {
     if (!formData.customerName.trim() || formData.customerName.trim().length < 2) {
-      toast({ title: "خطأ", description: "الاسم الكامل مطلوب (حرفين على الأقل)", variant: "destructive" });
-      return;
+      toast({ title: "خطأ", description: "الاسم مطلوب (حرفين على الأقل)", variant: "destructive" }); return;
     }
     if (!formData.customerPhone.trim()) {
-      toast({ title: "خطأ", description: "رقم الهاتف مطلوب", variant: "destructive" });
-      return;
+      toast({ title: "خطأ", description: "رقم الهاتف مطلوب", variant: "destructive" }); return;
     }
     if (!formData.shippingCity) {
-      toast({ title: "خطأ", description: "اختر المدينة", variant: "destructive" });
-      return;
+      toast({ title: "خطأ", description: "اختر المدينة", variant: "destructive" }); return;
     }
     if (!formData.shippingAddress.trim() || formData.shippingAddress.trim().length < 5) {
-      toast({ title: "خطأ", description: "العنوان التفصيلي مطلوب (5 أحرف على الأقل)", variant: "destructive" });
-      return;
+      toast({ title: "خطأ", description: "العنوان التفصيلي مطلوب", variant: "destructive" }); return;
     }
-
-    // التحقق من المحفظة إذا كانت مختارة
-    const isWalletPayment = formData.paymentMethod.startsWith("wallet_");
-    if (isWalletPayment) {
-      if (!formData.purchaseCode?.trim()) {
-        toast({ title: "خطأ", description: "يرجى إدخال رقم الحوالة أو كود الشراء", variant: "destructive" });
-        return;
-      }
-      if (!receiptFile) {
-        toast({ title: "خطأ", description: "يرجى رفع صورة إشعار التحويل", variant: "destructive" });
-        return;
-      }
+    if (isWalletPayment && !formData.purchaseCode?.trim()) {
+      toast({ title: "خطأ", description: "أدخل رقم الحوالة أو كود الدفع", variant: "destructive" }); return;
     }
-
-    // المستلم البديل — إذا مفعّل، تحقق من الحد الأدنى
-    if (showAlternate && alternateRecipient.name && !alternateRecipient.phone.trim()) {
-      toast({ title: "خطأ", description: "رقم هاتف المستلم البديل مطلوب", variant: "destructive" });
-      return;
+    if (isWalletPayment && selectedWallet?.requiresProof && !receiptFile) {
+      toast({ title: "خطأ", description: "ارفع صورة إيصال التحويل", variant: "destructive" }); return;
     }
 
     setIsSubmitting(true);
-
     try {
-
-      const orderData = {
-        ...formData,
-        total: finalTotal.toString(),
-        depositAmount: selectedPayment?.requiresDeposit ? depositAmount.toString() : null,
-        receiptImageUrl: receiptFile ? receiptFile.name : null,
-        couponCode: couponData?.code || null,
-        discountAmount: discountAmount > 0 ? discountAmount.toString() : null
-      };
-
-      const alternateNote = showAlternate && alternateRecipient.name
-        ? `\n\n--- المستلم البديل ---\nالاسم: ${alternateRecipient.name}\nالهاتف: ${alternateRecipient.phone}\nالحي: ${alternateRecipient.neighborhood}\nالمدينة/المحل: ${alternateRecipient.city}\nالعنوان: ${alternateRecipient.address}`
-        : "";
-
-      // تحويل paymentMethod لقيمة مقبولة في السيرفر
-      const normalizedPaymentMethod = formData.paymentMethod.startsWith("wallet_")
-        ? "digital_wallet"
-        : formData.paymentMethod;
-
+      const normalizedPaymentMethod = isWalletPayment ? "digital_wallet" : formData.paymentMethod;
+      const deliveryNote = deliveryTime === "later" ? "\n[وقت التسليم: لاحقاً]" : "";
       const response = await apiRequest("POST", "/api/orders/create", {
-        customerName: formData.customerName || user?.fullName || user?.email || "عميل",
+        customerName: formData.customerName || user?.fullName || "عميل",
         customerEmail: user?.email || "guest@oyoplast.com",
         customerPhone: formData.customerPhone,
         shippingCity: formData.shippingCity,
         shippingAddress: formData.shippingAddress,
         shippingOption: "standard",
-        shippingCost: 0,
+        shippingCost: effectiveShippingFee,
         paymentMethod: normalizedPaymentMethod,
         purchaseCode: formData.purchaseCode || undefined,
-        selectedWalletId: formData.selectedWalletId || undefined,
-        notes: (formData.notes || "") + alternateNote,
+        notes: (formData.notes || "") + deliveryNote,
         total: finalTotal,
         items: cartItems,
+        couponCode: couponData?.code || null,
+        discountAmount: discountAmount > 0 ? discountAmount : null,
       });
 
       try {
-        const payload = {
+        localStorage.setItem(savedKey, JSON.stringify({
           customerName: formData.customerName,
           customerPhone: formData.customerPhone,
           shippingCity: formData.shippingCity,
           shippingAddress: formData.shippingAddress,
-        };
-        localStorage.setItem(savedCheckoutAddressKey, JSON.stringify(payload));
+        }));
         if (isAuthenticated) {
           await apiRequest("POST", "/api/checkout/save-address", {
-            name: formData.customerName,
-            city: formData.shippingCity,
-            address: formData.shippingAddress,
-            phone: formData.customerPhone,
-            isDefault: true,
+            name: formData.customerName, city: formData.shippingCity,
+            address: formData.shippingAddress, phone: formData.customerPhone, isDefault: true,
           });
         }
-      } catch {
-      }
+      } catch { /* non-fatal */ }
 
       clearGuestCart();
-
       await queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
-      
-      toast({
-        title: "تم إنشاء الطلب بنجاح",
-        description: "سيتم التواصل معك قريباً لتأكيد الطلب",
-      });
-      
       setLocation(`/order-confirmation/${(response as any)?.id ?? ""}`);
-    } catch (error) {
-      toast({
-        title: "خطأ",
-        description: "حدث خطأ أثناء إنشاء الطلب",
-        variant: "destructive"
-      });
+    } catch {
+      toast({ title: "خطأ", description: "حدث خطأ أثناء إنشاء الطلب", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (isLoading_checkout) {
+  if (isLoadingCart) {
     return (
-      <div className="container mx-auto px-4 py-20 flex justify-center">
+      <div className="flex justify-center items-center min-h-screen">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
       </div>
     );
@@ -470,507 +264,513 @@ export default function Checkout() {
 
   if (!cartItems || cartItems.length === 0) {
     return (
-      <div className="container mx-auto px-4 py-20 text-center">
-        <h2 className="text-2xl font-bold mb-4">السلة فارغة</h2>
-        <Link href="/products">
-          <Button>تصفح المنتجات</Button>
-        </Link>
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 px-4 text-center">
+        <p className="text-lg font-bold text-muted-foreground">السلة فارغة</p>
+        <Link href="/products"><Button>تصفح المنتجات</Button></Link>
       </div>
     );
   }
 
+  const hasAddress = formData.customerName && formData.shippingCity && formData.shippingAddress;
+  const selectedPaymentName = isWalletPayment
+    ? (selectedWallet?.name ?? "محفظة إلكترونية")
+    : "الدفع عند الاستلام";
+
   return (
-    <div className="container mx-auto px-4 py-6 pb-24">
-      <Link href="/cart">
-        <Button variant="ghost" className="mb-4 gap-2" data-testid="button-back">
-          <ArrowRight className="h-4 w-4" />
-          العودة للسلة
-        </Button>
-      </Link>
+    <div className="min-h-screen bg-muted/30 dark:bg-background pb-32" dir="rtl">
+      {/* ── Header ── */}
+      <div className="sticky top-0 z-40 bg-background border-b flex items-center justify-between px-4 py-3">
+        <Link href="/cart">
+          <button className="p-1 text-muted-foreground" data-testid="button-back">
+            <ArrowRight className="h-5 w-5" />
+          </button>
+        </Link>
+        <h1 className="font-bold text-base">تأكيد الطلب</h1>
+        <div className="w-7" />
+      </div>
 
-      <h1 className="text-2xl md:text-3xl font-extrabold mb-6">إتمام الطلب</h1>
+      <div className="space-y-1">
+        {/* ── قسيمة الخصم ── */}
+        <div className="bg-background">
+          <button
+            className="w-full flex items-center justify-between px-4 py-3"
+            onClick={() => setShowCoupon(!showCoupon)}
+            data-testid="button-toggle-coupon"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <Tag className="h-4 w-4 text-primary" />
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-semibold">هل لديك قسيمة تخفيض؟</p>
+                {couponData && (
+                  <p className="text-xs text-green-600 font-bold">{couponData.code} — خصم {couponData.discountPercent}%</p>
+                )}
+              </div>
+            </div>
+            <span className="text-xs text-primary font-semibold shrink-0">
+              {couponData ? <X className="h-4 w-4 text-red-500" onClick={e => { e.stopPropagation(); setCouponData(null); setCouponCode(""); }} /> : "إضافة"}
+            </span>
+          </button>
+          {showCoupon && !couponData && (
+            <div className="px-4 pb-3 flex gap-2">
+              <Input
+                placeholder="أدخل كود الخصم"
+                value={couponCode}
+                onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                className="h-9 text-sm flex-1"
+                data-testid="input-coupon-code"
+              />
+              <Button size="sm" onClick={validateCoupon} disabled={isValidatingCoupon} className="h-9 px-4" data-testid="button-apply-coupon">
+                {isValidatingCoupon ? <Loader2 className="h-3 w-3 animate-spin" /> : "تطبيق"}
+              </Button>
+            </div>
+          )}
+          {couponError && <p className="px-4 pb-2 text-xs text-red-500">{couponError}</p>}
+        </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>معلومات التوصيل</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* اسم المستلم الرئيسي */}
+        <div className="h-px bg-border mx-4" />
+
+        {/* ── عنوان التوصيل ── */}
+        <div className="bg-background">
+          <button
+            className="w-full flex items-center justify-between px-4 py-3"
+            onClick={() => setShowAddressForm(!showAddressForm)}
+            data-testid="button-toggle-address"
+          >
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="w-9 h-9 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
+                <MapPin className="h-4 w-4 text-red-500" />
+              </div>
+              <div className="text-right flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground">عنوان التوصيل:</p>
+                {hasAddress ? (
+                  <p className="text-sm font-semibold truncate">
+                    {formData.shippingCity}، {formData.shippingAddress}
+                  </p>
+                ) : (
+                  <p className="text-sm text-orange-500 font-semibold">أضف عنوان التوصيل</p>
+                )}
+              </div>
+            </div>
+            <span className="text-xs text-primary font-semibold shrink-0 mr-2">تغيير</span>
+          </button>
+
+          {/* Phone row */}
+          {formData.customerPhone && !showAddressForm && (
+            <div className="flex items-center gap-3 px-4 pb-2">
+              <div className="w-9 h-9 shrink-0" />
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span className="font-mono text-foreground font-medium">{formData.customerPhone}</span>
+                <span className="text-xs">رقم التواصل</span>
+              </div>
+            </div>
+          )}
+
+          {/* Address Form */}
+          {showAddressForm && (
+            <div className="px-4 pb-4 space-y-2 border-t pt-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label htmlFor="customer-name">الاسم الكامل *</Label>
+                  <p className="text-xs text-muted-foreground mb-1">الاسم الكامل *</p>
                   <Input
-                    id="customer-name"
-                    type="text"
-                    placeholder="اسمك الكامل"
+                    placeholder="اسمك"
                     value={formData.customerName}
-                    onChange={(e) => setFormData({...formData, customerName: e.target.value})}
-                    className="mt-1"
+                    onChange={e => setFormData({ ...formData, customerName: e.target.value })}
+                    className="h-9 text-sm"
                     data-testid="input-customer-name"
                   />
                 </div>
-
                 <div>
-                  <Label htmlFor="phone">رقم الهاتف *</Label>
+                  <p className="text-xs text-muted-foreground mb-1">رقم الهاتف *</p>
                   <Input
-                    id="phone"
                     type="tel"
-                    placeholder="مثال: 777123456"
+                    placeholder="777XXXXXX"
                     value={formData.customerPhone}
-                    onChange={(e) => setFormData({...formData, customerPhone: e.target.value})}
-                    className="mt-1"
+                    onChange={e => setFormData({ ...formData, customerPhone: e.target.value })}
+                    className="h-9 text-sm"
                     data-testid="input-phone"
                   />
                 </div>
-                
-                <div>
-                  <Label htmlFor="city">المدينة *</Label>
-                  <Select
-                    value={formData.shippingCity}
-                    onValueChange={(value) => setFormData({...formData, shippingCity: value})}
-                  >
-                    <SelectTrigger className="mt-1" data-testid="select-city">
-                      <SelectValue placeholder="اختر المدينة" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {YEMENI_CITIES.map((city) => (
-                        <SelectItem key={city} value={city}>{city}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="address">العنوان التفصيلي *</Label>
-                  <Textarea
-                    id="address"
-                    placeholder="الحي، الشارع، رقم المبنى، علامة مميزة..."
-                    value={formData.shippingAddress}
-                    onChange={(e) => setFormData({...formData, shippingAddress: e.target.value})}
-                    className="mt-1"
-                    data-testid="input-address"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <Label htmlFor="gps">إحداثيات الموقع (GPS)</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={getCurrentLocation}
-                      disabled={isGettingLocation}
-                      className="gap-2"
-                      data-testid="button-get-location"
-                    >
-                      {isGettingLocation ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <MapPin className="h-4 w-4" />
-                      )}
-                      {isGettingLocation ? 'جارٍ التحديد...' : 'تحديد موقعي'}
-                    </Button>
-                  </div>
-                  <Input
-                    id="gps"
-                    type="text"
-                    placeholder="سيتم تعبئتها تلقائياً عند الضغط على الزر"
-                    value={formData.gpsCoordinates}
-                    onChange={(e) => setFormData({...formData, gpsCoordinates: e.target.value})}
-                    className="mt-1"
-                    readOnly
-                    data-testid="input-gps"
-                  />
-                  {formData.gpsCoordinates && (
-                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                      <Check className="h-3 w-3 text-green-600" />
-                      تم تحديد الموقع بنجاح
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="notes">ملاحظات إضافية</Label>
-                  <Textarea
-                    id="notes"
-                    placeholder="أي ملاحظات خاصة بالطلب..."
-                    value={formData.notes}
-                    onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                    className="mt-1"
-                    data-testid="input-notes"
-                  />
-                </div>
-
-                {/* ─── قسم المستلم البديل ─── */}
-                <div className="border border-dashed border-gray-300 rounded-xl overflow-hidden">
-                  <button
-                    type="button"
-                    className="w-full flex items-center justify-between p-4 text-right hover:bg-gray-50 transition-colors"
-                    onClick={() => setShowAlternate(!showAlternate)}
-                    data-testid="button-toggle-alternate-recipient"
-                  >
-                    <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                      <UserPlus className="h-4 w-4 text-primary" />
-                      هل تريد شخصاً آخر يستلم الطلب نيابةً عنك؟
-                    </div>
-                    {showAlternate ? <ChevronUp className="h-4 w-4 text-gray-500 shrink-0" /> : <ChevronDown className="h-4 w-4 text-gray-500 shrink-0" />}
-                  </button>
-
-                  {showAlternate && (
-                    <div className="px-4 pb-4 space-y-3 bg-blue-50/50 border-t border-dashed border-gray-300">
-                      <p className="text-xs text-muted-foreground pt-3">بيانات الشخص الذي سيستلم الطلب بدلاً منك</p>
-                      <div>
-                        <Label htmlFor="alt-name">اسم المستلم البديل *</Label>
-                        <Input
-                          id="alt-name"
-                          placeholder="الاسم الكامل للمستلم"
-                          value={alternateRecipient.name}
-                          onChange={(e) => setAlternateRecipient({...alternateRecipient, name: e.target.value})}
-                          className="mt-1"
-                          data-testid="input-alternate-name"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="alt-phone">رقم هاتف المستلم *</Label>
-                        <Input
-                          id="alt-phone"
-                          type="tel"
-                          placeholder="777XXXXXXX"
-                          value={alternateRecipient.phone}
-                          onChange={(e) => setAlternateRecipient({...alternateRecipient, phone: e.target.value})}
-                          className="mt-1"
-                          data-testid="input-alternate-phone"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="alt-neighborhood">الحي / المنطقة</Label>
-                        <Input
-                          id="alt-neighborhood"
-                          placeholder="اسم الحي أو المنطقة"
-                          value={alternateRecipient.neighborhood}
-                          onChange={(e) => setAlternateRecipient({...alternateRecipient, neighborhood: e.target.value})}
-                          className="mt-1"
-                          data-testid="input-alternate-neighborhood"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="alt-city">المدينة / المحل التجاري</Label>
-                        <Input
-                          id="alt-city"
-                          placeholder="اسم المدينة أو المحل"
-                          value={alternateRecipient.city}
-                          onChange={(e) => setAlternateRecipient({...alternateRecipient, city: e.target.value})}
-                          className="mt-1"
-                          data-testid="input-alternate-city"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="alt-address">العنوان التفصيلي</Label>
-                        <Textarea
-                          id="alt-address"
-                          placeholder="الشارع، رقم المبنى، علامة مميزة..."
-                          value={alternateRecipient.address}
-                          onChange={(e) => setAlternateRecipient({...alternateRecipient, address: e.target.value})}
-                          className="mt-1"
-                          rows={2}
-                          data-testid="input-alternate-address"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>طريقة الدفع</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <RadioGroup
-                  value={formData.paymentMethod}
-                  onValueChange={(val) => {
-                    const wId = val.startsWith("wallet_") ? parseInt(val.replace("wallet_", "")) : null;
-                    setFormData({...formData, paymentMethod: val, selectedWalletId: wId, purchaseCode: ""});
-                  }}
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">المدينة *</p>
+                <select
+                  value={formData.shippingCity}
+                  onChange={e => setFormData({ ...formData, shippingCity: e.target.value })}
+                  className="w-full h-9 text-sm border border-input rounded-md px-3 bg-background"
+                  data-testid="select-city"
                 >
-                {allPaymentMethods.map((method) => {
-                  const isSelected = formData.paymentMethod === method.id;
-                  const walletId = method.id.startsWith("wallet_") ? parseInt(method.id.replace("wallet_", "")) : null;
-                  const walletData = walletId ? digitalWallets.find((w: any) => w.id === walletId) : null;
-                  return (
-                    <div
-                      key={method.id}
-                      className={`rounded-xl border-2 cursor-pointer transition-all overflow-hidden ${
-                        isSelected ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
+                  <option value="">اختر المدينة</option>
+                  {YEMENI_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">العنوان التفصيلي *</p>
+                <Textarea
+                  placeholder="الحي، الشارع، علامة مميزة..."
+                  value={formData.shippingAddress}
+                  onChange={e => setFormData({ ...formData, shippingAddress: e.target.value })}
+                  className="text-sm resize-none"
+                  rows={2}
+                  data-testid="input-address"
+                />
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                className="w-full h-9"
+                onClick={() => setShowAddressForm(false)}
+                data-testid="button-save-address"
+              >
+                <Check className="h-4 w-4 ml-1" /> حفظ العنوان
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="h-px bg-border mx-4" />
+
+        {/* ── ملاحظات الطلب ── */}
+        <div className="bg-background">
+          <button
+            className="w-full flex items-center justify-between px-4 py-3"
+            onClick={() => setShowNotes(!showNotes)}
+            data-testid="button-toggle-notes"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <MessageSquare className="h-4 w-4 text-primary" />
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-semibold">ملاحظات الطلب</p>
+                <p className="text-xs text-muted-foreground">
+                  {formData.notes || "لا يوجد ملاحظة"}
+                </p>
+              </div>
+            </div>
+            <span className="text-xs text-primary font-semibold">{showNotes ? "إغلاق" : "إضافة"}</span>
+          </button>
+          {showNotes && (
+            <div className="px-4 pb-3">
+              <Textarea
+                placeholder="أي ملاحظات للمندوب..."
+                value={formData.notes}
+                onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                className="text-sm resize-none"
+                rows={2}
+                data-testid="input-notes"
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="h-px bg-border mx-4" />
+
+        {/* ── وقت الطلب ── */}
+        <div className="bg-background px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+              <Clock className="h-4 w-4 text-blue-500" />
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-semibold">تحديد وقت الطلب</p>
+              <p className="text-xs text-muted-foreground">وقت تنفيذ الطلب</p>
+            </div>
+          </div>
+          <div className="flex gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => setDeliveryTime("now")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                deliveryTime === "now"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground"
+              }`}
+              data-testid="button-delivery-now"
+            >
+              {deliveryTime === "now" && <span>✓ </span>}الآن
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeliveryTime("later")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                deliveryTime === "later"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground"
+              }`}
+              data-testid="button-delivery-later"
+            >
+              في وقت لاحق
+            </button>
+          </div>
+        </div>
+
+        <div className="h-px bg-border mx-4" />
+
+        {/* ── طريقة الدفع ── */}
+        <div className="bg-background">
+          <button
+            className="w-full flex items-center justify-between px-4 py-3"
+            onClick={() => setShowWallets(!showWallets)}
+            data-testid="button-toggle-payment"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center shrink-0">
+                <Wallet className="h-4 w-4 text-orange-500" />
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">طريقة الدفع</p>
+                <p className="text-sm font-semibold">( {selectedPaymentName} )</p>
+              </div>
+            </div>
+            {showWallets ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          </button>
+
+          {/* قائمة الدفع */}
+          {showWallets && (
+            <div className="border-t">
+              {/* COD */}
+              {codEnabled && (
+                <button
+                  type="button"
+                  className={`w-full flex items-center gap-3 px-4 py-3 transition-colors ${
+                    formData.paymentMethod === "cash_on_delivery" ? "bg-primary/5" : "hover:bg-muted/50"
+                  }`}
+                  onClick={() => {
+                    setFormData({ ...formData, paymentMethod: "cash_on_delivery", purchaseCode: "" });
+                    setReceiptFile(null);
+                  }}
+                  data-testid="payment-method-cash_on_delivery"
+                >
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                    formData.paymentMethod === "cash_on_delivery" ? "border-primary" : "border-muted-foreground"
+                  }`}>
+                    {formData.paymentMethod === "cash_on_delivery" && (
+                      <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+                    )}
+                  </div>
+                  <div className="w-9 h-9 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
+                    <Banknote className="h-4 w-4 text-green-600" />
+                  </div>
+                  <span className="text-sm font-medium">الدفع عند الاستلام</span>
+                  {formData.paymentMethod === "cash_on_delivery" && (
+                    <CheckCircle className="h-4 w-4 text-primary mr-auto shrink-0" />
+                  )}
+                </button>
+              )}
+
+              {/* Digital Wallets */}
+              {digitalWallets.filter((w: any) => w.isActive).map((wallet: any) => {
+                const wId = `wallet_${wallet.id}`;
+                const isSelected = formData.paymentMethod === wId;
+                return (
+                  <div key={wallet.id}>
+                    <button
+                      type="button"
+                      className={`w-full flex items-center gap-3 px-4 py-3 transition-colors ${
+                        isSelected ? "bg-primary/5" : "hover:bg-muted/50"
                       }`}
                       onClick={() => {
-                        const wId = method.id.startsWith("wallet_") ? parseInt(method.id.replace("wallet_", "")) : null;
-                        setFormData({...formData, paymentMethod: method.id, selectedWalletId: wId, purchaseCode: ""});
+                        setFormData({ ...formData, paymentMethod: wId, purchaseCode: "" });
+                        setReceiptFile(null);
                       }}
-                      data-testid={`payment-method-${method.id}`}
+                      data-testid={`payment-method-${wId}`}
                     >
-                      {/* رأس الخيار */}
-                      <div className="flex items-center gap-3 p-4">
-                        <RadioGroupItem value={method.id} id={method.id} className="shrink-0" />
-                        {(method as any).logoUrl ? (
-                          <img src={(method as any).logoUrl} alt={method.name} className="w-9 h-9 rounded-lg object-contain shrink-0 border border-gray-200 bg-white p-0.5" />
-                        ) : (
-                          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shrink-0">
-                            <method.icon className="h-4 w-4 text-primary" />
-                          </div>
-                        )}
-                        <div className="flex-grow">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Label htmlFor={method.id} className="font-bold cursor-pointer">{method.name}</Label>
-                            {method.requiresDeposit && <Badge variant="secondary" className="text-xs">عربون 30%</Badge>}
-                          </div>
-                          <p className="text-xs text-muted-foreground">{method.description}</p>
-                        </div>
-                        {isSelected && !method.requiresDeposit && <CheckCircle className="h-5 w-5 text-primary shrink-0" />}
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        isSelected ? "border-primary" : "border-muted-foreground"
+                      }`}>
+                        {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
                       </div>
+                      {wallet.logoUrl ? (
+                        <img src={wallet.logoUrl} alt={wallet.name} className="w-9 h-9 rounded-lg object-contain shrink-0 border bg-white p-0.5" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <Smartphone className="h-4 w-4 text-primary" />
+                        </div>
+                      )}
+                      <span className="text-sm font-medium flex-1 text-right">{wallet.name}</span>
+                    </button>
 
-                      {/* تفاصيل المحفظة عند الاختيار */}
-                      {isSelected && walletData && (
-                        <div className="px-4 pb-4 space-y-3 border-t border-primary/20 pt-3">
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="p-2.5 bg-white dark:bg-gray-800 rounded-lg border">
-                              <p className="text-xs text-gray-500 mb-0.5">باسم المستلم</p>
-                              <p className="font-bold text-sm">{walletData.receiverName}</p>
-                            </div>
-                            <div className="flex gap-1">
-                              <div className="flex-1 p-2.5 bg-white dark:bg-gray-800 rounded-lg border">
-                                <p className="text-xs text-gray-500 mb-0.5">رقم التحويل</p>
-                                <p className="font-mono font-bold text-sm">{walletData.phoneNumber}</p>
-                              </div>
+                    {/* تفاصيل المحفظة المختارة */}
+                    {isSelected && (
+                      <div className="mx-4 mb-3 rounded-xl border bg-muted/30 overflow-hidden">
+                        {/* معلومات الحساب */}
+                        <div className="flex items-start gap-3 p-3 border-b">
+                          <div className="flex-1">
+                            <p className="text-xs text-muted-foreground mb-0.5">اسم المستلم</p>
+                            <p className="text-sm font-bold">{wallet.receiverName}</p>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-xs text-muted-foreground mb-0.5">رقم الحساب</p>
+                            <div className="flex items-center gap-1">
+                              <p className="text-sm font-mono font-bold">{wallet.phoneNumber}</p>
                               <button
                                 type="button"
-                                onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(walletData.phoneNumber); toast({ title: "✅ تم نسخ الرقم" }); }}
-                                className="p-2.5 bg-blue-100 dark:bg-blue-900 hover:bg-blue-200 rounded-lg text-blue-600 transition-colors shrink-0 self-start mt-0 h-full"
+                                onClick={() => { navigator.clipboard.writeText(wallet.phoneNumber); toast({ title: "✅ تم نسخ الرقم" }); }}
+                                className="text-primary"
                               >
-                                <Copy className="h-4 w-4" />
+                                <Copy className="h-3.5 w-3.5" />
                               </button>
                             </div>
                           </div>
-                          {/* حقل رقم الحوالة */}
+                        </div>
+
+                        {wallet.instructions && (
+                          <p className="px-3 py-2 text-xs text-blue-600 dark:text-blue-400 border-b bg-blue-50 dark:bg-blue-900/20">
+                            {wallet.instructions}
+                          </p>
+                        )}
+
+                        <div className="p-3 space-y-2">
+                          {/* كود الدفع */}
                           <div>
-                            <Label className="text-sm font-semibold mb-1 block">رقم الحوالة / كود الدفع *</Label>
+                            <p className="text-xs font-semibold mb-1">رقم الحوالة / كود الدفع *</p>
                             <Input
                               type="text"
                               value={formData.purchaseCode}
-                              onChange={(e) => setFormData({ ...formData, purchaseCode: e.target.value })}
-                              onClick={(e) => e.stopPropagation()}
+                              onChange={e => setFormData({ ...formData, purchaseCode: e.target.value })}
                               placeholder="أدخل رقم السند أو كود التحويل"
-                              className="font-mono"
+                              className="h-9 text-sm font-mono"
+                              data-testid="input-purchase-code"
                             />
-                            <p className="text-xs text-blue-600 mt-1">⚠️ إلزامي للتحقق من الدفع</p>
                           </div>
-                          {/* رفع إشعار التحويل */}
-                          <div>
-                            <Label className="text-sm font-semibold mb-1 block">صورة إشعار التحويل *</Label>
-                            <div
-                              className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer hover:border-primary/50 transition-colors"
-                              onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-                            >
-                              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" data-testid="input-receipt" />
-                              {receiptFile ? (
-                                <div className="flex items-center justify-center gap-2 text-primary">
-                                  <Check className="h-4 w-4" /><span className="text-sm font-medium">{receiptFile.name}</span>
-                                </div>
-                              ) : (
-                                <div className="text-muted-foreground">
-                                  <Upload className="h-6 w-6 mx-auto mb-1" />
-                                  <p className="text-sm">اضغط لرفع صورة الإشعار</p>
-                                </div>
-                              )}
+                          {/* رفع الإيصال */}
+                          {wallet.requiresProof && (
+                            <div>
+                              <p className="text-xs font-semibold mb-1">صورة إيصال التحويل *</p>
+                              <div
+                                className="border-2 border-dashed rounded-lg p-3 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                                onClick={() => fileInputRef.current?.click()}
+                                data-testid="upload-receipt-area"
+                              >
+                                <input
+                                  ref={fileInputRef}
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handleFileUpload}
+                                  className="hidden"
+                                  data-testid="input-receipt"
+                                />
+                                {receiptFile ? (
+                                  <div className="flex items-center justify-center gap-2 text-green-600">
+                                    <Check className="h-4 w-4" />
+                                    <span className="text-sm font-medium truncate max-w-[180px]">{receiptFile.name}</span>
+                                  </div>
+                                ) : (
+                                  <div className="text-muted-foreground">
+                                    <Upload className="h-5 w-5 mx-auto mb-1" />
+                                    <p className="text-xs">اضغط لرفع صورة الإيصال</p>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              العربون المطلوب: <span className="font-bold text-primary">{formatPrice(depositAmount)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
-                            </p>
-                          </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-                </RadioGroup>
-              </CardContent>
-            </Card>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* زر إغلاق القائمة */}
+              <div className="px-4 pb-3">
+                <button
+                  type="button"
+                  onClick={() => setShowWallets(false)}
+                  className="w-full py-2 rounded-lg bg-muted text-sm font-medium text-muted-foreground"
+                  data-testid="button-close-payment"
+                >
+                  إغلاق
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── قسم الإجماليات ── */}
+        <div className="bg-background mx-0">
+          <div className="px-4 pt-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="font-bold text-muted-foreground">الإجمالي</span>
+              <span className="font-semibold">{formatPrice(subtotal)} {currLabel}</span>
+            </div>
+            {discountAmount > 0 && (
+              <div className="flex justify-between text-sm text-green-600">
+                <span>الخصم ({couponData?.discountPercent}%)</span>
+                <span className="font-bold">- {formatPrice(discountAmount)} {currLabel}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">التوصيل</span>
+              <span className={effectiveShippingFee === 0 ? "text-green-600 font-semibold" : "font-semibold"}>
+                {effectiveShippingFee === 0 ? "مجاني" : `${formatPrice(effectiveShippingFee)} ${currLabel}`}
+              </span>
+            </div>
           </div>
 
-          <div className="lg:col-span-1">
-            <Card className="sticky top-24">
-              <CardHeader>
-                <CardTitle>ملخص الطلب</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3 max-h-60 overflow-y-auto">
-                  {cartItems.map((item, idx) => {
-                    // For auth cart items
-                    const authItem = item as any;
-                    if (authItem.id && authItem.product) {
-                      return (
-                        <div key={authItem.id} className="flex gap-3">
-                          <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden shrink-0">
-                            <img 
-                              src={authItem.product.imageUrl} 
-                              alt={authItem.product.name}
-                              className="w-full h-full object-contain"
-                            />
-                          </div>
-                          <div className="flex-grow">
-                            <p className="font-medium text-sm line-clamp-1">{authItem.product.name}</p>
-                            <p className="text-xs text-muted-foreground">الكمية: {authItem.quantity}</p>
-                            <p className="text-sm font-bold text-primary">
-                              {formatPrice(
-                                (currency === 'SAR' && authItem.product.priceSar 
-                                  ? Number(authItem.product.priceSar) 
-                                  : Number(authItem.product.price)) * authItem.quantity
-                              )} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    }
-                    
-                    // For guest cart items
-                    const guestItem = item as GuestCartItem;
-                    const product = allProducts.find(p => p.id === guestItem.productId);
-                    if (!product) return null;
-                    
-                    return (
-                      <div key={`guest-${idx}`} className="flex gap-3">
-                        <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden shrink-0">
-                          <img 
-                            src={product.imageUrl} 
-                            alt={product.name}
-                            className="w-full h-full object-contain"
-                          />
-                        </div>
-                        <div className="flex-grow">
-                          <p className="font-medium text-sm line-clamp-1">{product.name}</p>
-                          <p className="text-xs text-muted-foreground">الكمية: {guestItem.quantity}</p>
-                          <p className="text-sm font-bold text-primary">
-                            {formatPrice(
-                              (currency === 'SAR' && product.priceSar 
-                                ? Number(product.priceSar) 
-                                : Number(product.price)) * guestItem.quantity
-                            )} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+          {/* الإجمالي الكلي */}
+          <div className="mx-4 mt-3 mb-4 rounded-xl bg-amber-400/90 dark:bg-amber-600/80 px-4 py-3 flex justify-between items-center">
+            <span className="font-extrabold text-base text-amber-900 dark:text-amber-100">الإجمالي الكلي</span>
+            <span className="font-extrabold text-xl text-amber-900 dark:text-amber-100" data-testid="text-final-total">
+              {formatPrice(finalTotal)} {currLabel}
+            </span>
+          </div>
 
-                <Separator />
-
-                {/* Coupon Input */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">كود الخصم</label>
-                  {couponData ? (
-                    <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                        <div>
-                          <span className="font-bold text-green-700 dark:text-green-400">{couponData.code}</span>
-                          <span className="text-sm text-green-600 mr-2">خصم {couponData.discountPercent}%</span>
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={removeCoupon}
-                        className="text-red-500"
-                        data-testid="button-remove-coupon"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="أدخل كود الخصم"
-                        value={couponCode}
-                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                        className="flex-1"
-                        data-testid="input-coupon-code"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={validateCoupon}
-                        disabled={isValidatingCoupon}
-                        data-testid="button-apply-coupon"
-                      >
-                        {isValidatingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : "تطبيق"}
-                      </Button>
-                    </div>
-                  )}
-                  {couponError && (
-                    <p className="text-sm text-red-500">{couponError}</p>
-                  )}
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">المجموع</span>
-                    <span className="font-bold">{formatPrice(subtotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
-                  </div>
-                  {discountAmount > 0 && (
-                    <div className="flex justify-between text-green-600">
-                      <span>الخصم ({couponData?.discountPercent}%)</span>
-                      <span className="font-bold">-{formatPrice(discountAmount)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
-                    </div>
-                  )}
-                  {selectedPayment?.requiresDeposit && (
-                    <>
-                      <div className="flex justify-between text-primary">
-                        <span>العربون (30%)</span>
-                        <span className="font-bold">{formatPrice(depositAmount)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
-                      </div>
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>الباقي عند الاستلام</span>
-                        <span className="font-bold">{formatPrice(finalTotal - depositAmount)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <Separator />
-
-                <div className="flex justify-between text-lg font-bold">
-                  <span>الإجمالي</span>
-                  <span className="text-primary">{formatPrice(finalTotal)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
-                </div>
-
-                <Button
-                  type="submit"
-                  size="lg"
-                  className="w-full h-14 text-lg font-extrabold rounded-xl"
-                  disabled={isSubmitting}
-                  data-testid="button-submit-order"
+          {/* جدول المنتجات */}
+          <div className="border-t mx-0">
+            <div className="grid grid-cols-4 bg-muted/50 px-4 py-2 text-xs font-bold text-muted-foreground">
+              <span>المنتج</span>
+              <span className="text-center">السعر</span>
+              <span className="text-center">الكمية</span>
+              <span className="text-left">الإجمالي</span>
+            </div>
+            {cartItems.map((item: any, idx: number) => {
+              const isAuthItem = item.id && item.product;
+              const product = isAuthItem ? item.product : allProducts.find((p: any) => p.id === item.productId);
+              if (!product) return null;
+              const price = currency === "SAR" && product.priceSar
+                ? Number(product.priceSar) : Number(product.price);
+              const qty = isAuthItem ? item.quantity : item.quantity;
+              return (
+                <div
+                  key={isAuthItem ? item.id : idx}
+                  className="grid grid-cols-4 px-4 py-2.5 text-sm border-t items-center"
+                  data-testid={`checkout-item-${isAuthItem ? item.id : idx}`}
                 >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-5 w-5 animate-spin ml-2" />
-                      جاري الإرسال...
-                    </>
-                  ) : (
-                    "تأكيد الطلب"
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
+                  <span className="font-medium text-xs line-clamp-2 leading-tight">{product.name}</span>
+                  <span className="text-center text-xs">{formatPrice(price)}</span>
+                  <span className="text-center font-bold">{qty}</span>
+                  <span className="text-left text-xs font-bold text-primary">{formatPrice(price * qty)}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
-      </form>
+      </div>
+
+      {/* ── أزرار الأسفل الثابتة ── */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t px-4 py-3 flex gap-3 shadow-lg">
+        <Button
+          className="flex-1 h-12 font-extrabold text-base rounded-xl"
+          onClick={handleSubmit}
+          disabled={isSubmitting}
+          data-testid="button-submit-order"
+        >
+          {isSubmitting ? (
+            <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري الإرسال...</>
+          ) : "تنفيذ الطلب"}
+        </Button>
+        <Link href="/cart">
+          <Button
+            variant="outline"
+            className="flex-1 h-12 font-bold rounded-xl"
+            data-testid="button-edit-cart"
+          >
+            تعديل السلة
+          </Button>
+        </Link>
+      </div>
     </div>
   );
 }

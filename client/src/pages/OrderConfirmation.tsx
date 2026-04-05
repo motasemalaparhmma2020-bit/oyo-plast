@@ -2,44 +2,32 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { CheckCircle, Package, Truck, ArrowRight, Loader2 } from "lucide-react";
+import { CheckCircle, Package, Truck, ArrowRight, Loader2, Phone, MapPin, CreditCard, Clock } from "lucide-react";
 
 export default function OrderConfirmation() {
   const [_location, navigate] = useLocation();
   const [orderId, setOrderId] = useState<number | null>(null);
 
-  // Extract order ID from URL
   useEffect(() => {
     const matches = window.location.pathname.match(/\/order-confirmation\/(\d+)/);
-    if (matches) {
-      setOrderId(parseInt(matches[1]));
-    } else {
-      navigate("/");
-    }
+    if (matches) setOrderId(parseInt(matches[1]));
+    else navigate("/");
   }, [navigate]);
 
-  // Fetch order details
   const { data: order, isLoading } = useQuery({
     queryKey: [`/api/orders/${orderId}`],
     queryFn: async () => {
-      const res = await fetch(`/api/orders/${orderId}`, {
-        credentials: "include",
-      });
+      const res = await fetch(`/api/orders/${orderId}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch order");
       return res.json();
     },
     enabled: !!orderId,
   });
 
-  // Fetch order items
   const { data: orderItems = [] } = useQuery({
     queryKey: [`/api/orders/${orderId}/items`],
     queryFn: async () => {
-      const res = await fetch(`/api/orders/${orderId}/items`, {
-        credentials: "include",
-      });
+      const res = await fetch(`/api/orders/${orderId}/items`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch order items");
       return res.json();
     },
@@ -49,190 +37,191 @@ export default function OrderConfirmation() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-cyan-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
 
   if (!order) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen pb-20">
-        <p className="text-red-600 mb-4">الطلب غير موجود</p>
-        <Button onClick={() => navigate("/")} variant="outline">
-          العودة للمتجر
-        </Button>
+      <div className="flex flex-col items-center justify-center min-h-screen pb-20 gap-4">
+        <p className="text-red-500 font-bold">الطلب غير موجود</p>
+        <Button onClick={() => navigate("/")} variant="outline">العودة للمتجر</Button>
       </div>
     );
   }
 
-  const shippingDays =
-    order.shippingOption === "fast" ? "1-2" : "3-5";
+  const paymentLabel = order.paymentMethod === "cash_on_delivery" ? "الدفع عند الاستلام"
+    : order.paymentMethod === "digital_wallet" ? "محفظة إلكترونية"
+    : order.paymentMethod;
 
   return (
-    <div className="flex flex-col pb-20 bg-white dark:bg-background min-h-screen">
+    <div className="min-h-screen bg-muted/20 dark:bg-background pb-28" dir="rtl">
       {/* Header */}
-      <header className="sticky top-0 bg-gradient-to-l from-green-500 to-green-600 px-4 py-4 flex items-center gap-3 z-50">
-        <button onClick={() => navigate("/")} className="text-white">
-          <ArrowRight className="w-6 h-6" />
+      <div className="sticky top-0 z-40 bg-background border-b flex items-center justify-between px-4 py-3">
+        <button onClick={() => navigate("/")} className="p-1 text-muted-foreground" data-testid="button-home">
+          <ArrowRight className="w-5 h-5" />
         </button>
-        <h1 className="text-white font-bold text-lg flex-1 text-right">تأكيد الطلب</h1>
-      </header>
+        <h1 className="font-bold text-base">تأكيد الطلب</h1>
+        <div className="w-7" />
+      </div>
 
-      {/* Main Content */}
-      <div className="max-w-2xl mx-auto w-full px-4 py-6 space-y-6">
-        {/* Success Message */}
-        <div className="text-center space-y-3 py-6" data-testid="section-success">
-          <div className="flex justify-center">
-            <CheckCircle className="w-16 h-16 text-green-600" />
+      {/* Success Banner */}
+      <div className="bg-green-500 dark:bg-green-600 px-4 py-6 text-center text-white" data-testid="section-success">
+        <div className="flex justify-center mb-3">
+          <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center">
+            <CheckCircle className="w-9 h-9 text-white" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            تم استقبال طلبك بنجاح ✅
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400">
-            شكراً لاختيارك أويو بلاست
-          </p>
         </div>
+        <h2 className="text-xl font-extrabold">تم استلام طلبك بنجاح ✅</h2>
+        <p className="text-green-100 text-sm mt-1">شكراً لاختيارك أويو بلاست</p>
+        <div className="mt-3 bg-white/20 rounded-xl py-2 px-4 inline-block">
+          <p className="text-xs text-green-100">رقم الطلب</p>
+          <p className="text-2xl font-black tracking-wide" data-testid="text-order-id">#{order.id}</p>
+        </div>
+      </div>
 
-        {/* Order Number & Date */}
-        <Card className="bg-gradient-to-br from-green-50 to-cyan-50 dark:from-green-900/20 dark:to-cyan-900/20 border-green-200 dark:border-green-800" data-testid="section-order-info">
-          <CardContent className="pt-6 space-y-4 text-center">
-            <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">رقم الطلب</p>
-              <p className="text-3xl font-bold text-green-600 dark:text-green-400" data-testid="text-order-id">
-                #{order.id}
-              </p>
-            </div>
-            <Separator />
-            <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">تاريخ الطلب</p>
-              <p className="text-lg font-semibold text-gray-900 dark:text-white" data-testid="text-order-date">
-                {new Date(order.createdAt).toLocaleDateString("ar-YE", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Order Summary */}
-        <Card data-testid="section-order-summary">
-          <CardHeader>
-            <CardTitle className="text-right flex items-center gap-2">
-              <Package className="w-5 h-5 text-cyan-600" />
-              ملخص الطلب
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {orderItems.map((item: any) => (
-              <div
-                key={item.id}
-                className="flex justify-between items-start pb-3 border-b last:border-b-0"
-                data-testid={`order-item-${item.id}`}
-              >
-                <div className="flex-1 text-right">
-                  <p className="font-semibold">{item.productName}</p>
-                  <p className="text-sm text-gray-500">الكمية: {item.quantity}</p>
-                </div>
-                <p className="font-bold ml-4" data-testid={`item-price-${item.id}`}>
-                  {item.price} ر.ي
-                </p>
-              </div>
-            ))}
-
-            <Separator />
-
-            <div className="space-y-2 text-right">
-              <div className="flex justify-between">
-                <span>الإجمالي:</span>
-                <span className="font-bold text-lg" data-testid="text-total">
-                  {order.total} ر.ي
-                </span>
-              </div>
-            </div>
-
-            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mt-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 text-right">
-                طريقة الدفع
-              </p>
-              <p className="font-semibold text-gray-900 dark:text-white text-right" data-testid="text-payment-method">
-                الدفع عند الاستلام (COD)
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Shipping Information */}
-        <Card data-testid="section-shipping-info">
-          <CardHeader>
-            <CardTitle className="text-right flex items-center gap-2">
-              <Truck className="w-5 h-5 text-cyan-600" />
-              معلومات الشحن
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 text-right">
-                  عنوان التسليم
-                </p>
-                <p className="font-semibold text-gray-900 dark:text-white text-right" data-testid="text-shipping-address">
+      <div className="space-y-1 mt-1">
+        {/* بيانات التوصيل */}
+        <div className="bg-background px-4 py-3 space-y-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Truck className="h-4 w-4 text-primary" />
+            <p className="text-sm font-bold">معلومات التوصيل</p>
+          </div>
+          {order.shippingAddress && (
+            <div className="flex items-start gap-3">
+              <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs text-muted-foreground">عنوان التوصيل</p>
+                <p className="text-sm font-semibold" data-testid="text-shipping-address">
                   {order.shippingCity}، {order.shippingAddress}
                 </p>
               </div>
-
-              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 text-right">
-                  المدة المتوقعة للتسليم
-                </p>
-                <p className="font-semibold text-blue-600 dark:text-blue-400 text-right" data-testid="text-delivery-days">
-                  {shippingDays} أيام
-                </p>
-              </div>
-
-              {order.notes && (
-                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 text-right">
-                    ملاحظاتك
-                  </p>
-                  <p className="text-gray-900 dark:text-white text-right" data-testid="text-notes">
-                    {order.notes}
-                  </p>
-                </div>
-              )}
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Status Info */}
-        <Card className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800" data-testid="section-status-info">
-          <CardContent className="pt-6 text-right">
-            <p className="text-sm text-yellow-800 dark:text-yellow-200">
-              سيتم التواصل معك عبر الرقم <strong>{order.customerPhone}</strong> أو البريد الإلكتروني <strong>{order.customerEmail}</strong>
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Action Buttons */}
-        <div className="space-y-3" data-testid="section-actions">
-          <Button
-            onClick={() => navigate(`/track/${order.id}`)}
-            className="w-full h-12 font-bold"
-            data-testid="button-track-order"
-          >
-            تتبع الطلب
-          </Button>
-
-          <Button
-            onClick={() => navigate("/")}
-            variant="outline"
-            className="w-full h-12 font-bold"
-            data-testid="button-return-store"
-          >
-            العودة للمتجر
-          </Button>
+          )}
+          {order.customerPhone && (
+            <div className="flex items-center gap-3">
+              <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div>
+                <p className="text-xs text-muted-foreground">رقم التواصل</p>
+                <p className="text-sm font-semibold" data-testid="text-customer-phone">{order.customerPhone}</p>
+              </div>
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <Clock className="h-4 w-4 text-blue-500 shrink-0" />
+            <div>
+              <p className="text-xs text-muted-foreground">وقت التوصيل المتوقع</p>
+              <p className="text-sm font-bold text-blue-600" data-testid="text-delivery-days">
+                خلال 3 - 5 أيام عمل
+              </p>
+            </div>
+          </div>
         </div>
+
+        <div className="h-px bg-border" />
+
+        {/* طريقة الدفع */}
+        <div className="bg-background px-4 py-3">
+          <div className="flex items-center gap-2 mb-2">
+            <CreditCard className="h-4 w-4 text-primary" />
+            <p className="text-sm font-bold">طريقة الدفع</p>
+          </div>
+          <div className="bg-muted/40 rounded-lg px-3 py-2">
+            <p className="text-sm font-semibold" data-testid="text-payment-method">{paymentLabel}</p>
+            {order.paymentMethod === "cash_on_delivery" && (
+              <p className="text-xs text-muted-foreground mt-0.5">ادفع المبلغ كاملاً لمندوب التوصيل</p>
+            )}
+            {order.paymentMethod === "digital_wallet" && (
+              <p className="text-xs text-orange-600 mt-0.5">⏳ بانتظار تأكيد التحويل من إدارة أويو بلاست</p>
+            )}
+          </div>
+        </div>
+
+        <div className="h-px bg-border" />
+
+        {/* ملخص الطلب */}
+        <div className="bg-background" data-testid="section-order-summary">
+          <div className="flex items-center gap-2 px-4 pt-3 mb-1">
+            <Package className="h-4 w-4 text-primary" />
+            <p className="text-sm font-bold">المنتجات</p>
+          </div>
+          <div className="grid grid-cols-4 bg-muted/50 px-4 py-2 text-xs font-bold text-muted-foreground">
+            <span>المنتج</span>
+            <span className="text-center">السعر</span>
+            <span className="text-center">الكمية</span>
+            <span className="text-left">الإجمالي</span>
+          </div>
+          {orderItems.map((item: any) => (
+            <div
+              key={item.id}
+              className="grid grid-cols-4 px-4 py-2.5 text-xs border-t items-center"
+              data-testid={`order-item-${item.id}`}
+            >
+              <span className="font-medium line-clamp-2 leading-tight">{item.productName}</span>
+              <span className="text-center">{Number(item.price).toLocaleString("ar-YE")}</span>
+              <span className="text-center font-bold">{item.quantity}</span>
+              <span className="text-left font-bold text-primary">
+                {(Number(item.price) * item.quantity).toLocaleString("ar-YE")}
+              </span>
+            </div>
+          ))}
+
+          {/* الإجمالي */}
+          <div className="px-4 pt-3 pb-4 space-y-2 border-t mt-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">المجموع</span>
+              <span className="font-semibold">{Number(order.subtotalBeforeDiscount || order.total).toLocaleString("ar-YE")} ر.ي</span>
+            </div>
+            {Number(order.discountAmount) > 0 && (
+              <div className="flex justify-between text-sm text-green-600">
+                <span>الخصم</span>
+                <span className="font-bold">- {Number(order.discountAmount).toLocaleString("ar-YE")} ر.ي</span>
+              </div>
+            )}
+            {Number(order.shippingCost) > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">رسوم الشحن</span>
+                <span className="font-semibold">{Number(order.shippingCost).toLocaleString("ar-YE")} ر.ي</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center bg-amber-400/90 rounded-xl px-3 py-2">
+              <span className="font-extrabold text-amber-900 dark:text-amber-100">الإجمالي الكلي</span>
+              <span className="font-extrabold text-lg text-amber-900 dark:text-amber-100" data-testid="text-total">
+                {Number(order.total).toLocaleString("ar-YE")} ر.ي
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {order.notes && (
+          <>
+            <div className="h-px bg-border" />
+            <div className="bg-background px-4 py-3">
+              <p className="text-xs text-muted-foreground mb-1">ملاحظاتك</p>
+              <p className="text-sm" data-testid="text-notes">{order.notes}</p>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* أزرار الأسفل */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t px-4 py-3 flex gap-3 shadow-lg" data-testid="section-actions">
+        <Button
+          className="flex-1 h-12 font-bold rounded-xl"
+          onClick={() => navigate("/")}
+          data-testid="button-return-store"
+        >
+          متابعة التسوق
+        </Button>
+        <Button
+          variant="outline"
+          className="flex-1 h-12 font-bold rounded-xl"
+          onClick={() => navigate(`/track/${order.id}`)}
+          data-testid="button-track-order"
+        >
+          تتبع الطلب
+        </Button>
       </div>
     </div>
   );

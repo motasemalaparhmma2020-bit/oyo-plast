@@ -188,6 +188,14 @@ export async function runMigrations(): Promise<void> {
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS sadeem_free_shipping_min INTEGER NOT NULL DEFAULT 0;`);
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS sadeem_marketer_discount INTEGER NOT NULL DEFAULT 0;`);
 
+    // ─── إعدادات الدفع والشحن ────────────────────────────────────────
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS shipping_fee INTEGER NOT NULL DEFAULT 0;`);
+    await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS cod_enabled BOOLEAN NOT NULL DEFAULT true;`);
+
+    // ─── تحسينات جدول المحافظ الرقمية ───────────────────────────────
+    await client.query(`ALTER TABLE digital_wallets ADD COLUMN IF NOT EXISTS requires_proof BOOLEAN NOT NULL DEFAULT true;`);
+    await client.query(`ALTER TABLE digital_wallets ADD COLUMN IF NOT EXISTS instructions TEXT;`);
+
     // ─── إدخال صف افتراضي إذا كان الجدول فارغاً ──────────────────
     await client.query(`
       INSERT INTO display_settings (

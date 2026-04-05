@@ -47,7 +47,8 @@ import {
   Truck,
   RefreshCcw,
   Percent,
-  Sparkles
+  Sparkles,
+  Banknote
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
@@ -2398,6 +2399,72 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
               </div>
             </div>
 
+          </div>
+        </div>
+        {/* ═══════════════════════════════════════════════════════════════ */}
+
+        {/* 💳 إعدادات الدفع والشحن */}
+        <div className="border-2 border-green-200 dark:border-green-800 rounded-xl overflow-hidden">
+          <div className="bg-gradient-to-l from-green-600 to-emerald-600 px-5 py-4 flex items-center gap-3">
+            <Banknote className="h-5 w-5 text-white flex-shrink-0" />
+            <div>
+              <h3 className="font-bold text-white text-base">إعدادات الدفع والشحن</h3>
+              <p className="text-green-100 text-xs">تحكم في رسوم الشحن وطرق الدفع المتاحة</p>
+            </div>
+          </div>
+
+          <div className="p-5 space-y-5 bg-green-50/30 dark:bg-green-950/20">
+            {/* رسوم الشحن */}
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-green-700 dark:text-green-300 uppercase tracking-wide">رسوم الشحن الثابتة</p>
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">قيمة الشحن (ر.ي)</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    القيمة التي تُضاف للطلبات — اكتب 0 للشحن المجاني دائماً
+                  </p>
+                </div>
+                <Input
+                  type="number"
+                  min={0}
+                  className="w-28 h-9 text-sm text-center font-bold"
+                  value={settings?.shippingFee ?? 0}
+                  onChange={e => setSettings((s: any) => ({ ...s, shippingFee: +e.target.value }))}
+                  onBlur={e => handleUpdate('shippingFee', +e.target.value)}
+                  data-testid="input-shipping-fee"
+                />
+              </div>
+              {(settings?.shippingFee ?? 0) === 0 ? (
+                <p className="text-xs text-green-600 font-medium">✅ الشحن مجاني لجميع الطلبات</p>
+              ) : (
+                <p className="text-xs text-orange-600">
+                  رسوم شحن {Number(settings?.shippingFee ?? 0).toLocaleString('ar')} ر.ي على كل طلب
+                  {(settings?.sadeemFreeShippingMin ?? 0) > 0 &&
+                    ` — مجاني للطلبات فوق ${Number(settings?.sadeemFreeShippingMin ?? 0).toLocaleString('ar')} ر.ي`}
+                </p>
+              )}
+            </div>
+
+            {/* COD Toggle */}
+            <div className="flex items-center justify-between py-3 border-t border-green-100 dark:border-green-900">
+              <div>
+                <Label className="text-sm font-medium">الدفع عند الاستلام (COD)</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  السماح للعملاء بالدفع نقداً عند استلام الطلب
+                </p>
+              </div>
+              <Switch
+                checked={settings?.codEnabled ?? true}
+                onCheckedChange={v => handleUpdate('codEnabled', v)}
+                disabled={updateMutation.isPending}
+                data-testid="switch-cod-enabled"
+              />
+            </div>
+            {!(settings?.codEnabled ?? true) && (
+              <p className="text-xs text-orange-600 bg-orange-50 dark:bg-orange-950/30 rounded-lg px-3 py-2">
+                ⚠️ الدفع عند الاستلام معطّل — سيُجبر العملاء على استخدام المحافظ الإلكترونية
+              </p>
+            )}
           </div>
         </div>
         {/* ═══════════════════════════════════════════════════════════════ */}
