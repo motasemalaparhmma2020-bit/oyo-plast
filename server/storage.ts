@@ -295,20 +295,39 @@ export class DatabaseStorage implements IStorage {
       shippingCost: data.shippingCost,
       notes: data.notes,
       total: data.total,
-      paymentMethod: "cash_on_delivery",
+      paymentMethod: data.paymentMethod || "cash_on_delivery",
       status: "pending",
     }).returning();
 
-    // Add order items
+    // Add order items — fetch price from DB if not provided (guest cart)
     if (data.items && data.items.length > 0) {
       for (const item of data.items) {
+        let price = item.price ?? item.unitPrice ?? null;
+
+        // If price is missing, look it up from products table
+        if (price === null || price === undefined) {
+          const productId = item.productId ?? item.product?.id;
+          if (productId) {
+            const [prod] = await db
+              .select({ price: products.price })
+              .from(products)
+              .where(eq(products.id, productId))
+              .limit(1);
+            price = prod?.price ?? "0";
+          }
+        }
+
+        const productId = item.productId ?? item.product?.id;
         await db.insert(orderItems).values({
           orderId: order.id,
-          productId: item.productId,
+          productId: productId,
           quantity: item.quantity,
-          price: item.price,
+          price: String(price ?? "0"),
           selectedSize: item.selectedSize,
           selectedColor: item.selectedColor,
+          customPrinting: item.customPrinting ?? false,
+          designNotes: item.designNotes,
+          designFileUrl: item.designFileUrl,
         });
       }
     }

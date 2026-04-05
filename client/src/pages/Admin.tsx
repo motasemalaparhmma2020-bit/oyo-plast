@@ -2704,14 +2704,22 @@ export default function Admin() {
                             id="product-price"
                             type="number"
                             value={productForm.price}
-                            onChange={(e) => setProductForm({...productForm, price: e.target.value})}
+                            onChange={(e) => {
+                              const yer = e.target.value;
+                              const rate = parseFloat(exchangeRate) || 140;
+                              const autoSar = yer ? (parseFloat(yer) / rate).toFixed(2) : "";
+                              setProductForm({...productForm, price: yer, priceSar: autoSar});
+                            }}
                             placeholder="5000"
                             required
                             data-testid="input-product-price"
                           />
                         </div>
                         <div>
-                          <Label htmlFor="product-price-sar">السعر بالريال السعودي</Label>
+                          <Label htmlFor="product-price-sar">
+                            السعر بالريال السعودي
+                            <span className="text-xs text-muted-foreground mr-1">(محسوب تلقائياً)</span>
+                          </Label>
                           <Input
                             id="product-price-sar"
                             type="number"

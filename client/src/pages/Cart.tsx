@@ -273,18 +273,9 @@ export default function Cart() {
     ? (cartItems?.length ?? 0)
     : guestCart.length;
 
-  /* ─── وجهة زر "إتمام الطلب" بناءً على إعداد loginFlow ─── */
-  const loginFlow: string = homeSettings?.loginFlow || "checkout";
-  let checkoutHref: string;
-  if (isAuthenticated) {
-    checkoutHref = "/checkout";
-  } else if (loginFlow === "none") {
-    checkoutHref = "/guest-checkout";
-  } else {
-    // "checkout" or "cart" → send unauthenticated users to login
-    checkoutHref = "/auth";
-  }
-  const checkoutLabel = isAuthenticated ? "إتمام الطلب" : (loginFlow === "none" ? "إتمام الطلب" : "تسجيل الدخول لإتمام الطلب");
+  /* ─── وجهة زر "إتمام الطلب" — guest-checkout يدعم الجميع ─── */
+  const checkoutHref = "/guest-checkout";
+  const checkoutLabel = "إتمام الطلب";
 
   return (
     <div className="max-w-lg mx-auto px-4 py-5 pb-24">
@@ -367,23 +358,15 @@ export default function Cart() {
           </div>
         </div>
 
-        {/* زر إتمام الطلب — يتوجه للدفع إن مسجل، للتسجيل إن لم يكن */}
+        {/* زر إتمام الطلب */}
         <Link href={checkoutHref}>
           <Button
             className="w-full h-12 text-base font-bold rounded-xl bg-teal-500 hover:bg-teal-600 shadow-md"
             data-testid="button-checkout"
           >
             {checkoutLabel}
-            <LogIn className="mr-2 h-4 w-4" />
           </Button>
         </Link>
-
-        {/* تلميح للزائر فقط */}
-        {!isAuthenticated && (
-          <p className="text-xs text-center text-muted-foreground mt-3">
-            سجّل الدخول للحصول على نقاط الولاء وتتبع طلباتك
-          </p>
-        )}
       </div>
     </div>
   );

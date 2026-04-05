@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
-import { ArrowRight, Upload, Check, Loader2, Banknote, MapPin, Wallet, Smartphone, CreditCard, Building2, CheckCircle, X, Copy } from "lucide-react";
+import { ArrowRight, Upload, Check, Loader2, Banknote, MapPin, Wallet, Smartphone, CreditCard, Building2, CheckCircle, X, Copy, ChevronDown, ChevronUp, UserPlus } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -41,78 +41,18 @@ const YEMENI_CITIES = [
   "الجوف"
 ];
 
-const PAYMENT_METHODS = [
+// طرق الدفع الأساسية — المحافظ تأتي من قاعدة البيانات
+const BASE_PAYMENT_METHODS = [
   {
     id: "cash_on_delivery",
     name: "الدفع عند الاستلام",
     description: "ادفع المبلغ كاملاً لمندوب التوصيل عند استلام الطلب",
     icon: Banknote,
     requiresDeposit: false,
-    instructions: null
-  },
-  {
-    id: "jawali",
-    name: "جوالي",
-    description: "التحويل عبر محفظة جوالي",
-    icon: Smartphone,
-    requiresDeposit: true,
-    instructions: "حوّل العربون (30%) إلى رقم: 774997589 ثم ارفع صورة الإشعار"
-  },
-  {
-    id: "jaib",
-    name: "جيب",
-    description: "التحويل عبر محفظة جيب",
-    icon: Wallet,
-    requiresDeposit: true,
-    instructions: "حوّل العربون (30%) إلى رقم: 774997589 ثم ارفع صورة الإشعار"
-  },
-  {
-    id: "onecash",
-    name: "ون كاش",
-    description: "التحويل عبر محفظة ون كاش",
-    icon: CreditCard,
-    requiresDeposit: true,
-    instructions: "حوّل العربون (30%) إلى رقم: 774997589 ثم ارفع صورة الإشعار"
-  },
-  {
-    id: "cash",
-    name: "كاش",
-    description: "التحويل عبر محفظة كاش",
-    icon: Wallet,
-    requiresDeposit: true,
-    instructions: "حوّل العربون (30%) إلى رقم: 774997589 ثم ارفع صورة الإشعار"
-  },
-  {
-    id: "mahfazati",
-    name: "محفظتي",
-    description: "التحويل عبر محفظة محفظتي",
-    icon: Smartphone,
-    requiresDeposit: true,
-    instructions: "حوّل العربون (30%) إلى رقم: 774997589 ثم ارفع صورة الإشعار"
-  },
-  {
-    id: "mobile_money",
-    name: "موبايل موني",
-    description: "التحويل عبر موبايل موني",
-    icon: Smartphone,
-    requiresDeposit: true,
-    instructions: "حوّل العربون (30%) إلى رقم: 774997589 ثم ارفع صورة الإشعار"
-  },
-  {
-    id: "kuraimi_bank",
-    name: "بنك الكريمي",
-    description: "التحويل عبر بنك الكريمي",
-    icon: Building2,
-    requiresDeposit: true,
-    instructions: "حوّل العربون (30%) إلى حساب رقم: 1234567890 باسم: أويو بلاست"
-  },
-  {
-    id: "digital_wallet",
-    name: "المحفظة الإلكترونية",
-    description: "ادفع باستخدام المحافظ الإلكترونية المتاحة",
-    icon: Wallet,
-    requiresDeposit: false,
-    instructions: null
+    instructions: null,
+    logoUrl: null,
+    receiverName: null,
+    phoneNumber: null,
   }
 ];
 
@@ -138,6 +78,7 @@ export default function Checkout() {
   const isLoading_checkout = !isAuthenticated ? false : isLoading;
   
   const [formData, setFormData] = useState({
+    customerName: "",
     customerPhone: "",
     shippingCity: "",
     shippingAddress: "",
@@ -147,6 +88,17 @@ export default function Checkout() {
     selectedWalletId: null as number | null,
     purchaseCode: ""
   });
+
+  // المستلم البديل
+  const [showAlternate, setShowAlternate] = useState(false);
+  const [alternateRecipient, setAlternateRecipient] = useState({
+    name: "",
+    phone: "",
+    address: "",
+    neighborhood: "",
+    city: ""
+  });
+
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
@@ -221,7 +173,26 @@ export default function Checkout() {
     return Math.ceil(finalTotal * 0.3);
   }, [finalTotal]);
 
-  const selectedPayment = PAYMENT_METHODS.find(p => p.id === formData.paymentMethod);
+  // دمج طريقة الدفع الكاش مع المحافظ الديناميكية من قاعدة البيانات
+  const allPaymentMethods = useMemo(() => [
+    ...BASE_PAYMENT_METHODS,
+    ...digitalWallets.filter((w: any) => w.isActive).map((w: any) => ({
+      id: `wallet_${w.id}`,
+      name: w.name,
+      description: `التحويل عبر ${w.name}`,
+      icon: Smartphone,
+      requiresDeposit: true,
+      instructions: `حوّل العربون (30%) إلى: ${w.phoneNumber} — باسم: ${w.receiverName}`,
+      logoUrl: w.logoUrl,
+      receiverName: w.receiverName,
+      phoneNumber: w.phoneNumber,
+    }))
+  ], [digitalWallets]);
+
+  const selectedPayment = allPaymentMethods.find(p => p.id === formData.paymentMethod);
+  const selectedWalletData = formData.paymentMethod.startsWith("wallet_")
+    ? digitalWallets.find((w: any) => `wallet_${w.id}` === formData.paymentMethod)
+    : null;
   
   const validateCoupon = async () => {
     if (!couponCode.trim()) {
@@ -334,60 +305,47 @@ export default function Checkout() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const validation = validateCheckoutForm({
-      customerPhone: formData.customerPhone,
-      shippingCity: formData.shippingCity,
-      shippingAddress: formData.shippingAddress,
-      paymentMethod: formData.paymentMethod,
-      notes: formData.notes,
-      gpsCoordinates: formData.gpsCoordinates,
-      selectedWalletId: formData.selectedWalletId,
-      purchaseCode: formData.purchaseCode,
-      couponCode,
-    });
 
-    if (!validation.valid) {
-      toast({
-        title: "خطأ",
-        description: Object.values(validation.errors)[0] || "يرجى التحقق من البيانات",
-        variant: "destructive"
-      });
+    // تحقق يدوي بسيط يدعم أرقام اليمن والسعودية
+    if (!formData.customerName.trim() || formData.customerName.trim().length < 2) {
+      toast({ title: "خطأ", description: "الاسم الكامل مطلوب (حرفين على الأقل)", variant: "destructive" });
+      return;
+    }
+    if (!formData.customerPhone.trim()) {
+      toast({ title: "خطأ", description: "رقم الهاتف مطلوب", variant: "destructive" });
+      return;
+    }
+    if (!formData.shippingCity) {
+      toast({ title: "خطأ", description: "اختر المدينة", variant: "destructive" });
+      return;
+    }
+    if (!formData.shippingAddress.trim() || formData.shippingAddress.trim().length < 5) {
+      toast({ title: "خطأ", description: "العنوان التفصيلي مطلوب (5 أحرف على الأقل)", variant: "destructive" });
       return;
     }
 
-    if (selectedPayment?.requiresDeposit && !receiptFile) {
-      toast({
-        title: "خطأ",
-        description: "يرجى رفع صورة إشعار التحويل",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Validate digital wallet payment
-    if (formData.paymentMethod === "digital_wallet") {
-      if (!formData.selectedWalletId) {
-        toast({
-          title: "خطأ",
-          description: "يرجى اختيار محفظة إلكترونية",
-          variant: "destructive"
-        });
+    // التحقق من المحفظة إذا كانت مختارة
+    const isWalletPayment = formData.paymentMethod.startsWith("wallet_");
+    if (isWalletPayment) {
+      if (!formData.purchaseCode?.trim()) {
+        toast({ title: "خطأ", description: "يرجى إدخال رقم الحوالة أو كود الشراء", variant: "destructive" });
         return;
       }
+      if (!receiptFile) {
+        toast({ title: "خطأ", description: "يرجى رفع صورة إشعار التحويل", variant: "destructive" });
+        return;
+      }
+    }
+
+    // المستلم البديل — إذا مفعّل، تحقق من الحد الأدنى
+    if (showAlternate && alternateRecipient.name && !alternateRecipient.phone.trim()) {
+      toast({ title: "خطأ", description: "رقم هاتف المستلم البديل مطلوب", variant: "destructive" });
+      return;
     }
 
     setIsSubmitting(true);
 
     try {
-      if (formData.paymentMethod === "digital_wallet" && (!formData.purchaseCode || formData.purchaseCode.trim() === "")) {
-        toast({
-          title: "خطأ",
-          description: "يرجى إدخال رقم الحوالة أو كود الشراء",
-          variant: "destructive"
-        });
-        return;
-      }
 
       const orderData = {
         ...formData,
@@ -398,15 +356,27 @@ export default function Checkout() {
         discountAmount: discountAmount > 0 ? discountAmount.toString() : null
       };
 
+      const alternateNote = showAlternate && alternateRecipient.name
+        ? `\n\n--- المستلم البديل ---\nالاسم: ${alternateRecipient.name}\nالهاتف: ${alternateRecipient.phone}\nالحي: ${alternateRecipient.neighborhood}\nالمدينة/المحل: ${alternateRecipient.city}\nالعنوان: ${alternateRecipient.address}`
+        : "";
+
+      // تحويل paymentMethod لقيمة مقبولة في السيرفر
+      const normalizedPaymentMethod = formData.paymentMethod.startsWith("wallet_")
+        ? "digital_wallet"
+        : formData.paymentMethod;
+
       const response = await apiRequest("POST", "/api/orders/create", {
-        customerName: user?.fullName || user?.email || "عميل",
+        customerName: formData.customerName || user?.fullName || user?.email || "عميل",
         customerEmail: user?.email || "guest@oyoplast.com",
         customerPhone: formData.customerPhone,
         shippingCity: formData.shippingCity,
         shippingAddress: formData.shippingAddress,
         shippingOption: "standard",
         shippingCost: 0,
-        notes: formData.notes,
+        paymentMethod: normalizedPaymentMethod,
+        purchaseCode: formData.purchaseCode || undefined,
+        selectedWalletId: formData.selectedWalletId || undefined,
+        notes: (formData.notes || "") + alternateNote,
         total: finalTotal,
         items: cartItems,
       });
@@ -470,6 +440,20 @@ export default function Checkout() {
                 <CardTitle>معلومات التوصيل</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* اسم المستلم الرئيسي */}
+                <div>
+                  <Label htmlFor="customer-name">الاسم الكامل *</Label>
+                  <Input
+                    id="customer-name"
+                    type="text"
+                    placeholder="اسمك الكامل"
+                    value={formData.customerName}
+                    onChange={(e) => setFormData({...formData, customerName: e.target.value})}
+                    className="mt-1"
+                    data-testid="input-customer-name"
+                  />
+                </div>
+
                 <div>
                   <Label htmlFor="phone">رقم الهاتف *</Label>
                   <Input
@@ -561,6 +545,85 @@ export default function Checkout() {
                     data-testid="input-notes"
                   />
                 </div>
+
+                {/* ─── قسم المستلم البديل ─── */}
+                <div className="border border-dashed border-gray-300 rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-between p-4 text-right hover:bg-gray-50 transition-colors"
+                    onClick={() => setShowAlternate(!showAlternate)}
+                    data-testid="button-toggle-alternate-recipient"
+                  >
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <UserPlus className="h-4 w-4 text-primary" />
+                      هل تريد شخصاً آخر يستلم الطلب نيابةً عنك؟
+                    </div>
+                    {showAlternate ? <ChevronUp className="h-4 w-4 text-gray-500 shrink-0" /> : <ChevronDown className="h-4 w-4 text-gray-500 shrink-0" />}
+                  </button>
+
+                  {showAlternate && (
+                    <div className="px-4 pb-4 space-y-3 bg-blue-50/50 border-t border-dashed border-gray-300">
+                      <p className="text-xs text-muted-foreground pt-3">بيانات الشخص الذي سيستلم الطلب بدلاً منك</p>
+                      <div>
+                        <Label htmlFor="alt-name">اسم المستلم البديل *</Label>
+                        <Input
+                          id="alt-name"
+                          placeholder="الاسم الكامل للمستلم"
+                          value={alternateRecipient.name}
+                          onChange={(e) => setAlternateRecipient({...alternateRecipient, name: e.target.value})}
+                          className="mt-1"
+                          data-testid="input-alternate-name"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="alt-phone">رقم هاتف المستلم *</Label>
+                        <Input
+                          id="alt-phone"
+                          type="tel"
+                          placeholder="777XXXXXXX"
+                          value={alternateRecipient.phone}
+                          onChange={(e) => setAlternateRecipient({...alternateRecipient, phone: e.target.value})}
+                          className="mt-1"
+                          data-testid="input-alternate-phone"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="alt-neighborhood">الحي / المنطقة</Label>
+                        <Input
+                          id="alt-neighborhood"
+                          placeholder="اسم الحي أو المنطقة"
+                          value={alternateRecipient.neighborhood}
+                          onChange={(e) => setAlternateRecipient({...alternateRecipient, neighborhood: e.target.value})}
+                          className="mt-1"
+                          data-testid="input-alternate-neighborhood"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="alt-city">المدينة / المحل التجاري</Label>
+                        <Input
+                          id="alt-city"
+                          placeholder="اسم المدينة أو المحل"
+                          value={alternateRecipient.city}
+                          onChange={(e) => setAlternateRecipient({...alternateRecipient, city: e.target.value})}
+                          className="mt-1"
+                          data-testid="input-alternate-city"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="alt-address">العنوان التفصيلي</Label>
+                        <Textarea
+                          id="alt-address"
+                          placeholder="الشارع، رقم المبنى، علامة مميزة..."
+                          value={alternateRecipient.address}
+                          onChange={(e) => setAlternateRecipient({...alternateRecipient, address: e.target.value})}
+                          className="mt-1"
+                          rows={2}
+                          data-testid="input-alternate-address"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -568,160 +631,114 @@ export default function Checkout() {
               <CardHeader>
                 <CardTitle>طريقة الدفع</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
                 <RadioGroup
                   value={formData.paymentMethod}
-                  onValueChange={(value) => setFormData({...formData, paymentMethod: value})}
-                  className="space-y-3"
+                  onValueChange={(val) => {
+                    const wId = val.startsWith("wallet_") ? parseInt(val.replace("wallet_", "")) : null;
+                    setFormData({...formData, paymentMethod: val, selectedWalletId: wId, purchaseCode: ""});
+                  }}
                 >
-                  {PAYMENT_METHODS.map((method) => (
+                {allPaymentMethods.map((method) => {
+                  const isSelected = formData.paymentMethod === method.id;
+                  const walletId = method.id.startsWith("wallet_") ? parseInt(method.id.replace("wallet_", "")) : null;
+                  const walletData = walletId ? digitalWallets.find((w: any) => w.id === walletId) : null;
+                  return (
                     <div
                       key={method.id}
-                      className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        formData.paymentMethod === method.id 
-                          ? 'border-primary bg-primary/5' 
-                          : 'border-gray-200 hover:border-gray-300'
+                      className={`rounded-xl border-2 cursor-pointer transition-all overflow-hidden ${
+                        isSelected ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
                       }`}
-                      onClick={() => setFormData({...formData, paymentMethod: method.id})}
+                      onClick={() => {
+                        const wId = method.id.startsWith("wallet_") ? parseInt(method.id.replace("wallet_", "")) : null;
+                        setFormData({...formData, paymentMethod: method.id, selectedWalletId: wId, purchaseCode: ""});
+                      }}
                       data-testid={`payment-method-${method.id}`}
                     >
-                      <RadioGroupItem value={method.id} id={method.id} className="mt-1" />
-                      <div className="flex-grow">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                      {/* رأس الخيار */}
+                      <div className="flex items-center gap-3 p-4">
+                        <RadioGroupItem value={method.id} id={method.id} className="shrink-0" />
+                        {(method as any).logoUrl ? (
+                          <img src={(method as any).logoUrl} alt={method.name} className="w-9 h-9 rounded-lg object-contain shrink-0 border border-gray-200 bg-white p-0.5" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shrink-0">
                             <method.icon className="h-4 w-4 text-primary" />
                           </div>
-                          <Label htmlFor={method.id} className="font-bold cursor-pointer">
-                            {method.name}
-                          </Label>
-                          {method.requiresDeposit && (
-                            <Badge variant="secondary" className="text-xs">عربون 30%</Badge>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground">{method.description}</p>
-                        {formData.paymentMethod === method.id && method.instructions && (
-                          <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                            <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
-                              {method.instructions}
-                            </p>
-                          </div>
                         )}
+                        <div className="flex-grow">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Label htmlFor={method.id} className="font-bold cursor-pointer">{method.name}</Label>
+                            {method.requiresDeposit && <Badge variant="secondary" className="text-xs">عربون 30%</Badge>}
+                          </div>
+                          <p className="text-xs text-muted-foreground">{method.description}</p>
+                        </div>
+                        {isSelected && !method.requiresDeposit && <CheckCircle className="h-5 w-5 text-primary shrink-0" />}
                       </div>
-                    </div>
-                  ))}
-                </RadioGroup>
 
-                {/* Digital Wallets Section */}
-                {formData.paymentMethod === "digital_wallet" && digitalWallets.length > 0 && (
-                  <div className="mt-6 space-y-4">
-                    <h3 className="font-semibold text-lg">اختر المحفظة الإلكترونية</h3>
-                    <div className="space-y-3">
-                      {digitalWallets.map((wallet: any) => (
-                        <div
-                          key={wallet.id}
-                          className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                            formData.selectedWalletId === wallet.id
-                              ? "border-primary bg-primary/5"
-                              : "border-gray-200 hover:border-gray-300"
-                          }`}
-                          onClick={() => setFormData({ ...formData, selectedWalletId: wallet.id })}
-                        >
-                          <div className="flex items-start gap-4">
-                            {wallet.logoUrl && (
-                              <img src={wallet.logoUrl} alt={wallet.name} className="w-12 h-12 rounded object-contain flex-shrink-0" />
-                            )}
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between mb-3">
-                                <p className="font-bold text-base">{wallet.name}</p>
-                                {formData.selectedWalletId === wallet.id && (
-                                  <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
-                                )}
+                      {/* تفاصيل المحفظة عند الاختيار */}
+                      {isSelected && walletData && (
+                        <div className="px-4 pb-4 space-y-3 border-t border-primary/20 pt-3">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="p-2.5 bg-white dark:bg-gray-800 rounded-lg border">
+                              <p className="text-xs text-gray-500 mb-0.5">باسم المستلم</p>
+                              <p className="font-bold text-sm">{walletData.receiverName}</p>
+                            </div>
+                            <div className="flex gap-1">
+                              <div className="flex-1 p-2.5 bg-white dark:bg-gray-800 rounded-lg border">
+                                <p className="text-xs text-gray-500 mb-0.5">رقم التحويل</p>
+                                <p className="font-mono font-bold text-sm">{walletData.phoneNumber}</p>
                               </div>
-                              
-                              {/* Receiver Name */}
-                              <div className="mb-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">باسم المستلم</p>
-                                <p className="font-bold text-sm">{wallet.receiverName}</p>
-                              </div>
-
-                              {/* Phone Number */}
-                              <div className="flex items-center gap-2">
-                                <div className="flex-1 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">رقم التحويل/الدفع</p>
-                                  <p className="font-mono font-bold text-sm">{wallet.phoneNumber}</p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigator.clipboard.writeText(wallet.phoneNumber);
-                                    toast({ title: "✅ تم نسخ الرقم" });
-                                  }}
-                                  className="p-3 bg-blue-100 dark:bg-blue-900 hover:bg-blue-200 dark:hover:bg-blue-800 rounded-lg text-blue-600 dark:text-blue-400 transition-colors flex-shrink-0"
-                                >
-                                  <Copy className="h-5 w-5" />
-                                </button>
-                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(walletData.phoneNumber); toast({ title: "✅ تم نسخ الرقم" }); }}
+                                className="p-2.5 bg-blue-100 dark:bg-blue-900 hover:bg-blue-200 rounded-lg text-blue-600 transition-colors shrink-0 self-start mt-0 h-full"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </button>
                             </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Purchase Code Input - REQUIRED */}
-                    {formData.selectedWalletId && (
-                      <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                        <Label className="font-semibold mb-2 block">كود الشراء/رقم الحوالة *</Label>
-                        <Input
-                          type="text"
-                          value={formData.purchaseCode}
-                          onChange={(e) => setFormData({ ...formData, purchaseCode: e.target.value })}
-                          placeholder="أدخل رقم السند/الحوالة أو كود التحويل"
-                          className="font-mono"
-                          required
-                        />
-                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
-                          ⚠️ <strong>إلزامي:</strong> يجب إدخال رقم الحوالة أو كود الدفع الذي حصلت عليه من المحفظة - الإدارة ستتحقق منه للموافقة على طلبك
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {selectedPayment?.requiresDeposit && (
-                  <div className="mt-6">
-                    <Label className="text-base font-semibold mb-3 block">
-                      رفع صورة إشعار التحويل *
-                    </Label>
-                    <div 
-                      className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                        data-testid="input-receipt"
-                      />
-                      {receiptFile ? (
-                        <div className="flex items-center justify-center gap-2 text-primary">
-                          <Check className="h-5 w-5" />
-                          <span className="font-medium">{receiptFile.name}</span>
-                        </div>
-                      ) : (
-                        <div className="text-muted-foreground">
-                          <Upload className="h-8 w-8 mx-auto mb-2" />
-                          <p>اضغط لرفع صورة الإشعار</p>
+                          {/* حقل رقم الحوالة */}
+                          <div>
+                            <Label className="text-sm font-semibold mb-1 block">رقم الحوالة / كود الدفع *</Label>
+                            <Input
+                              type="text"
+                              value={formData.purchaseCode}
+                              onChange={(e) => setFormData({ ...formData, purchaseCode: e.target.value })}
+                              onClick={(e) => e.stopPropagation()}
+                              placeholder="أدخل رقم السند أو كود التحويل"
+                              className="font-mono"
+                            />
+                            <p className="text-xs text-blue-600 mt-1">⚠️ إلزامي للتحقق من الدفع</p>
+                          </div>
+                          {/* رفع إشعار التحويل */}
+                          <div>
+                            <Label className="text-sm font-semibold mb-1 block">صورة إشعار التحويل *</Label>
+                            <div
+                              className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                              onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                            >
+                              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" data-testid="input-receipt" />
+                              {receiptFile ? (
+                                <div className="flex items-center justify-center gap-2 text-primary">
+                                  <Check className="h-4 w-4" /><span className="text-sm font-medium">{receiptFile.name}</span>
+                                </div>
+                              ) : (
+                                <div className="text-muted-foreground">
+                                  <Upload className="h-6 w-6 mx-auto mb-1" />
+                                  <p className="text-sm">اضغط لرفع صورة الإشعار</p>
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              العربون المطلوب: <span className="font-bold text-primary">{formatPrice(depositAmount)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
+                            </p>
+                          </div>
                         </div>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      قيمة العربون المطلوب: <span className="font-bold text-primary">{formatPrice(depositAmount)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</span>
-                    </p>
-                  </div>
-                )}
+                  );
+                })}
+                </RadioGroup>
               </CardContent>
             </Card>
           </div>

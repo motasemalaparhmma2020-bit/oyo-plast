@@ -115,9 +115,10 @@ function CartMerger() {
       const guestCart: any[] = JSON.parse(localStorage.getItem('guestCart') || '[]');
       if (guestCart.length > 0) {
         (async () => {
+          const remaining: any[] = [];
           for (const item of guestCart) {
             try {
-              await fetch('/api/cart', {
+              const res = await fetch('/api/cart', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -131,9 +132,17 @@ function CartMerger() {
                   designFileUrl: item.designFileUrl,
                 }),
               });
-            } catch {}
+              if (!res.ok) remaining.push(item);
+            } catch {
+              remaining.push(item);
+            }
           }
-          localStorage.removeItem('guestCart');
+          // Only clear items that were successfully synced
+          if (remaining.length === 0) {
+            localStorage.removeItem('guestCart');
+          } else {
+            localStorage.setItem('guestCart', JSON.stringify(remaining));
+          }
           queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
         })();
       }
