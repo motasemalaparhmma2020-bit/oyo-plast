@@ -44,8 +44,8 @@ export async function sendOTP(
         "Authorization": `Basic ${credentials}`,
       },
       body: JSON.stringify({
-        number: normalizedTo,
         message: messageText,
+        phoneNumbers: [normalizedTo],
       }),
     });
 
