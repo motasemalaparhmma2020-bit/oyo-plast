@@ -217,8 +217,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       tags: r.tags,
       showReviews: r.show_reviews,
       showInPrinting: r.show_in_printing,
-      enableVariantUI: r.enable_variant_ui ?? false,
-      colorImages: r.color_images ?? null,
+    enableVariantUI: r.enable_variant_ui ?? false,
+    colorImages: r.color_images ?? null,
       originalPrice: r.original_price ?? null,
       originalPriceSar: r.original_price_sar ?? null,
       discountPercent: r.discount_percent ?? null,
@@ -1620,6 +1620,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── عرض رموز OTP النشطة (للإدارة يدوياً عند فشل البوابة) ────────
   app.get("/api/admin/active-otps", requireAdmin, async (_req, res) => {
     try {
+      const { pool: dbPool } = await import("./db");
       const result = await dbPool.query(
         `SELECT phone, code, expires_at, created_at, attempts
          FROM phone_verifications

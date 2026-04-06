@@ -300,6 +300,15 @@ export default function ProductDetail() {
   }, [(product as any)?.colorImages]);
 
   const showVariantUI = !!(navSettings?.enableVariantProductPage && (product as any)?.enableVariantUI);
+  const parsedVariantImages: ColorImageEntry[] = useMemo(() => {
+    if (!showVariantUI || !(product as any)?.colorImages) return [];
+    try {
+      const parsed = JSON.parse((product as any).colorImages);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, [showVariantUI, (product as any)?.colorImages]);
 
   // ── الخيارات الذكية ──────────────────────────────────────────────
   type SmartVType = "color" | "size" | "weight" | "image";

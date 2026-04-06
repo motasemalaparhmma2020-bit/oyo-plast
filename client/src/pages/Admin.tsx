@@ -180,6 +180,7 @@ interface ProductFormData {
   tags: string;
   showReviews: boolean;
   enableVariantUI: boolean;
+  colorImages: ColorImageEntry[];
   enableSmartVariants: boolean;
   originalPrice: string;
   originalPriceSar: string;
@@ -207,6 +208,7 @@ const emptyProductForm: ProductFormData = {
   tags: "",
   showReviews: true,
   enableVariantUI: false,
+  colorImages: [],
   enableSmartVariants: false,
   originalPrice: "",
   originalPriceSar: "",
@@ -3717,6 +3719,7 @@ export default function Admin() {
       availableBagColors: product.availableBagColors ? product.availableBagColors.join(', ') : "",
       tags: product.tags ? product.tags.join(', ') : "",
       enableVariantUI: (product as any).enableVariantUI ?? false,
+      colorImages: [],
       enableSmartVariants: (product as any).enableSmartVariants ?? false,
       originalPrice: (product as any).originalPrice != null ? String((product as any).originalPrice) : "",
       originalPriceSar: (product as any).originalPriceSar != null ? String((product as any).originalPriceSar) : "",
