@@ -1235,6 +1235,132 @@ function SMSGatewayTest({ adminToken }: { adminToken: string | null }) {
   );
 }
 
+// ── عارض رموز OTP النشطة ──────────────────────────────────────────
+function ActiveOTPViewer({ adminToken }: { adminToken: string | null }) {
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
+  const { data, isLoading, refetch, isFetching } = useQuery<{ otps: any[] }>({
+    queryKey: ["/api/admin/active-otps", adminToken],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/active-otps", {
+        headers: { "x-admin-token": adminToken! },
+      });
+      if (!res.ok) throw new Error("فشل جلب الرموز");
+      return res.json();
+    },
+    enabled: !!adminToken,
+    refetchInterval: autoRefresh ? 10000 : false,
+    staleTime: 5000,
+  });
+
+  const otps = data?.otps || [];
+
+  const timeLeft = (expiresAt: string) => {
+    const diff = Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
+    if (diff <= 0) return "منتهي";
+    const m = Math.floor(diff / 60);
+    const s = diff % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).catch(() => {});
+  };
+
+  return (
+    <Card className="border-2 border-amber-200 dark:border-amber-800">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              🔑 رموز التحقق النشطة
+            </CardTitle>
+            <CardDescription className="mt-0.5">
+              عرض رموز OTP المولّدة — أرسلها يدوياً للعميل إذا لم تصله الرسالة
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted-foreground flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoRefresh}
+                onChange={e => setAutoRefresh(e.target.checked)}
+                className="w-3 h-3"
+              />
+              تحديث تلقائي
+            </label>
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="px-3 py-1 bg-amber-600 text-white text-xs font-bold rounded-lg disabled:opacity-50 flex items-center gap-1"
+              data-testid="button-refresh-otps"
+            >
+              {isFetching ? "..." : "🔄 تحديث"}
+            </button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="text-center py-6 text-muted-foreground text-sm">جاري التحميل...</div>
+        ) : otps.length === 0 ? (
+          <div className="text-center py-6 text-muted-foreground">
+            <p className="text-4xl mb-2">📭</p>
+            <p className="text-sm">لا توجد رموز نشطة حالياً</p>
+            <p className="text-xs text-muted-foreground mt-1">تظهر هنا حين يطلب العميل رمز التحقق</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground mb-3">
+              {otps.length} رمز نشط — اضغط على الرمز لنسخه
+            </p>
+            {otps.map((otp, idx) => (
+              <div
+                key={idx}
+                className="flex items-center justify-between gap-3 p-3 rounded-xl border-2 border-amber-100 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-900/10"
+                data-testid={`otp-row-${idx}`}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="font-mono text-sm font-bold text-foreground" dir="ltr">
+                    {otp.phone}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    المحاولات: {otp.attempts} / 5
+                  </p>
+                </div>
+                <button
+                  onClick={() => copyToClipboard(otp.code)}
+                  className="text-3xl font-black font-mono tracking-widest text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 transition-colors bg-amber-100 dark:bg-amber-900/30 px-3 py-1 rounded-lg"
+                  title="اضغط لنسخ الرمز"
+                  data-testid={`button-copy-otp-${idx}`}
+                >
+                  {otp.code}
+                </button>
+                <div className="text-xs text-center min-w-[50px]">
+                  <p className="font-mono font-bold text-orange-600 dark:text-orange-400">
+                    {timeLeft(otp.expires_at)}
+                  </p>
+                  <p className="text-muted-foreground">متبقّي</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-xs text-blue-700 dark:text-blue-300">
+          <strong>📌 كيف تستخدم هذه الصفحة:</strong>
+          <ol className="list-decimal list-inside mt-1 space-y-0.5">
+            <li>العميل يدخل رقمه ويضغط "إرسال رمز التحقق"</li>
+            <li>اضغط "تحديث" هنا لترى الرمز المولّد</li>
+            <li>اضغط الرمز لنسخه، ثم أرسله للعميل عبر واتساب أو اتصال</li>
+            <li>العميل يُدخل الرمز ويكمل تسجيل الدخول</li>
+          </ol>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function NavigationSettingsSection({ adminToken }: { adminToken: string | null }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -5279,16 +5405,7 @@ export default function Admin() {
 
           <TabsContent value="sms-test">
             <div className="space-y-4">
-              <Card className="border-2 border-sky-200 dark:border-sky-800">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    📲 بوابة فحص رسائل التحقق
-                  </CardTitle>
-                  <CardDescription>
-                    اختبر اتصال بوابة SMS واستلام رسائل التحقق OTP من هذه الصفحة مباشرةً
-                  </CardDescription>
-                </CardHeader>
-              </Card>
+              <ActiveOTPViewer adminToken={adminToken} />
               <SMSGatewayTest adminToken={adminToken} />
             </div>
           </TabsContent>

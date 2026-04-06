@@ -1617,6 +1617,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── عرض رموز OTP النشطة (للإدارة يدوياً عند فشل البوابة) ────────
+  app.get("/api/admin/active-otps", requireAdmin, async (_req, res) => {
+    try {
+      const result = await dbPool.query(
+        `SELECT phone, code, expires_at, created_at, attempts
+         FROM phone_verifications
+         WHERE verified = false AND expires_at > NOW()
+         ORDER BY created_at DESC
+         LIMIT 50`
+      );
+      res.json({ otps: result.rows });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الرموز", details: e.message });
+    }
+  });
+
   // ── تشخيص بوابة SMS ────────────────────────────────────────────
   app.post("/api/admin/test-sms", requireAdmin, async (req, res) => {
     const smsUser = process.env.SMS_USER;
