@@ -4,31 +4,7 @@ import { isAuthenticated } from "./replitAuth";
 import { hashPassword, verifyPassword } from "../../auth-utils";
 import { z } from "zod";
 import { pool } from "../../db";
-import { generateOTP, sendOTP } from "../../lib/twilio-otp";
-
-/**
- * تنسيق رقم الهاتف للصيغة الدولية
- * يقبل: 777XXXXXX، 0777XXXXXX، +967777XXXXXX، 967777XXXXXX
- * يعيد: +967777XXXXXX أو null إذا كان الرقم غير صالح
- */
-function normalizePhone(raw: string): string | null {
-  const digits = raw.replace(/\D/g, "");
-
-  // رقم يمني: 9 أرقام يبدأ بـ 7
-  if (/^7[0-9]{8}$/.test(digits)) return `+967${digits}`;
-  // رقم يمني مع 0: 0777XXXXXX
-  if (/^07[0-9]{8}$/.test(digits)) return `+967${digits.slice(1)}`;
-  // رقم كامل مع رمز اليمن: 967XXXXXXXXX
-  if (/^9677[0-9]{8}$/.test(digits)) return `+${digits}`;
-  // رقم سعودي: 5XXXXXXXX أو 05XXXXXXXX أو 9665XXXXXXXX
-  if (/^5[0-9]{8}$/.test(digits)) return `+966${digits}`;
-  if (/^05[0-9]{8}$/.test(digits)) return `+966${digits.slice(1)}`;
-  if (/^9665[0-9]{8}$/.test(digits)) return `+${digits}`;
-  // رقم دولي عام: 10+ أرقام
-  if (digits.length >= 10 && digits.length <= 15) return `+${digits}`;
-
-  return null;
-}
+import { generateOTP, sendOTP, normalizePhone } from "../../lib/otp-sender";
 
 const registerSchema = z.object({
   email: z.string().email("البريد الإلكتروني غير صالح"),
@@ -209,23 +185,29 @@ export function registerAuthRoutes(app: Express): void {
         if (!result.success) {
           console.error("[OTP] Send failed:", result.error);
 
-          // في وضع التطوير، نعيد الكود في الاستجابة
+          // في وضع التطوير، نعيد الكود في الاستجابة دائماً
           if (process.env.NODE_ENV !== "production") {
-            return res.json({ message: "تم إرسال الرمز (وضع التطوير)", devCode: code, phone: normalizedPhone });
+            console.log(`[OTP-DEV] Code for ${normalizedPhone}: ${code}`);
+            return res.json({
+              message: "تم إرسال الرمز (وضع التطوير)",
+              devCode: code,
+              phone: normalizedPhone,
+            });
           }
 
-          const gatewayError = result.error || "";
-          let userMessage = "فشل إرسال الرمز. تحقق من الرقم وأعد المحاولة.";
+          // في الإنتاج: رسالة خطأ واضحة
+          const err = result.error || "";
+          let userMessage = "تعذّر إرسال رمز التحقق. يرجى المحاولة مجدداً.";
 
-          if (gatewayError.includes("401") || gatewayError.includes("403")) {
-            userMessage = "خطأ في إعدادات خدمة الرسائل. تواصل مع الدعم.";
-          } else if (gatewayError.includes("invalid") || gatewayError.includes("Invalid")) {
-            userMessage = "رقم الهاتف غير صالح. تحقق من الرقم.";
-          } else if (gatewayError.includes("مُهيّأة") || gatewayError.includes("configured")) {
-            userMessage = "خدمة الرسائل غير مُفعّلة حالياً.";
+          if (err.includes("SMS_GATEWAY_401") || err.includes("SMS_GATEWAY_403")) {
+            userMessage = "بيانات بوابة الرسائل خاطئة. تواصل مع الدعم.";
+          } else if (err.includes("SMS_GATEWAY_404")) {
+            userMessage = "بوابة الرسائل غير متاحة حالياً. جرّب قناة أخرى أو انتظر قليلاً.";
+          } else if (err.includes("NOT_CONFIGURED")) {
+            userMessage = "خدمة الرسائل غير مفعّلة. تواصل مع الدعم.";
           }
 
-          return res.status(500).json({ message: userMessage });
+          return res.status(503).json({ message: userMessage });
         }
 
         const usedChannel = result.usedChannel || channel;

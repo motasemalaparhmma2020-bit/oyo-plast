@@ -94,7 +94,12 @@ export default function Auth() {
   // ── إرسال OTP ──────────────────────────────────────────────────
   const sendOtpMutation = useMutation({
     mutationFn: async () => {
-      const rawPhone = `${countryCode.code}${phone.replace(/^0/, "")}`;
+      // إزالة أي بادئة صفرية أو كود دولة مكرر من الرقم المُدخَل
+      const codeDigits = countryCode.code.replace(/\D/g, ""); // مثلاً "967"
+      let cleanPhone = phone.replace(/\D/g, ""); // إزالة غير الأرقام
+      if (cleanPhone.startsWith(codeDigits)) cleanPhone = cleanPhone.slice(codeDigits.length);
+      if (cleanPhone.startsWith("0")) cleanPhone = cleanPhone.slice(1);
+      const rawPhone = `${countryCode.code}${cleanPhone}`;
       const res = await fetch("/api/auth/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
