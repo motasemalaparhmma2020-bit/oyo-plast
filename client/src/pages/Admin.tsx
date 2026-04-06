@@ -1370,6 +1370,10 @@ function NavigationSettingsSection({ adminToken }: { adminToken: string | null }
   );
 }
 
+function SMSGatewayTestInline({ adminToken }: { adminToken: string | null }) {
+  return <SMSGatewayTest adminToken={adminToken} />;
+}
+
 // Printing Products Section
 function PrintingProductsSection({ adminToken }: { adminToken: string | null }) {
   const { toast } = useToast();
@@ -5271,9 +5275,9 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="navigation">
-            <div className="space-y-4">
+          <div className="space-y-4">
+              <SMSGatewayTestInline adminToken={adminToken} />
               <NavigationSettingsSection adminToken={adminToken} />
-              <SMSGatewayTest adminToken={adminToken} />
               <PrintingProductsSection adminToken={adminToken} />
             </div>
           </TabsContent>
