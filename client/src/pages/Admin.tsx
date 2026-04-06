@@ -5271,10 +5271,25 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="navigation">
-          <div className="space-y-4">
-              <SMSGatewayTestInline adminToken={adminToken} />
+            <div className="space-y-4">
               <NavigationSettingsSection adminToken={adminToken} />
               <PrintingProductsSection adminToken={adminToken} />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="sms-test">
+            <div className="space-y-4">
+              <Card className="border-2 border-sky-200 dark:border-sky-800">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    📲 بوابة فحص رسائل التحقق
+                  </CardTitle>
+                  <CardDescription>
+                    اختبر اتصال بوابة SMS واستلام رسائل التحقق OTP من هذه الصفحة مباشرةً
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+              <SMSGatewayTest adminToken={adminToken} />
             </div>
           </TabsContent>
 
