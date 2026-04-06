@@ -1616,4 +1616,80 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(500).json({ message: "فشل جلب المنتجات", details: e.message });
     }
   });
+
+  // ── تشخيص بوابة SMS ────────────────────────────────────────────
+  app.post("/api/admin/test-sms", requireAdmin, async (req, res) => {
+    const smsUser = process.env.SMS_USER;
+    const smsPass = process.env.SMS_PASS;
+    const ultraInstance = process.env.ULTRAMSG_INSTANCE_ID;
+    const ultraToken = process.env.ULTRAMSG_TOKEN;
+
+    const report: any = {
+      timestamp: new Date().toISOString(),
+      config: {
+        smsGateway: {
+          configured: !!(smsUser && smsPass),
+          user: smsUser ? smsUser.substring(0, 4) + "***" : "غير محدد",
+          url: "https://api.sms-gate.app/3/messages",
+        },
+        ultraMsg: {
+          configured: !!(ultraInstance && ultraToken),
+          instance: ultraInstance ? ultraInstance.substring(0, 4) + "***" : "غير محدد",
+        },
+      },
+      tests: {} as any,
+    };
+
+    // اختبار الاتصال بالخادم
+    try {
+      const healthRes = await fetch("https://api.sms-gate.app/", { signal: AbortSignal.timeout(6000) });
+      report.tests.serverReachable = {
+        ok: true,
+        status: healthRes.status,
+        note: "الخادم يستجيب",
+      };
+    } catch (e: any) {
+      report.tests.serverReachable = { ok: false, error: e.message };
+    }
+
+    // اختبار المصادقة على SMS Gateway
+    if (smsUser && smsPass) {
+      const creds = Buffer.from(`${smsUser}:${smsPass}`).toString("base64");
+      const testPhone = req.body?.testPhone || "+967700000000";
+      try {
+        const smsRes = await fetch("https://api.sms-gate.app/3/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Basic ${creds}`,
+          },
+          body: JSON.stringify({
+            message: "اويو بلاست: اختبار بوابة SMS",
+            phoneNumbers: [testPhone],
+          }),
+          signal: AbortSignal.timeout(8000),
+        });
+        const body = await smsRes.text();
+        report.tests.smsGateway = {
+          ok: smsRes.ok,
+          status: smsRes.status,
+          response: body.substring(0, 200),
+          diagnosis:
+            smsRes.status === 404
+              ? "الجهاز غير مسجّل في السحابة أو البيانات خاطئة"
+              : smsRes.status === 401
+              ? "كلمة المرور أو اسم المستخدم خاطئ"
+              : smsRes.status === 200 || smsRes.status === 201
+              ? "✅ يعمل بنجاح"
+              : `خطأ ${smsRes.status}`,
+        };
+      } catch (e: any) {
+        report.tests.smsGateway = { ok: false, error: e.message };
+      }
+    } else {
+      report.tests.smsGateway = { ok: false, note: "SMS_USER أو SMS_PASS غير محددَين" };
+    }
+
+    res.json(report);
+  });
 }

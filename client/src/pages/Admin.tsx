@@ -1137,6 +1137,104 @@ function BannersOffersSection({ adminToken }: { adminToken: string | null }) {
 }
 
 // Navigation Settings Section
+function SMSGatewayTest({ adminToken }: { adminToken: string | null }) {
+  const { toast } = useToast();
+  const [testPhone, setTestPhone] = useState("+967774997589");
+  const [result, setResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  const runTest = async () => {
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/admin/test-sms", {
+        method: "POST",
+        headers: { "x-admin-token": adminToken!, "Content-Type": "application/json" },
+        body: JSON.stringify({ testPhone }),
+      });
+      const data = await res.json();
+      setResult(data);
+      if (data.tests?.smsGateway?.ok) {
+        toast({ title: "✅ بوابة SMS تعمل بنجاح!" });
+      } else {
+        toast({ title: "❌ بوابة SMS لا تعمل", description: data.tests?.smsGateway?.diagnosis, variant: "destructive" });
+      }
+    } catch (e: any) {
+      toast({ title: "خطأ في الاختبار", description: e.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const statusColor = (ok: boolean | undefined) =>
+    ok === true ? "text-green-600" : ok === false ? "text-red-600" : "text-gray-400";
+
+  return (
+    <Card className="border-2 border-blue-200 dark:border-blue-800">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          🔧 تشخيص بوابة SMS (SMSGate)
+        </CardTitle>
+        <CardDescription>اختبر الاتصال بتطبيق SMSGate على هاتفك</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={testPhone}
+            onChange={e => setTestPhone(e.target.value)}
+            className="flex-1 px-3 py-2 text-sm border rounded-lg font-mono"
+            placeholder="+967XXXXXXXXX"
+            dir="ltr"
+          />
+          <button
+            onClick={runTest}
+            disabled={loading}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg disabled:opacity-50"
+          >
+            {loading ? "جاري الاختبار..." : "اختبر الاتصال"}
+          </button>
+        </div>
+
+        {result && (
+          <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 text-sm space-y-2 font-mono">
+            <div>
+              <span className="font-bold">الخادم: </span>
+              <span className={statusColor(result.tests?.serverReachable?.ok)}>
+                {result.tests?.serverReachable?.ok ? "✅ يستجيب" : "❌ لا يستجيب"}
+              </span>
+            </div>
+            <div>
+              <span className="font-bold">بوابة SMS: </span>
+              <span className={statusColor(result.tests?.smsGateway?.ok)}>
+                {result.tests?.smsGateway?.ok ? "✅ تعمل" : "❌ فشل"}
+              </span>
+            </div>
+            <div className="text-xs text-gray-500 break-all">
+              <span className="font-bold">الرد (HTTP {result.tests?.smsGateway?.status}): </span>
+              {result.tests?.smsGateway?.diagnosis}
+            </div>
+            {result.tests?.smsGateway?.status === 404 && (
+              <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded text-red-700 dark:text-red-300 text-xs">
+                <strong>سبب 404:</strong> الجهاز غير مسجّل في السحابة.
+                <br />• افتح تطبيق SMSGate على هاتفك
+                <br />• اضغط على "Cloud Server" ← تأكد أنه مفعّل
+                <br />• انسخ اسم المستخدم وكلمة المرور من هناك
+                <br />• حدّث SMS_USER و SMS_PASS في إعدادات Replit
+              </div>
+            )}
+            {result.config && (
+              <div className="text-xs text-gray-400 pt-1 border-t">
+                المستخدم الحالي: {result.config.smsGateway.user}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function NavigationSettingsSection({ adminToken }: { adminToken: string | null }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -5175,6 +5273,7 @@ export default function Admin() {
           <TabsContent value="navigation">
             <div className="space-y-4">
               <NavigationSettingsSection adminToken={adminToken} />
+              <SMSGatewayTest adminToken={adminToken} />
               <PrintingProductsSection adminToken={adminToken} />
             </div>
           </TabsContent>
