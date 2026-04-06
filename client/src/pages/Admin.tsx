@@ -1173,9 +1173,9 @@ function SMSGatewayTest({ adminToken }: { adminToken: string | null }) {
     <Card className="border-2 border-blue-200 dark:border-blue-800">
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          🔧 تشخيص بوابة SMS (SMSGate)
+          🔧 بوابة فحص رسائل التحقق
         </CardTitle>
-        <CardDescription>اختبر الاتصال بتطبيق SMSGate على هاتفك</CardDescription>
+        <CardDescription>اختبر اتصال SMSGate ورسائل التحقق من داخل لوحة الإدارة</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex gap-2">
@@ -1192,7 +1192,7 @@ function SMSGatewayTest({ adminToken }: { adminToken: string | null }) {
             disabled={loading}
             className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg disabled:opacity-50"
           >
-            {loading ? "جاري الاختبار..." : "اختبر الاتصال"}
+            {loading ? "جاري الفحص..." : "اختبر الاتصال"}
           </button>
         </div>
 
@@ -1368,10 +1368,6 @@ function NavigationSettingsSection({ adminToken }: { adminToken: string | null }
       </CardContent>
     </Card>
   );
-}
-
-function SMSGatewayTestInline({ adminToken }: { adminToken: string | null }) {
-  return <SMSGatewayTest adminToken={adminToken} />;
 }
 
 // Printing Products Section
