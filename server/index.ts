@@ -88,6 +88,16 @@ async function startServer() {
       res.json({ status: "ok", timestamp: new Date().toISOString() });
     });
 
+    // ── حارس مؤقت: أثناء التهيئة يُعيد JSON بدل HTML لأي /api/* ──
+    let serverReady = false;
+    app.use("/api", (req, res, next) => {
+      if (serverReady) return next();
+      res.status(503).json({
+        message: "الخادم يتهيأ، أعد المحاولة بعد ثوانٍ.",
+        code: "SERVER_STARTING",
+      });
+    });
+
     // Start listening FIRST - this is critical for deployment health checks
     await new Promise<void>((resolve, reject) => {
       httpServer.listen(
@@ -116,6 +126,9 @@ async function startServer() {
     console.log("[INFO] Registering routes...");
     await registerRoutes(httpServer, app);
     console.log("[SUCCESS] Routes registered");
+
+    // ── أطلق الحارس المؤقت: المسارات جاهزة ──
+    serverReady = true;
 
     // Error handler
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

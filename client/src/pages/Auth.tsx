@@ -91,6 +91,20 @@ export default function Auth() {
     return err.message;
   };
 
+  // ── مساعد: قراءة JSON آمنة (تحمي من ردود HTML غير متوقعة) ──────
+  const safeJson = async (res: Response): Promise<any> => {
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("application/json")) {
+      // الخادم أعاد HTML أو نص — نُحوّله لخطأ واضح
+      const text = await res.text();
+      if (res.status === 503 || res.status === 404) {
+        throw new Error("الخادم يتهيأ، انتظر ثوانٍ وأعد المحاولة.");
+      }
+      throw new Error(`استجابة غير متوقعة من الخادم (${res.status}). أعد المحاولة.`);
+    }
+    return res.json();
+  };
+
   // ── إرسال OTP ──────────────────────────────────────────────────
   const sendOtpMutation = useMutation({
     mutationFn: async () => {
@@ -106,8 +120,14 @@ export default function Auth() {
         credentials: "include",
         body: JSON.stringify({ phone: rawPhone, channel }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "فشل إرسال الرمز");
+      const data = await safeJson(res);
+      // رسالة واضحة عند فشل البوابة
+      if (!res.ok) {
+        if (data?.code === "SERVER_STARTING") {
+          throw new Error("الخادم يتهيأ، انتظر ثوانٍ وأعد المحاولة.");
+        }
+        throw new Error(data?.message || "فشل إرسال الرمز");
+      }
       return data;
     },
     onSuccess: (data) => {
@@ -144,8 +164,8 @@ export default function Auth() {
         credentials: "include",
         body: JSON.stringify({ phone: normalizedPhone, code, fullName: nameOverride || fullName || undefined }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "الرمز غير صحيح");
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data?.message || "الرمز غير صحيح");
       return data;
     },
     onSuccess: (data) => {
