@@ -209,23 +209,20 @@ export function registerAuthRoutes(app: Express): void {
         if (!result.success) {
           console.error("[OTP] Send failed:", result.error);
 
-          // في وضع التطوير، نعيد الكود في الاستجابة دون Twilio
+          // في وضع التطوير، نعيد الكود في الاستجابة
           if (process.env.NODE_ENV !== "production") {
             return res.json({ message: "تم إرسال الرمز (وضع التطوير)", devCode: code, phone: normalizedPhone });
           }
 
-          // تحويل أخطاء Twilio لرسائل عربية واضحة
-          const twilioError = result.error || "";
+          const gatewayError = result.error || "";
           let userMessage = "فشل إرسال الرمز. تحقق من الرقم وأعد المحاولة.";
 
-          if (twilioError.includes("exceeded") || twilioError.includes("limit")) {
-            userMessage = "تم تجاوز الحد اليومي لإرسال الرسائل. يرجى المحاولة لاحقاً أو ترقية حساب Twilio.";
-          } else if (twilioError.includes("unverified") || twilioError.includes("verified")) {
-            userMessage = "الرقم غير مسجّل للاستلام في حساب Twilio التجريبي. سجّل الرقم أولاً في لوحة Twilio.";
-          } else if (twilioError.includes("invalid") || twilioError.includes("Invalid")) {
-            userMessage = "رقم الهاتف غير صالح للإرسال. تحقق من الرقم.";
-          } else if (twilioError.includes("blacklist") || twilioError.includes("blocked")) {
-            userMessage = "الرقم محظور من الاستلام. جرّب رقماً آخر.";
+          if (gatewayError.includes("401") || gatewayError.includes("403")) {
+            userMessage = "خطأ في إعدادات خدمة الرسائل. تواصل مع الدعم.";
+          } else if (gatewayError.includes("invalid") || gatewayError.includes("Invalid")) {
+            userMessage = "رقم الهاتف غير صالح. تحقق من الرقم.";
+          } else if (gatewayError.includes("مُهيّأة") || gatewayError.includes("configured")) {
+            userMessage = "خدمة الرسائل غير مُفعّلة حالياً.";
           }
 
           return res.status(500).json({ message: userMessage });

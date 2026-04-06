@@ -1,23 +1,9 @@
 /**
- * Twilio OTP Service — إرسال رموز التحقق عبر رسالة نصية SMS أو واتساب
+ * SMS Gateway OTP Service — إرسال رموز التحقق عبر Android SMS Gateway
+ * يستخدم api.sms-gate.app (Cloud Server) بدلاً من Twilio
  */
-import twilio from "twilio";
 
-// رقم واتساب sandbox الافتراضي من تويليو (يتطلب opt-in)
-const TWILIO_SANDBOX_NUMBER = "+14155238886";
-
-let _client: twilio.Twilio | null = null;
-
-function getClient(): twilio.Twilio {
-  if (_client) return _client;
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken  = process.env.TWILIO_AUTH_TOKEN;
-  if (!accountSid || !authToken) {
-    throw new Error("TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN not configured");
-  }
-  _client = twilio(accountSid, authToken);
-  return _client;
-}
+const SMS_GATEWAY_URL = "https://api.sms-gate.app/3/messages";
 
 /** توليد كود 6 أرقام */
 export function generateOTP(): string {
@@ -25,76 +11,55 @@ export function generateOTP(): string {
 }
 
 /**
- * إرسال كود التحقق عبر SMS أو واتساب
- * إذا فشل واتساب يرجع fallback تلقائي لـ SMS
+ * إرسال كود التحقق عبر Android SMS Gateway
  * @param to رقم الهاتف بصيغة دولية مثل +967777XXXXXX
  * @param code كود 6 أرقام
- * @param channel قناة الإرسال: sms | whatsapp
+ * @param channel قناة الإرسال (sms فقط — whatsapp غير مدعوم في هذه الخدمة)
  */
 export async function sendOTP(
   to: string,
   code: string,
   channel: "whatsapp" | "sms" = "sms"
 ): Promise<{ success: boolean; usedChannel?: string; error?: string }> {
-  const whatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER;
-  if (!whatsappNumber) {
-    return { success: false, error: "TWILIO_WHATSAPP_NUMBER not configured" };
+  const smsUser = process.env.SMS_USER;
+  const smsPass = process.env.SMS_PASS;
+
+  if (!smsUser || !smsPass) {
+    console.error("[OTP] SMS_USER or SMS_PASS not configured");
+    return { success: false, error: "خدمة الرسائل غير مُهيّأة" };
   }
 
-  const isSandbox = whatsappNumber.replace(/\s/g, "") === TWILIO_SANDBOX_NUMBER;
+  // تأكد من أن الرقم بصيغة دولية (يبدأ بـ +)
+  const normalizedTo = to.startsWith("+") ? to : `+${to}`;
 
-  const message =
-    `رمز التحقق - أويو بلاست\n` +
-    `رمزك: ${code}\n` +
-    `صالح 5 دقائق فقط. لا تشاركه.`;
+  const messageText = `متجر اويو بلاست: رمز التحقق الخاص بك هو ${code}`;
 
-  const client = getClient();
-
-  // إذا طُلب واتساب لكن الرقم هو sandbox، انتقل مباشرة لـ SMS
-  if (channel === "whatsapp" && isSandbox) {
-    console.warn("[OTP] WhatsApp Sandbox detected → switching to SMS automatically");
-    channel = "sms";
-  }
-
-  // محاولة الإرسال عبر القناة المطلوبة
-  const trySend = async (ch: "whatsapp" | "sms"): Promise<void> => {
-    if (ch === "whatsapp") {
-      await client.messages.create({
-        from: `whatsapp:${whatsappNumber}`,
-        to: `whatsapp:${to}`,
-        body: message,
-      });
-    } else {
-      // SMS — نستخدم رقم TWILIO_PHONE_NUMBER إن وُجد وإلا رقم WhatsApp
-      const smsFrom = process.env.TWILIO_PHONE_NUMBER || whatsappNumber;
-      await client.messages.create({
-        from: smsFrom,
-        to,
-        body: message,
-      });
-    }
-  };
+  const credentials = Buffer.from(`${smsUser}:${smsPass}`).toString("base64");
 
   try {
-    await trySend(channel);
-    console.log(`[OTP] Sent via ${channel} to ${to} — code: ${code}`);
-    return { success: true, usedChannel: channel };
-  } catch (err: any) {
-    console.error(`[OTP] Send error via ${channel} to ${to}:`, err.message);
+    const res = await fetch(SMS_GATEWAY_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Basic ${credentials}`,
+      },
+      body: JSON.stringify({
+        number: normalizedTo,
+        message: messageText,
+      }),
+    });
 
-    // إذا فشل واتساب، حاول SMS تلقائياً
-    if (channel === "whatsapp") {
-      console.log(`[OTP] Falling back to SMS for ${to}...`);
-      try {
-        await trySend("sms");
-        console.log(`[OTP] Fallback SMS sent to ${to} — code: ${code}`);
-        return { success: true, usedChannel: "sms" };
-      } catch (smsErr: any) {
-        console.error(`[OTP] SMS fallback also failed for ${to}:`, smsErr.message);
-        return { success: false, error: smsErr.message };
-      }
+    const responseText = await res.text();
+
+    if (!res.ok) {
+      console.error(`[OTP] SMS Gateway error ${res.status}: ${responseText}`);
+      return { success: false, error: `فشل الإرسال (${res.status})` };
     }
 
-    return { success: false, error: err.message };
+    console.log(`[OTP] Sent via SMS Gateway to ${normalizedTo} — code: ${code}`);
+    return { success: true, usedChannel: "sms" };
+  } catch (err: any) {
+    console.error(`[OTP] SMS Gateway fetch error for ${normalizedTo}:`, err.message);
+    return { success: false, error: "تعذّر الاتصال بخدمة الرسائل" };
   }
 }
