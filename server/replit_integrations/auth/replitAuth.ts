@@ -28,7 +28,7 @@ export function getSession() {
     tableName: "sessions",
   });
   return session({
-    secret: process.env.SESSION_SECRET!,
+    secret: process.env.SESSION_SECRET || process.env.ADMIN_PASSWORD || "oyo-plast-session-secret",
     store: sessionStore,
     resave: false,
     saveUninitialized: false,

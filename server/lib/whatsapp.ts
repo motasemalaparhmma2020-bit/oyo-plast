@@ -1,15 +1,4 @@
-/**
- * WhatsApp Notifications via Twilio
- * Handles all WhatsApp messaging for orders and notifications
- */
-
 import { logEvent, logNotificationAttempt } from "./logger";
-
-interface WhatsAppConfig {
-  accountSid?: string;
-  authToken?: string;
-  phoneNumber?: string;
-}
 
 interface WhatsAppMessage {
   to: string;
@@ -35,93 +24,14 @@ const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const MESSAGE_EXPIRY_MS = 48 * 60 * 60 * 1000; // 48 hours
 
-/**
- * Initialize Twilio client (lazy load)
- * Called only when needed to avoid missing env vars at startup
- */
-function getTwilioClient(): any {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-
-  if (!accountSid || !authToken) {
-    throw new Error("❌ TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN not configured");
-  }
-
-  // Dynamic import to avoid requiring twilio at startup
-  // In production, you'd do: const twilio = require('twilio');
-  // For now, return mock to prevent startup errors
-  return {
-    messages: {
-      create: async (opts: any) => {
-        logEvent(
-          "WhatsApp Message Sent (Mock)",
-          "success",
-          {
-            to: opts.to,
-            preview: opts.body.substring(0, 50),
-          },
-          undefined
-        );
-        return { sid: `mock-${Date.now()}` };
-      },
-    },
-  };
-}
-
-/**
- * Send WhatsApp message
- * With retry logic and failure tracking
- */
 export async function sendWhatsAppMessage(
   to: string,
   message: string,
   orderId?: number
 ): Promise<SendResult> {
-  const phoneNumber = process.env.TWILIO_WHATSAPP_NUMBER;
-
-  if (!phoneNumber) {
-    const error = "TWILIO_WHATSAPP_NUMBER not configured";
-    logNotificationAttempt(orderId || 0, "whatsapp", to, "failed");
-    return { success: false, error };
-  }
-
-  try {
-    const client = getTwilioClient();
-
-    // Ensure phone number has correct format (whatsapp:+1234567890)
-    const formattedTo = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
-
-    const result = await client.messages.create({
-      from: `whatsapp:${phoneNumber}`,
-      to: formattedTo,
-      body: message,
-    });
-
-    logNotificationAttempt(orderId || 0, "whatsapp", to, "success");
-
-    return {
-      success: true,
-      messageId: result.sid,
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logNotificationAttempt(orderId || 0, "whatsapp", to, "failed");
-
-    // Add to failed messages for retry
-    addFailedMessage(
-      {
-        to,
-        message,
-        orderId,
-      },
-      orderId
-    );
-
-    return {
-      success: false,
-      error: errorMessage,
-    };
-  }
+  const error = "WhatsApp notifications are disabled";
+  logNotificationAttempt(orderId || 0, "whatsapp", to, "failed");
+  return { success: false, error };
 }
 
 /**
