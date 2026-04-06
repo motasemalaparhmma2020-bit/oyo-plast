@@ -55,6 +55,7 @@ import PrintableInvoice from "@/components/PrintableInvoice";
 import { DigitalWalletsManager } from "@/components/DigitalWalletsManager";
 import { ImageDimensionsManager } from "@/components/ImageDimensionsManager";
 import { AdminNav } from "@/components/AdminNav";
+import { LoginManagementSection } from "@/components/LoginManagementSection";
 import { compressImage, formatFileSize } from "@/lib/imageCompression";
 
 const statusMap: Record<string, { label: string; color: string; icon: any }> = {
@@ -5347,6 +5348,10 @@ export default function Admin() {
                 <DigitalWalletsManager adminToken={adminToken} />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="login-management">
+            <LoginManagementSection adminToken={adminToken} />
           </TabsContent>
 
         </Tabs>

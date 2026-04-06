@@ -610,17 +610,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ─── Admin Navigation Settings ────────────────────────────────────
-  app.patch("/api/admin/navigation-settings", requireAdmin, async (req, res) => {
+  // ─── Visitor Tracking (Public) ────────────────────────────────────
+  app.post("/api/track-visit", async (req, res) => {
     try {
-      const settings = await storage.updateNavigationSettings({
-        showPrintingSection: req.body.showPrintingSection ?? true,
-        showSignupEntryPoint: req.body.showSignupEntryPoint ?? true,
-        enableVariantProductPage: req.body.enableVariantProductPage ?? false,
-      });
-      res.json(settings);
+      const { sessionId } = req.body;
+      if (!sessionId) return res.json({ ok: true });
+      const { pool: dbPool } = await import("./db");
+      const client = await dbPool.connect();
+      try {
+        await client.query(`
+          INSERT INTO visitor_sessions (session_id, last_seen, page_views)
+          VALUES ($1, NOW(), 1)
+          ON CONFLICT (session_id) DO UPDATE
+          SET last_seen = NOW(), page_views = visitor_sessions.page_views + 1
+        `, [sessionId]);
+      } finally { client.release(); }
+      res.json({ ok: true });
+    } catch { res.json({ ok: true }); }
+  });
+
+  // ─── Admin Stats ───────────────────────────────────────────────────
+  app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const client = await dbPool.connect();
+      try {
+        const [usersRes, visitorsRes, activeRes] = await Promise.all([
+          client.query(`SELECT COUNT(*) FROM users`),
+          client.query(`SELECT COUNT(DISTINCT session_id) FROM visitor_sessions`),
+          client.query(`SELECT COUNT(DISTINCT session_id) FROM visitor_sessions WHERE last_seen > NOW() - INTERVAL '5 minutes'`),
+        ]);
+        res.json({
+          registeredUsers: parseInt(usersRes.rows[0].count),
+          totalVisitors: parseInt(visitorsRes.rows[0].count),
+          activeNow: parseInt(activeRes.rows[0].count),
+        });
+      } finally { client.release(); }
     } catch (e: any) {
-      res.status(500).json({ message: "فشل تحديث إعدادات التنقل", details: e.message });
+      res.status(500).json({ message: "فشل جلب الإحصائيات", details: e.message });
     }
   });
 
@@ -719,22 +746,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/admin/navigation-settings", requireAdmin, async (req, res) => {
     try {
-      const {
-        showPrintingSection,
-        showSignupEntryPoint,
-        enableVariantProductPage,
-        lockMobilePwaMode,
-        disablePinchZoom,
-        disableHorizontalScroll,
-      } = req.body;
-      const settings = await storage.updateNavigationSettings({
-        ...(showPrintingSection !== undefined && { showPrintingSection }),
-        ...(showSignupEntryPoint !== undefined && { showSignupEntryPoint }),
-        ...(enableVariantProductPage !== undefined && { enableVariantProductPage }),
-        ...(lockMobilePwaMode !== undefined && { lockMobilePwaMode }),
-        ...(disablePinchZoom !== undefined && { disablePinchZoom }),
-        ...(disableHorizontalScroll !== undefined && { disableHorizontalScroll }),
-      });
+      const allowed = [
+        "showPrintingSection", "showSignupEntryPoint", "enableVariantProductPage",
+        "lockMobilePwaMode", "disablePinchZoom", "disableHorizontalScroll",
+        "enablePhoneLogin", "enableEmailLogin",
+        "loginShowOnTop", "loginShowOnCheckout", "loginShowOnAccount",
+      ];
+      const patch: Record<string, any> = {};
+      for (const key of allowed) {
+        if (req.body[key] !== undefined) patch[key] = req.body[key];
+      }
+      const settings = await storage.updateNavigationSettings(patch);
       res.json(settings);
     } catch (e: any) {
       res.status(500).json({ message: "فشل تحديث إعدادات التنقل", details: e.message });

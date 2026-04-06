@@ -253,6 +253,27 @@ export async function runMigrations(): Promise<void> {
       WHERE NOT EXISTS (SELECT 1 FROM display_settings LIMIT 1);
     `);
 
+    // ─── إعدادات تسجيل الدخول ────────────────────────────────────────
+    await client.query(`ALTER TABLE navigation_settings ADD COLUMN IF NOT EXISTS enable_phone_login BOOLEAN NOT NULL DEFAULT true;`);
+    await client.query(`ALTER TABLE navigation_settings ADD COLUMN IF NOT EXISTS enable_email_login BOOLEAN NOT NULL DEFAULT true;`);
+    await client.query(`ALTER TABLE navigation_settings ADD COLUMN IF NOT EXISTS login_show_on_top BOOLEAN NOT NULL DEFAULT false;`);
+    await client.query(`ALTER TABLE navigation_settings ADD COLUMN IF NOT EXISTS login_show_on_checkout BOOLEAN NOT NULL DEFAULT true;`);
+    await client.query(`ALTER TABLE navigation_settings ADD COLUMN IF NOT EXISTS login_show_on_account BOOLEAN NOT NULL DEFAULT true;`);
+
+    // ─── جدول تتبع الزوار والجلسات ───────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS visitor_sessions (
+        id SERIAL PRIMARY KEY,
+        session_id TEXT NOT NULL UNIQUE,
+        user_id TEXT,
+        first_seen TIMESTAMP NOT NULL DEFAULT NOW(),
+        last_seen TIMESTAMP NOT NULL DEFAULT NOW(),
+        page_views INTEGER NOT NULL DEFAULT 1
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_visitor_sessions_last_seen ON visitor_sessions(last_seen);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_visitor_sessions_session ON visitor_sessions(session_id);`);
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

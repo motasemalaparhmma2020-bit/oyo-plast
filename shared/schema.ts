@@ -389,10 +389,16 @@ export const navigationSettings = pgTable("navigation_settings", {
   id: serial("id").primaryKey(),
   showPrintingSection: boolean("show_printing_section").default(true).notNull(),
   showSignupEntryPoint: boolean("show_signup_entry_point").default(true).notNull(),
-  enableVariantProductPage: boolean("enable_variant_product_page").default(false).notNull(), // Master switch: SHEIN-style variant UI
+  enableVariantProductPage: boolean("enable_variant_product_page").default(false).notNull(),
   lockMobilePwaMode: boolean("lock_mobile_pwa_mode").default(true).notNull(),
   disablePinchZoom: boolean("disable_pinch_zoom").default(true).notNull(),
   disableHorizontalScroll: boolean("disable_horizontal_scroll").default(true).notNull(),
+  // ── إعدادات تسجيل الدخول ─────────────────────────────────────────
+  enablePhoneLogin: boolean("enable_phone_login").default(true).notNull(),
+  enableEmailLogin: boolean("enable_email_login").default(true).notNull(),
+  loginShowOnTop: boolean("login_show_on_top").default(false).notNull(),
+  loginShowOnCheckout: boolean("login_show_on_checkout").default(true).notNull(),
+  loginShowOnAccount: boolean("login_show_on_account").default(true).notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

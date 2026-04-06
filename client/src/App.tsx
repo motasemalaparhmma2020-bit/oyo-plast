@@ -187,6 +187,23 @@ function DisplaySettingsInjector() {
   return null;
 }
 
+// تتبع زيارة المستخدم (بدون بيانات شخصية — session ID عشوائي فقط)
+function VisitorTracker() {
+  useEffect(() => {
+    let sessionId = sessionStorage.getItem("oyo_sid");
+    if (!sessionId) {
+      sessionId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      sessionStorage.setItem("oyo_sid", sessionId);
+    }
+    fetch("/api/track-visit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+    }).catch(() => {});
+  }, []);
+  return null;
+}
+
 function OfflineSyncProvider() {
   const { isOnline, syncedCount } = useOfflineSync();
   
@@ -205,6 +222,34 @@ function OfflineSyncProvider() {
         </div>
       )}
     </>
+  );
+}
+
+function LoginTopBanner() {
+  const { isAuthenticated } = useAuth();
+  const { data: navSettings } = useQuery<any>({
+    queryKey: ["/api/navigation-settings"],
+    staleTime: 60000,
+  });
+  const [, setLocation] = useLocation();
+  const [dismissed, setDismissed] = React.useState(false);
+
+  if (!navSettings?.loginShowOnTop || isAuthenticated || dismissed) return null;
+
+  return (
+    <div className="bg-primary text-primary-foreground text-center text-xs py-2 px-4 flex items-center justify-between gap-2" dir="rtl">
+      <span className="flex-1">👋 سجّل دخولك للاستفادة من جميع المزايا والعروض الحصرية</span>
+      <button
+        onClick={() => setLocation("/auth")}
+        className="font-bold underline whitespace-nowrap"
+        data-testid="button-login-banner"
+      >
+        تسجيل الدخول
+      </button>
+      <button onClick={() => setDismissed(true)} className="opacity-70 hover:opacity-100 text-base leading-none" data-testid="button-dismiss-banner">
+        ✕
+      </button>
+    </div>
   );
 }
 
@@ -247,8 +292,10 @@ function Router() {
       <SplashScreen />
       <CartMerger />
       <DisplaySettingsInjector />
+      <VisitorTracker />
       <OfflineSyncProvider />
       <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16 md:pb-0">
+        <LoginTopBanner />
         <Navbar />
         <main className="flex-grow">
           <Switch>

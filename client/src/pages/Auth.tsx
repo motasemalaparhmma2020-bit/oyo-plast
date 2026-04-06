@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -32,6 +32,14 @@ type LoginMode = "phone" | "email";
 export default function Auth() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  // إعدادات تسجيل الدخول من لوحة الإدارة
+  const { data: navSettings } = useQuery<any>({
+    queryKey: ["/api/navigation-settings"],
+    staleTime: 60000,
+  });
+  const enablePhone = navSettings?.enablePhoneLogin ?? true;
+  const enableEmail = navSettings?.enableEmailLogin ?? true;
 
   const [loginMode, setLoginMode] = useState<LoginMode>("phone");
   const [step, setStep] = useState<Step>("phone");
@@ -497,39 +505,45 @@ export default function Auth() {
 
         {/* البطاقة الرئيسية */}
         <div className="bg-card border rounded-2xl shadow-xl p-6">
-          {/* تبديل بين الهاتف والبريد */}
-          <div className="flex rounded-xl overflow-hidden border mb-5">
-            <button
-              type="button"
-              onClick={() => { setLoginMode("phone"); setStep("phone"); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors ${
-                loginMode === "phone" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground"
-              }`}
-              data-testid="button-mode-phone"
-            >
-              <Phone className="h-4 w-4" /> رقم الهاتف
-            </button>
-            <button
-              type="button"
-              onClick={() => setLoginMode("email")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors ${
-                loginMode === "email" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground"
-              }`}
-              data-testid="button-mode-email"
-            >
-              <Mail className="h-4 w-4" /> البريد الإلكتروني
-            </button>
-          </div>
+          {/* تبديل بين الهاتف والبريد — يظهر فقط إذا الاثنان مفعّلان */}
+          {enablePhone && enableEmail && (
+            <div className="flex rounded-xl overflow-hidden border mb-5">
+              <button
+                type="button"
+                onClick={() => { setLoginMode("phone"); setStep("phone"); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors ${
+                  loginMode === "phone" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground"
+                }`}
+                data-testid="button-mode-phone"
+              >
+                <Phone className="h-4 w-4" /> رقم الهاتف
+              </button>
+              <button
+                type="button"
+                onClick={() => setLoginMode("email")}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors ${
+                  loginMode === "email" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground"
+                }`}
+                data-testid="button-mode-email"
+              >
+                <Mail className="h-4 w-4" /> البريد الإلكتروني
+              </button>
+            </div>
+          )}
 
-          {/* المحتوى */}
-          {loginMode === "phone" ? (
+          {/* المحتوى — مرتبط بالإعداد الفعلي */}
+          {(enablePhone && (!enableEmail || loginMode === "phone")) ? (
             <>
               {step === "phone" && renderPhoneStep()}
               {step === "otp"   && renderOtpStep()}
               {step === "name"  && renderNameStep()}
             </>
-          ) : (
+          ) : enableEmail ? (
             renderEmailLogin()
+          ) : (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              تسجيل الدخول غير متاح حالياً
+            </div>
           )}
         </div>
 
