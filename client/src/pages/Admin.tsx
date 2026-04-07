@@ -1159,7 +1159,8 @@ function SMSGatewayTest({ adminToken }: { adminToken: string | null }) {
       if (data.tests?.smsGateway?.ok) {
         toast({ title: "✅ بوابة SMS تعمل بنجاح!" });
       } else {
-        toast({ title: "❌ بوابة SMS لا تعمل", description: data.tests?.smsGateway?.diagnosis, variant: "destructive" });
+        const diagnosis = data.tests?.smsGateway?.diagnosis || "تعذر إرسال الرسائل من بوابة SMSGate";
+        toast({ title: "❌ بوابة SMS لا تعمل", description: diagnosis, variant: "destructive" });
       }
     } catch (e: any) {
       toast({ title: "خطأ في الاختبار", description: e.message, variant: "destructive" });
@@ -1223,6 +1224,7 @@ function SMSGatewayTest({ adminToken }: { adminToken: string | null }) {
                 <br />• اضغط على "Cloud Server" ← تأكد أنه مفعّل
                 <br />• انسخ اسم المستخدم وكلمة المرور من هناك
                 <br />• حدّث SMS_USER و SMS_PASS في إعدادات Replit
+                <br />• إذا استمر 404 بعد ذلك، فالحل من داخل SMSGate أو من مزوّد الخدمة نفسه وليس من الموقع
               </div>
             )}
             {result.config && (
