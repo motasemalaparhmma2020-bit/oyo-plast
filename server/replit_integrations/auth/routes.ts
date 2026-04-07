@@ -199,12 +199,12 @@ export function registerAuthRoutes(app: Express): void {
           const err = result.error || "";
           let userMessage = "تعذّر إرسال رمز التحقق. يرجى المحاولة مجدداً.";
 
-          if (err.includes("SMS_GATEWAY_401") || err.includes("SMS_GATEWAY_403")) {
-            userMessage = "بيانات بوابة الرسائل خاطئة. تواصل مع الدعم.";
-          } else if (err.includes("SMS_GATEWAY_404")) {
-            userMessage = "بوابة الرسائل غير متاحة حالياً. جرّب قناة أخرى أو انتظر قليلاً.";
-          } else if (err.includes("NOT_CONFIGURED")) {
+          if (err.includes("TWILIO_NOT_CONFIGURED") || err.includes("NOT_CONFIGURED")) {
             userMessage = "خدمة الرسائل غير مفعّلة. تواصل مع الدعم.";
+          } else if (err.toLowerCase().includes("twilio") && (err.includes("401") || err.includes("403"))) {
+            userMessage = "بيانات Twilio خاطئة. تواصل مع الدعم.";
+          } else if (err.toLowerCase().includes("twilio")) {
+            userMessage = "تعذّر إرسال الرمز عبر Twilio. جرّب قناة أخرى أو انتظر قليلاً.";
           }
 
           return res.status(503).json({ message: userMessage });
