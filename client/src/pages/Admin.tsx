@@ -1139,7 +1139,7 @@ function BannersOffersSection({ adminToken }: { adminToken: string | null }) {
 }
 
 // Twilio SMS Test Section
-function SMSGatewayTest({ adminToken }: { adminToken: string | null }) {
+function TwilioSmsTest({ adminToken }: { adminToken: string | null }) {
   const { toast } = useToast();
   const [testPhone, setTestPhone] = useState("+967774997589");
   const [result, setResult] = useState<any>(null);
@@ -5405,7 +5405,7 @@ export default function Admin() {
           <TabsContent value="sms-test">
             <div className="space-y-4">
               <ActiveOTPViewer adminToken={adminToken} />
-              <SMSGatewayTest adminToken={adminToken} />
+              <TwilioSmsTest adminToken={adminToken} />
             </div>
           </TabsContent>
 
