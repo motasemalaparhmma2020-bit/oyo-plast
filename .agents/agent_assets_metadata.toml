@@ -12,3 +12,15 @@ id = "iJDpNWwnThRO5MZR4NfWS"
 uri = "file://oyoplast_backup_2026-04-07.tar.gz"
 type = "unspecified"
 title = "نسخة احتياطية كاملة - أويو بلاست (2026-04-07)"
+
+[[outputs]]
+id = "H38mYaA2FN5X2N7qDFrBv"
+uri = "file://oyoplast_code_backup.tar.gz"
+type = "unspecified"
+title = "كود المشروع كامل - أويو بلاست (2 ميجا)"
+
+[[outputs]]
+id = "S1h6vN2ol_HJXhgFKlI6e"
+uri = "file://oyoplast_database_backup.txt"
+type = "text"
+title = "قاعدة البيانات كاملة - المنتجات والفئات والإعدادات (78 كيلو)"
