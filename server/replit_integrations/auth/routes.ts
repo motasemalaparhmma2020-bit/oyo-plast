@@ -201,10 +201,12 @@ export function registerAuthRoutes(app: Express): void {
 
           if (err.includes("TWILIO_NOT_CONFIGURED") || err.includes("NOT_CONFIGURED")) {
             userMessage = "خدمة الرسائل غير مفعّلة. تواصل مع الدعم.";
+          } else if (err.includes("429") || err.toLowerCase().includes("exceeded") || err.toLowerCase().includes("daily messages limit")) {
+            userMessage = "تجاوز المتجر الحد اليومي لرسائل التحقق. يرجى المحاولة غداً أو التواصل مع الدعم.";
           } else if (err.toLowerCase().includes("twilio") && (err.includes("401") || err.includes("403"))) {
-            userMessage = "بيانات Twilio خاطئة. تواصل مع الدعم.";
-          } else if (err.toLowerCase().includes("twilio")) {
-            userMessage = "تعذّر إرسال الرمز عبر Twilio. جرّب قناة أخرى أو انتظر قليلاً.";
+            userMessage = "بيانات خدمة الرسائل غير صحيحة. تواصل مع الدعم.";
+          } else if (err.toLowerCase().includes("twilio") || err.toLowerCase().includes("sms")) {
+            userMessage = "تعذّر إرسال الرمز. جرّب واتساب بدلاً من SMS أو أعد المحاولة لاحقاً.";
           }
 
           return res.status(503).json({ message: userMessage });

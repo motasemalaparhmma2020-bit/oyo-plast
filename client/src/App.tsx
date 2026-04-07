@@ -204,6 +204,78 @@ function VisitorTracker() {
   return null;
 }
 
+// ── قفل الشاشة في وضع الموبايل PWA ──────────────────────────────
+function MobilePwaLock() {
+  const { data: displaySettings } = useQuery<any>({
+    queryKey: ['/api/display-settings'],
+    staleTime: 60000,
+  });
+
+  const isLockEnabled = displaySettings?.lockMobilePwaMode !== false;
+
+  // هل الجهاز موبايل فعلاً (عرض صغير أو شاشة لمس)
+  const isMobileDevice = () =>
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+    window.matchMedia('(max-width: 768px)').matches ||
+    ('ontouchstart' in window);
+
+  // هل التطبيق مثبّت كـ PWA Standalone
+  const isPWAStandalone = () =>
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as any).standalone === true;
+
+  useEffect(() => {
+    if (!isLockEnabled) return;
+    if (!isMobileDevice() && !isPWAStandalone()) return;
+
+    const lockOrientation = async () => {
+      try {
+        if (screen.orientation && (screen.orientation as any).lock) {
+          await (screen.orientation as any).lock('portrait-primary');
+        }
+      } catch {
+        // المتصفح لا يدعم القفل — نعتمد على CSS overlay
+      }
+    };
+
+    lockOrientation();
+    const handleChange = () => { lockOrientation(); };
+    screen.orientation?.addEventListener?.('change', handleChange);
+    return () => screen.orientation?.removeEventListener?.('change', handleChange);
+  }, [isLockEnabled]);
+
+  const [isLandscape, setIsLandscape] = React.useState(
+    () => window.innerWidth > window.innerHeight
+  );
+
+  useEffect(() => {
+    if (!isLockEnabled) return;
+    const check = () => setIsLandscape(window.innerWidth > window.innerHeight);
+    window.addEventListener('resize', check);
+    window.addEventListener('orientationchange', check);
+    return () => {
+      window.removeEventListener('resize', check);
+      window.removeEventListener('orientationchange', check);
+    };
+  }, [isLockEnabled]);
+
+  // الـ overlay يظهر فقط على الموبايل أو PWA — وليس على سطح المكتب
+  const shouldShow = isLockEnabled && isLandscape && (isMobileDevice() || isPWAStandalone());
+  if (!shouldShow) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] bg-[#1976D2] flex flex-col items-center justify-center text-white select-none"
+      style={{ touchAction: 'none' }}
+    >
+      <div className="text-6xl mb-6" style={{ animation: 'spin 2s linear infinite' }}>🔄</div>
+      <p className="text-xl font-bold mb-2">يرجى تدوير الجهاز</p>
+      <p className="text-sm opacity-80">هذا التطبيق مُصمَّم للعرض العمودي فقط</p>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
 function OfflineSyncProvider() {
   const { isOnline, syncedCount } = useOfflineSync();
   
@@ -289,6 +361,7 @@ function Router() {
 
   return (
     <>
+      <MobilePwaLock />
       <SplashScreen />
       <CartMerger />
       <DisplaySettingsInjector />
