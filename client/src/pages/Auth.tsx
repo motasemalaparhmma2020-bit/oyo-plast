@@ -332,6 +332,9 @@ export default function Auth() {
   // ── واجهة الخطوة 2: OTP ────────────────────────────────────────
   const renderOtpStep = () => (
     <div className="space-y-5">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+        إذا وصلتك الرسالة، انسخ الرمز هنا ثم اضغط "تأكيد الرمز".
+      </div>
       <div className="text-center">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-3">
           {channel === "whatsapp" ? (
@@ -366,6 +369,16 @@ export default function Auth() {
             data-testid={`input-otp-${i}`}
           />
         ))}
+      </div>
+      <div className="text-center">
+        <button
+          type="button"
+          className="text-xs font-semibold text-primary hover:underline"
+          onClick={() => otpRefs.current[0]?.focus()}
+          data-testid="button-focus-otp"
+        >
+          اضغط هنا للبدء بإدخال الرمز
+        </button>
       </div>
 
       {/* زر التحقق */}
