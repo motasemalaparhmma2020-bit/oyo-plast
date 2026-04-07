@@ -1638,6 +1638,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/admin/test-sms", requireAdmin, async (req, res) => {
     const smsUser = process.env.SMS_USER;
     const smsPass = process.env.SMS_PASS;
+    const smsDeviceId = process.env.SMS_DEVICE_ID;
+    const smsGatewayUrl = process.env.SMS_GATEWAY_URL || "https://api.sms-gate.app/mobile/v1";
     const ultraInstance = process.env.ULTRAMSG_INSTANCE_ID;
     const ultraToken = process.env.ULTRAMSG_TOKEN;
 
@@ -1647,7 +1649,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         smsGateway: {
           configured: !!(smsUser && smsPass),
           user: smsUser ? smsUser.substring(0, 4) + "***" : "غير محدد",
-          url: "https://api.sms-gate.app/3/messages",
+          deviceId: smsDeviceId ? smsDeviceId.substring(0, 4) + "***" : "غير محدد",
+          url: smsGatewayUrl,
         },
         ultraMsg: {
           configured: !!(ultraInstance && ultraToken),
@@ -1659,7 +1662,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     // اختبار الاتصال بالخادم
     try {
-      const healthRes = await fetch("https://api.sms-gate.app/", { signal: AbortSignal.timeout(6000) });
+      const healthRes = await fetch(smsGatewayUrl, { signal: AbortSignal.timeout(6000) });
       report.tests.serverReachable = {
         ok: true,
         status: healthRes.status,
@@ -1674,7 +1677,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const creds = Buffer.from(`${smsUser}:${smsPass}`).toString("base64");
       const testPhone = req.body?.testPhone || "+967700000000";
       try {
-        const smsRes = await fetch("https://api.sms-gate.app/3/messages", {
+        const smsRes = await fetch(smsGatewayUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1683,6 +1686,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           body: JSON.stringify({
             message: "اويو بلاست: اختبار بوابة SMS",
             phoneNumbers: [testPhone],
+            ...(smsDeviceId ? { deviceId: smsDeviceId } : {}),
           }),
           signal: AbortSignal.timeout(8000),
         });

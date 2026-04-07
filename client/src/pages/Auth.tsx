@@ -123,6 +123,9 @@ export default function Auth() {
       const data = await safeJson(res);
       // رسالة واضحة عند فشل البوابة
       if (!res.ok) {
+        if (data?.error?.includes("SMS_GATEWAY_404") || data?.message?.includes("SMS_GATEWAY_404")) {
+          throw new Error("مسار SMS Gate غير صحيح أو الجهاز غير متصل. تحقق من إعدادات SMS_GATEWAY_URL و SMS_DEVICE_ID.");
+        }
         if (data?.code === "SERVER_STARTING") {
           throw new Error("الخادم يتهيأ، انتظر ثوانٍ وأعد المحاولة.");
         }
@@ -150,7 +153,8 @@ export default function Auth() {
       }
     },
     onError: (err: Error) => {
-      toast({ title: "تعذّر إرسال الرمز", description: extractErrorMessage(err), variant: "destructive" });
+      const message = extractErrorMessage(err);
+      toast({ title: "تعذّر إرسال الرمز", description: message, variant: "destructive" });
     },
   });
 
@@ -333,7 +337,7 @@ export default function Auth() {
   const renderOtpStep = () => (
     <div className="space-y-5">
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-        إذا وصلتك الرسالة، انسخ الرمز هنا ثم اضغط "تأكيد الرمز".
+        إذا وصلتك الرسالة، أدخل الرمز هنا ثم اضغط "تأكيد الرمز".
       </div>
       <div className="text-center">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-3">
@@ -379,6 +383,15 @@ export default function Auth() {
         >
           اضغط هنا للبدء بإدخال الرمز
         </button>
+      </div>
+
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 leading-6">
+        <div className="font-bold mb-1">إذا لم يظهر لك الحقل:</div>
+        <ol className="list-decimal pr-4 space-y-1">
+          <li>أعد إرسال الرمز.</li>
+          <li>انتظر حتى تتحول الصفحة إلى خطوة التحقق.</li>
+          <li>إذا استمر الخطأ 404، فالمشكلة من SMS Gate وليس من إدخال الرمز.</li>
+        </ol>
       </div>
 
       {/* زر التحقق */}
