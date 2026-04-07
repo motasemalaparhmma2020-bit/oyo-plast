@@ -82,6 +82,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   await setupAuth(app);
   registerAuthRoutes(app);
 
+  // ─── Google Search Console Verification ──────────────────────────
+  app.get("/google2bec18c5e7a1da83.html", (_req, res) => {
+    res.setHeader("Content-Type", "text/html");
+    res.send("google-site-verification: google2bec18c5e7a1da83.html");
+  });
+
   // ─── Dynamic Sitemap ─────────────────────────────────────────────
   app.get("/sitemap.xml", async (_req, res) => {
     try {
