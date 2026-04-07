@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "9khr7Nh71CvY-pKqMhryJ"
+uri = "file://oyo-plast-backup-20260407.tar.gz"
+type = "unspecified"
+title = "نسخة احتياطية — ملفات المشروع الكاملة"
