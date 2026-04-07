@@ -10,6 +10,14 @@ import crypto from "crypto";
 
 const rootDir = process.cwd();
 
+/** تختار الحقول المعروفة فقط من كائن المصدر — تمنع ثغرة prototype pollution */
+function pickFields(src: Record<string, unknown>, keys: string[]): Record<string, unknown> {
+  const keySet = new Set(keys);
+  return Object.fromEntries(
+    Object.entries(src).filter(([k, v]) => keySet.has(k) && v !== undefined)
+  );
+}
+
 // Keep uploads dir for design files only (not product images)
 const uploadsDir = path.resolve(rootDir, "public", "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -413,7 +421,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const id = parseInt(req.params.id);
       const data = req.body;
-      const update: any = {};
       const fields = [
         "name", "description", "price", "priceSar", "categoryId",
         "imageUrl", "imageUrls", "stock", "colors", "sizes",
@@ -423,9 +430,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "originalPrice", "originalPriceSar", "discountPercent", "promotionalTags",
         "enableSmartVariants", "smartVariants"
       ];
-      for (const f of fields) {
-        if (data[f] !== undefined) update[f] = data[f];
-      }
+      const update = pickFields(data as Record<string, unknown>, fields);
       const product = await storage.updateProduct(id, update);
       res.json(product);
     } catch (e: any) {
@@ -726,16 +731,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // text fields
       const textFields = ['imageMode', 'detailImageMode', 'discountBadgeBg'];
 
-      const patch: Record<string, any> = {};
-      for (const f of intFields) {
-        if (req.body[f] !== undefined) patch[f] = parseInt(req.body[f]);
-      }
-      for (const f of boolFields) {
-        if (req.body[f] !== undefined) patch[f] = req.body[f];
-      }
-      for (const f of textFields) {
-        if (req.body[f] !== undefined) patch[f] = req.body[f];
-      }
+      const body = req.body as Record<string, unknown>;
+      const patch: Record<string, any> = {
+        ...Object.fromEntries(
+          Object.entries(pickFields(body, intFields)).map(([k, v]) => [k, parseInt(v as string)])
+        ),
+        ...pickFields(body, boolFields),
+        ...pickFields(body, textFields),
+      };
 
       const settings = await storage.updateDisplaySettings(patch);
       res.json(settings);
@@ -752,10 +755,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "enablePhoneLogin", "enableEmailLogin",
         "loginShowOnTop", "loginShowOnCheckout", "loginShowOnAccount",
       ];
-      const patch: Record<string, any> = {};
-      for (const key of allowed) {
-        if (req.body[key] !== undefined) patch[key] = req.body[key];
-      }
+      const patch = pickFields(req.body as Record<string, unknown>, allowed);
       const settings = await storage.updateNavigationSettings(patch);
       res.json(settings);
     } catch (e: any) {

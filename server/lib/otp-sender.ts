@@ -94,7 +94,7 @@ async function sendViaSmsGateway(
     return { success: false, error: "SMS_GATEWAY_NOT_CONFIGURED" };
   }
 
-  const SMS_GATEWAY_URL = process.env.SMS_GATEWAY_URL || "https://api.sms-gate.app/3/messages";
+  const SMS_GATEWAY_URL = process.env.SMS_GATEWAY_URL || "https://api.sms-gate.app/mobile/v1";
   const credentials = Buffer.from(`${smsUser}:${smsPass}`).toString("base64");
   const payload: Record<string, any> = {
     message,
