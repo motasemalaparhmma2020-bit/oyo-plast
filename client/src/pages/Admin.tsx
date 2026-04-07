@@ -1138,7 +1138,7 @@ function BannersOffersSection({ adminToken }: { adminToken: string | null }) {
   );
 }
 
-// Navigation Settings Section
+// Twilio SMS Test Section
 function SMSGatewayTest({ adminToken }: { adminToken: string | null }) {
   const { toast } = useToast();
   const [testPhone, setTestPhone] = useState("+967774997589");
@@ -1156,11 +1156,11 @@ function SMSGatewayTest({ adminToken }: { adminToken: string | null }) {
       });
       const data = await res.json();
       setResult(data);
-      if (data.tests?.smsGateway?.ok) {
-        toast({ title: "✅ بوابة SMS تعمل بنجاح!" });
+      if (data.tests?.twilio?.ok) {
+        toast({ title: "✅ Twilio يعمل بنجاح! تم إرسال رسالة تجريبية." });
       } else {
-        const diagnosis = data.tests?.smsGateway?.diagnosis || "تعذر إرسال الرسائل من بوابة SMSGate";
-        toast({ title: "❌ بوابة SMS لا تعمل", description: diagnosis, variant: "destructive" });
+        const diagnosis = data.tests?.twilio?.diagnosis || data.tests?.twilio?.note || "تعذّر إرسال الرسائل عبر Twilio";
+        toast({ title: "❌ Twilio لا يعمل", description: diagnosis, variant: "destructive" });
       }
     } catch (e: any) {
       toast({ title: "خطأ في الاختبار", description: e.message, variant: "destructive" });
@@ -1176,9 +1176,9 @@ function SMSGatewayTest({ adminToken }: { adminToken: string | null }) {
     <Card className="border-2 border-blue-200 dark:border-blue-800">
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          🔧 بوابة فحص رسائل التحقق
+          📱 فحص Twilio — إرسال رسائل التحقق
         </CardTitle>
-        <CardDescription>اختبر اتصال SMSGate ورسائل التحقق من داخل لوحة الإدارة</CardDescription>
+        <CardDescription>اختبر اتصال Twilio وإرسال رسائل SMS التحقق من داخل لوحة الإدارة</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex gap-2">
@@ -1189,47 +1189,41 @@ function SMSGatewayTest({ adminToken }: { adminToken: string | null }) {
             className="flex-1 px-3 py-2 text-sm border rounded-lg font-mono"
             placeholder="+967XXXXXXXXX"
             dir="ltr"
+            data-testid="input-twilio-test-phone"
           />
           <button
             onClick={runTest}
             disabled={loading}
             className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg disabled:opacity-50"
+            data-testid="button-twilio-test"
           >
-            {loading ? "جاري الفحص..." : "اختبر الاتصال"}
+            {loading ? "جاري الإرسال..." : "اختبر Twilio"}
           </button>
         </div>
 
         {result && (
           <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 text-sm space-y-2 font-mono">
             <div>
-              <span className="font-bold">الخادم: </span>
-              <span className={statusColor(result.tests?.serverReachable?.ok)}>
-                {result.tests?.serverReachable?.ok ? "✅ يستجيب" : "❌ لا يستجيب"}
-              </span>
-            </div>
-            <div>
-              <span className="font-bold">بوابة SMS: </span>
-              <span className={statusColor(result.tests?.smsGateway?.ok)}>
-                {result.tests?.smsGateway?.ok ? "✅ تعمل" : "❌ فشل"}
+              <span className="font-bold">Twilio: </span>
+              <span className={statusColor(result.tests?.twilio?.ok)}>
+                {result.tests?.twilio?.ok ? "✅ يعمل" : "❌ فشل"}
               </span>
             </div>
             <div className="text-xs text-gray-500 break-all">
-              <span className="font-bold">الرد (HTTP {result.tests?.smsGateway?.status}): </span>
-              {result.tests?.smsGateway?.diagnosis}
+              <span className="font-bold">التشخيص: </span>
+              {result.tests?.twilio?.diagnosis || result.tests?.twilio?.note || result.tests?.twilio?.error}
             </div>
-            {result.tests?.smsGateway?.status === 404 && (
-              <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded text-red-700 dark:text-red-300 text-xs">
-                <strong>سبب 404:</strong> الجهاز غير مسجّل في السحابة.
-                <br />• افتح تطبيق SMSGate على هاتفك
-                <br />• اضغط على "Cloud Server" ← تأكد أنه مفعّل
-                <br />• انسخ اسم المستخدم وكلمة المرور من هناك
-                <br />• حدّث SMS_USER و SMS_PASS في إعدادات Replit
-                <br />• إذا استمر 404 بعد ذلك، فالحل من داخل SMSGate أو من مزوّد الخدمة نفسه وليس من الموقع
+            {!result.config?.twilio?.configured && (
+              <div className="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded text-yellow-800 dark:text-yellow-200 text-xs">
+                <strong>الإعداد مطلوب:</strong>
+                <br />• أضف <code>TWILIO_ACCOUNT_SID</code> في Replit Secrets
+                <br />• أضف <code>TWILIO_AUTH_TOKEN</code> في Replit Secrets
+                <br />• أضف <code>TWILIO_FROM_NUMBER</code> (رقم Twilio بالصيغة +1XXXXXXXXXX)
               </div>
             )}
             {result.config && (
               <div className="text-xs text-gray-400 pt-1 border-t">
-                المستخدم الحالي: {result.config.smsGateway.user}
+                Account SID: {result.config.twilio.accountSid} — من: {result.config.twilio.fromNumber}
               </div>
             )}
           </div>

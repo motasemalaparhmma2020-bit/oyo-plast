@@ -1634,23 +1634,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── تشخيص بوابة SMS ────────────────────────────────────────────
+  // ── تشخيص Twilio SMS ────────────────────────────────────────────
   app.post("/api/admin/test-sms", requireAdmin, async (req, res) => {
-    const smsUser = process.env.SMS_USER;
-    const smsPass = process.env.SMS_PASS;
-    const smsDeviceId = process.env.SMS_DEVICE_ID;
-    const smsGatewayUrl = process.env.SMS_GATEWAY_URL || "https://api.sms-gate.app/mobile/v1";
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromNumber = process.env.TWILIO_FROM_NUMBER;
     const ultraInstance = process.env.ULTRAMSG_INSTANCE_ID;
     const ultraToken = process.env.ULTRAMSG_TOKEN;
+
+    const configured = !!(accountSid && authToken && fromNumber);
 
     const report: any = {
       timestamp: new Date().toISOString(),
       config: {
-        smsGateway: {
-          configured: !!(smsUser && smsPass),
-          user: smsUser ? smsUser.substring(0, 4) + "***" : "غير محدد",
-          deviceId: smsDeviceId ? smsDeviceId.substring(0, 4) + "***" : "غير محدد",
-          url: smsGatewayUrl,
+        twilio: {
+          configured,
+          accountSid: accountSid ? accountSid.substring(0, 6) + "***" : "غير محدد",
+          fromNumber: fromNumber || "غير محدد",
         },
         ultraMsg: {
           configured: !!(ultraInstance && ultraToken),
@@ -1660,55 +1660,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       tests: {} as any,
     };
 
-    // اختبار الاتصال بالخادم
-    try {
-      const healthRes = await fetch(smsGatewayUrl, { signal: AbortSignal.timeout(6000) });
-      report.tests.serverReachable = {
-        ok: true,
-        status: healthRes.status,
-        note: "الخادم يستجيب",
+    if (!configured) {
+      report.tests.twilio = {
+        ok: false,
+        note: "TWILIO_ACCOUNT_SID أو TWILIO_AUTH_TOKEN أو TWILIO_FROM_NUMBER غير محددة في Secrets",
       };
-    } catch (e: any) {
-      report.tests.serverReachable = { ok: false, error: e.message };
+      return res.json(report);
     }
 
-    // اختبار المصادقة على SMS Gateway
-    if (smsUser && smsPass) {
-      const creds = Buffer.from(`${smsUser}:${smsPass}`).toString("base64");
-      const testPhone = req.body?.testPhone || "+967700000000";
-      try {
-        const smsRes = await fetch(smsGatewayUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Basic ${creds}`,
-          },
-          body: JSON.stringify({
-            message: "اويو بلاست: اختبار بوابة SMS",
-            phoneNumbers: [testPhone],
-            ...(smsDeviceId ? { deviceId: smsDeviceId } : {}),
-          }),
-          signal: AbortSignal.timeout(8000),
-        });
-        const body = await smsRes.text();
-        report.tests.smsGateway = {
-          ok: smsRes.ok,
-          status: smsRes.status,
-          response: body.substring(0, 200),
-          diagnosis:
-            smsRes.status === 404
-              ? "الجهاز غير مسجّل في السحابة أو البيانات خاطئة"
-              : smsRes.status === 401
-              ? "كلمة المرور أو اسم المستخدم خاطئ"
-              : smsRes.status === 200 || smsRes.status === 201
-              ? "✅ يعمل بنجاح"
-              : `خطأ ${smsRes.status}`,
-        };
-      } catch (e: any) {
-        report.tests.smsGateway = { ok: false, error: e.message };
-      }
-    } else {
-      report.tests.smsGateway = { ok: false, note: "SMS_USER أو SMS_PASS غير محددَين" };
+    // اختبار إرسال فعلي عبر Twilio
+    const testPhone: string = req.body?.testPhone || "+967700000000";
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+    const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+
+    try {
+      const twilioRes = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: `Basic ${credentials}`,
+        },
+        body: new URLSearchParams({
+          To: testPhone,
+          From: fromNumber!,
+          Body: "اويو بلاست: اختبار Twilio — رسالة تجريبية",
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      const data = await twilioRes.json();
+      report.tests.twilio = {
+        ok: twilioRes.ok && !!data.sid,
+        status: twilioRes.status,
+        sid: data.sid || null,
+        diagnosis: twilioRes.ok && data.sid
+          ? `✅ تم الإرسال بنجاح — SID: ${data.sid}`
+          : `خطأ ${twilioRes.status}: ${data.message || data.code || "غير معروف"}`,
+      };
+    } catch (e: any) {
+      report.tests.twilio = { ok: false, error: e.message };
     }
 
     res.json(report);

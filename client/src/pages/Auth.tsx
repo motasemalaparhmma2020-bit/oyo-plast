@@ -123,8 +123,8 @@ export default function Auth() {
       const data = await safeJson(res);
       // رسالة واضحة عند فشل البوابة
       if (!res.ok) {
-        if (data?.error?.includes("SMS_GATEWAY_404") || data?.message?.includes("SMS_GATEWAY_404")) {
-          throw new Error("مسار SMS Gate غير صحيح أو الجهاز غير متصل. تحقق من إعدادات SMS_GATEWAY_URL و SMS_DEVICE_ID.");
+        if (data?.error?.includes("TWILIO_NOT_CONFIGURED") || data?.message?.includes("TWILIO_NOT_CONFIGURED")) {
+          throw new Error("خدمة الرسائل النصية غير مفعّلة. تواصل مع الإدارة.");
         }
         if (data?.code === "SERVER_STARTING") {
           throw new Error("الخادم يتهيأ، انتظر ثوانٍ وأعد المحاولة.");
