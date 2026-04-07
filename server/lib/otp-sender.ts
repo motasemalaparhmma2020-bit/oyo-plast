@@ -88,6 +88,7 @@ async function sendViaSmsGateway(
 ): Promise<{ success: boolean; error?: string }> {
   const smsUser = process.env.SMS_USER;
   const smsPass = process.env.SMS_PASS;
+  const smsDeviceId = process.env.SMS_DEVICE_ID;
 
   if (!smsUser || !smsPass) {
     return { success: false, error: "SMS_GATEWAY_NOT_CONFIGURED" };
@@ -95,10 +96,14 @@ async function sendViaSmsGateway(
 
   const SMS_GATEWAY_URL = process.env.SMS_GATEWAY_URL || "https://api.sms-gate.app/3/messages";
   const credentials = Buffer.from(`${smsUser}:${smsPass}`).toString("base64");
-  const payload = { message, phoneNumbers: [to] };
+  const payload: Record<string, any> = {
+    message,
+    phoneNumbers: [to],
+  };
+  if (smsDeviceId) payload.deviceId = smsDeviceId;
 
   console.log(
-    `[OTP-SMS] Sending to ${to}, user=${smsUser.substring(0, 3)}***, url=${SMS_GATEWAY_URL}`
+    `[OTP-SMS] Sending to ${to}, user=${smsUser.substring(0, 3)}***, device=${smsDeviceId ? smsDeviceId.substring(0, 6) + "***" : "none"}, url=${SMS_GATEWAY_URL}`
   );
 
   try {
