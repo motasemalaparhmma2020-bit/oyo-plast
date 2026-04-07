@@ -390,7 +390,7 @@ export default function Auth() {
         <ol className="list-decimal pr-4 space-y-1">
           <li>أعد إرسال الرمز.</li>
           <li>انتظر حتى تتحول الصفحة إلى خطوة التحقق.</li>
-          <li>إذا استمر الخطأ 404، فالمشكلة من SMS Gate وليس من إدخال الرمز.</li>
+          <li>إذا استمر الخطأ، فالمشكلة من إعدادات Twilio أو من الرقم المدخل.</li>
         </ol>
       </div>
 
