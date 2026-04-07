@@ -1,4 +1,12 @@
 User-agent: *
 Allow: /
 
+Disallow: /admin
+Disallow: /api/
+Disallow: /checkout
+Disallow: /order-confirmation/
+Disallow: /orders
+Disallow: /auth
+Disallow: /register
+
 Sitemap: https://oyoplast.com/sitemap.xml

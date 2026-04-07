@@ -4,8 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Search, ShoppingBag, Package } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
+import { useSEO } from "@/hooks/use-seo";
 
 export default function Products() {
+  useSEO({
+    title: "جميع المنتجات | أويو بلاست",
+    description: "تصفّح مجموعتنا الكاملة من الأكياس ومستلزمات التغليف - أكياس بلاستيكية، قماشية، علاقي، وأكثر. أسعار الجملة والتجزئة.",
+    keywords: "أكياس تغليف, أكياس بلاستيك, علاقي أكياس, أكياس قماشية, شراء أكياس اليمن",
+    canonical: "https://oyoplast.com/products",
+  });
   const searchParams = new URLSearchParams(window.location.search);
   const initialCategory = searchParams.get("category") || "";
   const initialSearch = searchParams.get("search") || "";

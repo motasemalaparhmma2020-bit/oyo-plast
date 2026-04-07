@@ -3,8 +3,15 @@ import { Package, Truck, CreditCard, Shield, Phone, MapPin, Clock, Award, FileTe
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
+import { useSEO } from "@/hooks/use-seo";
 
 export default function About() {
+  useSEO({
+    title: "من نحن | أويو بلاست",
+    description: "تعرّف على أويو بلاست - متجر متخصص في مستلزمات التغليف والأكياس البلاستيكية والقماشية في اليمن والسعودية. نوفر أعلى جودة بأفضل الأسعار.",
+    keywords: "أويو بلاست, من نحن, مستلزمات تغليف اليمن, أكياس بلاستيك, تغليف احترافي",
+    canonical: "https://oyoplast.com/about",
+  });
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-background" dir="rtl">
       <div className="bg-gradient-to-l from-[#1976D2] to-[#2196F3] text-white py-12 px-4">

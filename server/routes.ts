@@ -82,6 +82,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   await setupAuth(app);
   registerAuthRoutes(app);
 
+  // ─── Dynamic Sitemap ─────────────────────────────────────────────
+  app.get("/sitemap.xml", async (_req, res) => {
+    try {
+      const products = await storage.getProducts();
+      const today = new Date().toISOString().split("T")[0];
+      const staticPages = [
+        { url: "/", priority: "1.0", changefreq: "daily" },
+        { url: "/products", priority: "0.9", changefreq: "daily" },
+        { url: "/printing", priority: "0.8", changefreq: "weekly" },
+        { url: "/printing-and-design", priority: "0.7", changefreq: "weekly" },
+        { url: "/about", priority: "0.6", changefreq: "monthly" },
+        { url: "/terms", priority: "0.4", changefreq: "monthly" },
+        { url: "/privacy", priority: "0.4", changefreq: "monthly" },
+        { url: "/returns", priority: "0.4", changefreq: "monthly" },
+      ];
+      const productEntries = products.map(p =>
+        `  <url>\n    <loc>https://oyoplast.com/products/${p.id}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n    <lastmod>${today}</lastmod>\n  </url>`
+      ).join("\n");
+      const staticEntries = staticPages.map(p =>
+        `  <url>\n    <loc>https://oyoplast.com${p.url}</loc>\n    <changefreq>${p.changefreq}</changefreq>\n    <priority>${p.priority}</priority>\n    <lastmod>${today}</lastmod>\n  </url>`
+      ).join("\n");
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${staticEntries}\n${productEntries}\n</urlset>`;
+      res.setHeader("Content-Type", "application/xml");
+      res.send(xml);
+    } catch (e) {
+      res.status(500).send("Error generating sitemap");
+    }
+  });
+
   // ─── Admin Login ─────────────────────────────────────────────────
   app.post("/api/admin/login", (req, res) => {
     const { password } = req.body;

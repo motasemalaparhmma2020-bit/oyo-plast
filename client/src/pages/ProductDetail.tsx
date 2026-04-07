@@ -2,6 +2,7 @@ import { useParams, Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Product, Review } from "@shared/schema";
 import { Button } from "@/components/ui/button";
+import { useSEO } from "@/hooks/use-seo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -95,6 +96,14 @@ export default function ProductDetail() {
     queryKey: ['/api/products', id],
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
+  });
+
+  useSEO({
+    title: product ? `${product.name} | أويو بلاست` : "منتج | أويو بلاست",
+    description: product
+      ? `اشترِ ${product.name} بسعر ${product.price} ريال من أويو بلاست. ${product.description ?? "مستلزمات تغليف احترافية في اليمن والسعودية."}`
+      : "تفاصيل المنتج - أويو بلاست",
+    canonical: `https://oyoplast.com/products/${id}`,
   });
 
   const { data: navSettings } = useQuery<any>({

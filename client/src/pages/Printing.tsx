@@ -3,8 +3,15 @@ import { Link } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { ProductCard } from "@/components/ProductCard";
+import { useSEO } from "@/hooks/use-seo";
 
 export default function Printing() {
+  useSEO({
+    title: "خدمة الطباعة على الأكياس | أويو بلاست",
+    description: "طباعة مخصصة على الأكياس والتغليف - شعارك أو تصميمك على أكياسك. خدمة طباعة احترافية في اليمن والسعودية من أويو بلاست.",
+    keywords: "طباعة أكياس, طباعة مخصصة, أكياس مطبوعة, تصميم أكياس, أويو بلاست",
+    canonical: "https://oyoplast.com/printing",
+  });
   const { data: products = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/printing-products"],
     queryFn: async () => {

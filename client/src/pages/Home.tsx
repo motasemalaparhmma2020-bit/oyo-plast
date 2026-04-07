@@ -10,6 +10,7 @@ import { ArrowLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import useEmblaCarousel from "embla-carousel-react";
 import { useEffect, useRef } from "react";
+import { useSEO } from "@/hooks/use-seo";
 
 // ── قسم ديناميكي واحد ─────────────────────────────────────────────────────
 function HomeSectionBlock({ section, displaySettings, primaryColor }: {
@@ -129,6 +130,12 @@ function HomeSectionBlock({ section, displaySettings, primaryColor }: {
 
 // ── الصفحة الرئيسية ─────────────────────────────────────────────────────────
 export default function Home() {
+  useSEO({
+    title: "أويو بلاست | مستلزمات التغليف والأكياس - اليمن والسعودية",
+    description: "تسوّق أفضل مستلزمات التغليف والأكياس البلاستيكية والقماشية بأسعار الجملة. أويو بلاست - شريكك في التغليف الاحترافي في اليمن والسعودية.",
+    keywords: "أويو بلاست, أكياس تغليف, أكياس بلاستيك, أكياس قماش, تغليف اليمن, مستلزمات تغليف",
+    canonical: "https://oyoplast.com/",
+  });
   const { data: categories } = useCategories();
   const { data: homeSettings } = useHomeSettings();
 
