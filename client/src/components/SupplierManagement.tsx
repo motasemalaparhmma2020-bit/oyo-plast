@@ -61,6 +61,7 @@ function SupplierForm({
     commissionRate: initial?.commission_rate || "10",
     notes: initial?.notes || "",
     isActive: initial?.is_active !== false,
+    pin: initial?.pin || "1234",
   });
   const [cityInput, setCityInput] = useState("");
 
@@ -77,7 +78,7 @@ function SupplierForm({
 
   const handleSubmit = () => {
     if (!form.name || !form.phone) return;
-    onSave({ ...form, commissionRate: Number(form.commissionRate) });
+    onSave({ ...form, commissionRate: Number(form.commissionRate), pin: form.pin });
   };
 
   return (
@@ -113,6 +114,18 @@ function SupplierForm({
             dir="ltr"
             className="mt-1"
           />
+        </div>
+        <div>
+          <Label className="text-xs">الرمز السري لبوابة المورد 🔑</Label>
+          <Input
+            value={form.pin}
+            onChange={e => setForm(f => ({ ...f, pin: e.target.value }))}
+            placeholder="1234"
+            dir="ltr"
+            className="mt-1 font-mono"
+            data-testid="input-supplier-pin"
+          />
+          <p className="text-xs text-muted-foreground mt-0.5">يستخدمه المورد للدخول لبوابته على /supplier</p>
         </div>
         <div>
           <Label className="text-xs">عمولة المنصة %</Label>

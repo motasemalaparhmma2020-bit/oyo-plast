@@ -61,6 +61,7 @@ import MyAccount from "@/pages/MyAccount";
 import MarketerCoupons from "@/pages/MarketerCoupons";
 import Printing from "@/pages/Printing";
 import StaffPortal from "@/pages/StaffPortal";
+import SupplierPortal from "@/pages/SupplierPortal";
 import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
@@ -350,10 +351,9 @@ function Router() {
   // إخفاء زر التنقل السفلي على:
   // 1. صفحة الإدارة دائماً
   // 2. صفحة المنتج عند تفعيل الشريط الثابت (بديله يكون زر شراء)
-  // صفحة الموظفين مستقلة تماماً بدون navbar/footer
-  if (location === '/staff') {
-    return <StaffPortal />;
-  }
+  // صفحة الموظفين وبوابة الموردين مستقلة تماماً بدون navbar/footer
+  if (location === '/staff') return <StaffPortal />;
+  if (location === '/supplier') return <SupplierPortal />;
 
   const isProductDetail = /^\/products\/[^/]+$/.test(location);
   // إخفاء شريط التنقل السفلي في الصفحات التي لها شريط ثابت خاص بها
@@ -409,9 +409,11 @@ function Router() {
             <Route path="/order-confirmation/:id">
               <OrderConfirmation />
             </Route>
+            <Route path="/track" component={OrderTracking} />
             <Route path="/track/:id">
               <OrderTracking />
             </Route>
+            <Route path="/supplier" component={SupplierPortal} />
             <Route path="/orders">
               <RequireAccountType><Orders /></RequireAccountType>
             </Route>

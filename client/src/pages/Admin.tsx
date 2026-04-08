@@ -190,6 +190,7 @@ interface ProductFormData {
   originalPriceSar: string;
   discountPercent: string;
   promotionalTags: string[];
+  supplierId: number;
 }
 
 const emptyProductForm: ProductFormData = {
@@ -218,6 +219,7 @@ const emptyProductForm: ProductFormData = {
   originalPriceSar: "",
   discountPercent: "",
   promotionalTags: [],
+  supplierId: 0,
 };
 
 interface CategoryFormData {
@@ -3285,6 +3287,17 @@ export default function Admin() {
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
+  const { data: suppliers = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/suppliers"],
+    queryFn: async () => {
+      if (!adminToken) return [];
+      const res = await fetch("/api/admin/suppliers", { headers: { "x-admin-token": adminToken } });
+      return res.ok ? res.json() : [];
+    },
+    enabled: !!adminToken,
+    staleTime: 60000,
+  });
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'product' | 'category' = 'product') => {
     const files = e.target.files;
     if (!files || files.length === 0 || !adminToken) return;
@@ -3591,6 +3604,7 @@ export default function Admin() {
           originalPriceSar: data.originalPriceSar || null,
           discountPercent: data.discountPercent ? Number(data.discountPercent) : null,
           promotionalTags: data.promotionalTags.length > 0 ? data.promotionalTags : null,
+          supplierId: data.supplierId || null,
         })
       });
       if (!res.ok) {
@@ -3646,6 +3660,7 @@ export default function Admin() {
         originalPriceSar: data.originalPriceSar || null,
         discountPercent: data.discountPercent ? Number(data.discountPercent) : null,
         promotionalTags: data.promotionalTags.length > 0 ? data.promotionalTags : null,
+        supplierId: data.supplierId || null,
       };
       
       if (data.imageUrls && data.imageUrls.length > 0) {
@@ -3843,6 +3858,7 @@ export default function Admin() {
       originalPriceSar: (product as any).originalPriceSar != null ? String((product as any).originalPriceSar) : "",
       discountPercent: (product as any).discountPercent != null ? String((product as any).discountPercent) : "",
       promotionalTags: (product as any).promotionalTags ?? [],
+      supplierId: (product as any).supplierId ?? (product as any).supplier_id ?? 0,
     });
     // Parse colorImages JSON if present
     try {
@@ -4245,6 +4261,27 @@ export default function Admin() {
                           required
                           data-testid="input-product-description"
                         />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="product-supplier">المورد المسؤول عن هذا المنتج (اختياري)</Label>
+                        <Select
+                          value={productForm.supplierId ? productForm.supplierId.toString() : "0"}
+                          onValueChange={(v) => setProductForm({...productForm, supplierId: parseInt(v)})}
+                        >
+                          <SelectTrigger data-testid="select-product-supplier" className="mt-1">
+                            <SelectValue placeholder="اختر مورداً (اختياري)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">— بلا مورد محدد (حسب المدينة)</SelectItem>
+                            {(suppliers as any[]).map((s: any) => (
+                              <SelectItem key={s.id} value={s.id.toString()}>
+                                {s.name} — {(s.cities || []).slice(0, 3).join(", ")}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground mt-0.5">إذا تركته فارغاً، يُعيَّن المورد تلقائياً حسب مدينة الشحن</p>
                       </div>
 
                       <div className="grid md:grid-cols-3 gap-4">

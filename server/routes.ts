@@ -284,13 +284,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/admin/suppliers", requireAdmin, async (req, res) => {
     try {
       const { pool: dbPool } = await import("./db");
-      const { name, phone, email, cities, commissionRate, notes } = req.body;
+      const { name, phone, email, cities, commissionRate, notes, pin } = req.body;
       if (!name || !phone) return res.status(400).json({ message: "الاسم والهاتف مطلوبان" });
       const citiesArr = Array.isArray(cities) ? cities : (cities ? cities.split(",").map((c: string) => c.trim()) : []);
       const result = await dbPool.query(
-        `INSERT INTO suppliers (name, phone, email, cities, commission_rate, notes)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [name, phone, email || null, citiesArr, commissionRate || 10, notes || null]
+        `INSERT INTO suppliers (name, phone, email, cities, commission_rate, notes, pin)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [name, phone, email || null, citiesArr, commissionRate || 10, notes || null, pin || "1234"]
       );
       res.json(result.rows[0]);
     } catch (e: any) {
@@ -303,12 +303,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const { pool: dbPool } = await import("./db");
       const id = parseInt(req.params.id);
-      const { name, phone, email, cities, commissionRate, notes, isActive } = req.body;
+      const { name, phone, email, cities, commissionRate, notes, isActive, pin } = req.body;
       const citiesArr = Array.isArray(cities) ? cities : (cities ? cities.split(",").map((c: string) => c.trim()) : []);
       const result = await dbPool.query(
-        `UPDATE suppliers SET name=$1, phone=$2, email=$3, cities=$4, commission_rate=$5, notes=$6, is_active=$7
-         WHERE id=$8 RETURNING *`,
-        [name, phone, email || null, citiesArr, commissionRate || 10, notes || null, isActive !== false, id]
+        `UPDATE suppliers SET name=$1, phone=$2, email=$3, cities=$4, commission_rate=$5, notes=$6, is_active=$7, pin=COALESCE($8, pin)
+         WHERE id=$9 RETURNING *`,
+        [name, phone, email || null, citiesArr, commissionRate || 10, notes || null, isActive !== false, pin || null, id]
       );
       if (!result.rows.length) return res.status(404).json({ message: "المورد غير موجود" });
       res.json(result.rows[0]);
@@ -1187,6 +1187,172 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ? e.message
         : "حدث خطأ أثناء إنشاء الطلب، يرجى المحاولة مرة أخرى";
       res.status(500).json({ message: userMessage, details: e.message });
+    }
+  });
+
+  // ─── تتبع الطلب العام (العميل يدخل رقم الطلب + رقم الهاتف) ────────────────────
+  app.post("/api/track-order", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { orderId, phone } = req.body;
+      if (!orderId || !phone) return res.status(400).json({ message: "رقم الطلب والهاتف مطلوبان" });
+      const orderRes = await dbPool.query(
+        `SELECT o.*, s.name as supplier_name, s.phone as supplier_phone
+         FROM orders o
+         LEFT JOIN suppliers s ON o.supplier_id = s.id
+         WHERE o.id=$1`,
+        [parseInt(orderId)]
+      );
+      if (!orderRes.rows.length) return res.status(404).json({ message: "الطلب غير موجود" });
+      const order = orderRes.rows[0];
+      // تحقق من الهاتف
+      const cleanPhone = phone.replace(/\s+/g, "").replace(/^00/, "+");
+      const cleanOrderPhone = (order.customer_phone || "").replace(/\s+/g, "").replace(/^00/, "+");
+      if (cleanPhone !== cleanOrderPhone && !cleanOrderPhone.includes(phone.slice(-8))) {
+        return res.status(403).json({ message: "رقم الهاتف غير مطابق" });
+      }
+      // جلب عناصر الطلب
+      const itemsRes = await dbPool.query(
+        `SELECT oi.*, p.name as product_name_db FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id=$1`,
+        [parseInt(orderId)]
+      );
+      const safeOrder = {
+        id: order.id,
+        status: order.status,
+        deliveryStatus: order.delivery_status,
+        paymentStatus: order.payment_status,
+        customerName: order.customer_name,
+        shippingCity: order.shipping_city,
+        shippingAddress: order.shipping_address,
+        total: order.total,
+        currency: order.currency,
+        shippingCost: order.shipping_cost,
+        shippingOption: order.shipping_option,
+        paymentMethod: order.payment_method,
+        trackingNumber: order.tracking_number,
+        createdAt: order.created_at,
+        supplierName: order.supplier_name,
+        items: itemsRes.rows,
+      };
+      res.json(safeOrder);
+    } catch (e: any) {
+      res.status(500).json({ message: "حدث خطأ" });
+    }
+  });
+
+  // ─── بوابة المورد — تسجيل دخول ────────────────────────────────────────────────
+  app.post("/api/supplier/login", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { phone, pin } = req.body;
+      if (!phone || !pin) return res.status(400).json({ message: "الهاتف والرمز مطلوبان" });
+      const cleanPhone = phone.replace(/\s+/g, "");
+      const result = await dbPool.query(
+        `SELECT * FROM suppliers WHERE (phone=$1 OR phone=$2) AND is_active=true`,
+        [cleanPhone, phone]
+      );
+      if (!result.rows.length) return res.status(404).json({ message: "لم يُعثر على هذا الرقم في نظام الموردين" });
+      const supplier = result.rows[0];
+      const supplierPin = supplier.pin || "1234";
+      if (pin !== supplierPin) return res.status(401).json({ message: "الرمز السري غير صحيح" });
+      // إنشاء token بسيط
+      const crypto = await import("crypto");
+      const token = crypto.createHmac("sha256", supplier.id + supplier.phone).update("supplier-v1").digest("hex");
+      res.json({ token, supplier: { id: supplier.id, name: supplier.name, phone: supplier.phone, cities: supplier.cities, commissionRate: supplier.commission_rate } });
+    } catch (e: any) {
+      res.status(500).json({ message: "حدث خطأ" });
+    }
+  });
+
+  // ─── middleware تحقق من توكن المورد ────────────────────────────────────────────
+  async function requireSupplier(req: Request, res: Response, next: NextFunction) {
+    const token = req.headers["x-supplier-token"] as string;
+    const supplierId = req.headers["x-supplier-id"] as string;
+    if (!token || !supplierId) return res.status(401).json({ message: "غير مصرح" });
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query("SELECT * FROM suppliers WHERE id=$1 AND is_active=true", [parseInt(supplierId)]);
+      if (!result.rows.length) return res.status(401).json({ message: "غير مصرح" });
+      const supplier = result.rows[0];
+      const crypto = await import("crypto");
+      const expectedToken = crypto.createHmac("sha256", supplier.id + supplier.phone).update("supplier-v1").digest("hex");
+      if (token !== expectedToken) return res.status(401).json({ message: "غير مصرح" });
+      (req as any).supplier = supplier;
+      next();
+    } catch {
+      res.status(401).json({ message: "غير مصرح" });
+    }
+  }
+
+  app.get("/api/supplier/me", requireSupplier, async (req, res) => {
+    const supplier = (req as any).supplier;
+    res.json({ id: supplier.id, name: supplier.name, phone: supplier.phone, cities: supplier.cities, commissionRate: supplier.commission_rate, balanceDue: supplier.balance_due, totalSales: supplier.total_sales });
+  });
+
+  app.get("/api/supplier/orders", requireSupplier, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const supplier = (req as any).supplier;
+      const result = await dbPool.query(
+        `SELECT * FROM orders WHERE supplier_id=$1 AND status NOT IN ('cancelled') ORDER BY created_at DESC LIMIT 100`,
+        [supplier.id]
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الطلبات" });
+    }
+  });
+
+  app.get("/api/supplier/orders/:id/items", requireSupplier, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const supplier = (req as any).supplier;
+      const orderId = parseInt(req.params.id);
+      // تحقق أن الطلب تابع لهذا المورد
+      const orderCheck = await dbPool.query("SELECT id FROM orders WHERE id=$1 AND supplier_id=$2", [orderId, supplier.id]);
+      if (!orderCheck.rows.length) return res.status(403).json({ message: "غير مصرح" });
+      const items = await dbPool.query(
+        `SELECT oi.*, p.name as product_name_db FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id=$1`,
+        [orderId]
+      );
+      res.json(items.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  app.put("/api/supplier/orders/:id/delivery", requireSupplier, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const supplier = (req as any).supplier;
+      const orderId = parseInt(req.params.id);
+      const { deliveryStatus, notes } = req.body;
+      const validStatuses = ["pending", "picked_up", "shipped", "delivered", "failed"];
+      if (!validStatuses.includes(deliveryStatus)) return res.status(400).json({ message: "حالة غير صالحة" });
+      const orderCheck = await dbPool.query("SELECT id FROM orders WHERE id=$1 AND supplier_id=$2", [orderId, supplier.id]);
+      if (!orderCheck.rows.length) return res.status(403).json({ message: "غير مصرح" });
+      let newStatus = deliveryStatus === "delivered" ? "delivered" : undefined;
+      if (newStatus) {
+        await dbPool.query(`UPDATE orders SET delivery_status=$1, status=$2 WHERE id=$3`, [deliveryStatus, newStatus, orderId]);
+      } else {
+        await dbPool.query(`UPDATE orders SET delivery_status=$1 WHERE id=$2`, [deliveryStatus, orderId]);
+      }
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  // تحديث PIN المورد (من لوحة الأدمن)
+  app.put("/api/admin/suppliers/:id/pin", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { pin } = req.body;
+      if (!pin || pin.length < 4) return res.status(400).json({ message: "الرمز يجب أن يكون 4 أرقام على الأقل" });
+      await dbPool.query("UPDATE suppliers SET pin=$1 WHERE id=$2", [pin, parseInt(req.params.id)]);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
     }
   });
 
