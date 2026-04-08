@@ -1,9 +1,9 @@
-const CACHE_NAME = "oyoplast-shell-v2";
-const PRECACHE_URLS = ["/", "/products", "/manifest.webmanifest"];
+const CACHE_NAME = "oyoplast-v3";
+const SHELL_URLS = ["/", "/products", "/manifest.json"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_URLS).catch(() => {}))
   );
   self.skipWaiting();
 });
@@ -11,7 +11,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.map((key) => (key !== CACHE_NAME ? caches.delete(key) : null)))
+      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -21,18 +21,45 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
 
-  if (request.destination === "image" || request.destination === "script" || request.destination === "style") {
+  const url = new URL(request.url);
+
+  if (url.pathname.startsWith("/api/")) {
+    event.respondWith(
+      fetch(request).catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  if (
+    request.destination === "image" ||
+    request.destination === "script" ||
+    request.destination === "style" ||
+    request.destination === "font"
+  ) {
     event.respondWith(
       caches.match(request).then((cached) => {
-        return (
-          cached ||
-          fetch(request).then((response) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok) {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-            return response;
-          })
-        );
+          }
+          return response;
+        });
       })
     );
+    return;
   }
+
+  if (url.origin === self.location.origin && !url.pathname.startsWith("/api/")) {
+    event.respondWith(
+      fetch(request).catch(() =>
+        caches.match(request).then((cached) => cached || caches.match("/"))
+      )
+    );
+  }
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });

@@ -743,6 +743,71 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Product Reviews ─────────────────────────────────────────────
+  app.get("/api/products/:id/reviews", async (req, res) => {
+    try {
+      const productId = parseInt(req.params.id);
+      if (Number.isNaN(productId)) return res.status(400).json({ message: "معرف غير صحيح" });
+      const reviews = await storage.getProductReviews(productId);
+      res.json(reviews);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب التقييمات" });
+    }
+  });
+
+  app.post("/api/products/:id/reviews", async (req: any, res) => {
+    try {
+      if (!req.isAuthenticated || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "يجب تسجيل الدخول لإضافة تقييم" });
+      }
+      const productId = parseInt(req.params.id);
+      if (Number.isNaN(productId)) return res.status(400).json({ message: "معرف غير صحيح" });
+      const { rating, comment, imageUrl } = req.body;
+      if (!rating || rating < 1 || rating > 5) {
+        return res.status(400).json({ message: "التقييم يجب أن يكون بين 1 و 5" });
+      }
+      const userId = req.user?.id || req.session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
+      const review = await storage.createReview({ productId, userId, rating: parseInt(rating), comment, imageUrl });
+      res.status(201).json(review);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إضافة التقييم" });
+    }
+  });
+
+  app.post("/api/upload/review", async (req: any, res) => {
+    try {
+      upload.single("image")(req, res, async (err) => {
+        if (err) return res.status(400).json({ message: "فشل رفع الصورة" });
+        if (!req.file) return res.status(400).json({ message: "لا يوجد ملف" });
+        const imageUrl = `/api/admin/upload-serve/${req.file.filename}`;
+        res.json({ imageUrl: `/uploads/${req.file.filename}` });
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل رفع الصورة" });
+    }
+  });
+
+  app.get("/api/admin/reviews", requireAdmin, async (_req, res) => {
+    try {
+      const reviews = await storage.getAllReviews();
+      res.json(reviews);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب التقييمات" });
+    }
+  });
+
+  app.delete("/api/admin/reviews/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "معرف غير صحيح" });
+      await storage.deleteReview(id);
+      res.json({ message: "تم حذف التقييم" });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حذف التقييم" });
+    }
+  });
+
   // ─── Admin Categories ────────────────────────────────────────────
   app.get("/api/admin/categories", requireAdmin, async (_req, res) => {
     const cats = await storage.getCategories();

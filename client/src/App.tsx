@@ -72,6 +72,7 @@ import NotFound from "@/pages/not-found";
 import { Footer, MobileFooter } from "@/components/Footer";
 import { GlobalBottomNav } from "@/components/GlobalBottomNav";
 import { SplashScreen } from "@/components/SplashScreen";
+import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { useOfflineSync } from "@/hooks/use-offline-sync";
 
 // Component to redirect users who need to complete registration
@@ -440,6 +441,7 @@ function Router() {
         {!hideFooter && <MobileFooter />}
         {!hideFooter && <Footer />}
         {!hideBottomNav && <GlobalBottomNav />}
+        <PwaInstallBanner />
       </div>
     </>
   );

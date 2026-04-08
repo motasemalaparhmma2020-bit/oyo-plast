@@ -71,6 +71,11 @@ export interface IStorage {
   getOrderStats(): Promise<{ totalSales: number; totalOrders: number; averageOrderValue: number }>;
   createOrder(data: any): Promise<Order>;
 
+  getProductReviews(productId: number): Promise<any[]>;
+  createReview(data: { productId: number; userId: string; rating: number; comment?: string; imageUrl?: string }): Promise<any>;
+  deleteReview(id: number): Promise<void>;
+  getAllReviews(): Promise<any[]>;
+
   sessionStore: session.Store;
 }
 
@@ -413,6 +418,69 @@ export class DatabaseStorage implements IStorage {
 
       return order;
     });
+  }
+
+  async getProductReviews(productId: number): Promise<any[]> {
+    const { pool: dbPool } = await import("./db");
+    const result = await dbPool.query(
+      `SELECT r.*, u.full_name as user_name, u.id as user_id
+       FROM reviews r
+       LEFT JOIN users u ON r.user_id = u.id
+       WHERE r.product_id = $1
+       ORDER BY r.created_at DESC`,
+      [productId]
+    );
+    return result.rows;
+  }
+
+  async createReview(data: { productId: number; userId: string; rating: number; comment?: string; imageUrl?: string }): Promise<any> {
+    const { pool: dbPool } = await import("./db");
+    const result = await dbPool.query(
+      `INSERT INTO reviews (product_id, user_id, rating, comment, image_url)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [data.productId, data.userId, data.rating, data.comment || null, data.imageUrl || null]
+    );
+    const review = result.rows[0];
+    const stats = await dbPool.query(
+      `SELECT AVG(rating)::numeric(3,1) as avg_rating, COUNT(*) as total
+       FROM reviews WHERE product_id = $1`,
+      [data.productId]
+    );
+    await dbPool.query(
+      `UPDATE products SET rating = $1, review_count = $2 WHERE id = $3`,
+      [stats.rows[0].avg_rating || data.rating, stats.rows[0].total, data.productId]
+    );
+    return review;
+  }
+
+  async deleteReview(id: number): Promise<void> {
+    const { pool: dbPool } = await import("./db");
+    const rev = await dbPool.query(`SELECT product_id FROM reviews WHERE id = $1`, [id]);
+    await dbPool.query(`DELETE FROM reviews WHERE id = $1`, [id]);
+    if (rev.rows[0]) {
+      const productId = rev.rows[0].product_id;
+      const stats = await dbPool.query(
+        `SELECT AVG(rating)::numeric(3,1) as avg_rating, COUNT(*) as total FROM reviews WHERE product_id = $1`,
+        [productId]
+      );
+      await dbPool.query(
+        `UPDATE products SET rating = $1, review_count = $2 WHERE id = $3`,
+        [stats.rows[0].avg_rating || 5, stats.rows[0].total, productId]
+      );
+    }
+  }
+
+  async getAllReviews(): Promise<any[]> {
+    const { pool: dbPool } = await import("./db");
+    const result = await dbPool.query(
+      `SELECT r.*, u.full_name as user_name, p.name as product_name
+       FROM reviews r
+       LEFT JOIN users u ON r.user_id = u.id
+       LEFT JOIN products p ON r.product_id = p.id
+       ORDER BY r.created_at DESC`
+    );
+    return result.rows;
   }
 }
 
