@@ -1806,6 +1806,228 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ═══════════════════════════════════════════════════════════════════
+  // ─── نظام التقسيط ────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════
+
+  // إنشاء خطة تقسيط جديدة (يُستدعى بعد إنشاء الطلب)
+  app.post("/api/installment-plans", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const {
+        orderId, customerId, customerName, customerPhone,
+        planType, totalAmount, depositAmount,
+        guarantorSupplierName, guarantorSupplierPhone, guarantorNotes,
+        depositReceiptUrl,
+      } = req.body;
+
+      if (!orderId || !customerName || !planType || !totalAmount || !depositAmount) {
+        return res.status(400).json({ message: "بيانات ناقصة" });
+      }
+
+      const remaining = Number(totalAmount) - Number(depositAmount);
+
+      const result = await dbPool.query(
+        `INSERT INTO installment_plans
+          (order_id, customer_id, customer_name, customer_phone, plan_type,
+           total_amount, deposit_amount, remaining_amount,
+           deposit_receipt_url,
+           guarantor_supplier_name, guarantor_notes, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending')
+         RETURNING *`,
+        [
+          orderId, customerId || null, customerName, customerPhone, planType,
+          totalAmount, depositAmount, remaining,
+          depositReceiptUrl || null,
+          guarantorSupplierName || null,
+          guarantorNotes || guarantorSupplierPhone || null,
+        ]
+      );
+
+      // إشعار المشرف بالتقسيط الجديد عبر واتساب
+      try {
+        const adminPhone = process.env.ADMIN_WHATSAPP_NUMBER || process.env.TWILIO_FROM_NUMBER;
+        if (adminPhone) {
+          const planLabel = planType === "deposit_cod" ? "مقدّم + باقي عند التسليم" : "كفيل المورد";
+          await (async () => {
+            const twilio = (await import("twilio")).default;
+            const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+            await client.messages.create({
+              from: `whatsapp:${process.env.TWILIO_FROM_NUMBER}`,
+              to: `whatsapp:${adminPhone}`,
+              body: `📋 طلب تقسيط جديد\nالطلب: #${orderId}\nالعميل: ${customerName} | ${customerPhone}\nالنوع: ${planLabel}\nالمقدّم: ${Number(depositAmount).toLocaleString()} ر.ي\nالباقي: ${remaining.toLocaleString()} ر.ي${guarantorSupplierName ? `\nالكفيل: ${guarantorSupplierName}` : ""}\nراجع اللوحة: https://oyoplast.com/admin`,
+            });
+          })();
+        }
+      } catch { /* non-fatal */ }
+
+      res.json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إنشاء خطة التقسيط", details: e.message });
+    }
+  });
+
+  // قائمة خطط التقسيط (للإدارة)
+  app.get("/api/admin/installment-plans", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { status } = req.query;
+      let where = status ? `WHERE ip.status = $1` : "";
+      const params = status ? [status] : [];
+
+      const result = await dbPool.query(`
+        SELECT ip.*,
+               o.status as order_status, o.total as order_total,
+               o.shipping_city, o.shipping_address,
+               o.customer_phone as order_phone
+        FROM installment_plans ip
+        JOIN orders o ON ip.order_id = o.id
+        ${where}
+        ORDER BY ip.created_at DESC
+        LIMIT 200
+      `, params);
+
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب خطط التقسيط" });
+    }
+  });
+
+  // تفاصيل خطة واحدة
+  app.get("/api/admin/installment-plans/:id", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        `SELECT ip.*, o.status as order_status, o.total as order_total,
+                o.shipping_city, o.customer_phone as order_phone
+         FROM installment_plans ip
+         JOIN orders o ON ip.order_id = o.id
+         WHERE ip.id = $1`,
+        [parseInt(req.params.id)]
+      );
+      if (!result.rows.length) return res.status(404).json({ message: "الخطة غير موجودة" });
+      res.json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  // تحديث حالة خطة التقسيط (مشرف)
+  app.patch("/api/admin/installment-plans/:id", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const planId = parseInt(req.params.id);
+      const { action, adminNotes } = req.body;
+
+      // الإجراءات المتاحة: confirm_deposit | confirm_remaining | cancel | add_note
+      let setClauses: string[] = [];
+      let values: any[] = [];
+      let idx = 1;
+
+      if (action === "confirm_deposit") {
+        setClauses.push(`deposit_paid = true, deposit_paid_at = NOW(), status = 'deposit_paid'`);
+        // تحديث الطلب بحالة deposit_paid
+        const plan = await dbPool.query(`SELECT order_id FROM installment_plans WHERE id=$1`, [planId]);
+        if (plan.rows[0]) {
+          await dbPool.query(`UPDATE orders SET status='deposit_paid', payment_status='partial' WHERE id=$1`, [plan.rows[0].order_id]);
+        }
+      } else if (action === "confirm_remaining") {
+        setClauses.push(`remaining_paid = true, remaining_paid_at = NOW(), status = 'completed'`);
+        const plan = await dbPool.query(`SELECT order_id FROM installment_plans WHERE id=$1`, [planId]);
+        if (plan.rows[0]) {
+          await dbPool.query(`UPDATE orders SET payment_status='cod_collected' WHERE id=$1`, [plan.rows[0].order_id]);
+        }
+      } else if (action === "cancel") {
+        setClauses.push(`status = 'cancelled'`);
+      }
+
+      if (adminNotes !== undefined) {
+        setClauses.push(`admin_notes = $${idx++}`);
+        values.push(adminNotes);
+      }
+
+      if (!setClauses.length) return res.status(400).json({ message: "لا يوجد تحديث" });
+
+      values.push(planId);
+      const result = await dbPool.query(
+        `UPDATE installment_plans SET ${setClauses.join(", ")} WHERE id = $${idx} RETURNING *`,
+        values
+      );
+
+      res.json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث الخطة", details: e.message });
+    }
+  });
+
+  // إحصائيات التقسيط للإدارة
+  app.get("/api/admin/installment-plans/stats/summary", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(`
+        SELECT
+          COUNT(*) as total_plans,
+          COUNT(CASE WHEN status='pending' THEN 1 END) as pending,
+          COUNT(CASE WHEN status='deposit_paid' THEN 1 END) as deposit_paid,
+          COUNT(CASE WHEN status='completed' THEN 1 END) as completed,
+          COUNT(CASE WHEN status='cancelled' THEN 1 END) as cancelled,
+          COALESCE(SUM(total_amount::numeric), 0) as total_value,
+          COALESCE(SUM(deposit_amount::numeric), 0) as total_deposits,
+          COALESCE(SUM(remaining_amount::numeric), 0) as total_remaining,
+          COALESCE(SUM(CASE WHEN remaining_paid=false AND status NOT IN ('cancelled','completed') THEN remaining_amount::numeric ELSE 0 END), 0) as pending_collection
+        FROM installment_plans
+      `);
+      res.json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  // قائمة الموردين النشطين (للاستخدام في اختيار كفيل - عام محدود)
+  app.get("/api/public/suppliers-list", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        `SELECT id, name, phone, cities FROM suppliers WHERE is_active=true ORDER BY name`
+      );
+      res.json(result.rows.map(r => ({
+        id: r.id,
+        name: r.name,
+        phone: r.phone,
+        cities: r.cities,
+      })));
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  // إشعار المشرف عند رفع إيصال الدفع (بدون تقسيط)
+  app.post("/api/orders/:id/notify-receipt", async (req, res) => {
+    try {
+      const orderId = parseInt(req.params.id);
+      const { pool: dbPool } = await import("./db");
+      const order = await dbPool.query(`SELECT * FROM orders WHERE id=$1`, [orderId]);
+      if (!order.rows[0]) return res.status(404).json({ message: "طلب غير موجود" });
+      const o = order.rows[0];
+      // إشعار المشرف
+      try {
+        const adminPhone = process.env.ADMIN_WHATSAPP_NUMBER;
+        if (adminPhone && process.env.TWILIO_ACCOUNT_SID) {
+          const twilio = (await import("twilio")).default;
+          const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+          await client.messages.create({
+            from: `whatsapp:${process.env.TWILIO_FROM_NUMBER}`,
+            to: `whatsapp:${adminPhone}`,
+            body: `💰 إيصال دفع جديد بانتظار المراجعة\nطلب: #${orderId}\nالعميل: ${o.customer_name} | ${o.customer_phone}\nالمبلغ: ${Number(o.total).toLocaleString()} ر.ي\nراجع: https://oyoplast.com/admin`,
+          });
+        }
+      } catch { /* non-fatal */ }
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
   // ─── Admin Product Stock ─────────────────────────────────────────
   app.patch("/api/admin/products/:id/stock", requireAdmin, async (req, res) => {
     try {

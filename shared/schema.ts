@@ -570,6 +570,31 @@ export const coupons = pgTable("coupons", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ─── جداول نظام التقسيط ───────────────────────────────────────────────────────
+export const installmentPlans = pgTable("installment_plans", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").references(() => orders.id).notNull(),
+  customerId: varchar("customer_id").references(() => users.id),
+  customerName: text("customer_name").notNull(),
+  customerPhone: text("customer_phone").notNull(),
+  planType: text("plan_type").notNull(), // deposit_cod | supplier_guaranteed
+  totalAmount: numeric("total_amount").notNull(),
+  depositAmount: numeric("deposit_amount").notNull(), // المقدّم
+  remainingAmount: numeric("remaining_amount").notNull(), // الباقي
+  depositPaid: boolean("deposit_paid").default(false),
+  depositPaidAt: timestamp("deposit_paid_at"),
+  depositReceiptUrl: text("deposit_receipt_url"),
+  remainingPaid: boolean("remaining_paid").default(false),
+  remainingPaidAt: timestamp("remaining_paid_at"),
+  // كفيل المورد
+  guarantorSupplierId: integer("guarantor_supplier_id"),
+  guarantorSupplierName: text("guarantor_supplier_name"),
+  guarantorNotes: text("guarantor_notes"),
+  status: text("status").default("pending"), // pending | deposit_paid | completed | cancelled
+  adminNotes: text("admin_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Schemas
 export const insertHomeSectionSchema = createInsertSchema(homeSections).omit({ id: true, createdAt: true });
 export type InsertHomeSection = z.infer<typeof insertHomeSectionSchema>;
@@ -598,6 +623,8 @@ export const insertMarketerProfileSchema = createInsertSchema(marketerProfiles).
 export const insertEndCustomerContactSchema = createInsertSchema(endCustomerContacts).omit({ id: true, createdAt: true });
 export const insertMarketerCommissionSchema = createInsertSchema(marketerCommissions).omit({ id: true, createdAt: true });
 export const insertCouponSchema = createInsertSchema(coupons).omit({ id: true, createdAt: true, usageCount: true });
+export const insertInstallmentPlanSchema = createInsertSchema(installmentPlans).omit({ id: true, createdAt: true });
+export type InstallmentPlan = typeof installmentPlans.$inferSelect;
 
 // Types
 export type Product = typeof products.$inferSelect;

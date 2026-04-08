@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Order, Product } from "@shared/schema";
 import FinancialReports from "@/components/FinancialReports";
+import AdminInstallments from "@/components/AdminInstallments";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -5714,6 +5715,11 @@ export default function Admin() {
           {/* ─── Suppliers Tab ─────────────────────────────────────────── */}
           <TabsContent value="suppliers">
             <SupplierManagement adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── Installments Tab ──────────────────────────────────────── */}
+          <TabsContent value="installments">
+            <AdminInstallments adminToken={adminToken} />
           </TabsContent>
 
           {/* ─── Invoice Settings Tab ──────────────────────────────────── */}

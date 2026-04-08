@@ -7,7 +7,8 @@ import { Link, useLocation } from "wouter";
 import {
   ArrowRight, Upload, Check, Loader2, Banknote,
   MapPin, Smartphone, Copy, ChevronDown, ChevronUp,
-  Clock, MessageSquare, Wallet, Tag, X, CheckCircle
+  Clock, MessageSquare, Wallet, Tag, X, CheckCircle,
+  SplitSquareVertical, Users, Phone, FileText, ChevronRight
 } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -74,6 +75,20 @@ export default function Checkout() {
   const [showNotes, setShowNotes] = useState(false);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [showWallets, setShowWallets] = useState(false);
+
+  // ─── حالة نظام التقسيط ──────────────────────────────────────────────
+  const [installmentType, setInstallmentType] = useState<null | "deposit_cod" | "supplier_guaranteed">(null);
+  const [depositPercent, setDepositPercent] = useState<30 | 40 | 50>(30);
+  const [guarantorName, setGuarantorName] = useState("");
+  const [guarantorPhone, setGuarantorPhone] = useState("");
+  const [guarantorNotes, setGuarantorNotes] = useState("");
+  const [receiptCountdown, setReceiptCountdown] = useState<number | null>(null);
+
+  // جلب الموردين النشطين للكفيل
+  const { data: suppliersList = [] } = useQuery<any[]>({
+    queryKey: ["/api/public/suppliers-list"],
+    staleTime: 300000,
+  });
 
   const [couponCode, setCouponCode] = useState("");
   const [couponData, setCouponData] = useState<{ code: string; discountPercent: number } | null>(null);
@@ -187,6 +202,12 @@ export default function Checkout() {
     ? digitalWallets.find((w: any) => `wallet_${w.id}` === formData.paymentMethod)
     : null;
 
+  // ─── حسابات التقسيط ───────────────────────────────────────────────
+  const isInstallmentOrder = installmentType !== null;
+  const depositAmount = isInstallmentOrder ? Math.round(finalTotal * (depositPercent / 100)) : 0;
+  const remainingAmount = isInstallmentOrder ? finalTotal - depositAmount : 0;
+  const INSTALLMENT_MIN = 50000; // الحد الأدنى لتفعيل التقسيط (50,000 ر.ي)
+
   const validateCoupon = async () => {
     if (!couponCode.trim()) { setCouponError("أدخل كود الخصم"); return; }
     setIsValidatingCoupon(true); setCouponError("");
@@ -230,11 +251,28 @@ export default function Checkout() {
     if (isWalletPayment && selectedWallet?.requiresProof && !receiptFile) {
       toast({ title: "خطأ", description: "ارفع صورة إيصال التحويل", variant: "destructive" }); return;
     }
+    // تحقق من بيانات التقسيط
+    if (installmentType === "deposit_cod" && !isWalletPayment) {
+      toast({ title: "خطأ", description: "اختر محفظة إلكترونية لدفع المقدّم", variant: "destructive" }); return;
+    }
+    if (installmentType === "supplier_guaranteed" && !guarantorName.trim()) {
+      toast({ title: "خطأ", description: "أدخل اسم الكفيل (المورد)", variant: "destructive" }); return;
+    }
+    if (installmentType === "supplier_guaranteed" && !guarantorPhone.trim()) {
+      toast({ title: "خطأ", description: "أدخل رقم هاتف الكفيل", variant: "destructive" }); return;
+    }
 
     setIsSubmitting(true);
     try {
-      const normalizedPaymentMethod = isWalletPayment ? "digital_wallet" : formData.paymentMethod;
+      const normalizedPaymentMethod = installmentType
+        ? (installmentType === "deposit_cod" ? "installment_deposit_cod" : "supplier_guaranteed")
+        : (isWalletPayment ? "digital_wallet" : formData.paymentMethod);
       const deliveryNote = deliveryTime === "later" ? "\n[وقت التسليم: لاحقاً]" : "";
+      const installmentNote = installmentType === "deposit_cod"
+        ? `\n[تقسيط: مقدّم ${depositPercent}% = ${formatPrice(depositAmount)} ${currLabel} + باقي ${formatPrice(remainingAmount)} ${currLabel} عند التسليم]`
+        : installmentType === "supplier_guaranteed"
+        ? `\n[تقسيط بكفيل مورد: ${guarantorName} / ${guarantorPhone}${guarantorNotes ? " - " + guarantorNotes : ""}]`
+        : "";
       const rawRes = await fetch("/api/orders/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -249,8 +287,9 @@ export default function Checkout() {
           shippingCost: effectiveShippingFee,
           paymentMethod: normalizedPaymentMethod,
           purchaseCode: formData.purchaseCode || undefined,
-          notes: (formData.notes || "") + deliveryNote,
+          notes: (formData.notes || "") + deliveryNote + installmentNote,
           total: finalTotal,
+          depositAmount: installmentType ? depositAmount : undefined,
           items: cartItems,
           couponCode: couponData?.code || null,
           discountAmount: discountAmount > 0 ? discountAmount : null,
@@ -270,6 +309,28 @@ export default function Checkout() {
       const orderId = orderData?.id;
       if (!orderId) {
         throw new Error("لم يتم إرجاع رقم الطلب من الخادم، يرجى المحاولة مرة أخرى");
+      }
+
+      // ─── إنشاء خطة التقسيط ───────────────────────────────────────────
+      if (installmentType) {
+        try {
+          await fetch("/api/installment-plans", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orderId,
+              customerId: user?.id || null,
+              customerName: formData.customerName || user?.fullName || "عميل",
+              customerPhone: formData.customerPhone,
+              planType: installmentType,
+              totalAmount: finalTotal,
+              depositAmount,
+              guarantorSupplierName: installmentType === "supplier_guaranteed" ? guarantorName : null,
+              guarantorSupplierPhone: installmentType === "supplier_guaranteed" ? guarantorPhone : null,
+              guarantorNotes: installmentType === "supplier_guaranteed" ? guarantorNotes : null,
+            }),
+          });
+        } catch { /* non-fatal — plan can be created manually */ }
       }
 
       try {
@@ -315,7 +376,11 @@ export default function Checkout() {
   }
 
   const hasAddress = formData.customerName && formData.shippingCity && formData.shippingAddress;
-  const selectedPaymentName = isWalletPayment
+  const selectedPaymentName = installmentType === "deposit_cod"
+    ? `مقدّم ${depositPercent}% + باقي عند التسليم`
+    : installmentType === "supplier_guaranteed"
+    ? "تقسيط بكفيل مورد"
+    : isWalletPayment
     ? (selectedWallet?.name ?? "محفظة إلكترونية")
     : "الدفع عند الاستلام";
 
@@ -716,8 +781,76 @@ export default function Checkout() {
                 );
               })}
 
+              {/* ── خيارات التقسيط (تظهر للطلبات > 50,000 ر.ي) ── */}
+              {finalTotal >= INSTALLMENT_MIN && (
+                <>
+                  <div className="mx-4 mt-1 mb-1">
+                    <p className="text-xs text-muted-foreground font-semibold flex items-center gap-1">
+                      <SplitSquareVertical className="h-3.5 w-3.5 text-primary" />
+                      خيارات التقسيط (للطلبات الكبيرة)
+                    </p>
+                  </div>
+
+                  {/* مقدّم + باقي عند التسليم */}
+                  <button
+                    type="button"
+                    className={`w-full flex items-center gap-3 px-4 py-3 transition-colors ${
+                      installmentType === "deposit_cod" ? "bg-amber-50 dark:bg-amber-900/20" : "hover:bg-muted/50"
+                    }`}
+                    onClick={() => {
+                      setInstallmentType(installmentType === "deposit_cod" ? null : "deposit_cod");
+                      setFormData(f => ({ ...f, paymentMethod: "cash_on_delivery" }));
+                      setReceiptFile(null);
+                    }}
+                    data-testid="payment-method-deposit_cod"
+                  >
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      installmentType === "deposit_cod" ? "border-amber-500" : "border-muted-foreground"
+                    }`}>
+                      {installmentType === "deposit_cod" && <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />}
+                    </div>
+                    <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                      <SplitSquareVertical className="h-4 w-4 text-amber-600" />
+                    </div>
+                    <div className="text-right flex-1">
+                      <span className="text-sm font-medium">مقدّم + باقي عند التسليم</span>
+                      <p className="text-xs text-muted-foreground">ادفع جزءاً الآن والباقي حين تستلم الطلب</p>
+                    </div>
+                    {installmentType === "deposit_cod" && <CheckCircle className="h-4 w-4 text-amber-500 shrink-0" />}
+                  </button>
+
+                  {/* كفيل المورد */}
+                  <button
+                    type="button"
+                    className={`w-full flex items-center gap-3 px-4 py-3 transition-colors ${
+                      installmentType === "supplier_guaranteed" ? "bg-purple-50 dark:bg-purple-900/20" : "hover:bg-muted/50"
+                    }`}
+                    onClick={() => {
+                      setInstallmentType(installmentType === "supplier_guaranteed" ? null : "supplier_guaranteed");
+                      setFormData(f => ({ ...f, paymentMethod: "cash_on_delivery", purchaseCode: "" }));
+                      setReceiptFile(null);
+                    }}
+                    data-testid="payment-method-supplier_guaranteed"
+                  >
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      installmentType === "supplier_guaranteed" ? "border-purple-500" : "border-muted-foreground"
+                    }`}>
+                      {installmentType === "supplier_guaranteed" && <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />}
+                    </div>
+                    <div className="w-9 h-9 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
+                      <Users className="h-4 w-4 text-purple-600" />
+                    </div>
+                    <div className="text-right flex-1">
+                      <span className="text-sm font-medium">كفيل المورد</span>
+                      <p className="text-xs text-muted-foreground">المورد يكفلك ويستلم الطلب على مسؤوليته</p>
+                    </div>
+                    {installmentType === "supplier_guaranteed" && <CheckCircle className="h-4 w-4 text-purple-500 shrink-0" />}
+                  </button>
+                </>
+              )}
+
               {/* زر إغلاق القائمة */}
-              <div className="px-4 pb-3">
+              <div className="px-4 pb-3 pt-1">
                 <button
                   type="button"
                   onClick={() => setShowWallets(false)}
@@ -730,6 +863,188 @@ export default function Checkout() {
             </div>
           )}
         </div>
+
+        {/* ── قسم ضبط التقسيط ── */}
+        {installmentType === "deposit_cod" && (
+          <div className="bg-background border-t">
+            <div className="px-4 py-4 space-y-4">
+              <div className="flex items-center gap-2">
+                <SplitSquareVertical className="h-4 w-4 text-amber-600" />
+                <p className="font-semibold text-sm">ضبط المقدّم</p>
+              </div>
+
+              {/* نسبة المقدّم */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">اختر نسبة المقدّم</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {([30, 40, 50] as const).map((pct) => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => setDepositPercent(pct)}
+                      className={`py-2.5 rounded-xl border-2 font-bold text-sm transition-all ${
+                        depositPercent === pct
+                          ? "border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-900/30"
+                          : "border-muted bg-muted/30 text-muted-foreground"
+                      }`}
+                      data-testid={`deposit-percent-${pct}`}
+                    >
+                      {pct}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* عرض المبالغ */}
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 p-3 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-amber-700 dark:text-amber-400">المقدّم (الآن)</span>
+                  <span className="font-black text-amber-700 text-base">{formatPrice(depositAmount)} {currLabel}</span>
+                </div>
+                <div className="h-px bg-amber-200 dark:bg-amber-800" />
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-500">الباقي (عند التسليم)</span>
+                  <span className="font-bold text-gray-600">{formatPrice(remainingAmount)} {currLabel}</span>
+                </div>
+              </div>
+
+              {/* اختيار المحفظة لدفع المقدّم */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">اختر محفظة لدفع المقدّم الآن</p>
+                <div className="space-y-1">
+                  {digitalWallets.filter((w: any) => w.isActive).map((wallet: any) => {
+                    const wId = `wallet_${wallet.id}`;
+                    const isSel = formData.paymentMethod === wId;
+                    return (
+                      <button
+                        key={wallet.id}
+                        type="button"
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-right ${isSel ? "border-amber-500 bg-amber-50/80" : "border-muted hover:bg-muted/40"}`}
+                        onClick={() => setFormData(f => ({ ...f, paymentMethod: wId, purchaseCode: "" }))}
+                        data-testid={`deposit-wallet-${wallet.id}`}
+                      >
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${isSel ? "border-amber-500" : "border-gray-300"}`}>
+                          {isSel && <div className="w-2 h-2 rounded-full bg-amber-500" />}
+                        </div>
+                        {wallet.logoUrl ? (
+                          <img src={wallet.logoUrl} alt={wallet.name} className="w-7 h-7 rounded-md object-contain border bg-white" />
+                        ) : (
+                          <Smartphone className="h-4 w-4 text-amber-600" />
+                        )}
+                        <span className="text-sm font-medium">{wallet.name}</span>
+                        <span className="text-xs text-muted-foreground mr-auto">{wallet.phoneNumber}</span>
+                        <button type="button" className="text-primary shrink-0"
+                          onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(wallet.phoneNumber); toast({ title: "✅ تم نسخ الرقم" }); }}>
+                          <Copy className="h-3 w-3" />
+                        </button>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* كود الحوالة للمقدّم */}
+              {isWalletPayment && (
+                <div>
+                  <p className="text-xs font-semibold mb-1">رقم حوالة المقدّم *</p>
+                  <Input
+                    value={formData.purchaseCode}
+                    onChange={e => setFormData(f => ({ ...f, purchaseCode: e.target.value }))}
+                    placeholder="أدخل رقم الحوالة بعد الدفع"
+                    className="text-right"
+                    data-testid="input-deposit-code"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── قسم بيانات كفيل المورد ── */}
+        {installmentType === "supplier_guaranteed" && (
+          <div className="bg-background border-t">
+            <div className="px-4 py-4 space-y-4">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-purple-600" />
+                <p className="font-semibold text-sm">بيانات الكفيل (المورد)</p>
+              </div>
+
+              <div className="rounded-xl bg-purple-50 dark:bg-purple-900/20 p-3 text-xs text-purple-700 dark:text-purple-300 leading-relaxed">
+                الكفيل هو الموزع أو المورد الذي يضمن طلبك. يتحمّل المسؤولية الكاملة عن دفعك، وسيتم إشعاره فور تقديم الطلب.
+              </div>
+
+              {/* اختيار من القائمة أو إدخال يدوي */}
+              {suppliersList.length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-2">اختر كفيلاً من القائمة</p>
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {suppliersList.map((s: any) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-right transition-all ${
+                          guarantorName === s.name ? "border-purple-500 bg-purple-50/80" : "border-muted hover:bg-muted/40"
+                        }`}
+                        onClick={() => { setGuarantorName(s.name); setGuarantorPhone(s.phone || ""); }}
+                        data-testid={`guarantor-supplier-${s.id}`}
+                      >
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${guarantorName === s.name ? "border-purple-500" : "border-gray-300"}`}>
+                          {guarantorName === s.name && <div className="w-2 h-2 rounded-full bg-purple-500" />}
+                        </div>
+                        <Users className="h-4 w-4 text-purple-500 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{s.name}</p>
+                          {s.cities?.length > 0 && <p className="text-xs text-muted-foreground">{s.cities.slice(0, 2).join("، ")}</p>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2 mb-1">أو أدخل بيانات الكفيل يدوياً</p>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs font-semibold mb-1">اسم الكفيل (المورد) *</p>
+                  <Input
+                    value={guarantorName}
+                    onChange={e => setGuarantorName(e.target.value)}
+                    placeholder="مثال: شركة الأهدل للتوزيع"
+                    className="text-right"
+                    data-testid="input-guarantor-name"
+                  />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold mb-1">رقم هاتف الكفيل *</p>
+                  <Input
+                    value={guarantorPhone}
+                    onChange={e => setGuarantorPhone(e.target.value)}
+                    placeholder="77X XXX XXXX"
+                    className="text-right"
+                    data-testid="input-guarantor-phone"
+                  />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold mb-1">ملاحظة للكفيل (اختياري)</p>
+                  <Input
+                    value={guarantorNotes}
+                    onChange={e => setGuarantorNotes(e.target.value)}
+                    placeholder="مثال: تعاملنا منذ 2 سنة"
+                    className="text-right"
+                    data-testid="input-guarantor-notes"
+                  />
+                </div>
+              </div>
+
+              {/* ملخص المبلغ للكفيل */}
+              <div className="rounded-xl border border-purple-200 dark:border-purple-800 p-3">
+                <p className="text-xs text-muted-foreground mb-1">إجمالي الطلب المكفول</p>
+                <p className="font-black text-purple-700 text-xl">{formatPrice(finalTotal)} {currLabel}</p>
+                <p className="text-xs text-gray-400 mt-0.5">سيتحمّل الكفيل المسؤولية الكاملة عن هذا المبلغ</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── قسم الإجماليات ── */}
         <div className="bg-background mx-0">
@@ -751,6 +1066,30 @@ export default function Checkout() {
               </span>
             </div>
           </div>
+
+          {/* ملخص التقسيط في الإجماليات */}
+          {isInstallmentOrder && (
+            <div className="mx-4 mt-3 space-y-2">
+              {installmentType === "deposit_cod" && (
+                <div className="rounded-xl border border-amber-200 dark:border-amber-800 overflow-hidden">
+                  <div className="flex justify-between items-center px-3 py-2 bg-amber-50 dark:bg-amber-900/20">
+                    <span className="text-xs font-bold text-amber-700">المقدّم (تدفعه الآن)</span>
+                    <span className="font-black text-amber-700 text-base">{formatPrice(depositAmount)} {currLabel}</span>
+                  </div>
+                  <div className="flex justify-between items-center px-3 py-2">
+                    <span className="text-xs text-gray-500">الباقي (عند التسليم)</span>
+                    <span className="font-bold text-gray-600">{formatPrice(remainingAmount)} {currLabel}</span>
+                  </div>
+                </div>
+              )}
+              {installmentType === "supplier_guaranteed" && (
+                <div className="rounded-xl border border-purple-200 dark:border-purple-800 px-3 py-2 flex justify-between items-center">
+                  <span className="text-xs font-bold text-purple-700">مكفول بواسطة: {guarantorName || "..."}</span>
+                  <span className="font-black text-purple-700 text-base">{formatPrice(finalTotal)} {currLabel}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* الإجمالي الكلي */}
           <div className="mx-4 mt-3 mb-4 rounded-xl bg-amber-400/90 dark:bg-amber-600/80 px-4 py-3 flex justify-between items-center">
