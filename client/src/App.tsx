@@ -60,6 +60,7 @@ import Notifications from "@/pages/Notifications";
 import MyAccount from "@/pages/MyAccount";
 import MarketerCoupons from "@/pages/MarketerCoupons";
 import Printing from "@/pages/Printing";
+import StaffPortal from "@/pages/StaffPortal";
 import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
@@ -349,6 +350,11 @@ function Router() {
   // إخفاء زر التنقل السفلي على:
   // 1. صفحة الإدارة دائماً
   // 2. صفحة المنتج عند تفعيل الشريط الثابت (بديله يكون زر شراء)
+  // صفحة الموظفين مستقلة تماماً بدون navbar/footer
+  if (location === '/staff') {
+    return <StaffPortal />;
+  }
+
   const isProductDetail = /^\/products\/[^/]+$/.test(location);
   // إخفاء شريط التنقل السفلي في الصفحات التي لها شريط ثابت خاص بها
   const hideBottomNav =
@@ -423,6 +429,7 @@ function Router() {
               <RequireAccountType><MarketerCoupons /></RequireAccountType>
             </Route>
             <Route path="/printing" component={Printing} />
+            <Route path="/staff" component={StaffPortal} />
             <Route component={NotFound} />
           </Switch>
         </main>

@@ -1738,4 +1738,306 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     res.json(report);
   });
+
+  // ════════════════════════════════════════════════════════════════════
+  // ─── STAFF MANAGEMENT (Admin Only) ───────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
+
+  // ─── List all staff ───────────────────────────────────────────────
+  app.get("/api/admin/staff", requireAdmin, async (_req, res) => {
+    try {
+      const { db: dbI } = await import("./db");
+      const { users: usersT } = await import("@shared/schema");
+      const { ne, and } = await import("drizzle-orm");
+      const staff = await dbI.select({
+        id: usersT.id,
+        email: usersT.email,
+        fullName: usersT.fullName,
+        phone: usersT.phone,
+        role: usersT.role,
+        permissions: usersT.permissions,
+        createdAt: usersT.createdAt,
+      }).from(usersT)
+        .where(and(
+          ne(usersT.role, "customer"),
+          ne(usersT.role, "marketer"),
+        ));
+      res.json(staff);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب قائمة الموظفين", error: e.message });
+    }
+  });
+
+  // ─── Create staff account ─────────────────────────────────────────
+  app.post("/api/admin/staff", requireAdmin, async (req, res) => {
+    try {
+      const { email, password, fullName, phone, role, title, permissions } = req.body;
+      if (!email || !password || !role) {
+        return res.status(400).json({ message: "البريد الإلكتروني وكلمة المرور والدور مطلوبة" });
+      }
+      const validRoles = ["product_manager", "order_manager", "delivery", "finance", "owner"];
+      if (!validRoles.includes(role)) {
+        return res.status(400).json({ message: "الدور غير صالح" });
+      }
+      const { hashPassword } = await import("./auth-utils");
+      const { authStorage } = await import("./replit_integrations/auth/storage");
+      const existing = await authStorage.getUserByEmail(email);
+      if (existing) {
+        return res.status(400).json({ message: "البريد الإلكتروني مستخدم بالفعل" });
+      }
+      const passwordHash = hashPassword(password);
+      const { db: dbI } = await import("./db");
+      const { users: usersT } = await import("@shared/schema");
+      const [user] = await dbI.insert(usersT).values({
+        email,
+        passwordHash,
+        fullName: fullName || null,
+        phone: phone || null,
+        role,
+        accountType: "staff",
+        authProvider: "email",
+        isEmailVerified: "true",
+        permissions: permissions || null,
+      }).returning();
+      // Also insert into team_members
+      const { pool: dbPool2 } = await import("./db");
+      await dbPool2.query(
+        `INSERT INTO team_members (user_id, role, title, is_active, permissions) VALUES ($1, $2, $3, true, $4)
+         ON CONFLICT (user_id) DO UPDATE SET role=$2, title=$3, permissions=$4`,
+        [user.id, role, title || null, permissions ? JSON.stringify(permissions) : null]
+      );
+      res.status(201).json({ id: user.id, email: user.email, fullName: user.fullName, role: user.role });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إنشاء حساب الموظف", error: e.message });
+    }
+  });
+
+  // ─── Update staff ─────────────────────────────────────────────────
+  app.put("/api/admin/staff/:id", requireAdmin, async (req, res) => {
+    try {
+      const { db: dbI } = await import("./db");
+      const { users: usersT } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+      const { fullName, phone, role, title, permissions, password, isActive } = req.body;
+      const updates: Record<string, any> = {};
+      if (fullName !== undefined) updates.fullName = fullName;
+      if (phone !== undefined) updates.phone = phone;
+      if (role !== undefined) updates.role = role;
+      if (permissions !== undefined) updates.permissions = permissions;
+      if (password) {
+        const { hashPassword } = await import("./auth-utils");
+        updates.passwordHash = hashPassword(password);
+      }
+      const [updated] = await dbI.update(usersT).set(updates).where(eqFn(usersT.id, req.params.id)).returning();
+      if (!updated) return res.status(404).json({ message: "الموظف غير موجود" });
+      // Update team_members table
+      if (role !== undefined || title !== undefined || isActive !== undefined || permissions !== undefined) {
+        const { pool: dbPool3 } = await import("./db");
+        await dbPool3.query(
+          `UPDATE team_members SET role=COALESCE($2,role), title=COALESCE($3,title), is_active=COALESCE($4,is_active), permissions=COALESCE($5,permissions) WHERE user_id=$1`,
+          [req.params.id, role || null, title || null, isActive !== undefined ? isActive : null, permissions ? JSON.stringify(permissions) : null]
+        );
+      }
+      res.json({ id: updated.id, email: updated.email, fullName: updated.fullName, role: updated.role });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث بيانات الموظف", error: e.message });
+    }
+  });
+
+  // ─── Delete / Deactivate staff ────────────────────────────────────
+  app.delete("/api/admin/staff/:id", requireAdmin, async (req, res) => {
+    try {
+      const { db: dbI } = await import("./db");
+      const { users: usersT } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+      // Set role to 'customer' to deactivate (not delete — keeps order history)
+      await dbI.update(usersT).set({ role: "customer", accountType: "customer" }).where(eqFn(usersT.id, req.params.id));
+      await dbI.execute(`UPDATE team_members SET is_active=false WHERE user_id=$1` as any, [req.params.id]);
+      res.json({ message: "تم إلغاء تفعيل الحساب" });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حذف الموظف", error: e.message });
+    }
+  });
+
+  // ════════════════════════════════════════════════════════════════════
+  // ─── STAFF PORTAL ROUTES (Authenticated Staff Users) ─────────────
+  // ════════════════════════════════════════════════════════════════════
+
+  // Middleware to check staff role
+  function requireStaff(allowedRoles: string[]) {
+    return async (req: Request, res: Response, next: NextFunction) => {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "يجب تسجيل الدخول" });
+      const userId = user.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "جلسة غير صالحة" });
+      try {
+        const { db: dbI } = await import("./db");
+        const { users: usersT } = await import("@shared/schema");
+        const { eq: eqFn } = await import("drizzle-orm");
+        const [dbUser] = await dbI.select({ role: usersT.role, permissions: usersT.permissions }).from(usersT).where(eqFn(usersT.id, userId));
+        if (!dbUser) return res.status(401).json({ message: "مستخدم غير موجود" });
+        const staffRoles = ["product_manager", "order_manager", "delivery", "finance", "owner"];
+        if (!staffRoles.includes(dbUser.role || "")) return res.status(403).json({ message: "غير مصرح لك بالدخول" });
+        if (allowedRoles.length > 0 && !allowedRoles.includes(dbUser.role || "")) {
+          return res.status(403).json({ message: "ليس لديك صلاحية لهذه العملية" });
+        }
+        (req as any).staffRole = dbUser.role;
+        (req as any).staffPermissions = dbUser.permissions;
+        next();
+      } catch (e: any) {
+        res.status(500).json({ message: "خطأ في التحقق من الصلاحيات" });
+      }
+    };
+  }
+
+  // ─── Staff: Get my info ────────────────────────────────────────────
+  app.get("/api/staff/me", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "يجب تسجيل الدخول" });
+      const userId = user.claims?.sub;
+      const { db: dbI } = await import("./db");
+      const { users: usersT } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+      const [dbUser] = await dbI.select({
+        id: usersT.id, email: usersT.email, fullName: usersT.fullName,
+        phone: usersT.phone, role: usersT.role, permissions: usersT.permissions,
+      }).from(usersT).where(eqFn(usersT.id, userId));
+      if (!dbUser) return res.status(404).json({ message: "مستخدم غير موجود" });
+      const staffRoles = ["product_manager", "order_manager", "delivery", "finance", "owner"];
+      if (!staffRoles.includes(dbUser.role || "")) return res.status(403).json({ message: "غير مصرح" });
+      res.json(dbUser);
+    } catch (e: any) {
+      res.status(500).json({ message: "خطأ في جلب البيانات" });
+    }
+  });
+
+  // ─── Staff: Get orders (filtered by role) ─────────────────────────
+  app.get("/api/staff/orders", requireStaff([]), async (req, res) => {
+    try {
+      const role = (req as any).staffRole;
+      const userId = (req as any).user?.claims?.sub;
+      const { pool: dbPool } = await import("./db");
+      let query = "";
+      let params: any[] = [];
+      if (role === "delivery") {
+        query = `SELECT o.*, 
+          (SELECT json_agg(oi.*) FROM order_items oi WHERE oi.order_id = o.id) as items
+          FROM orders o WHERE o.assigned_to=$1 ORDER BY o.created_at DESC LIMIT 200`;
+        params = [userId];
+      } else {
+        query = `SELECT o.*,
+          (SELECT json_agg(oi.*) FROM order_items oi WHERE oi.order_id = o.id) as items
+          FROM orders o ORDER BY o.created_at DESC LIMIT 500`;
+      }
+      const result = await dbPool.query(query, params);
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الطلبات", error: e.message });
+    }
+  });
+
+  // ─── Staff: Update order status ───────────────────────────────────
+  app.put("/api/staff/orders/:id/status", requireStaff(["order_manager", "delivery", "owner"]), async (req, res) => {
+    try {
+      const { status, note } = req.body;
+      const userId = (req as any).user?.claims?.sub;
+      const role = (req as any).staffRole;
+      const validStatuses = ["pending", "processing", "shipped", "delivered", "completed", "cancelled"];
+      if (!validStatuses.includes(status)) return res.status(400).json({ message: "حالة غير صالحة" });
+      // Delivery staff can only update delivery statuses
+      if (role === "delivery" && !["shipped", "delivered", "completed"].includes(status)) {
+        return res.status(403).json({ message: "لا يمكنك تغيير الطلب إلى هذه الحالة" });
+      }
+      const { pool: dbPool } = await import("./db");
+      // Get current order
+      const current = await dbPool.query("SELECT status, status_history, assigned_to FROM orders WHERE id=$1", [req.params.id]);
+      if (!current.rows.length) return res.status(404).json({ message: "الطلب غير موجود" });
+      // Delivery staff can only update their own orders
+      if (role === "delivery" && current.rows[0].assigned_to !== userId) {
+        return res.status(403).json({ message: "هذا الطلب غير مخصص لك" });
+      }
+      const history = current.rows[0].status_history || [];
+      history.push({ status, changedBy: userId, role, note: note || null, at: new Date().toISOString() });
+      await dbPool.query(
+        "UPDATE orders SET status=$1, status_history=$2 WHERE id=$3",
+        [status, JSON.stringify(history), req.params.id]
+      );
+      res.json({ message: "تم تحديث حالة الطلب", status });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث الحالة", error: e.message });
+    }
+  });
+
+  // ─── Staff: Update payment status ─────────────────────────────────
+  app.put("/api/staff/orders/:id/payment", requireStaff(["finance", "order_manager", "delivery", "owner"]), async (req, res) => {
+    try {
+      const { paymentStatus, note } = req.body;
+      const validPayments = ["unpaid", "cod_collected", "transferred", "partial", "refunded"];
+      if (!validPayments.includes(paymentStatus)) return res.status(400).json({ message: "حالة دفع غير صالحة" });
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query("UPDATE orders SET payment_status=$1 WHERE id=$2", [paymentStatus, req.params.id]);
+      res.json({ message: "تم تحديث حالة الدفع", paymentStatus });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث حالة الدفع", error: e.message });
+    }
+  });
+
+  // ─── Staff: Assign order to delivery ──────────────────────────────
+  app.put("/api/staff/orders/:id/assign", requireStaff(["order_manager", "owner"]), async (req, res) => {
+    try {
+      const { deliveryUserId } = req.body;
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query("UPDATE orders SET assigned_to=$1 WHERE id=$2", [deliveryUserId || null, req.params.id]);
+      res.json({ message: "تم تخصيص الطلب", deliveryUserId });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تخصيص الطلب", error: e.message });
+    }
+  });
+
+  // ─── Staff: Get delivery staff list (for assignment) ──────────────
+  app.get("/api/staff/delivery-team", requireStaff(["order_manager", "owner"]), async (_req, res) => {
+    try {
+      const { db: dbI } = await import("./db");
+      const { users: usersT } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+      const team = await dbI.select({ id: usersT.id, fullName: usersT.fullName, phone: usersT.phone }).from(usersT).where(eqFn(usersT.role, "delivery"));
+      res.json(team);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب فريق التوصيل" });
+    }
+  });
+
+  // ─── Staff: Products (product_manager) ────────────────────────────
+  app.get("/api/staff/products", requireStaff(["product_manager", "owner"]), async (_req, res) => {
+    try {
+      const products = await storage.getProducts();
+      res.json(products);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب المنتجات" });
+    }
+  });
+
+  // ─── Staff: Financial summary (finance) ───────────────────────────
+  app.get("/api/staff/financial-summary", requireStaff(["finance", "owner"]), async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(`
+        SELECT
+          COUNT(*) as total_orders,
+          SUM(CASE WHEN payment_status = 'cod_collected' OR payment_status = 'transferred' THEN total::numeric ELSE 0 END) as collected_amount,
+          SUM(CASE WHEN payment_status = 'unpaid' AND status != 'cancelled' THEN total::numeric ELSE 0 END) as pending_amount,
+          SUM(CASE WHEN status = 'cancelled' THEN total::numeric ELSE 0 END) as cancelled_amount,
+          COUNT(CASE WHEN status = 'delivered' OR status = 'completed' THEN 1 END) as delivered_count,
+          COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_count,
+          COUNT(CASE WHEN payment_status = 'cod_collected' THEN 1 END) as cod_collected_count,
+          COUNT(CASE WHEN payment_status = 'unpaid' AND status != 'cancelled' THEN 1 END) as unpaid_count
+        FROM orders
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+      `);
+      res.json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الملخص المالي" });
+    }
+  });
 }

@@ -56,6 +56,7 @@ import { DigitalWalletsManager } from "@/components/DigitalWalletsManager";
 import { ImageDimensionsManager } from "@/components/ImageDimensionsManager";
 import { AdminNav } from "@/components/AdminNav";
 import { LoginManagementSection } from "@/components/LoginManagementSection";
+import TeamManagement from "@/components/TeamManagement";
 import { compressImage, formatFileSize } from "@/lib/imageCompression";
 
 const statusMap: Record<string, { label: string; color: string; icon: any }> = {
@@ -5582,6 +5583,11 @@ export default function Admin() {
 
           <TabsContent value="login-management">
             <LoginManagementSection adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── Team Management Tab ───────────────────────────────────── */}
+          <TabsContent value="team">
+            <TeamManagement adminToken={adminToken} />
           </TabsContent>
 
         </Tabs>
