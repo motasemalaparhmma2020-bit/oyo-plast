@@ -36,8 +36,8 @@ export default function Products() {
     setSearchTerm(search);
   };
 
-  const handleCategoryClick = (categoryId: string) => {
-    setSelectedCategory(categoryId);
+  const handleCategoryClick = (categorySlug: string) => {
+    setSelectedCategory(categorySlug);
     setSearchTerm("");
     setSearch("");
   };
@@ -66,7 +66,7 @@ export default function Products() {
           </Button>
 
           {categories?.filter((c: any) => c?.isActive).map((category: any) => {
-            const isActive = selectedCategory === String(category?.id);
+            const isActive = selectedCategory === String(category?.slug);
             return (
               <Button
                 key={category?.id}
@@ -77,7 +77,7 @@ export default function Products() {
                     ? "bg-teal-500 hover:bg-teal-600 text-white border-teal-500"
                     : "bg-white hover:bg-gray-50 text-gray-700 border-gray-200"
                 }`}
-                onClick={() => handleCategoryClick(String(category?.id))}
+                onClick={() => handleCategoryClick(String(category?.slug))}
                 data-testid={`filter-${category?.id}`}
               >
                 <ShoppingBag className="h-4 w-4" />

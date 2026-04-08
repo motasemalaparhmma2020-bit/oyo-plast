@@ -3,12 +3,12 @@ import { api, buildUrl } from "@shared/routes";
 import { useMemo } from "react";
 
 // GET /api/products
-export function useProducts(categoryId?: string, search?: string) {
+export function useProducts(categorySlug?: string, search?: string) {
   return useQuery({
-    queryKey: [api.products.list.path, categoryId, search],
+    queryKey: [api.products.list.path, categorySlug, search],
     queryFn: async () => {
       const url = new URL(api.products.list.path, window.location.origin);
-      if (categoryId) url.searchParams.append("categoryId", categoryId);
+      if (categorySlug) url.searchParams.append("category", categorySlug);
       if (search) url.searchParams.append("search", search);
       
       const res = await fetch(url.toString(), { credentials: "include" });
@@ -34,8 +34,8 @@ export function useCategories() {
   });
 }
 
-export function useCategoriesAndProducts(categoryId?: string, search?: string) {
-  const productsQuery = useProducts(categoryId, search);
+export function useCategoriesAndProducts(categorySlug?: string, search?: string) {
+  const productsQuery = useProducts(categorySlug, search);
   const categoriesQuery = useCategories();
   return useMemo(() => ({
     products: productsQuery.data ?? [],
