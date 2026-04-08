@@ -1,9 +1,10 @@
-import { Order } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Printer, X, MapPin, Phone, User, Package } from "lucide-react";
+import { Printer, X, MapPin, Phone, User, Package, FileText, Truck } from "lucide-react";
 import logoImg from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
 
-interface OrderItem {
+// ─── Types ────────────────────────────────────────────────────────────────────
+export interface OrderItem {
   id: number;
   productId: number | null;
   quantity: number;
@@ -13,24 +14,64 @@ interface OrderItem {
   selectedColor?: string | null;
   customPrinting?: boolean | null;
   designNotes?: string | null;
+  designFileUrl?: string | null;
 }
 
+export interface InvoiceSettings {
+  showProductImages: boolean;
+  showSize: boolean;
+  showColor: boolean;
+  showShipping: boolean;
+  showDiscount: boolean;
+  showReceiptImage: boolean;
+  showTransferCode: boolean;
+  showCustomerNotes: boolean;
+  showAdminNote: boolean;
+  adminNote: string;
+  currency: "YER" | "SAR" | "both";
+  storePhone: string;
+  storeAddress: string;
+  footerText: string;
+  deliveryInvoiceShowPrices: boolean;
+  deliveryInvoiceShowImages: boolean;
+  showGPS: boolean;
+  manualDiscount: number;
+  manualDiscountLabel: string;
+}
+
+export const DEFAULT_INVOICE_SETTINGS: InvoiceSettings = {
+  showProductImages: true,
+  showSize: true,
+  showColor: true,
+  showShipping: true,
+  showDiscount: true,
+  showReceiptImage: true,
+  showTransferCode: true,
+  showCustomerNotes: true,
+  showAdminNote: false,
+  adminNote: "",
+  currency: "both",
+  storePhone: "+967 774 997 589",
+  storeAddress: "",
+  footerText: "شكراً لثقتكم بنا — أويو بلاست",
+  deliveryInvoiceShowPrices: true,
+  deliveryInvoiceShowImages: false,
+  showGPS: true,
+  manualDiscount: 0,
+  manualDiscountLabel: "خصم إضافي",
+};
+
 interface PrintableInvoiceProps {
-  order: Order;
+  order: any;
   orderItems?: OrderItem[];
   isDeliveryInvoice?: boolean;
   onClose: () => void;
+  adminToken?: string | null;
+  overrideSettings?: Partial<InvoiceSettings>;
 }
 
-interface AlternateRecipient {
-  name: string;
-  phone: string;
-  neighborhood: string;
-  city: string;
-  address: string;
-}
-
-function parseAlternateRecipient(notes: string | null | undefined): AlternateRecipient | null {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function parseAlternateRecipient(notes: string | null | undefined) {
   if (!notes) return null;
   const marker = "--- المستلم البديل ---";
   const idx = notes.indexOf(marker);
@@ -42,92 +83,620 @@ function parseAlternateRecipient(notes: string | null | undefined): AlternateRec
   };
   const name = get("الاسم");
   if (!name) return null;
-  return {
-    name,
-    phone: get("الهاتف"),
-    neighborhood: get("الحي"),
-    city: get("المدينة/المحل"),
-    address: get("العنوان"),
-  };
+  return { name, phone: get("الهاتف"), neighborhood: get("الحي"), city: get("المدينة/المحل"), address: get("العنوان") };
 }
 
 function getCleanNotes(notes: string | null | undefined): string {
   if (!notes) return "";
   const idx = notes.indexOf("--- المستلم البديل ---");
-  if (idx === -1) return notes.trim();
-  return notes.slice(0, idx).trim();
+  return idx === -1 ? notes.trim() : notes.slice(0, idx).trim();
 }
 
 function getGoogleMapsUrl(coords: string | null | undefined): string | null {
   if (!coords) return null;
   const trimmed = coords.trim();
   if (trimmed.startsWith("http")) return trimmed;
-  const parts = trimmed.split(",").map((p) => p.trim());
-  if (parts.length >= 2 && !isNaN(Number(parts[0])) && !isNaN(Number(parts[1]))) {
+  const parts = trimmed.split(",").map(p => p.trim());
+  if (parts.length >= 2 && !isNaN(Number(parts[0])) && !isNaN(Number(parts[1])))
     return `https://maps.google.com/?q=${parts[0]},${parts[1]}`;
-  }
   return null;
 }
 
-export default function PrintableInvoice({ order, orderItems, isDeliveryInvoice, onClose }: PrintableInvoiceProps) {
-  const formatPrice = (price: string | number | null | undefined) => {
-    if (!price) return "0";
-    return Number(price).toLocaleString("ar-YE");
-  };
+const PAYMENT_LABELS: Record<string, string> = {
+  cash_on_delivery: "الدفع عند الاستلام 💵",
+  digital_wallet: "محفظة إلكترونية",
+  karimi: "الكريمي",
+  najm: "النجم",
+  bank_transfer: "تحويل بنكي",
+};
 
-  const formatDate = (date: string | Date | null | undefined) => {
-    if (!date) return "-";
-    return new Date(date).toLocaleDateString("ar-YE", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+const SHIPPING_LABELS: Record<string, string> = {
+  normal: "شحن عادي (3-5 أيام)",
+  fast: "شحن سريع (1-2 يوم)",
+  free: "شحن مجاني 🎁",
+};
 
-  const paymentMethodLabels: Record<string, string> = {
-    cash_on_delivery: "الدفع عند الاستلام",
-    digital_wallet: "محفظة إلكترونية",
-    karimi: "الكريمي",
-    najm: "النجم",
-  };
+const COLOR_MAP: Record<string, string> = {
+  أبيض: "#FFFFFF", أسود: "#000000", أحمر: "#EF4444", أزرق: "#3B82F6",
+  أخضر: "#22C55E", أصفر: "#EAB308", برتقالي: "#F97316", وردي: "#EC4899",
+  بنفسجي: "#8B5CF6", رمادي: "#6B7280", بني: "#92400E", ذهبي: "#D97706",
+  فضي: "#9CA3AF", شفاف: "transparent", سماوي: "#06B6D4", زهري: "#F472B6",
+  كحلي: "#1E3A8A", بيج: "#D4A574",
+};
 
-  const shippingOptionLabels: Record<string, string> = {
-    normal: "شحن عادي (3-5 أيام)",
-    fast: "شحن سريع (1-2 يوم)",
-    free: "شحن مجاني",
-  };
+function getColorHex(color: string | null | undefined): string {
+  if (!color) return "transparent";
+  if (color.startsWith("#")) return color;
+  return COLOR_MAP[color] || "#888888";
+}
 
+// ─── Customer Invoice ─────────────────────────────────────────────────────────
+function CustomerInvoice({ order, orderItems, settings }: {
+  order: any; orderItems: OrderItem[]; settings: InvoiceSettings;
+}) {
   const currency = order.currency === "SAR" ? "ر.س" : "ر.ي";
+  const currencySar = "ر.س";
+  const currencyYer = "ر.ي";
+
+  const formatPrice = (price: number | string | null | undefined, curr?: string) => {
+    if (!price) return "0";
+    return `${Number(price).toLocaleString("ar-YE")} ${curr || currency}`;
+  };
+
+  const formatDate = (date: any) => {
+    if (!date) return "-";
+    return new Date(date).toLocaleDateString("ar-YE", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  };
+
   const shippingCost = Number(order.shippingCost || 0);
   const subtotalBefore = Number(order.subtotalBeforeDiscount || 0);
   const discountAmount = Number(order.discountAmount || 0);
+  const manualDiscount = Number(settings.manualDiscount || 0);
   const total = Number(order.total || 0);
+  const adjustedTotal = Math.max(0, total - manualDiscount);
   const depositAmount = Number(order.depositAmount || 0);
-  const balanceDue = order.paymentMethod === "cash_on_delivery" ? total - depositAmount : 0;
+  const balanceDue = order.paymentMethod === "cash_on_delivery" ? adjustedTotal - depositAmount : 0;
 
   const alternateRecipient = parseAlternateRecipient(order.notes);
   const cleanNotes = getCleanNotes(order.notes);
   const mapsUrl = getGoogleMapsUrl(order.gpsCoordinates);
 
-  const handlePrint = () => {
-    setTimeout(() => {
-      if (window.print) window.print();
-    }, 100);
+  const trackingNumber = order.trackingNumber;
+  const receiptImageUrl = order.receiptImageUrl;
+
+  const showCols = {
+    images: settings.showProductImages,
+    size: settings.showSize,
+    color: settings.showColor,
   };
+
+  return (
+    <div id="invoice-content" className="p-6 print:p-4 bg-white" dir="rtl">
+
+      {/* ═══ رأس الفاتورة ═══ */}
+      <div className="flex items-start justify-between mb-5 pb-4 border-b-[3px] border-primary">
+        <div className="flex items-center gap-3">
+          <img src={logoImg} alt="أويو بلاست" className="h-16 w-16 rounded-full object-cover border-2 border-primary/20 shadow" />
+          <div>
+            <h1 className="text-xl font-black text-primary leading-tight">أويو بلاست</h1>
+            <p className="text-xs text-gray-500">لطباعة ومستلزمات التغليف البلاستيكي</p>
+            <p className="text-xs text-gray-400">السجل التجاري: 139688</p>
+            <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+              <Phone className="h-3 w-3" />
+              <span dir="ltr">{settings.storePhone || "+967 774 997 589"}</span>
+            </p>
+            {settings.storeAddress && (
+              <p className="text-xs text-gray-400">{settings.storeAddress}</p>
+            )}
+          </div>
+        </div>
+        <div className="text-left bg-primary/5 border border-primary/20 rounded-xl px-4 py-3">
+          <div className="bg-primary text-white text-xs font-bold px-3 py-1 rounded-lg text-center mb-2">
+            فاتورة مشتريات
+          </div>
+          <p className="text-gray-400 text-xs">رقم الفاتورة</p>
+          <p className="font-black text-2xl text-primary leading-tight">#{order.id}</p>
+          <p className="text-gray-400 text-xs mt-1">التاريخ</p>
+          <p className="font-medium text-xs text-gray-600">{formatDate(order.createdAt)}</p>
+        </div>
+      </div>
+
+      {/* ═══ بيانات العميل ═══ */}
+      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-4">
+        <h3 className="font-bold mb-2.5 text-blue-800 flex items-center gap-2 text-sm border-b border-blue-200 pb-2">
+          <User className="h-4 w-4" /> بيانات العميل
+        </h3>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          {order.customerName && (
+            <div className="col-span-2 flex items-center gap-2">
+              <span className="text-gray-500 text-xs">الاسم:</span>
+              <span className="font-bold">{order.customerName}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-1.5">
+            <Phone className="h-3 w-3 text-gray-400" />
+            <span className="font-medium text-sm" dir="ltr">{order.customerPhone || "-"}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 text-xs">المدينة:</span>
+            <span className="font-medium">{order.shippingCity || "-"}</span>
+          </div>
+          {order.shippingAddress && (
+            <div className="col-span-2 flex items-start gap-1.5">
+              <MapPin className="h-3 w-3 text-gray-400 mt-0.5 shrink-0" />
+              <span className="font-medium text-sm">{order.shippingAddress}</span>
+            </div>
+          )}
+          {settings.showGPS && mapsUrl && (
+            <div className="col-span-2 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5 flex items-center gap-2">
+              <MapPin className="h-3.5 w-3.5 text-green-600 shrink-0" />
+              <span className="text-green-700 text-xs font-medium">الموقع:</span>
+              <span className="text-green-600 text-xs font-mono break-all" dir="ltr">{mapsUrl}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ═══ رقم الحوالة / كود الطلب ═══ */}
+      {settings.showTransferCode && trackingNumber && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 mb-4 flex items-center gap-3">
+          <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
+            <FileText className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <p className="text-xs text-indigo-500 font-medium">رقم الحوالة / كود الطلب</p>
+            <p className="font-black text-indigo-800 text-lg tracking-wider" dir="ltr">{trackingNumber}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ صورة الحوالة (إيصال الدفع) ═══ */}
+      {settings.showReceiptImage && receiptImageUrl && (
+        <div className="border border-gray-200 rounded-xl p-3 mb-4">
+          <p className="text-xs text-gray-500 font-medium mb-2 flex items-center gap-1.5">
+            <FileText className="h-3.5 w-3.5" /> إيصال الدفع المرفق من العميل
+          </p>
+          <img
+            src={receiptImageUrl}
+            alt="إيصال الدفع"
+            className="max-h-48 rounded-lg border border-gray-200 object-contain mx-auto block"
+            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
+        </div>
+      )}
+
+      {/* ═══ جدول المنتجات ═══ */}
+      {orderItems.length > 0 && (
+        <div className="mb-4">
+          <h3 className="font-bold mb-2.5 flex items-center gap-2 text-sm border-b pb-2">
+            <Package className="h-4 w-4" /> تفاصيل الطلب
+          </h3>
+          <div className="overflow-hidden rounded-xl border border-gray-200">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-100 border-b">
+                  <th className="text-right py-2 px-2 font-semibold text-gray-600">#</th>
+                  {showCols.images && <th className="py-2 px-1"></th>}
+                  <th className="text-right py-2 px-2 font-semibold text-gray-600">المنتج</th>
+                  {showCols.size && <th className="text-center py-2 px-1 font-semibold text-gray-600">المقاس</th>}
+                  {showCols.color && <th className="text-center py-2 px-1 font-semibold text-gray-600">اللون</th>}
+                  <th className="text-center py-2 px-1 font-semibold text-gray-600">الكمية</th>
+                  <th className="text-left py-2 px-2 font-semibold text-gray-600">سعر الوحدة</th>
+                  <th className="text-left py-2 px-2 font-semibold text-gray-600">الإجمالي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderItems.map((item, i) => {
+                  const itemTotal = Number(item.price) * item.quantity;
+                  const colorHex = getColorHex(item.selectedColor);
+                  return (
+                    <tr key={item.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                      <td className="py-2.5 px-2 text-gray-400">{i + 1}</td>
+                      {showCols.images && (
+                        <td className="py-2.5 px-1">
+                          {item.productId ? (
+                            <img
+                              src={`/api/products/image/${item.productId}`}
+                              alt={item.productName || ""}
+                              className="w-9 h-9 rounded-lg object-cover border border-gray-200 shrink-0"
+                              onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                            />
+                          ) : <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center"><Package className="w-4 h-4 text-gray-300" /></div>}
+                        </td>
+                      )}
+                      <td className="py-2.5 px-2">
+                        <p className="font-semibold text-gray-800 leading-tight">{item.productName || `منتج #${item.productId}`}</p>
+                        {item.customPrinting && (
+                          <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">طباعة مخصصة</span>
+                        )}
+                        {item.designNotes && (
+                          <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[120px]">{item.designNotes}</p>
+                        )}
+                      </td>
+                      {showCols.size && (
+                        <td className="text-center py-2.5 px-1">
+                          {item.selectedSize
+                            ? <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded-full text-xs font-medium">{item.selectedSize}</span>
+                            : <span className="text-gray-300">—</span>}
+                        </td>
+                      )}
+                      {showCols.color && (
+                        <td className="text-center py-2.5 px-1">
+                          {item.selectedColor ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <div
+                                className="w-4 h-4 rounded-full border border-gray-300 shrink-0"
+                                style={{ backgroundColor: colorHex }}
+                              />
+                              {!item.selectedColor.startsWith("#") && (
+                                <span className="text-xs">{item.selectedColor}</span>
+                              )}
+                            </div>
+                          ) : <span className="text-gray-300">—</span>}
+                        </td>
+                      )}
+                      <td className="text-center py-2.5 px-1 font-bold text-base">{item.quantity}</td>
+                      <td className="text-left py-2.5 px-2 text-gray-600">{formatPrice(item.price)}</td>
+                      <td className="text-left py-2.5 px-2 font-bold text-primary">{formatPrice(itemTotal)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ ملخص المبالغ ═══ */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        {/* الدفع والشحن */}
+        {settings.showShipping && (
+          <div className="bg-gray-50 border rounded-xl p-3">
+            <h4 className="font-bold text-gray-700 text-xs mb-2 border-b pb-1.5">طريقة الدفع والشحن</h4>
+            <div className="space-y-1.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-gray-500">الدفع:</span>
+                <span className="font-semibold">{PAYMENT_LABELS[order.paymentMethod || ""] || order.paymentMethod || "—"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">الشحن:</span>
+                <span className="font-semibold">{SHIPPING_LABELS[order.shippingOption || ""] || order.shippingOption || "—"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">رسوم الشحن:</span>
+                <span className={`font-bold ${shippingCost === 0 ? "text-green-600" : ""}`}>
+                  {shippingCost === 0 ? "مجاني 🎁" : formatPrice(shippingCost)}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* الإجمالي */}
+        <div className="bg-gray-50 border rounded-xl p-3">
+          <h4 className="font-bold text-gray-700 text-xs mb-2 border-b pb-1.5">ملخص المبالغ</h4>
+          <div className="space-y-1.5 text-xs">
+            {settings.showDiscount && subtotalBefore > 0 && discountAmount > 0 && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">قبل الخصم:</span>
+                  <span className="line-through text-gray-400">{formatPrice(subtotalBefore)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">خصم الكوبون:</span>
+                  <span className="text-green-600 font-semibold">- {formatPrice(discountAmount)}</span>
+                </div>
+              </>
+            )}
+            {manualDiscount > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">{settings.manualDiscountLabel || "خصم إضافي"}:</span>
+                <span className="text-green-600 font-semibold">- {formatPrice(manualDiscount)}</span>
+              </div>
+            )}
+            {depositAmount > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">العربون:</span>
+                <span className="font-semibold text-blue-600">{formatPrice(depositAmount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between pt-1.5 border-t font-bold text-sm">
+              <span>الإجمالي النهائي:</span>
+              <span className="text-primary text-base">{formatPrice(adjustedTotal)}</span>
+            </div>
+            {settings.currency === "both" && order.currency !== "SAR" && (
+              <div className="text-center text-xs text-gray-400 border-t pt-1">
+                ≈ {(adjustedTotal / 530).toFixed(2)} {currencySar}
+              </div>
+            )}
+            {balanceDue > 0 && (
+              <div className="flex justify-between bg-orange-50 border border-orange-200 rounded-lg px-2 py-1.5 mt-1">
+                <span className="text-orange-700 font-bold text-xs">المبلغ عند الاستلام:</span>
+                <span className="font-black text-orange-700">{formatPrice(balanceDue)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ المستلم البديل ═══ */}
+      {alternateRecipient && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+          <h4 className="font-bold text-amber-800 text-xs mb-2 border-b border-amber-200 pb-1.5 flex items-center gap-1.5">
+            <User className="h-3.5 w-3.5" /> المستلم البديل
+          </h4>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div><span className="text-gray-500">الاسم: </span><span className="font-bold">{alternateRecipient.name}</span></div>
+            <div><span className="text-gray-500">الجوال: </span><span dir="ltr">{alternateRecipient.phone}</span></div>
+            {alternateRecipient.city && <div><span className="text-gray-500">المدينة: </span><span>{alternateRecipient.city}</span></div>}
+            {alternateRecipient.address && <div className="col-span-2"><span className="text-gray-500">العنوان: </span><span>{alternateRecipient.address}</span></div>}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ ملاحظات العميل ═══ */}
+      {settings.showCustomerNotes && cleanNotes && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 mb-4">
+          <h4 className="font-bold text-yellow-800 text-xs mb-1.5">ملاحظات العميل</h4>
+          <p className="text-xs text-yellow-700 whitespace-pre-wrap">{cleanNotes}</p>
+        </div>
+      )}
+
+      {/* ═══ ملاحظة إدارية ═══ */}
+      {settings.showAdminNote && settings.adminNote && (
+        <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 mb-4">
+          <h4 className="font-bold text-purple-800 text-xs mb-1.5">ملاحظة إدارية</h4>
+          <p className="text-xs text-purple-700 whitespace-pre-wrap">{settings.adminNote}</p>
+        </div>
+      )}
+
+      {/* ═══ التذييل ═══ */}
+      <div className="text-center text-xs text-gray-400 pt-3 border-t mt-2">
+        <p className="font-semibold text-gray-600 text-sm">{settings.footerText || "شكراً لثقتكم بنا"}</p>
+        <p className="mt-0.5">أويو بلاست — لطباعة ومستلزمات التغليف</p>
+        <p className="mt-0.5">معتصم محمد احمد الاهدل | هاتف: <span dir="ltr">{settings.storePhone}</span></p>
+        {settings.storeAddress && <p>{settings.storeAddress}</p>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Delivery Invoice ─────────────────────────────────────────────────────────
+function DeliveryInvoice({ order, orderItems, settings }: {
+  order: any; orderItems: OrderItem[]; settings: InvoiceSettings;
+}) {
+  const currency = order.currency === "SAR" ? "ر.س" : "ر.ي";
+  const total = Number(order.total || 0);
+  const manualDiscount = Number(settings.manualDiscount || 0);
+  const adjustedTotal = Math.max(0, total - manualDiscount);
+  const mapsUrl = getGoogleMapsUrl(order.gpsCoordinates);
+  const alternateRecipient = parseAlternateRecipient(order.notes);
+  const cleanNotes = getCleanNotes(order.notes);
+  const trackingNumber = order.trackingNumber;
+  const isCOD = order.paymentMethod === "cash_on_delivery";
+  const depositAmount = Number(order.depositAmount || 0);
+  const balanceDue = isCOD ? adjustedTotal - depositAmount : 0;
+
+  const formatDate = (date: any) => {
+    if (!date) return "-";
+    return new Date(date).toLocaleDateString("ar-YE", { year: "numeric", month: "long", day: "numeric" });
+  };
+
+  return (
+    <div id="invoice-content" className="p-5 print:p-4 bg-white" dir="rtl">
+
+      {/* رأس */}
+      <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-dashed border-gray-400">
+        <div className="flex items-center gap-2">
+          <img src={logoImg} alt="أويو بلاست" className="h-12 w-12 rounded-full object-cover border border-gray-200" />
+          <div>
+            <p className="font-black text-primary text-base leading-tight">أويو بلاست</p>
+            <p className="text-xs text-gray-500" dir="ltr">{settings.storePhone}</p>
+          </div>
+        </div>
+        <div className="text-left">
+          <div className="bg-primary text-white px-3 py-1 rounded-lg font-bold text-sm flex items-center gap-1.5">
+            <Truck className="w-4 h-4" />
+            بوليصة توصيل
+          </div>
+          <p className="font-black text-xl text-primary mt-1">#{order.id}</p>
+          <p className="text-xs text-gray-500">{formatDate(order.createdAt)}</p>
+        </div>
+      </div>
+
+      {/* ═══ المبلغ المطلوب تحصيله (أبرز شيء) ═══ */}
+      {isCOD && (
+        <div className="bg-orange-500 text-white rounded-2xl p-4 mb-4 text-center shadow-lg">
+          <p className="text-sm font-semibold opacity-90 mb-1">💵 المبلغ المطلوب تحصيله</p>
+          <p className="text-4xl font-black tracking-wide">
+            {balanceDue.toLocaleString("ar-YE")} <span className="text-2xl">{currency}</span>
+          </p>
+          {depositAmount > 0 && (
+            <p className="text-xs opacity-80 mt-1">تم دفع عربون {depositAmount.toLocaleString()} {currency} مسبقاً</p>
+          )}
+        </div>
+      )}
+
+      {/* ═══ بيانات العميل / التوصيل ═══ */}
+      <div className="border-2 border-gray-300 rounded-xl p-4 mb-4">
+        <h3 className="font-bold text-gray-700 text-sm mb-2 flex items-center gap-1.5">
+          <MapPin className="w-4 h-4 text-primary" /> عنوان التوصيل
+        </h3>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500 text-sm w-16 shrink-0">الاسم:</span>
+            <span className="font-bold text-base">{(alternateRecipient ? alternateRecipient.name : order.customerName) || "—"}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Phone className="w-4 h-4 text-gray-400 shrink-0" />
+            <span className="font-bold text-base" dir="ltr">
+              {alternateRecipient ? alternateRecipient.phone : (order.customerPhone || "—")}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500 text-sm w-16 shrink-0">المدينة:</span>
+            <span className="font-semibold">{alternateRecipient ? alternateRecipient.city : (order.shippingCity || "—")}</span>
+          </div>
+          {(order.shippingAddress || (alternateRecipient?.address)) && (
+            <div className="flex items-start gap-2">
+              <MapPin className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+              <span className="font-semibold">{alternateRecipient ? alternateRecipient.address : order.shippingAddress}</span>
+            </div>
+          )}
+          {settings.showGPS && mapsUrl && (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-1.5 text-xs">
+              <span className="text-green-700 font-medium">📍 الموقع: </span>
+              <span className="text-green-600 font-mono break-all" dir="ltr">{mapsUrl}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* رقم الحوالة */}
+      {settings.showTransferCode && trackingNumber && (
+        <div className="border border-indigo-200 rounded-xl p-3 mb-4 flex items-center gap-3 bg-indigo-50">
+          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
+            <FileText className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <p className="text-xs text-indigo-500">رقم الحوالة / كود الطلب</p>
+            <p className="font-black text-indigo-800 text-lg" dir="ltr">{trackingNumber}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ المنتجات (مختصر) ═══ */}
+      {orderItems.length > 0 && (
+        <div className="mb-4">
+          <h4 className="font-bold text-sm mb-2 flex items-center gap-1.5 text-gray-700 border-b pb-1.5">
+            <Package className="w-4 h-4" /> المنتجات ({orderItems.length})
+          </h4>
+          <div className="space-y-2">
+            {orderItems.map((item, i) => (
+              <div key={item.id} className="flex items-center gap-2 py-2 border-b border-dashed border-gray-200 last:border-0">
+                {settings.deliveryInvoiceShowImages && item.productId && (
+                  <img
+                    src={`/api/products/image/${item.productId}`}
+                    alt=""
+                    className="w-10 h-10 rounded-lg object-cover border border-gray-200 shrink-0"
+                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm truncate">{item.productName || `منتج #${item.productId}`}</p>
+                  <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                    {item.selectedSize && <span className="bg-gray-100 px-1.5 rounded">{item.selectedSize}</span>}
+                    {item.selectedColor && (
+                      <span className="flex items-center gap-1">
+                        <span className="w-3 h-3 rounded-full border border-gray-300 inline-block" style={{ backgroundColor: getColorHex(item.selectedColor) }} />
+                        {!item.selectedColor.startsWith("#") && item.selectedColor}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-left shrink-0">
+                  <p className="font-bold">× {item.quantity}</p>
+                  {settings.deliveryInvoiceShowPrices && (
+                    <p className="text-xs text-gray-500">{(Number(item.price) * item.quantity).toLocaleString()} {currency}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* الملاحظات */}
+      {settings.showCustomerNotes && cleanNotes && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 mb-4">
+          <p className="text-xs text-yellow-700 font-medium mb-1">📝 ملاحظات</p>
+          <p className="text-sm text-yellow-800 whitespace-pre-wrap">{cleanNotes}</p>
+        </div>
+      )}
+
+      {/* ملاحظة إدارية */}
+      {settings.showAdminNote && settings.adminNote && (
+        <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 mb-4">
+          <p className="text-xs text-purple-600 font-medium mb-1">ملاحظة للمندوب</p>
+          <p className="text-sm text-purple-800 whitespace-pre-wrap">{settings.adminNote}</p>
+        </div>
+      )}
+
+      {/* ═══ توقيعات ═══ */}
+      <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 mb-3">
+        <p className="font-bold text-center text-gray-600 text-sm mb-4 border-b pb-2">إقرار الاستلام والتسليم</p>
+        <div className="grid grid-cols-2 gap-6">
+          {["المستلم", "مندوب التوصيل"].map(label => (
+            <div key={label} className="space-y-3">
+              <p className="text-xs font-semibold text-center text-gray-500">{label}</p>
+              <div>
+                <p className="text-xs text-gray-400 mb-1">الاسم:</p>
+                <div className="border-b-2 border-gray-300 min-h-[22px]" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-1">التوقيع:</p>
+                <div className="border-b-2 border-gray-300 min-h-[36px]" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-3 mt-3 border-t pt-3">
+          <span className="text-xs font-semibold text-gray-600 shrink-0">تاريخ التسليم:</span>
+          <div className="border-b-2 border-gray-300 flex-1 min-h-[20px]" />
+          <span className="text-xs font-semibold text-gray-600 shrink-0">الوقت:</span>
+          <div className="border-b-2 border-gray-300 w-20 min-h-[20px]" />
+        </div>
+      </div>
+
+      {/* التذييل */}
+      <p className="text-center text-xs text-gray-400 mt-2">
+        أويو بلاست | <span dir="ltr">{settings.storePhone}</span>
+      </p>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+export default function PrintableInvoice({
+  order,
+  orderItems = [],
+  isDeliveryInvoice = false,
+  onClose,
+  adminToken,
+  overrideSettings,
+}: PrintableInvoiceProps) {
+
+  const { data: savedSettings } = useQuery<Partial<InvoiceSettings>>({
+    queryKey: ["/api/invoice-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/invoice-settings");
+      if (!res.ok) return {};
+      return res.json();
+    },
+    staleTime: 30000,
+  });
+
+  const settings: InvoiceSettings = {
+    ...DEFAULT_INVOICE_SETTINGS,
+    ...(savedSettings || {}),
+    ...(overrideSettings || {}),
+  };
+
+  const handlePrint = () => setTimeout(() => window.print(), 100);
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center p-4 overflow-auto">
       <div className="bg-white max-w-2xl w-full rounded-xl shadow-2xl print:shadow-none print:rounded-none print:max-w-none print:w-full my-4 print:my-0">
 
-        {/* شريط الأزرار - يُخفى عند الطباعة */}
-        <div className="p-4 border-b flex items-center justify-between print:hidden bg-gray-50 rounded-t-xl">
-          <h2 className="text-lg font-bold text-primary">
-            {isDeliveryInvoice ? "فاتورة التوصيل" : "فاتورة الشراء"}
+        {/* شريط الأزرار */}
+        <div className="p-4 border-b flex items-center justify-between print:hidden bg-gray-50 rounded-t-xl gap-2">
+          <h2 className="text-base font-bold text-primary flex items-center gap-2">
+            {isDeliveryInvoice ? <Truck className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+            {isDeliveryInvoice ? "بوليصة توصيل" : "فاتورة العميل"}
+            <span className="text-gray-400 text-sm font-normal">#{order.id}</span>
           </h2>
           <div className="flex gap-2">
-            <Button onClick={handlePrint} className="gap-2" data-testid="button-print-invoice">
+            <Button onClick={handlePrint} className="gap-2" size="sm" data-testid="button-print-invoice">
               <Printer className="h-4 w-4" />
               طباعة
             </Button>
@@ -137,319 +706,30 @@ export default function PrintableInvoice({ order, orderItems, isDeliveryInvoice,
           </div>
         </div>
 
-        {/* محتوى الفاتورة */}
-        <div id="invoice-content" className="p-6 print:p-5" dir="rtl">
-
-          {/* ═══ رأس الفاتورة ═══ */}
-          <div className="flex items-start justify-between mb-6 pb-5 border-b-2 border-primary">
-            <div className="flex items-center gap-4">
-              <img src={logoImg} alt="أويو بلاست" className="h-16 w-16 rounded-full object-cover border-2 border-primary/20" />
-              <div>
-                <h1 className="text-2xl font-black text-primary">أويو بلاست</h1>
-                <p className="text-sm text-gray-600">لطباعة ومستلزمات التغليف البلاستيكي</p>
-                <p className="text-xs text-gray-500">السجل التجاري: 139688</p>
-                <div className="flex items-center gap-1 mt-0.5">
-                  <Phone className="h-3 w-3 text-gray-400" />
-                  <span className="text-xs text-gray-500" dir="ltr">+967 774 997 589</span>
-                </div>
-              </div>
-            </div>
-            <div className="text-left">
-              <div className={`px-4 py-2 rounded-lg text-center ${isDeliveryInvoice ? "bg-primary text-white" : "bg-gray-100"}`}>
-                <p className="font-bold text-sm">{isDeliveryInvoice ? "فاتورة توصيل" : "فاتورة مشتريات"}</p>
-              </div>
-              <p className="text-gray-500 text-xs mt-2 text-left">رقم الفاتورة</p>
-              <p className="font-black text-xl text-primary text-left">#{order.id}</p>
-              <p className="text-gray-500 text-xs mt-1 text-left">التاريخ والوقت</p>
-              <p className="font-medium text-xs text-left">{formatDate(order.createdAt)}</p>
-            </div>
-          </div>
-
-          {/* ═══ بيانات العميل ═══ */}
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-5">
-            <h3 className="font-bold mb-3 text-blue-800 flex items-center gap-2 border-b border-blue-200 pb-2">
-              <User className="h-4 w-4" />
-              بيانات العميل
-            </h3>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              {order.customerName && (
-                <div className="col-span-2 flex items-center gap-2">
-                  <span className="text-gray-500 shrink-0">الاسم:</span>
-                  <span className="font-bold text-gray-800">{order.customerName}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <Phone className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                <span className="font-medium" dir="ltr">{order.customerPhone || "-"}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-gray-500 shrink-0">المدينة:</span>
-                <span className="font-medium">{order.shippingCity || "-"}</span>
-              </div>
-              {order.shippingAddress && (
-                <div className="col-span-2 flex items-start gap-2">
-                  <MapPin className="h-3.5 w-3.5 text-gray-400 shrink-0 mt-0.5" />
-                  <span className="font-medium">{order.shippingAddress}</span>
-                </div>
-              )}
-              {mapsUrl && (
-                <div className="col-span-2 flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
-                  <MapPin className="h-4 w-4 text-green-600 shrink-0" />
-                  <span className="text-green-700 text-xs font-medium">موقع العميل على الخريطة:</span>
-                  <span className="text-green-600 text-xs font-mono break-all" dir="ltr">{mapsUrl}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ═══ ملخص الطلب - المنتجات ═══ */}
-          {orderItems && orderItems.length > 0 && (
-            <div className="mb-5">
-              <h3 className="font-bold mb-3 text-gray-800 flex items-center gap-2 border-b pb-2">
-                <Package className="h-4 w-4" />
-                ملخص الطلب
-              </h3>
-              <div className="overflow-hidden rounded-xl border border-gray-200">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-100 border-b">
-                      <th className="text-right py-2.5 px-3 font-semibold text-gray-600">#</th>
-                      <th className="text-right py-2.5 px-3 font-semibold text-gray-600">المنتج</th>
-                      <th className="text-center py-2.5 px-2 font-semibold text-gray-600">المقاس</th>
-                      <th className="text-center py-2.5 px-2 font-semibold text-gray-600">اللون</th>
-                      <th className="text-center py-2.5 px-2 font-semibold text-gray-600">الكمية</th>
-                      <th className="text-left py-2.5 px-3 font-semibold text-gray-600">السعر</th>
-                      <th className="text-left py-2.5 px-3 font-semibold text-gray-600">الإجمالي</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orderItems.map((item, index) => (
-                      <tr key={item.id} className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                        <td className="py-3 px-3 text-gray-500">{index + 1}</td>
-                        <td className="py-3 px-3">
-                          <div className="flex items-center gap-2">
-                            {item.productId && (
-                              <img
-                                src={`/api/products/image/${item.productId}`}
-                                alt={item.productName || ""}
-                                className="w-10 h-10 rounded-lg object-cover border border-gray-200 shrink-0 print:w-8 print:h-8"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                              />
-                            )}
-                            <div>
-                              <p className="font-medium text-gray-800">{item.productName || `منتج #${item.productId}`}</p>
-                              {item.customPrinting && (
-                                <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">طباعة مخصصة</span>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="text-center py-3 px-2">
-                          {item.selectedSize ? (
-                            <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs font-medium">{item.selectedSize}</span>
-                          ) : <span className="text-gray-400">-</span>}
-                        </td>
-                        <td className="text-center py-3 px-2">
-                          {item.selectedColor ? (
-                            <div className="flex items-center justify-center gap-1">
-                              <div
-                                className="w-4 h-4 rounded-full border border-gray-300 shrink-0"
-                                style={{ backgroundColor: item.selectedColor.startsWith("#") ? item.selectedColor : "transparent" }}
-                              />
-                              <span className="text-xs">{item.selectedColor.startsWith("#") ? "" : item.selectedColor}</span>
-                            </div>
-                          ) : <span className="text-gray-400">-</span>}
-                        </td>
-                        <td className="text-center py-3 px-2 font-bold">{item.quantity}</td>
-                        <td className="text-left py-3 px-3 text-gray-600">{formatPrice(item.price)} {currency}</td>
-                        <td className="text-left py-3 px-3 font-bold text-primary">
-                          {formatPrice(Number(item.price) * item.quantity)} {currency}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ═══ ملخص المبالغ والدفع والشحن ═══ */}
-          <div className="grid grid-cols-2 gap-4 mb-5">
-            {/* الدفع والشحن */}
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-              <h3 className="font-bold mb-3 text-gray-700 border-b pb-2 text-sm">الدفع والشحن</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-500">طريقة الدفع:</span>
-                  <span className="font-semibold">
-                    {paymentMethodLabels[order.paymentMethod || ""] || order.paymentMethod || "-"}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-500">طريقة الشحن:</span>
-                  <span className="font-semibold">
-                    {order.shippingOption ? (shippingOptionLabels[order.shippingOption] || order.shippingOption) : "-"}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-500">رسوم الشحن:</span>
-                  <span className={`font-semibold ${shippingCost === 0 ? "text-green-600" : ""}`}>
-                    {shippingCost === 0 ? "مجاني ✓" : `${formatPrice(shippingCost)} ${currency}`}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* إجمالي المبالغ */}
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-              <h3 className="font-bold mb-3 text-gray-700 border-b pb-2 text-sm">الإجمالي</h3>
-              <div className="space-y-2 text-sm">
-                {subtotalBefore > 0 && discountAmount > 0 && (
-                  <>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-500">السعر قبل الخصم:</span>
-                      <span className="line-through text-gray-400">{formatPrice(subtotalBefore)} {currency}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-500">الخصم:</span>
-                      <span className="text-green-600 font-semibold">- {formatPrice(discountAmount)} {currency}</span>
-                    </div>
-                  </>
-                )}
-                {depositAmount > 0 && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500">العربون المدفوع:</span>
-                    <span className="font-semibold text-blue-600">{formatPrice(depositAmount)} {currency}</span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center pt-2 border-t mt-2">
-                  <span className="font-bold text-base">الإجمالي الكلي:</span>
-                  <span className="font-black text-lg text-primary">{formatPrice(total)} {currency}</span>
-                </div>
-                {balanceDue > 0 && (
-                  <div className="flex justify-between items-center bg-orange-50 border border-orange-200 rounded-lg px-2 py-1.5 mt-1">
-                    <span className="text-orange-700 font-semibold text-xs">المبلغ عند التوصيل:</span>
-                    <span className="font-black text-orange-700">{formatPrice(balanceDue)} {currency}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* ═══ بيانات المستلم البديل ═══ */}
-          {alternateRecipient && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
-              <h3 className="font-bold mb-3 text-amber-800 border-b border-amber-300 pb-2 flex items-center gap-2">
-                <User className="h-4 w-4" />
-                تفاصيل المستلم البديل
-              </h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500 shrink-0">اسم المستلم:</span>
-                  <span className="font-bold text-gray-800">{alternateRecipient.name}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                  <span className="font-medium" dir="ltr">{alternateRecipient.phone || "-"}</span>
-                </div>
-                {alternateRecipient.neighborhood && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500 shrink-0">الحي:</span>
-                    <span className="font-medium">{alternateRecipient.neighborhood}</span>
-                  </div>
-                )}
-                {alternateRecipient.city && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500 shrink-0">المدينة/المحل:</span>
-                    <span className="font-medium">{alternateRecipient.city}</span>
-                  </div>
-                )}
-                {alternateRecipient.address && (
-                  <div className="col-span-2 flex items-start gap-2">
-                    <MapPin className="h-3.5 w-3.5 text-gray-400 shrink-0 mt-0.5" />
-                    <span className="font-medium">{alternateRecipient.address}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ملاحظات (بدون المستلم البديل) */}
-          {cleanNotes && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-5">
-              <h3 className="font-bold mb-2 text-yellow-800 text-sm">ملاحظات العميل</h3>
-              <p className="text-sm text-yellow-700 whitespace-pre-wrap">{cleanNotes}</p>
-            </div>
-          )}
-
-          {/* ═══ قسم التسليم والتوقيعات ═══ */}
-          {isDeliveryInvoice && (
-            <div className="border-2 border-dashed border-gray-300 rounded-xl p-5 mb-5">
-              <h3 className="font-bold mb-4 text-gray-700 text-center border-b pb-3">إقرار الاستلام والتسليم</h3>
-
-              <div className="grid grid-cols-2 gap-6 mb-5">
-                {/* المستلم */}
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold text-gray-600 text-center">المستلم</p>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">الاسم:</p>
-                    <div className="border-b-2 border-gray-300 pb-1 min-h-[24px]"></div>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">التوقيع:</p>
-                    <div className="border-b-2 border-gray-300 pb-1 min-h-[40px]"></div>
-                  </div>
-                </div>
-
-                {/* المندوب */}
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold text-gray-600 text-center">مندوب التوصيل</p>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">الاسم:</p>
-                    <div className="border-b-2 border-gray-300 pb-1 min-h-[24px]"></div>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">التوقيع:</p>
-                    <div className="border-b-2 border-gray-300 pb-1 min-h-[40px]"></div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 border-t pt-3 mt-2">
-                <span className="text-sm font-semibold text-gray-600 shrink-0">تاريخ التسليم:</span>
-                <div className="border-b-2 border-gray-300 flex-1 min-h-[24px]"></div>
-                <span className="text-sm font-semibold text-gray-600 shrink-0">الوقت:</span>
-                <div className="border-b-2 border-gray-300 w-24 min-h-[24px]"></div>
-              </div>
-            </div>
-          )}
-
-          {/* ═══ تذييل الفاتورة ═══ */}
-          <div className="text-center text-xs text-gray-400 pt-4 border-t">
-            <p className="font-semibold text-gray-600">شكراً لثقتكم بنا</p>
-            <p>أويو بلاست — لطباعة ومستلزمات التغليف البلاستيكي</p>
-            <p>معتصم محمد احمد الاهدل &nbsp;|&nbsp; هاتف: <span dir="ltr">+967 774 997 589</span></p>
-          </div>
-        </div>
+        {/* المحتوى */}
+        {isDeliveryInvoice
+          ? <DeliveryInvoice order={order} orderItems={orderItems} settings={settings} />
+          : <CustomerInvoice order={order} orderItems={orderItems} settings={settings} />
+        }
       </div>
 
       <style>{`
         @media print {
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body, html { background: white; width: 100%; height: 100%; }
-          body * { visibility: hidden; }
-          #invoice-content, #invoice-content * { visibility: visible !important; }
+          * { margin:0; padding:0; box-sizing:border-box; }
+          body, html { background:white; width:100%; }
+          body * { visibility:hidden; }
+          #invoice-content, #invoice-content * { visibility:visible !important; }
           #invoice-content {
-            position: absolute; left: 0; top: 0; right: 0;
-            width: 100%; background: white; padding: 12px; margin: 0;
+            position:absolute; left:0; top:0; right:0;
+            width:100%; background:white; padding:12px; margin:0;
           }
-          .print\\:hidden { display: none !important; }
-          table { width: 100%; border-collapse: collapse; }
-          td, th { border: 1px solid #ddd; padding: 6px 8px; }
-          img { max-width: 32px !important; max-height: 32px !important; }
-          .no-print { display: none !important; }
+          .print\\:hidden { display:none !important; }
+          table { width:100%; border-collapse:collapse; }
+          td, th { border:1px solid #e5e7eb; padding:5px 7px; }
+          img { max-width:36px !important; max-height:36px !important; }
+          button { display:none !important; }
         }
-        @page { margin: 0.8cm; size: A4; }
+        @page { margin:0.8cm; size:A4; }
       `}</style>
     </div>
   );

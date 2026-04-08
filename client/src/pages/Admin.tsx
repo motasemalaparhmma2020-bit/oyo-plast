@@ -48,7 +48,8 @@ import {
   RefreshCcw,
   Percent,
   Sparkles,
-  Banknote
+  Banknote,
+  FileText
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
@@ -57,6 +58,7 @@ import { ImageDimensionsManager } from "@/components/ImageDimensionsManager";
 import { AdminNav } from "@/components/AdminNav";
 import { LoginManagementSection } from "@/components/LoginManagementSection";
 import TeamManagement from "@/components/TeamManagement";
+import InvoiceSettingsSection from "@/components/InvoiceSettings";
 import { compressImage, formatFileSize } from "@/lib/imageCompression";
 
 const statusMap: Record<string, { label: string; color: string; icon: any }> = {
@@ -3242,7 +3244,9 @@ export default function Admin() {
     });
   };
 
-  const handlePrintDeliveryInvoice = async (order: Order) => {
+  const [invoiceType, setInvoiceType] = useState<"customer" | "delivery">("delivery");
+
+  const handleOpenInvoice = async (order: Order, type: "customer" | "delivery") => {
     if (!adminToken) return;
     setLoadingItems(true);
     try {
@@ -3257,8 +3261,11 @@ export default function Admin() {
       console.error("Failed to fetch order items:", error);
     }
     setLoadingItems(false);
+    setInvoiceType(type);
     setSelectedOrderForInvoice(order);
   };
+
+  const handlePrintDeliveryInvoice = (order: Order) => handleOpenInvoice(order, "delivery");
 
   useEffect(() => {
     const savedToken = localStorage.getItem("admin_token");
@@ -3920,18 +3927,30 @@ export default function Admin() {
                               <TableCell className="text-sm">{formatDate(order.createdAt)}</TableCell>
                               <TableCell>
                                 <div className="flex gap-2">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => handleOpenInvoice(order, "customer")}
+                                    disabled={loadingItems}
+                                    title="فاتورة العميل"
+                                    data-testid={`button-admin-customer-invoice-${order.id}`}
+                                    className="text-primary hover:text-primary"
+                                  >
+                                    {loadingItems ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                                  </Button>
                                   <Button 
                                     size="icon" 
                                     variant="ghost" 
-                                    onClick={() => handlePrintDeliveryInvoice(order)}
+                                    onClick={() => handleOpenInvoice(order, "delivery")}
                                     disabled={loadingItems}
-                                    title="طباعة فاتورة التوصيل"
+                                    title="بوليصة التوصيل"
                                     data-testid={`button-admin-print-invoice-${order.id}`}
+                                    className="text-orange-500 hover:text-orange-600"
                                   >
                                     {loadingItems ? (
                                       <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
-                                      <Printer className="h-4 w-4" />
+                                      <Truck className="h-4 w-4" />
                                     )}
                                   </Button>
                                   <Dialog>
@@ -5585,6 +5604,11 @@ export default function Admin() {
             <LoginManagementSection adminToken={adminToken} />
           </TabsContent>
 
+          {/* ─── Invoice Settings Tab ──────────────────────────────────── */}
+          <TabsContent value="invoice-settings">
+            <InvoiceSettingsSection adminToken={adminToken} />
+          </TabsContent>
+
           {/* ─── Team Management Tab ───────────────────────────────────── */}
           <TabsContent value="team">
             <TeamManagement adminToken={adminToken} />
@@ -5597,7 +5621,8 @@ export default function Admin() {
         <PrintableInvoice
           order={selectedOrderForInvoice}
           orderItems={orderItems}
-          isDeliveryInvoice={true}
+          isDeliveryInvoice={invoiceType === "delivery"}
+          adminToken={adminToken}
           onClose={() => {
             setSelectedOrderForInvoice(null);
             setOrderItems([]);

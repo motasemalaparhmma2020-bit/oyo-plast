@@ -147,6 +147,46 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Invoice Settings ─────────────────────────────────────────────
+  app.get("/api/admin/invoice-settings", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query("SELECT value FROM settings WHERE key='invoice_settings'");
+      if (result.rows.length) {
+        res.json(JSON.parse(result.rows[0].value));
+      } else {
+        res.json({});
+      }
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب إعدادات الفاتورة" });
+    }
+  });
+
+  app.put("/api/admin/invoice-settings", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const value = JSON.stringify(req.body);
+      await dbPool.query(
+        `INSERT INTO settings (key, value) VALUES ('invoice_settings', $1)
+         ON CONFLICT (key) DO UPDATE SET value=$1`,
+        [value]
+      );
+      res.json(req.body);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حفظ إعدادات الفاتورة" });
+    }
+  });
+
+  // Public invoice settings (for invoice rendering)
+  app.get("/api/invoice-settings", async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query("SELECT value FROM settings WHERE key='invoice_settings'");
+      if (result.rows.length) res.json(JSON.parse(result.rows[0].value));
+      else res.json({});
+    } catch { res.json({}); }
+  });
+
   // ─── Admin Stats ─────────────────────────────────────────────────
   app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
     try {
