@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, numeric, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, numeric, varchar, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -90,6 +90,10 @@ export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").references(() => users.id), // Nullable for guest checkout
   status: text("status").notNull().default("pending"), // pending, deposit_paid, processing, shipped, delivered, completed, cancelled
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  deliveryStatus: text("delivery_status").default("pending"), // pending, picked_up, shipped, delivered, failed
+  paymentStatus: text("payment_status").default("unpaid"), // unpaid, cod_collected, transferred, partial, refunded
+  statusHistory: jsonb("status_history"),
   trackingNumber: text("tracking_number"), // For shipping tracking
   total: numeric("total").notNull(),
   currency: text("currency").default("YER").notNull(), // YER or SAR
@@ -114,6 +118,16 @@ export const orders = pgTable("orders", {
   endCustomerContactId: integer("end_customer_contact_id"), // Reference to end customer if marketer order
   isMarketerOrder: boolean("is_marketer_order").default(false), // Whether this is a marketer order
   preferredDeliveryTime: text("preferred_delivery_time"), // Preferred delivery time slot
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const teamMembers = pgTable("team_members", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id).notNull().unique(),
+  role: text("role").notNull(),
+  title: text("title"),
+  isActive: boolean("is_active").default(true).notNull(),
+  permissions: jsonb("permissions"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

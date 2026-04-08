@@ -36,6 +36,8 @@ export const users = pgTable("users", {
   landmark: varchar("landmark"), // بجوار/أمام/بجانب
   businessType: varchar("business_type"), // نوع النشاط التجاري: مصنع، مطعم، محل تجاري، جهة حكومية، أخرى
   accountType: varchar("account_type").default("customer"), // customer أو marketer
+  role: varchar("role").default("customer"), // owner, product_manager, order_manager, delivery, finance, customer
+  permissions: jsonb("permissions"),
   isPhoneVerified: varchar("is_phone_verified").default("false"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
