@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Edit2, Trash2, Phone, MapPin, Percent, Wallet,
   CheckCircle, XCircle, RefreshCw, Send, DollarSign,
-  TrendingUp, ShoppingBag, Users, ChevronRight
+  TrendingUp, ShoppingBag, Users, ChevronRight, BarChart2, Loader2, Package
 } from "lucide-react";
 
 interface Supplier {
@@ -221,6 +221,144 @@ function SupplierForm({
         </Button>
       </div>
     </div>
+  );
+}
+
+function PerformanceDialog({ supplier, adminToken }: { supplier: Supplier; adminToken: string }) {
+  const [open, setOpen] = useState(false);
+
+  const { data, isLoading } = useQuery<any>({
+    queryKey: ["/api/admin/suppliers", supplier.id, "performance"],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/suppliers/${supplier.id}/performance`, {
+        headers: { "x-admin-token": adminToken },
+      });
+      if (!res.ok) throw new Error("فشل");
+      return res.json();
+    },
+    enabled: open,
+    staleTime: 60000,
+  });
+
+  const fmt = (n: number | string) => Number(n).toLocaleString("ar-YE");
+  const s = data?.stats;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-1" data-testid={`button-performance-${supplier.id}`}>
+          <BarChart2 className="w-3.5 h-3.5" />
+          الأداء
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <BarChart2 className="h-5 w-5 text-primary" />
+            أداء المورد — {supplier.name}
+          </DialogTitle>
+        </DialogHeader>
+        {isLoading ? (
+          <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+        ) : s ? (
+          <div className="space-y-4">
+            {/* إحصائيات رئيسية */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-blue-50 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-blue-700">{s.totalOrders}</p>
+                <p className="text-xs text-gray-500">إجمالي الطلبات</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-green-700">{s.deliveredOrders}</p>
+                <p className="text-xs text-gray-500">مسلَّمة</p>
+              </div>
+              <div className="bg-orange-50 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-orange-600">{s.activeOrders}</p>
+                <p className="text-xs text-gray-500">جارية</p>
+              </div>
+              <div className="bg-red-50 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-red-600">{s.cancelledOrders}</p>
+                <p className="text-xs text-gray-500">ملغاة</p>
+              </div>
+            </div>
+
+            {/* نسبة التسليم */}
+            <div>
+              <div className="flex justify-between mb-1">
+                <span className="text-sm text-gray-600">نسبة التسليم</span>
+                <span className="font-bold text-green-600">{s.deliveryRate}%</span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-3">
+                <div className="h-3 rounded-full bg-green-500" style={{ width: `${s.deliveryRate}%` }} />
+              </div>
+            </div>
+
+            {/* مالية */}
+            <div className="border rounded-lg p-3 space-y-2">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-500">إجمالي المبيعات</span>
+                <span className="font-bold">{fmt(s.totalRevenue)} ر.ي</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-500">مبالغ مدفوعة</span>
+                <span className="font-bold text-green-600">{fmt(s.totalPaid)} ر.ي</span>
+              </div>
+              <div className="flex justify-between border-t pt-2">
+                <span className="text-sm font-medium">مستحق غير مدفوع</span>
+                <span className="font-bold text-orange-600">{fmt(s.pendingPayment)} ر.ي</span>
+              </div>
+            </div>
+
+            {/* أفضل المنتجات */}
+            {data.topProducts?.length > 0 && (
+              <div>
+                <p className="text-sm font-bold mb-2 flex items-center gap-1">
+                  <Package className="h-4 w-4" /> أفضل المنتجات
+                </p>
+                <div className="space-y-1.5">
+                  {data.topProducts.map((p: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{i+1}</span>
+                        <span className="truncate max-w-[160px]">{p.product_name}</span>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <span className="font-medium">{fmt(p.revenue)} ر.ي</span>
+                        <span className="text-gray-400 text-xs mr-1">({p.units} وحدة)</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* شهري */}
+            {data.monthly?.length > 0 && (
+              <div>
+                <p className="text-sm font-bold mb-2">الأداء الشهري (آخر 6 أشهر)</p>
+                <div className="space-y-1.5">
+                  {data.monthly.map((m: any) => {
+                    const maxRev = Math.max(...data.monthly.map((x: any) => Number(x.revenue)), 1);
+                    const w = Math.round((Number(m.revenue) / maxRev) * 100);
+                    return (
+                      <div key={m.month} className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 w-14 flex-shrink-0">{m.month}</span>
+                        <div className="flex-1 bg-gray-100 rounded-full h-2">
+                          <div className="h-2 rounded-full bg-primary" style={{ width: `${w}%` }} />
+                        </div>
+                        <span className="text-xs font-medium flex-shrink-0">{fmt(m.revenue)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-center text-gray-400 py-6">لا توجد بيانات بعد</p>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -436,6 +574,7 @@ export default function SupplierManagement({ adminToken }: SupplierManagementPro
             adminToken={adminToken!}
             onDone={() => { invalidate(); refetch().then(d => { const updated = (d.data as any)?.find((s: Supplier) => s.id === selectedSupplier.id); if (updated) setSelectedSupplier(updated); }); }}
           />
+          <PerformanceDialog supplier={selectedSupplier} adminToken={adminToken!} />
           <Button variant="outline" size="sm" onClick={() => setEditSupplier(selectedSupplier)} className="gap-1">
             <Edit2 className="w-3.5 h-3.5" />
             تعديل

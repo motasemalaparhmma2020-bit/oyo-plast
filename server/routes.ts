@@ -190,6 +190,46 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ─── Suppliers (الموردون/الموزعون) ──────────────────────────────────────────
 
   // دالة إشعار واتساب/SMS للمورد
+  // ─── إشعار العميل عبر واتساب عند تغيير حالة الطلب ────────────────────────────
+  async function notifyCustomerStatus(customerPhone: string, orderId: number, newStatus: string, extra?: { trackingNumber?: string }) {
+    try {
+      const phone = customerPhone.replace(/\s+/g, "").replace(/^00/, "+");
+      if (!phone.startsWith("+")) return;
+
+      const accountSid = process.env.TWILIO_ACCOUNT_SID;
+      const authToken = process.env.TWILIO_AUTH_TOKEN;
+      const fromNumber = process.env.TWILIO_FROM_NUMBER;
+      if (!accountSid || !authToken || !fromNumber) return;
+
+      const trackLink = `https://oyoplast.com/track`;
+
+      const messages: Record<string, string> = {
+        confirmed: `✅ تم تأكيد طلبك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\nسنبدأ تجهيز طلبك قريباً.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
+        preparing:  `⚙️ جاري تجهيز طلبك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\nطلبك قيد التجهيز والتعبئة الآن.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
+        shipped:    `🚚 تم شحن طلبك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\n${extra?.trackingNumber ? `📦 رقم التتبع: ${extra.trackingNumber}\n` : ""}طلبك في الطريق إليك.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
+        delivered:  `🎉 تم تسليم طلبك بنجاح!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\nنتمنى أن ينال طلبك إعجابك.\nشكراً لثقتك بأويو بلاست! 💙\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
+        cancelled:  `❌ تم إلغاء طلبك\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\nللاستفسار تواصل معنا.\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
+      };
+
+      const msg = messages[newStatus];
+      if (!msg) return;
+
+      await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: "Basic " + Buffer.from(`${accountSid}:${authToken}`).toString("base64"),
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({ To: `whatsapp:${phone}`, From: `whatsapp:${fromNumber}`, Body: msg }),
+        }
+      );
+    } catch (e: any) {
+      console.error("Customer notification error:", e.message);
+    }
+  }
+
   async function notifySupplier(supplierId: number, orderId: number, orderData: any) {
     try {
       const { pool: dbPool } = await import("./db");
@@ -431,7 +471,64 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // سجل دفعات مورد
+  // لوحة أداء المورد
+  app.get("/api/admin/suppliers/:id/performance", requireAdmin, async (req, res) => {
+    try {
+      const supplierId = parseInt(req.params.id);
+      const { pool: dbPool } = await import("./db");
+      const stats = await dbPool.query(`
+        SELECT
+          COUNT(*) as total_orders,
+          COUNT(CASE WHEN status='delivered' THEN 1 END) as delivered_orders,
+          COUNT(CASE WHEN status='cancelled' THEN 1 END) as cancelled_orders,
+          COUNT(CASE WHEN status IN ('pending','confirmed','preparing','shipped') THEN 1 END) as active_orders,
+          COALESCE(SUM(total::numeric), 0) as total_revenue,
+          COALESCE(SUM(CASE WHEN status='delivered' THEN supplier_amount::numeric ELSE 0 END), 0) as total_paid,
+          COALESCE(SUM(CASE WHEN status='delivered' THEN supplier_amount::numeric ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN supplier_paid=true THEN supplier_amount::numeric ELSE 0 END), 0) as pending_payment,
+          0 as avg_delivery_days
+        FROM orders WHERE supplier_id=$1
+      `, [supplierId]);
+      
+      const monthly = await dbPool.query(`
+        SELECT TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as month,
+               COUNT(*) as orders,
+               SUM(total::numeric) as revenue
+        FROM orders
+        WHERE supplier_id=$1 AND created_at >= NOW() - INTERVAL '6 months'
+        GROUP BY DATE_TRUNC('month', created_at)
+        ORDER BY DATE_TRUNC('month', created_at)
+      `, [supplierId]);
+
+      const topProducts = await dbPool.query(`
+        SELECT oi.product_name, SUM(oi.quantity) as units, SUM(oi.price::numeric * oi.quantity) as revenue
+        FROM order_items oi
+        JOIN orders o ON oi.order_id=o.id
+        WHERE o.supplier_id=$1
+        GROUP BY oi.product_name
+        ORDER BY revenue DESC LIMIT 5
+      `, [supplierId]);
+
+      const s = stats.rows[0];
+      res.json({
+        stats: {
+          totalOrders: Number(s.total_orders),
+          deliveredOrders: Number(s.delivered_orders),
+          cancelledOrders: Number(s.cancelled_orders),
+          activeOrders: Number(s.active_orders),
+          totalRevenue: Number(s.total_revenue),
+          totalPaid: Number(s.total_paid),
+          pendingPayment: Number(s.pending_payment),
+          avgDeliveryDays: s.avg_delivery_days ? Number(s.avg_delivery_days).toFixed(1) : null,
+          deliveryRate: s.total_orders > 0 ? ((Number(s.delivered_orders) / Number(s.total_orders)) * 100).toFixed(1) : 0,
+        },
+        monthly: monthly.rows,
+        topProducts: topProducts.rows,
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب البيانات", details: e.message });
+    }
+  });
+
   app.get("/api/admin/suppliers/:id/payments", requireAdmin, async (req, res) => {
     try {
       const { pool: dbPool } = await import("./db");
@@ -1446,7 +1543,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { db: dbInstance } = await import("./db");
       const { orders: ordersTable } = await import("@shared/schema");
       const { eq: eqFn } = await import("drizzle-orm");
-      const updateData: any = { status: req.body.status };
+      const newStatus = req.body.status;
+      const updateData: any = { status: newStatus };
       if (req.body.trackingNumber !== undefined) updateData.trackingNumber = req.body.trackingNumber;
       const [order] = await dbInstance
         .update(ordersTable)
@@ -1454,8 +1552,257 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         .where(eqFn(ordersTable.id, parseInt(req.params.id)))
         .returning();
       res.json(order);
+      // إشعار العميل بتغيير الحالة (لا ننتظر)
+      if (order?.customerPhone && newStatus) {
+        notifyCustomerStatus(order.customerPhone, order.id, newStatus, { trackingNumber: order.trackingNumber || undefined });
+      }
+      // منح نقاط الولاء عند تسليم الطلب
+      if (newStatus === "delivered" && order?.userId && order?.total) {
+        awardOrderPoints(order.userId, order.id, Number(order.total));
+      }
     } catch (e: any) {
       res.status(500).json({ message: "فشل تحديث حالة الطلب", details: e.message });
+    }
+  });
+
+  // ─── التقارير المالية ────────────────────────────────────────────────────────────
+  app.get("/api/admin/reports/financial", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+
+      // إجمالي المبيعات وعمولة المنصة
+      const totals = await dbPool.query(`
+        SELECT
+          COALESCE(SUM(total::numeric), 0) as total_revenue,
+          COALESCE(SUM(CASE WHEN supplier_amount IS NOT NULL THEN supplier_amount::numeric ELSE 0 END), 0) as total_supplier,
+          COUNT(*) as total_orders,
+          COUNT(CASE WHEN status='delivered' THEN 1 END) as delivered_orders,
+          COUNT(CASE WHEN status='cancelled' THEN 1 END) as cancelled_orders,
+          COUNT(CASE WHEN DATE(created_at) = CURRENT_DATE THEN 1 END) as today_orders,
+          COALESCE(SUM(CASE WHEN DATE(created_at) = CURRENT_DATE THEN total::numeric ELSE 0 END), 0) as today_revenue
+        FROM orders WHERE status != 'cancelled'
+      `);
+
+      // آخر 30 يوم - مبيعات يومية
+      const daily = await dbPool.query(`
+        SELECT DATE(created_at) as day,
+               SUM(total::numeric) as revenue,
+               COUNT(*) as orders
+        FROM orders
+        WHERE status != 'cancelled' AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY DATE(created_at)
+        ORDER BY day
+      `);
+
+      // آخر 12 شهر - مبيعات شهرية
+      const monthly = await dbPool.query(`
+        SELECT TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as month,
+               SUM(total::numeric) as revenue,
+               COUNT(*) as orders
+        FROM orders
+        WHERE status != 'cancelled' AND created_at >= NOW() - INTERVAL '12 months'
+        GROUP BY DATE_TRUNC('month', created_at)
+        ORDER BY DATE_TRUNC('month', created_at)
+      `);
+
+      // أفضل المنتجات مبيعاً
+      const topProducts = await dbPool.query(`
+        SELECT oi.product_name, oi.product_id,
+               SUM(oi.price::numeric * oi.quantity) as revenue,
+               SUM(oi.quantity) as units_sold
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        WHERE o.status != 'cancelled'
+        GROUP BY oi.product_name, oi.product_id
+        ORDER BY revenue DESC
+        LIMIT 10
+      `);
+
+      // أفضل المدن
+      const topCities = await dbPool.query(`
+        SELECT shipping_city as city,
+               COUNT(*) as orders,
+               SUM(total::numeric) as revenue
+        FROM orders
+        WHERE status != 'cancelled' AND shipping_city IS NOT NULL
+        GROUP BY shipping_city
+        ORDER BY orders DESC
+        LIMIT 10
+      `);
+
+      // الشهر الحالي vs الشهر الماضي
+      const comparison = await dbPool.query(`
+        SELECT
+          COALESCE(SUM(CASE WHEN DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE) THEN total::numeric END), 0) as this_month,
+          COALESCE(SUM(CASE WHEN DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' THEN total::numeric END), 0) as last_month,
+          COUNT(CASE WHEN DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE) THEN 1 END) as this_month_orders,
+          COUNT(CASE WHEN DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' THEN 1 END) as last_month_orders
+        FROM orders WHERE status != 'cancelled'
+      `);
+
+      const t = totals.rows[0];
+      res.json({
+        summary: {
+          totalRevenue: Number(t.total_revenue),
+          totalSupplierPaid: Number(t.total_supplier),
+          platformCommission: Number(t.total_revenue) - Number(t.total_supplier),
+          totalOrders: Number(t.total_orders),
+          deliveredOrders: Number(t.delivered_orders),
+          cancelledOrders: Number(t.cancelled_orders),
+          todayOrders: Number(t.today_orders),
+          todayRevenue: Number(t.today_revenue),
+        },
+        daily: daily.rows.map(r => ({ day: r.day, revenue: Number(r.revenue), orders: Number(r.orders) })),
+        monthly: monthly.rows.map(r => ({ month: r.month, revenue: Number(r.revenue), orders: Number(r.orders) })),
+        topProducts: topProducts.rows.map(r => ({ name: r.product_name, revenue: Number(r.revenue), units: Number(r.units_sold) })),
+        topCities: topCities.rows.map(r => ({ city: r.city, orders: Number(r.orders), revenue: Number(r.revenue) })),
+        comparison: comparison.rows[0],
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب التقارير", details: e.message });
+    }
+  });
+
+  // ─── نقاط الولاء (Loyalty Points) ────────────────────────────────────────────
+  // قراءة نقاط المستخدم
+  app.get("/api/points", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        "SELECT * FROM reward_points WHERE user_id=$1",
+        [user.id]
+      );
+      if (!result.rows.length) {
+        return res.json({ points: 0, lifetimePoints: 0 });
+      }
+      const row = result.rows[0];
+      res.json({ points: row.points, lifetimePoints: row.lifetime_points });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب النقاط" });
+    }
+  });
+
+  // سجل معاملات النقاط
+  app.get("/api/points/history", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        "SELECT * FROM points_transactions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50",
+        [user.id]
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب السجل" });
+    }
+  });
+
+  // حساب تكلفة استرداد النقاط (100 نقطة = 1000 ر.ي)
+  app.post("/api/points/redeem-estimate", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const { pointsToUse } = req.body;
+      if (!pointsToUse || pointsToUse <= 0) return res.status(400).json({ message: "عدد النقاط غير صالح" });
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query("SELECT points FROM reward_points WHERE user_id=$1", [user.id]);
+      const availablePoints = result.rows[0]?.points || 0;
+      const actualPoints = Math.min(pointsToUse, availablePoints);
+      const discountAmount = Math.floor(actualPoints / 100) * 1000; // 100 نقطة = 1000 ر.ي
+      res.json({ pointsToUse: actualPoints, discountAmount, availablePoints });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  // منح النقاط عند اكتمال الطلب (تُستدعى داخلياً)
+  async function awardOrderPoints(userId: number, orderId: number, orderTotal: number) {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const pointsEarned = Math.floor(orderTotal / 1000); // 1 نقطة لكل 1000 ر.ي
+      if (pointsEarned <= 0) return;
+      // تأكد من وجود سجل للمستخدم
+      await dbPool.query(
+        `INSERT INTO reward_points (user_id, points, lifetime_points)
+         VALUES ($1, $2, $2)
+         ON CONFLICT (user_id)
+         DO UPDATE SET points = reward_points.points + $2, lifetime_points = reward_points.lifetime_points + $2`,
+        [userId, pointsEarned]
+      );
+      // سجل المعاملة
+      await dbPool.query(
+        `INSERT INTO points_transactions (user_id, points, type, description, order_id) VALUES ($1, $2, $3, $4, $5)`,
+        [userId, pointsEarned, "earn", `شراء - طلب #${orderId}`, orderId]
+      );
+    } catch (e: any) {
+      console.error("Points award error:", e.message);
+    }
+  }
+
+  // alias for /api/points/history (للتوافق مع النظام القديم)
+  app.get("/api/points/transactions", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        "SELECT * FROM points_transactions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50",
+        [user.id]
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب السجل" });
+    }
+  });
+
+  // التحقق من كود الكوبون (للمسوقين وغيرهم)
+  app.post("/api/coupons/validate", async (req, res) => {
+    try {
+      const { code } = req.body;
+      if (!code) return res.status(400).json({ message: "الرجاء إدخال كود الكوبون" });
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        `SELECT * FROM coupons WHERE code=$1 AND is_active=true AND (expires_at IS NULL OR expires_at > NOW())`,
+        [code.toUpperCase()]
+      );
+      if (!result.rows.length) return res.status(404).json({ message: "الكوبون غير صالح أو منتهي" });
+      const coupon = result.rows[0];
+      if (coupon.max_usage && coupon.usage_count >= coupon.max_usage)
+        return res.status(400).json({ message: "تم استخدام الكوبون بالحد الأقصى" });
+      res.json({
+        code: coupon.code,
+        discountPercent: coupon.discount_percent,
+        marketerCommission: coupon.marketer_commission_percent,
+        marketerId: coupon.marketer_id,
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل التحقق من الكوبون" });
+    }
+  });
+
+  // Admin - إحصائيات نقاط الولاء
+  app.get("/api/admin/points/stats", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const stats = await dbPool.query(`
+        SELECT
+          COUNT(DISTINCT user_id) as users_with_points,
+          SUM(points) as total_active_points,
+          SUM(lifetime_points) as total_earned_ever
+        FROM reward_points
+      `);
+      const recent = await dbPool.query(`
+        SELECT pt.*, u.name as user_name, u.phone as user_phone
+        FROM points_transactions pt
+        JOIN users u ON pt.user_id = u.id
+        ORDER BY pt.created_at DESC LIMIT 20
+      `);
+      res.json({ stats: stats.rows[0], recent: recent.rows });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
     }
   });
 

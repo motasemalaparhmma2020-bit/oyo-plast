@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Order, Product } from "@shared/schema";
+import FinancialReports from "@/components/FinancialReports";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -5587,58 +5588,7 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="reports">
-            <div className="grid md:grid-cols-3 gap-4 mb-6">
-              <Card>
-                <CardContent className="p-6 text-center">
-                  <DollarSign className="h-12 w-12 mx-auto mb-4 text-green-600" />
-                  <p className="text-sm text-muted-foreground mb-2">إجمالي المبيعات</p>
-                  <p className="text-3xl font-bold text-green-600">
-                    {formatPrice(salesStats?.totalSales || 0)} ر.ي
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6 text-center">
-                  <ShoppingBag className="h-12 w-12 mx-auto mb-4 text-blue-600" />
-                  <p className="text-sm text-muted-foreground mb-2">عدد الطلبات</p>
-                  <p className="text-3xl font-bold text-blue-600">
-                    {salesStats?.totalOrders || 0}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6 text-center">
-                  <TrendingUp className="h-12 w-12 mx-auto mb-4 text-purple-600" />
-                  <p className="text-sm text-muted-foreground mb-2">متوسط قيمة الطلب</p>
-                  <p className="text-3xl font-bold text-purple-600">
-                    {formatPrice(salesStats?.averageOrderValue || 0)} ر.ي
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>ملخص الطلبات حسب الحالة</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {Object.entries(statusMap).map(([key, value]) => {
-                    const count = orders?.filter(o => o.status === key).length || 0;
-                    const StatusIcon = value.icon;
-                    return (
-                      <div key={key} className={`p-4 rounded-lg ${value.color}`}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <StatusIcon className="h-5 w-5" />
-                          <span className="font-medium">{value.label}</span>
-                        </div>
-                        <p className="text-2xl font-bold">{count}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+            <FinancialReports adminToken={adminToken} />
           </TabsContent>
 
           <TabsContent value="settings">
