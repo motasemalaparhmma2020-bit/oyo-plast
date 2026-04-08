@@ -59,7 +59,8 @@ export default function Terms() {
                   مرحباً بكم في متجر أويو بلاست. باستخدامك لهذا الموقع وخدماتنا، فإنك توافق على الالتزام بهذه الشروط والأحكام. 
                   يرجى قراءتها بعناية قبل إجراء أي عملية شراء.
                 </p>
-                <p>رقم توثيق الاسم التجاري: <strong>139688</strong></p>
+                <p>رقم حجز الاسم التجاري: <strong>119688</strong> | الاسم: أويو بلاست بيع المواد البلاستيك</p>
+                <p>المالك: <strong>معتصم محمد أحمد الأهدل</strong> | الجمهورية اليمنية</p>
               </CardContent>
             </Card>
 
@@ -169,9 +170,33 @@ export default function Terms() {
               </CardContent>
             </Card>
 
+            {/* بيان الملكية الفكرية */}
+            <Card className="mb-6 border-red-200 dark:border-red-800">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-red-600">
+                  <Scale className="h-5 w-5" />
+                  بيان حقوق الملكية الفكرية والحماية القانونية
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="prose prose-sm max-w-none text-muted-foreground space-y-3">
+                <p className="font-medium text-foreground">
+                  كافة المحتويات، العلامات التجارية (أويو بلاست)، والأنظمة البرمجية لهذا الموقع هي ملكية فكرية
+                  مسجّلة باسم <strong>معتصم محمد أحمد الأهدل</strong> بموجب قانون حماية الحق الفكري اليمني،
+                  ويمنع نسخها أو محاولة اختراقها تحت طائلة المسؤولية القانونية الكاملة.
+                </p>
+                <p>
+                  يلتزم المتجر بحماية بيانات العملاء وفق المعايير التقنية والقانونية،
+                  وتُعدّ أي محاولة وصول غير مشروع للبيانات جريمة إلكترونية يُلاحَق مرتكبها قضائياً.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  آخر تحديث: ديسمبر 2025 | يسري وفق القانون التجاري اليمني رقم 32 لسنة 1991 وتعديلاته.
+                </p>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardContent className="p-6 text-center">
-                <p className="text-muted-foreground text-sm">آخر تحديث: يناير 2025</p>
+                <p className="text-muted-foreground text-sm">آخر تحديث: ديسمبر 2025</p>
                 <p className="text-muted-foreground text-sm mt-2">
                   نحتفظ بحق تعديل هذه الشروط والأحكام في أي وقت. سيتم إشعار العملاء بأي تغييرات جوهرية.
                 </p>

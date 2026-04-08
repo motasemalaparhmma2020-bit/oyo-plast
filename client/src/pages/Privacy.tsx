@@ -58,7 +58,8 @@ export default function Privacy() {
                 </p>
                 <div className="mt-4 p-4 bg-primary/5 border border-primary/20 rounded-lg">
                   <p className="text-sm text-muted-foreground">
-                    <strong>رقم توثيق الاسم التجاري:</strong> 139688
+                    <strong>رقم حجز الاسم التجاري:</strong> 119688 — أويو بلاست بيع المواد البلاستيك<br/>
+                    <strong>المالك:</strong> معتصم محمد أحمد الأهدل | الجمهورية اليمنية
                   </p>
                 </div>
               </CardContent>

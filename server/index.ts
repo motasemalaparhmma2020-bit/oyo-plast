@@ -1,12 +1,28 @@
 import express, { type Request, Response, NextFunction } from "express";
+import helmet from "helmet";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { runMigrations } from "./migrate";
 import { createServer } from "http";
 import path from "path";
+import { generalLimiter, sanitizeInputs } from "./security";
 
 const app = express();
 const httpServer = createServer(app);
+
+// ══ Security Headers (Helmet) ══════════════════════════════════════════
+app.use(helmet({
+  contentSecurityPolicy: false, // نعطّله لأن Vite يحتاج مرونة في dev
+  crossOriginEmbedderPolicy: false,
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+}));
+
+// ══ Rate Limiting العام ════════════════════════════════════════════════
+app.use("/api", generalLimiter);
+
+// ══ تنظيف المدخلات من XSS ════════════════════════════════════════════
+app.use(sanitizeInputs);
+
 // Get directory name - use process.cwd() for production compatibility
 const rootDir = process.cwd();
 

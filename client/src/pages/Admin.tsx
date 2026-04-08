@@ -4,6 +4,7 @@ import { Order, Product } from "@shared/schema";
 import FinancialReports from "@/components/FinancialReports";
 import AdminInstallments from "@/components/AdminInstallments";
 import AdminPricing from "@/components/AdminPricing";
+import AdminSecurityLogs from "@/components/AdminSecurityLogs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -5726,6 +5727,11 @@ export default function Admin() {
           {/* ─── Smart Pricing Tab ─────────────────────────────────────── */}
           <TabsContent value="pricing">
             <AdminPricing adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── Security Logs Tab ─────────────────────────────────────── */}
+          <TabsContent value="security">
+            <AdminSecurityLogs adminToken={adminToken} />
           </TabsContent>
 
           {/* ─── Invoice Settings Tab ──────────────────────────────────── */}

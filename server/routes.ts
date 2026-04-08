@@ -7,6 +7,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import { adminLimiter, orderLimiter, loginLimiter, logSecurityEvent, getSecurityLogs } from "./security";
 
 const rootDir = process.cwd();
 
@@ -1252,7 +1253,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ─── Create Order (Public - for checkout) ────────────────────────
-  app.post("/api/orders/create", async (req, res) => {
+  app.post("/api/orders/create", orderLimiter, async (req, res) => {
     try {
       const { validateOrderCreation } = await import("./lib/errorHandler");
       const { logOrderCreation, logValidationError } = await import("./lib/logger");
@@ -2916,6 +2917,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(500).json({ message: "فشل جلب الرموز", details: e.message });
     }
   });
+
+  // ── سجلات الأمان ─────────────────────────────────────────────────
+  app.get("/api/admin/security-logs", requireAdmin, getSecurityLogs);
 
   // ── تشخيص Twilio SMS ────────────────────────────────────────────
   app.post("/api/admin/test-sms", requireAdmin, async (req, res) => {
