@@ -626,6 +626,46 @@ export const insertCouponSchema = createInsertSchema(coupons).omit({ id: true, c
 export const insertInstallmentPlanSchema = createInsertSchema(installmentPlans).omit({ id: true, createdAt: true });
 export type InstallmentPlan = typeof installmentPlans.$inferSelect;
 
+// ── Smart Pricing System ────────────────────────────────────────────────────
+
+// التكاليف التشغيلية الشهرية (رواتب، إيجار، تسويق، لوجستيات...)
+export const operationalCosts = pgTable("operational_costs", {
+  id: serial("id").primaryKey(),
+  month: varchar("month", { length: 7 }).notNull().unique(),   // "2025-04"
+  salaries: numeric("salaries").default("0").notNull(),
+  rent: numeric("rent").default("0").notNull(),
+  marketing: numeric("marketing").default("0").notNull(),
+  logistics: numeric("logistics").default("0").notNull(),
+  other: numeric("other").default("0").notNull(),
+  totalOrders: integer("total_orders").default(0).notNull(),   // عدد الطلبات في الشهر
+  costPerOrder: numeric("cost_per_order").default("0"),        // يُحسب تلقائياً
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// تكاليف كل منتج مع خطوط الحماية المحسوبة
+export const productCosts = pgTable("product_costs", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").references(() => products.id).notNull().unique(),
+  purchasePrice: numeric("purchase_price").default("0").notNull(),     // تكلفة الشراء
+  inlandShipping: numeric("inland_shipping").default("0").notNull(),   // شحن داخلي
+  storageCost: numeric("storage_cost").default("0").notNull(),         // تكلفة تخزين
+  operationalShare: numeric("operational_share").default("0"),         // حصة التشغيل (محسوبة)
+  redLinePrice: numeric("red_line_price").default("0"),                // الحد الأحمر (محسوب)
+  greenLinePrice: numeric("green_line_price").default("0"),            // الحد الأخضر (محسوب)
+  suggestedPrice: numeric("suggested_price").default("0"),             // السعر المقترح (محسوب)
+  targetMarginPercent: numeric("target_margin_percent").default("30"), // هامش الهدف %
+  safetyMarginPercent: numeric("safety_margin_percent").default("15"), // هامش الأمان الأدنى %
+  notes: text("notes"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertOperationalCostSchema = createInsertSchema(operationalCosts).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertProductCostSchema = createInsertSchema(productCosts).omit({ id: true, updatedAt: true });
+export type OperationalCost = typeof operationalCosts.$inferSelect;
+export type ProductCost = typeof productCosts.$inferSelect;
+
 // Types
 export type Product = typeof products.$inferSelect;
 export type Category = typeof categories.$inferSelect;

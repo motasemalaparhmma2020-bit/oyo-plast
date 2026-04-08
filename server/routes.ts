@@ -851,6 +851,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const id = parseInt(req.params.id);
       const data = req.body;
+
+      // ── Safety Net: رفض أي سعر أقل من الحد الأحمر ──────────────────
+      if (data.price !== undefined) {
+        const { pool: dbPool } = await import("./db");
+        const costRow = await dbPool.query(
+          `SELECT red_line_price FROM product_costs WHERE product_id=$1`, [id]
+        );
+        if (costRow.rows[0]) {
+          const redLine = parseFloat(costRow.rows[0].red_line_price);
+          const newPrice = parseFloat(String(data.price));
+          if (redLine > 0 && newPrice < redLine) {
+            return res.status(422).json({
+              message: `⛔ السعر المدخل (${newPrice.toLocaleString()} ر.ي) أقل من الحد الأحمر (${redLine.toLocaleString()} ر.ي). لا يمكن الحفظ.`,
+              redLine,
+              enteredPrice: newPrice,
+            });
+          }
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────
+
       const fields = [
         "name", "description", "price", "priceSar", "categoryId",
         "imageUrl", "imageUrls", "stock", "colors", "sizes",
@@ -2025,6 +2046,198 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ ok: true });
     } catch (e: any) {
       res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════
+  // ─── Smart Pricing System ─────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════
+
+  // دالة مساعدة: حساب خطوط التسعير من تكاليف المنتج + التكلفة التشغيلية للوحدة
+  async function calcPricingLines(
+    purchasePrice: number,
+    inlandShipping: number,
+    storageCost: number,
+    targetMarginPct: number,
+    safetyMarginPct: number,
+    operationalShareOverride?: number
+  ) {
+    const { pool: dbPool } = await import("./db");
+    // اجلب أحدث تكلفة تشغيلية للوحدة
+    let costPerOrder = operationalShareOverride ?? 0;
+    if (operationalShareOverride === undefined) {
+      const latest = await dbPool.query(
+        `SELECT cost_per_order FROM operational_costs ORDER BY month DESC LIMIT 1`
+      );
+      costPerOrder = parseFloat(latest.rows[0]?.cost_per_order ?? "0");
+    }
+    const redLine = purchasePrice + inlandShipping + storageCost + costPerOrder;
+    const greenLine = redLine * (1 + safetyMarginPct / 100);
+    const suggestedPrice = greenLine * (1 + targetMarginPct / 100);
+    return { costPerOrder, redLine, greenLine, suggestedPrice };
+  }
+
+  // GET /api/admin/operational-costs — قائمة التكاليف التشغيلية الشهرية
+  app.get("/api/admin/operational-costs", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        `SELECT * FROM operational_costs ORDER BY month DESC`
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب التكاليف", details: e.message });
+    }
+  });
+
+  // POST /api/admin/operational-costs — حفظ تكاليف شهر (upsert)
+  app.post("/api/admin/operational-costs", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { month, salaries = 0, rent = 0, marketing = 0, logistics = 0, other = 0, totalOrders = 1, notes } = req.body;
+      if (!month || !/^\d{4}-\d{2}$/.test(month))
+        return res.status(400).json({ message: "صيغة الشهر غير صحيحة (YYYY-MM)" });
+
+      const totalCosts = Number(salaries) + Number(rent) + Number(marketing) + Number(logistics) + Number(other);
+      const costPerOrder = totalOrders > 0 ? (totalCosts / Number(totalOrders)) : 0;
+
+      const result = await dbPool.query(
+        `INSERT INTO operational_costs (month, salaries, rent, marketing, logistics, other, total_orders, cost_per_order, notes, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+         ON CONFLICT (month) DO UPDATE SET
+           salaries=$2, rent=$3, marketing=$4, logistics=$5, other=$6,
+           total_orders=$7, cost_per_order=$8, notes=$9, updated_at=NOW()
+         RETURNING *`,
+        [month, salaries, rent, marketing, logistics, other, totalOrders, costPerOrder.toFixed(2), notes || null]
+      );
+
+      // إعادة حساب جميع تكاليف المنتجات عند تحديث أحدث شهر
+      const latestMonth = await dbPool.query(`SELECT month FROM operational_costs ORDER BY month DESC LIMIT 1`);
+      if (latestMonth.rows[0]?.month === month) {
+        const allCosts = await dbPool.query(`SELECT * FROM product_costs`);
+        for (const pc of allCosts.rows) {
+          const { redLine, greenLine, suggestedPrice } = await calcPricingLines(
+            parseFloat(pc.purchase_price), parseFloat(pc.inland_shipping), parseFloat(pc.storage_cost),
+            parseFloat(pc.target_margin_percent), parseFloat(pc.safety_margin_percent), costPerOrder
+          );
+          await dbPool.query(
+            `UPDATE product_costs SET operational_share=$1, red_line_price=$2, green_line_price=$3, suggested_price=$4, updated_at=NOW() WHERE id=$5`,
+            [costPerOrder.toFixed(2), redLine.toFixed(2), greenLine.toFixed(2), suggestedPrice.toFixed(2), pc.id]
+          );
+        }
+      }
+
+      res.json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حفظ التكاليف", details: e.message });
+    }
+  });
+
+  // GET /api/admin/pricing/products — قائمة المنتجات مع بيانات التكلفة وحالة الهامش
+  app.get("/api/admin/pricing/products", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(`
+        SELECT
+          p.id, p.name, p.price, p.price_sar,
+          pc.id AS cost_id,
+          pc.purchase_price, pc.inland_shipping, pc.storage_cost,
+          pc.operational_share, pc.red_line_price, pc.green_line_price,
+          pc.suggested_price, pc.target_margin_percent, pc.safety_margin_percent,
+          pc.notes AS cost_notes, pc.updated_at AS cost_updated_at,
+          CASE
+            WHEN pc.id IS NULL THEN 'no_data'
+            WHEN p.price::numeric < pc.red_line_price::numeric THEN 'danger'
+            WHEN p.price::numeric < pc.green_line_price::numeric THEN 'warning'
+            ELSE 'safe'
+          END AS margin_status,
+          CASE
+            WHEN pc.red_line_price::numeric > 0
+            THEN ROUND(((p.price::numeric - pc.red_line_price::numeric) / pc.red_line_price::numeric * 100)::numeric, 1)
+            ELSE NULL
+          END AS actual_margin_pct
+        FROM products p
+        LEFT JOIN product_costs pc ON pc.product_id = p.id
+        ORDER BY
+          CASE
+            WHEN pc.id IS NULL THEN 0
+            WHEN p.price::numeric < pc.red_line_price::numeric THEN 1
+            WHEN p.price::numeric < pc.green_line_price::numeric THEN 2
+            ELSE 3
+          END,
+          p.name
+      `);
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب المنتجات", details: e.message });
+    }
+  });
+
+  // POST /api/admin/pricing/product/:id/costs — تحديث تكاليف منتج وإعادة الحساب
+  app.post("/api/admin/pricing/product/:id/costs", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const productId = parseInt(req.params.id);
+      const {
+        purchasePrice = 0, inlandShipping = 0, storageCost = 0,
+        targetMarginPercent = 30, safetyMarginPercent = 15, notes
+      } = req.body;
+
+      const { costPerOrder, redLine, greenLine, suggestedPrice } = await calcPricingLines(
+        Number(purchasePrice), Number(inlandShipping), Number(storageCost),
+        Number(targetMarginPercent), Number(safetyMarginPercent)
+      );
+
+      const result = await dbPool.query(
+        `INSERT INTO product_costs
+           (product_id, purchase_price, inland_shipping, storage_cost, operational_share,
+            red_line_price, green_line_price, suggested_price, target_margin_percent, safety_margin_percent, notes, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
+         ON CONFLICT (product_id) DO UPDATE SET
+           purchase_price=$2, inland_shipping=$3, storage_cost=$4, operational_share=$5,
+           red_line_price=$6, green_line_price=$7, suggested_price=$8,
+           target_margin_percent=$9, safety_margin_percent=$10, notes=$11, updated_at=NOW()
+         RETURNING *`,
+        [productId, purchasePrice, inlandShipping, storageCost,
+         costPerOrder.toFixed(2), redLine.toFixed(2), greenLine.toFixed(2),
+         suggestedPrice.toFixed(2), targetMarginPercent, safetyMarginPercent, notes || null]
+      );
+      res.json({ ...result.rows[0], redLine, greenLine, suggestedPrice });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حفظ تكاليف المنتج", details: e.message });
+    }
+  });
+
+  // GET /api/admin/pricing/report — تقرير الهوامش (المنتجات تحت خط الأمان)
+  app.get("/api/admin/pricing/report", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(`
+        SELECT
+          p.id, p.name, p.price::numeric AS current_price,
+          pc.red_line_price::numeric, pc.green_line_price::numeric, pc.suggested_price::numeric,
+          pc.target_margin_percent::numeric, pc.safety_margin_percent::numeric,
+          CASE
+            WHEN p.price::numeric < pc.red_line_price::numeric THEN 'danger'
+            WHEN p.price::numeric < pc.green_line_price::numeric THEN 'warning'
+            ELSE 'safe'
+          END AS margin_status,
+          ROUND(((p.price::numeric - pc.red_line_price::numeric) / NULLIF(pc.red_line_price::numeric,0) * 100)::numeric, 1) AS actual_margin_pct,
+          (pc.suggested_price::numeric - p.price::numeric) AS gap_to_suggested
+        FROM products p
+        INNER JOIN product_costs pc ON pc.product_id = p.id
+        WHERE pc.red_line_price::numeric > 0
+        ORDER BY actual_margin_pct ASC NULLS FIRST
+      `);
+      const summary = {
+        total: result.rows.length,
+        danger: result.rows.filter(r => r.margin_status === "danger").length,
+        warning: result.rows.filter(r => r.margin_status === "warning").length,
+        safe: result.rows.filter(r => r.margin_status === "safe").length,
+      };
+      res.json({ summary, products: result.rows });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب التقرير", details: e.message });
     }
   });
 
