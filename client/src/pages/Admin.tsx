@@ -6,6 +6,7 @@ import AdminInstallments from "@/components/AdminInstallments";
 import AdminPricing from "@/components/AdminPricing";
 import AdminSecurityLogs from "@/components/AdminSecurityLogs";
 import { AdminReviews } from "@/components/AdminReviews";
+import AdminSectionSettings from "@/components/AdminSectionSettings";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -5748,6 +5749,11 @@ export default function Admin() {
           {/* ─── Team Management Tab ───────────────────────────────────── */}
           <TabsContent value="team">
             <TeamManagement adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── Section Settings Tab ──────────────────────────────────── */}
+          <TabsContent value="section-settings">
+            <AdminSectionSettings />
           </TabsContent>
 
         </Tabs>

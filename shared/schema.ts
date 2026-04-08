@@ -503,6 +503,19 @@ export const displaySettings = pgTable("display_settings", {
   // ── إعدادات الدفع والشحن ──────────────────────────────────────────────────
   shippingFee: integer("shipping_fee").default(0).notNull(),                            // رسوم الشحن الثابتة (0=مجاني)
   codEnabled: boolean("cod_enabled").default(true).notNull(),                           // تفعيل الدفع عند الاستلام
+  // ── إعدادات أقسام الصفحة الرئيسية (لماذا / إحصائيات / أسئلة) ─────────────
+  showWhyUs: boolean("show_why_us").default(true).notNull(),
+  whyUsSize: text("why_us_size").default("medium").notNull(),        // small | medium | large
+  whyUsOnHome: boolean("why_us_on_home").default(true).notNull(),
+  whyUsOnAccount: boolean("why_us_on_account").default(false).notNull(),
+  showStats: boolean("show_stats").default(true).notNull(),
+  statsSize: text("stats_size").default("medium").notNull(),
+  statsOnHome: boolean("stats_on_home").default(true).notNull(),
+  statsOnAccount: boolean("stats_on_account").default(false).notNull(),
+  showFaq: boolean("show_faq").default(true).notNull(),
+  faqSize: text("faq_size").default("medium").notNull(),
+  faqOnHome: boolean("faq_on_home").default(true).notNull(),
+  faqOnAccount: boolean("faq_on_account").default(false).notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

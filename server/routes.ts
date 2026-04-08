@@ -1244,9 +1244,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         'sadeemShowRating', 'sadeemShowSoldCount',
         'sadeemShowShipping', 'sadeemShowReturns',
         'codEnabled',
+        // ── أقسام الصفحة الرئيسية ──
+        'showWhyUs', 'whyUsOnHome', 'whyUsOnAccount',
+        'showStats', 'statsOnHome', 'statsOnAccount',
+        'showFaq', 'faqOnHome', 'faqOnAccount',
       ];
       // text fields
-      const textFields = ['imageMode', 'detailImageMode', 'discountBadgeBg'];
+      const textFields = [
+        'imageMode', 'detailImageMode', 'discountBadgeBg',
+        'whyUsSize', 'statsSize', 'faqSize',
+      ];
 
       const body = req.body as Record<string, unknown>;
       const patch: Record<string, any> = {

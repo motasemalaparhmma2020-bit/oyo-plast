@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { WhyUsSection, StatsSection, FaqSection } from "@/components/HomeSections";
 import { Link } from "wouter";
 import { 
   ShoppingBag, Wallet, Award, ChevronLeft, Package, Clock, 
@@ -35,6 +36,11 @@ export default function MyAccount() {
     orders: { total: number; pending: number; completed: number };
   }>({
     queryKey: ["/api/account/summary"],
+  });
+
+  const { data: displaySettings } = useQuery<any>({
+    queryKey: ["/api/display-settings"],
+    staleTime: 60_000,
   });
 
   const { data: orders = [], isLoading: ordersLoading } = useQuery<Order[]>({
@@ -429,6 +435,17 @@ export default function MyAccount() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* ── أقسام مفعّلة لصفحة حسابي ── */}
+      {displaySettings?.showWhyUs && displaySettings?.whyUsOnAccount && (
+        <WhyUsSection size={displaySettings.whyUsSize ?? "medium"} />
+      )}
+      {displaySettings?.showStats && displaySettings?.statsOnAccount && (
+        <StatsSection size={displaySettings.statsSize ?? "medium"} />
+      )}
+      {displaySettings?.showFaq && displaySettings?.faqOnAccount && (
+        <FaqSection size={displaySettings.faqSize ?? "medium"} />
+      )}
     </div>
   );
 }
