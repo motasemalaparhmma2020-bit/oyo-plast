@@ -73,6 +73,8 @@ import { Footer, MobileFooter } from "@/components/Footer";
 import { GlobalBottomNav } from "@/components/GlobalBottomNav";
 import { SplashScreen } from "@/components/SplashScreen";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
+import { CompareBar } from "@/components/CompareBar";
+import Compare from "@/pages/Compare";
 import { useOfflineSync } from "@/hooks/use-offline-sync";
 
 // Component to redirect users who need to complete registration
@@ -397,6 +399,7 @@ function Router() {
             <Route path="/product/:id" component={ProductDetail} />
             <Route path="/products/:id" component={ProductDetail} />
             <Route path="/cart" component={Cart} />
+            <Route path="/compare" component={Compare} />
             
             {/* Guest Checkout - no auth required */}
             <Route path="/guest-checkout">
@@ -441,6 +444,7 @@ function Router() {
         {!hideFooter && <MobileFooter />}
         {!hideFooter && <Footer />}
         {!hideBottomNav && <GlobalBottomNav />}
+        <CompareBar />
         <PwaInstallBanner />
       </div>
     </>

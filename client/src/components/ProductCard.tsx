@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAddToCart } from "@/hooks/use-cart";
-import { ShoppingCart, Loader2, Eye, Star } from "lucide-react";
+import { useCompare } from "@/hooks/use-compare";
+import { ShoppingCart, Loader2, Eye, Star, GitCompare, Check } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface ProductCardProps {
@@ -18,6 +19,8 @@ interface ProductCardProps {
 
 export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSize, bannerPriceFontSize }: ProductCardProps) {
   const { mutate: addToCart, isPending } = useAddToCart();
+  const { addToCompare, removeFromCompare, isInCompare, isFull } = useCompare();
+  const inCompare = isInCompare(product.id);
   const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
     return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
   });
@@ -178,9 +181,9 @@ export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSiz
         </div>
       </CardContent>
 
-      <CardFooter className="p-2 pt-0">
+      <CardFooter className="p-2 pt-0 flex gap-1.5">
         <Button
-          className="w-full gap-2 font-bold shadow-md shadow-primary/20 text-xs rounded-lg"
+          className="flex-1 gap-1.5 font-bold shadow-md shadow-primary/20 text-xs rounded-lg"
           style={{ height: 'var(--qty-btn-height, 40px)' }}
           disabled={product.stock <= 0 || isPending}
           onClick={(e) => {
@@ -195,6 +198,21 @@ export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSiz
             <ShoppingCart className="h-4 w-4" />
           )}
           {product.stock <= 0 ? "غير متوفر" : "أضف للسلة"}
+        </Button>
+        <Button
+          variant={inCompare ? "default" : "outline"}
+          size="icon"
+          className={`rounded-lg flex-shrink-0 ${inCompare ? "bg-green-600 hover:bg-green-700 border-green-600" : ""}`}
+          style={{ height: 'var(--qty-btn-height, 40px)', width: 'var(--qty-btn-height, 40px)' }}
+          onClick={(e) => {
+            e.preventDefault();
+            inCompare ? removeFromCompare(product.id) : addToCompare(product);
+          }}
+          disabled={!inCompare && isFull}
+          title={inCompare ? "إزالة من المقارنة" : isFull ? "المقارنة ممتلئة (3 منتجات)" : "أضف للمقارنة"}
+          data-testid={`button-compare-${product.id}`}
+        >
+          {inCompare ? <Check className="h-4 w-4" /> : <GitCompare className="h-4 w-4" />}
         </Button>
       </CardFooter>
     </Card>
