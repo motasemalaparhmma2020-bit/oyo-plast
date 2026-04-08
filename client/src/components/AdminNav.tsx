@@ -1,4 +1,4 @@
-import { Package, Grid3x3, Tags, ShoppingCart, Zap, Palette, Image, BarChart3, Settings, Printer, Wallet, LayoutDashboard, UserCog, MessageSquareWarning, Users, Receipt } from "lucide-react";
+import { Package, Grid3x3, Tags, ShoppingCart, Zap, Palette, Image, BarChart3, Settings, Printer, Wallet, LayoutDashboard, UserCog, MessageSquareWarning, Users, Receipt, Handshake } from "lucide-react";
 
 interface AdminNavItem {
   id: string;
@@ -21,6 +21,7 @@ export const adminNavItems: AdminNavItem[] = [
   { id: "navigation", label: "التنقل والطباعة", icon: <Printer className="h-8 w-8" />, color: "from-lime-400 to-lime-600" },
   { id: "login-management", label: "إدارة الدخول", icon: <UserCog className="h-8 w-8" />, color: "from-violet-400 to-violet-600" },
   { id: "sms-test", label: "بوابة فحص الرسائل", icon: <MessageSquareWarning className="h-8 w-8" />, color: "from-sky-400 to-sky-600" },
+  { id: "suppliers", label: "الموردون والموزعون", icon: <Handshake className="h-8 w-8" />, color: "from-cyan-400 to-cyan-600" },
   { id: "invoice-settings", label: "إعدادات الفاتورة", icon: <Receipt className="h-8 w-8" />, color: "from-teal-400 to-teal-600" },
   { id: "team", label: "إدارة الفريق", icon: <Users className="h-8 w-8" />, color: "from-emerald-400 to-emerald-600" },
   { id: "settings", label: "الإعدادات", icon: <Settings className="h-8 w-8" />, color: "from-slate-400 to-slate-600" },

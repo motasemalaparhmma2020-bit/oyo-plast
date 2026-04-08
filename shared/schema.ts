@@ -59,6 +59,9 @@ export const products = pgTable("products", {
   discountPercent: integer("discount_percent"),        // نسبة الخصم يدوياً (تتغلب على الحسابي)
   // ── التصنيفات الترويجية ─────────────────────────────────────────────────────
   promotionalTags: text("promotional_tags").array(),  // ['new','offers','exclusive','discounts','deals','clearance','featured']
+  // ── المورد المسؤول عن هذا المنتج ──────────────────────────────────────────
+  supplierId: integer("supplier_id"),           // المورد الافتراضي لهذا المنتج
+  productCommissionRate: numeric("product_commission_rate"), // عمولة خاصة تتغلب على العمولة العامة
 });
 
 export const settings = pgTable("settings", {
@@ -118,7 +121,38 @@ export const orders = pgTable("orders", {
   endCustomerContactId: integer("end_customer_contact_id"), // Reference to end customer if marketer order
   isMarketerOrder: boolean("is_marketer_order").default(false), // Whether this is a marketer order
   preferredDeliveryTime: text("preferred_delivery_time"), // Preferred delivery time slot
+  // ─── حقول المورد ──────────────────────────────────────────────────
+  supplierId: integer("supplier_id"),          // المورد المكلّف بهذا الطلب
+  supplierAmount: numeric("supplier_amount"),  // المبلغ الذي يستحقه المورد بعد العمولة
+  platformCommission: numeric("platform_commission"), // عمولة المنصة
+  supplierPaid: boolean("supplier_paid").default(false), // هل تم دفع المورد؟
+  supplierNotified: boolean("supplier_notified").default(false), // هل أُرسل له إشعار؟
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ─── الموردون / الموزعون ──────────────────────────────────────────────────────
+export const suppliers = pgTable("suppliers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  phone: text("phone").notNull(), // رقم واتساب للإشعارات
+  email: text("email"),
+  cities: text("cities").array().notNull().default([]), // المدن التي يغطيها
+  commissionRate: numeric("commission_rate").default("10"), // نسبة عمولة المنصة %
+  balanceDue: numeric("balance_due").default("0"),    // مستحق له
+  totalPaid: numeric("total_paid").default("0"),      // إجمالي ما دُفع له
+  totalSales: numeric("total_sales").default("0"),    // إجمالي مبيعاته
+  isActive: boolean("is_active").default(true).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// سجل دفعات الموردين
+export const supplierPayments = pgTable("supplier_payments", {
+  id: serial("id").primaryKey(),
+  supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
+  amount: numeric("amount").notNull(),
+  notes: text("notes"),
+  paidAt: timestamp("paid_at").defaultNow(),
 });
 
 export const teamMembers = pgTable("team_members", {

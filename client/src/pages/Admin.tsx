@@ -59,6 +59,7 @@ import { AdminNav } from "@/components/AdminNav";
 import { LoginManagementSection } from "@/components/LoginManagementSection";
 import TeamManagement from "@/components/TeamManagement";
 import InvoiceSettingsSection from "@/components/InvoiceSettings";
+import SupplierManagement from "@/components/SupplierManagement";
 import { compressImage, formatFileSize } from "@/lib/imageCompression";
 
 const statusMap: Record<string, { label: string; color: string; icon: any }> = {
@@ -3148,6 +3149,119 @@ function HomePageSettingsSection({ adminToken }: { adminToken: string | null }) 
   );
 }
 
+// ─── تعيين مورد لطلب محدد ──────────────────────────────────────────────────────
+function OrderSupplierAssign({ order, adminToken }: { order: any; adminToken: string | null }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
+
+  const { data: suppliers = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/suppliers"],
+    queryFn: async () => {
+      if (!adminToken) return [];
+      const res = await fetch("/api/admin/suppliers", { headers: { "x-admin-token": adminToken } });
+      return res.ok ? res.json() : [];
+    },
+    enabled: !!adminToken,
+    staleTime: 60000,
+  });
+
+  const { mutate: assignSupplier, isPending } = useMutation({
+    mutationFn: async (supplierId: number) => {
+      const res = await fetch(`/api/admin/orders/${order.id}/assign-supplier`, {
+        method: "PUT",
+        headers: { "x-admin-token": adminToken!, "Content-Type": "application/json" },
+        body: JSON.stringify({ supplierId }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: `✅ تم تعيين المورد — يستلم ${Number(data.supplierAmount).toLocaleString()} ر.ي` });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/suppliers"] });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+
+  const { mutate: notifySupplier, isPending: isNotifying } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/admin/orders/${order.id}/notify-supplier`, {
+        method: "POST",
+        headers: { "x-admin-token": adminToken! },
+      });
+      if (!res.ok) throw new Error((await res.json()).message);
+      return res.json();
+    },
+    onSuccess: () => toast({ title: "✅ تم إرسال الإشعار للمورد" }),
+    onError: (e: any) => toast({ title: "خطأ في الإشعار", description: e.message, variant: "destructive" }),
+  });
+
+  const activeSuppliers = suppliers.filter((s: any) => s.is_active);
+  const currentSupplier = suppliers.find((s: any) => s.id === order.supplierId || s.id === order.supplier_id);
+
+  return (
+    <div className="bg-cyan-50 border border-cyan-200 rounded-xl p-4" dir="rtl">
+      <p className="font-semibold text-sm text-cyan-800 mb-3 flex items-center gap-2">
+        🤝 تعيين المورد / الموزع
+      </p>
+      {currentSupplier ? (
+        <div className="mb-3 bg-white border border-cyan-200 rounded-lg p-2.5">
+          <p className="text-xs text-gray-500">المورد الحالي</p>
+          <p className="font-bold">{currentSupplier.name}</p>
+          <p className="text-xs text-gray-500" dir="ltr">{currentSupplier.phone}</p>
+          <div className="flex items-center gap-2 mt-1.5">
+            <span className="text-xs text-green-700">
+              نصيبه: {Number(order.supplierAmount || order.supplier_amount || 0).toLocaleString()} ر.ي
+            </span>
+            <span className="text-xs text-purple-600">
+              / عمولة المنصة: {Number(order.platformCommission || order.platform_commission || 0).toLocaleString()} ر.ي
+            </span>
+          </div>
+          {(order.supplierNotified || order.supplier_notified) && (
+            <span className="text-xs text-green-600">✓ تم إشعاره</span>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-orange-600 mb-3">⚠️ لم يُعيَّن مورد بعد لهذا الطلب</p>
+      )}
+
+      <div className="flex gap-2">
+        <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
+          <SelectTrigger className="flex-1 text-sm" data-testid="select-order-supplier">
+            <SelectValue placeholder="اختر مورداً..." />
+          </SelectTrigger>
+          <SelectContent>
+            {activeSuppliers.map((s: any) => (
+              <SelectItem key={s.id} value={String(s.id)}>
+                {s.name} — {(s.cities || []).slice(0, 2).join("، ")}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          size="sm"
+          onClick={() => selectedSupplierId && assignSupplier(Number(selectedSupplierId))}
+          disabled={!selectedSupplierId || isPending}
+          data-testid="button-assign-supplier"
+        >
+          {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "تعيين"}
+        </Button>
+        {currentSupplier && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => notifySupplier()}
+            disabled={isNotifying}
+            title="إعادة إرسال الإشعار"
+          >
+            {isNotifying ? <Loader2 className="w-4 h-4 animate-spin" /> : "📲"}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Admin() {
   const [activeSection, setActiveSection] = useState("orders");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -4024,6 +4138,12 @@ export default function Admin() {
                                             </SelectContent>
                                           </Select>
                                         </div>
+
+                                        {/* ─── تعيين المورد يدوياً ─── */}
+                                        <OrderSupplierAssign
+                                          order={order}
+                                          adminToken={adminToken}
+                                        />
                                       </div>
                                     </DialogContent>
                                   </Dialog>
@@ -5602,6 +5722,11 @@ export default function Admin() {
 
           <TabsContent value="login-management">
             <LoginManagementSection adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── Suppliers Tab ─────────────────────────────────────────── */}
+          <TabsContent value="suppliers">
+            <SupplierManagement adminToken={adminToken} />
           </TabsContent>
 
           {/* ─── Invoice Settings Tab ──────────────────────────────────── */}

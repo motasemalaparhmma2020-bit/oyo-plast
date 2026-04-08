@@ -187,6 +187,264 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.json({}); }
   });
 
+  // ─── Suppliers (الموردون/الموزعون) ──────────────────────────────────────────
+
+  // دالة إشعار واتساب/SMS للمورد
+  async function notifySupplier(supplierId: number, orderId: number, orderData: any) {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const sup = await dbPool.query("SELECT * FROM suppliers WHERE id=$1", [supplierId]);
+      if (!sup.rows.length) return;
+      const supplier = sup.rows[0];
+      const phone = supplier.phone.replace(/\s+/g, "").replace(/^00/, "+");
+
+      const accountSid = process.env.TWILIO_ACCOUNT_SID;
+      const authToken = process.env.TWILIO_AUTH_TOKEN;
+      const fromNumber = process.env.TWILIO_FROM_NUMBER;
+      if (!accountSid || !authToken || !fromNumber) return;
+
+      const msg = `
+📦 طلب جديد مُوكَّل إليك!
+━━━━━━━━━━━━━━━━━━━━━
+🆔 رقم الطلب: #${orderId}
+👤 العميل: ${orderData.customerName || "—"}
+📱 الجوال: ${orderData.customerPhone || "—"}
+📍 المدينة: ${orderData.shippingCity || "—"}
+💰 المبلغ المستحق لك: ${Number(orderData.supplierAmount || 0).toLocaleString()} ${orderData.currency || "ر.ي"}
+━━━━━━━━━━━━━━━━━━━━━
+أويو بلاست | oyoplast.com
+      `.trim();
+
+      await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: "Basic " + Buffer.from(`${accountSid}:${authToken}`).toString("base64"),
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({ To: `whatsapp:${phone}`, From: `whatsapp:${fromNumber}`, Body: msg }),
+        }
+      );
+      await dbPool.query("UPDATE orders SET supplier_notified=true WHERE id=$1", [orderId]);
+    } catch (e: any) {
+      console.error("Supplier notification error:", e.message);
+    }
+  }
+
+  // دالة تعيين المورد تلقائياً بناءً على مدينة العميل
+  async function autoAssignSupplier(orderId: number, city: string, orderTotal: number, currency: string, customerName: string, customerPhone: string) {
+    try {
+      const { pool: dbPool } = await import("./db");
+      // ابحث عن مورد يغطي هذه المدينة (الأول نشاطاً)
+      const res = await dbPool.query(
+        `SELECT * FROM suppliers WHERE is_active=true AND $1=ANY(cities) ORDER BY id LIMIT 1`,
+        [city]
+      );
+      if (!res.rows.length) return; // لا يوجد مورد يغطي هذه المدينة
+      const supplier = res.rows[0];
+      const commissionRate = Number(supplier.commission_rate || 10);
+      const platformCommission = orderTotal * commissionRate / 100;
+      const supplierAmount = orderTotal - platformCommission;
+
+      await dbPool.query(
+        `UPDATE orders SET supplier_id=$1, supplier_amount=$2, platform_commission=$3
+         WHERE id=$4`,
+        [supplier.id, supplierAmount.toFixed(2), platformCommission.toFixed(2), orderId]
+      );
+      // تحديث إجمالي مبيعات المورد
+      await dbPool.query(
+        `UPDATE suppliers SET total_sales=COALESCE(total_sales,0)+$1, balance_due=COALESCE(balance_due,0)+$2 WHERE id=$3`,
+        [orderTotal, supplierAmount, supplier.id]
+      );
+      // إرسال إشعار واتساب
+      await notifySupplier(supplier.id, orderId, { customerName, customerPhone, shippingCity: city, supplierAmount, currency });
+    } catch (e: any) {
+      console.error("Auto-assign supplier error:", e.message);
+    }
+  }
+
+  // جلب قائمة الموردين
+  app.get("/api/admin/suppliers", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        `SELECT s.*, 
+          (SELECT COUNT(*) FROM orders WHERE supplier_id=s.id) as total_orders,
+          (SELECT COUNT(*) FROM orders WHERE supplier_id=s.id AND supplier_paid=false AND status NOT IN ('cancelled')) as unpaid_orders
+         FROM suppliers s ORDER BY s.created_at DESC`
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الموردين" });
+    }
+  });
+
+  // إضافة مورد جديد
+  app.post("/api/admin/suppliers", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { name, phone, email, cities, commissionRate, notes } = req.body;
+      if (!name || !phone) return res.status(400).json({ message: "الاسم والهاتف مطلوبان" });
+      const citiesArr = Array.isArray(cities) ? cities : (cities ? cities.split(",").map((c: string) => c.trim()) : []);
+      const result = await dbPool.query(
+        `INSERT INTO suppliers (name, phone, email, cities, commission_rate, notes)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [name, phone, email || null, citiesArr, commissionRate || 10, notes || null]
+      );
+      res.json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إضافة المورد" });
+    }
+  });
+
+  // تعديل مورد
+  app.put("/api/admin/suppliers/:id", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const id = parseInt(req.params.id);
+      const { name, phone, email, cities, commissionRate, notes, isActive } = req.body;
+      const citiesArr = Array.isArray(cities) ? cities : (cities ? cities.split(",").map((c: string) => c.trim()) : []);
+      const result = await dbPool.query(
+        `UPDATE suppliers SET name=$1, phone=$2, email=$3, cities=$4, commission_rate=$5, notes=$6, is_active=$7
+         WHERE id=$8 RETURNING *`,
+        [name, phone, email || null, citiesArr, commissionRate || 10, notes || null, isActive !== false, id]
+      );
+      if (!result.rows.length) return res.status(404).json({ message: "المورد غير موجود" });
+      res.json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تعديل المورد" });
+    }
+  });
+
+  // حذف مورد
+  app.delete("/api/admin/suppliers/:id", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const id = parseInt(req.params.id);
+      await dbPool.query("UPDATE suppliers SET is_active=false WHERE id=$1", [id]);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حذف المورد" });
+    }
+  });
+
+  // طلبات مورد معين
+  app.get("/api/admin/suppliers/:id/orders", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const id = parseInt(req.params.id);
+      const result = await dbPool.query(
+        `SELECT * FROM orders WHERE supplier_id=$1 ORDER BY created_at DESC LIMIT 100`,
+        [id]
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الطلبات" });
+    }
+  });
+
+  // تسجيل دفعة للمورد
+  app.post("/api/admin/suppliers/:id/pay", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const supplierId = parseInt(req.params.id);
+      const { amount, notes, orderIds } = req.body;
+      if (!amount || Number(amount) <= 0) return res.status(400).json({ message: "المبلغ مطلوب" });
+      
+      // سجّل الدفعة
+      await dbPool.query(
+        `INSERT INTO supplier_payments (supplier_id, amount, notes) VALUES ($1, $2, $3)`,
+        [supplierId, amount, notes || null]
+      );
+      // حدّث رصيد المورد
+      await dbPool.query(
+        `UPDATE suppliers SET balance_due=GREATEST(0, COALESCE(balance_due,0)-$1), total_paid=COALESCE(total_paid,0)+$1 WHERE id=$2`,
+        [amount, supplierId]
+      );
+      // إذا أُرسلت أرقام طلبات، علّم عليها كمدفوعة
+      if (Array.isArray(orderIds) && orderIds.length > 0) {
+        await dbPool.query(
+          `UPDATE orders SET supplier_paid=true WHERE id=ANY($1) AND supplier_id=$2`,
+          [orderIds, supplierId]
+        );
+      }
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تسجيل الدفعة" });
+    }
+  });
+
+  // تعيين مورد يدوياً لطلب
+  app.put("/api/admin/orders/:id/assign-supplier", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const orderId = parseInt(req.params.id);
+      const { supplierId } = req.body;
+      const orderRes = await dbPool.query("SELECT * FROM orders WHERE id=$1", [orderId]);
+      if (!orderRes.rows.length) return res.status(404).json({ message: "الطلب غير موجود" });
+      const order = orderRes.rows[0];
+      const supRes = await dbPool.query("SELECT * FROM suppliers WHERE id=$1", [supplierId]);
+      if (!supRes.rows.length) return res.status(404).json({ message: "المورد غير موجود" });
+      const supplier = supRes.rows[0];
+      const orderTotal = Number(order.total);
+      const commRate = Number(supplier.commission_rate || 10);
+      const platformCommission = orderTotal * commRate / 100;
+      const supplierAmount = orderTotal - platformCommission;
+
+      // إذا كان هناك مورد قديم، اطرح من رصيده
+      if (order.supplier_id && order.supplier_id !== supplierId) {
+        await dbPool.query(
+          `UPDATE suppliers SET total_sales=GREATEST(0, COALESCE(total_sales,0)-$1), balance_due=GREATEST(0, COALESCE(balance_due,0)-$2) WHERE id=$3`,
+          [orderTotal, Number(order.supplier_amount || 0), order.supplier_id]
+        );
+      }
+      await dbPool.query(
+        `UPDATE orders SET supplier_id=$1, supplier_amount=$2, platform_commission=$3, supplier_notified=false WHERE id=$4`,
+        [supplierId, supplierAmount.toFixed(2), platformCommission.toFixed(2), orderId]
+      );
+      await dbPool.query(
+        `UPDATE suppliers SET total_sales=COALESCE(total_sales,0)+$1, balance_due=COALESCE(balance_due,0)+$2 WHERE id=$3`,
+        [orderTotal, supplierAmount, supplierId]
+      );
+      // إرسال إشعار
+      await notifySupplier(supplierId, orderId, { customerName: order.customer_name, customerPhone: order.customer_phone, shippingCity: order.shipping_city, supplierAmount, currency: order.currency });
+      res.json({ success: true, supplierAmount, platformCommission });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تعيين المورد" });
+    }
+  });
+
+  // إعادة إرسال إشعار واتساب للمورد
+  app.post("/api/admin/orders/:id/notify-supplier", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const orderId = parseInt(req.params.id);
+      const orderRes = await dbPool.query("SELECT * FROM orders WHERE id=$1", [orderId]);
+      if (!orderRes.rows.length) return res.status(404).json({ message: "الطلب غير موجود" });
+      const order = orderRes.rows[0];
+      if (!order.supplier_id) return res.status(400).json({ message: "لا يوجد مورد مُعيَّن لهذا الطلب" });
+      await notifySupplier(order.supplier_id, orderId, { customerName: order.customer_name, customerPhone: order.customer_phone, shippingCity: order.shipping_city, supplierAmount: order.supplier_amount, currency: order.currency });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل الإشعار" });
+    }
+  });
+
+  // سجل دفعات مورد
+  app.get("/api/admin/suppliers/:id/payments", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        `SELECT * FROM supplier_payments WHERE supplier_id=$1 ORDER BY paid_at DESC`,
+        [parseInt(req.params.id)]
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب السجل" });
+    }
+  });
+
   // ─── Admin Stats ─────────────────────────────────────────────────
   app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
     try {
@@ -919,6 +1177,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await Promise.allSettled([
         sendOrderConfirmation(customerPhone, order.id, Number(total), "SAR"),
         sendAdminNotification(order.id, customerName, customerPhone, Number(total), items.length),
+        // تعيين المورد تلقائياً حسب مدينة العميل
+        shippingCity ? autoAssignSupplier(order.id, shippingCity, Number(total), req.body.currency || "YER", customerName, customerPhone) : Promise.resolve(),
       ]);
 
       res.json(order);
