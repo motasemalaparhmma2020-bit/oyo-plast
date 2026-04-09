@@ -2076,6 +2076,91 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
               data-testid="switch-show-categories"
             />
           </div>
+
+          {/* ── طريقة عرض الأقسام الدائرية ── */}
+          <div className="border-t pt-4 space-y-3">
+            <Label className="text-sm font-semibold">طريقة عرض الأقسام الدائرية</Label>
+            <div className="grid grid-cols-2 gap-3">
+              {/* صف واحد متحرك */}
+              <button
+                type="button"
+                onClick={() => { setSettings((s: any) => ({ ...s, categoriesLayout: "scroll" })); handleUpdate('categoriesLayout', 'scroll'); }}
+                className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all ${
+                  (settings?.categoriesLayout ?? "scroll") === "scroll"
+                    ? "border-primary bg-primary/5"
+                    : "border-muted hover:border-primary/40"
+                }`}
+                data-testid="layout-scroll"
+                disabled={updateMutation.isPending}
+              >
+                {/* مؤشر مرئي — صف واحد */}
+                <div className="flex gap-1.5 items-center">
+                  {[0,1,2,3,4].map(i => (
+                    <div key={i} className="w-6 h-6 rounded-full bg-muted-foreground/30 flex-shrink-0" />
+                  ))}
+                  <span className="text-xs text-muted-foreground">←</span>
+                </div>
+                <span className="text-xs font-semibold">صف واحد متحرك</span>
+                <span className="text-[10px] text-muted-foreground text-center">السحب يميناً ويساراً</span>
+              </button>
+
+              {/* شبكة صفوف */}
+              <button
+                type="button"
+                onClick={() => { setSettings((s: any) => ({ ...s, categoriesLayout: "grid" })); handleUpdate('categoriesLayout', 'grid'); }}
+                className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all ${
+                  (settings?.categoriesLayout ?? "scroll") === "grid"
+                    ? "border-primary bg-primary/5"
+                    : "border-muted hover:border-primary/40"
+                }`}
+                data-testid="layout-grid"
+                disabled={updateMutation.isPending}
+              >
+                {/* مؤشر مرئي — شبكة */}
+                <div className="grid grid-cols-4 gap-1">
+                  {[0,1,2,3,4,5,6,7].map(i => (
+                    <div key={i} className="w-5 h-5 rounded-full bg-muted-foreground/30" />
+                  ))}
+                </div>
+                <span className="text-xs font-semibold">شبكة صفوف</span>
+                <span className="text-[10px] text-muted-foreground text-center">4 أقسام في كل صف</span>
+              </button>
+            </div>
+
+            {/* عدد الصفوف — يظهر فقط في وضع الشبكة */}
+            {(settings?.categoriesLayout ?? "scroll") === "grid" && (
+              <div className="flex items-center justify-between pt-1">
+                <div>
+                  <Label className="text-sm font-medium">عدد الصفوف</Label>
+                  <p className="text-xs text-muted-foreground">كل صف يحتوي على 4 أقسام</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { const v = Math.max(1, (settings?.categoriesRows ?? 2) - 1); setSettings((s: any) => ({ ...s, categoriesRows: v })); handleUpdate('categoriesRows', v); }}
+                    className="w-8 h-8 rounded-lg border flex items-center justify-center text-lg font-bold hover:bg-muted"
+                    disabled={updateMutation.isPending}
+                    data-testid="btn-rows-minus"
+                  >−</button>
+                  <span className="w-8 text-center font-bold text-lg">{settings?.categoriesRows ?? 2}</span>
+                  <button
+                    type="button"
+                    onClick={() => { const v = Math.min(6, (settings?.categoriesRows ?? 2) + 1); setSettings((s: any) => ({ ...s, categoriesRows: v })); handleUpdate('categoriesRows', v); }}
+                    className="w-8 h-8 rounded-lg border flex items-center justify-center text-lg font-bold hover:bg-muted"
+                    disabled={updateMutation.isPending}
+                    data-testid="btn-rows-plus"
+                  >+</button>
+                </div>
+              </div>
+            )}
+
+            {/* معاينة نصية */}
+            <p className="text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+              {(settings?.categoriesLayout ?? "scroll") === "scroll"
+                ? "✅ الأقسام ستظهر في صف واحد أفقي يمكن السحب عليه يميناً ويساراً — جميع الأقسام ظاهرة"
+                : `✅ الأقسام ستظهر في شبكة ${settings?.categoriesRows ?? 2} صفوف × 4 أعمدة = ${(settings?.categoriesRows ?? 2) * 4} قسم — الزائد يخفى`}
+            </p>
+          </div>
         </div>
 
         {/* Product Card Settings */}

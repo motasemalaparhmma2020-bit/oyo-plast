@@ -298,6 +298,8 @@ export default function Home() {
           categories={categories || []}
           circleSize={displaySettings.categorySize}
           perRow={displaySettings.categoriesPerRow}
+          layout={displaySettings.categoriesLayout ?? "scroll"}
+          rows={displaySettings.categoriesRows ?? 2}
         />
       )}
 
