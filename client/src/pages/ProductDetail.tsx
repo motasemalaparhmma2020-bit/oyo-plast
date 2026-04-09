@@ -793,8 +793,12 @@ export default function ProductDetail() {
                   {allImages.map((img, idx) => (
                     <div key={idx} className="flex-[0_0_100%] min-w-0">
                       <div
-                        className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 flex items-center justify-center"
-                        style={{ height: detailImgH, padding: detailImgMode === 'contain' ? 16 : 0 }}
+                        className="bg-white dark:bg-gray-900 flex items-center justify-center"
+                        style={{
+                          aspectRatio: '1 / 1',
+                          padding: detailImgMode === 'contain' ? 16 : 0,
+                          background: '#ffffff',
+                        }}
                       >
                         <LazyImage
                           src={img}
@@ -846,8 +850,12 @@ export default function ProductDetail() {
             </div>
           ) : (
             <div
-              className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-2xl overflow-hidden flex items-center justify-center"
-              style={{ height: detailImgH, padding: detailImgMode === 'contain' ? 16 : 0 }}
+              className="rounded-2xl overflow-hidden flex items-center justify-center"
+              style={{
+                aspectRatio: '1 / 1',
+                padding: detailImgMode === 'contain' ? 16 : 0,
+                background: '#ffffff',
+              }}
             >
               <LazyImage
                 src={product?.imageUrl || ''}
