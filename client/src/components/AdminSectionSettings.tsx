@@ -195,7 +195,7 @@ function SectionCard({
   );
 }
 
-export default function AdminSectionSettings() {
+export default function AdminSectionSettings({ adminToken }: { adminToken?: string | null }) {
   const { toast } = useToast();
 
   const { data: raw, isLoading } = useQuery<any>({
@@ -236,8 +236,17 @@ export default function AdminSectionSettings() {
   }, [raw]);
 
   const mutation = useMutation({
-    mutationFn: (data: Partial<SectionSettings>) =>
-      apiRequest("PATCH", "/api/admin/display-settings", data),
+    mutationFn: async (data: Partial<SectionSettings>) => {
+      const token = adminToken ?? localStorage.getItem("adminToken") ?? "";
+      const res = await fetch("/api/admin/display-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-token": token },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/display-settings"] });
       toast({ title: "تم الحفظ", description: "تم تحديث إعدادات الأقسام بنجاح" });

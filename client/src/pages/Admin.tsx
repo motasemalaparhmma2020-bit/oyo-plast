@@ -6046,7 +6046,7 @@ export default function Admin() {
 
           {/* ─── Section Settings Tab ──────────────────────────────────── */}
           <TabsContent value="section-settings">
-            <AdminSectionSettings />
+            <AdminSectionSettings adminToken={adminToken} />
           </TabsContent>
 
         </Tabs>
