@@ -559,6 +559,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(cats);
   });
 
+  // ─── Subcategories (Public) ──────────────────────────────────────
+  app.get("/api/subcategories", async (req, res) => {
+    const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
+    const subs = await storage.getSubcategories(categoryId);
+    res.json(subs);
+  });
+
+  app.get("/api/subcategories/by-slug/:slug", async (req, res) => {
+    const sub = await storage.getSubcategoryBySlug(req.params.slug);
+    if (!sub) return res.status(404).json({ message: "Not found" });
+    res.json(sub);
+  });
+
+  // ─── Subcategories Admin CRUD ────────────────────────────────────
+  app.post("/api/admin/subcategories", requireAdmin, async (req, res) => {
+    try {
+      const sub = await storage.createSubcategory(req.body);
+      res.json(sub);
+    } catch (e: any) { res.status(400).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/subcategories/:id", requireAdmin, async (req, res) => {
+    try {
+      const sub = await storage.updateSubcategory(parseInt(req.params.id), req.body);
+      res.json(sub);
+    } catch (e: any) { res.status(400).json({ message: e.message }); }
+  });
+
+  app.delete("/api/admin/subcategories/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteSubcategory(parseInt(req.params.id));
+      res.json({ success: true });
+    } catch (e: any) { res.status(400).json({ message: e.message }); }
+  });
+
   // ─── Products (Public) ───────────────────────────────────────────
   // ─── Image serving (converts base64 DB data to real HTTP images) ──
   app.get("/api/products/image/:id", async (req, res) => {

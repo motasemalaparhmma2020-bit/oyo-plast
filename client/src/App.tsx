@@ -45,6 +45,8 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError:
 
 import Home from "@/pages/Home";
 import Products from "@/pages/Products";
+import CategoryPage from "@/pages/CategoryPage";
+import CategoriesPage from "@/pages/CategoriesPage";
 import ProductDetail from "@/pages/ProductDetail";
 import Cart from "@/pages/Cart";
 import Checkout from "@/pages/Checkout";
@@ -396,6 +398,8 @@ function Router() {
             {/* Public pages - no auth required */}
             <Route path="/" component={Home} />
             <Route path="/products" component={Products} />
+            <Route path="/categories" component={CategoriesPage} />
+            <Route path="/category/:slug" component={CategoryPage} />
             <Route path="/product/:id" component={ProductDetail} />
             <Route path="/products/:id" component={ProductDetail} />
             <Route path="/cart" component={Cart} />

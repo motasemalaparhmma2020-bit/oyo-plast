@@ -1,9 +1,11 @@
 import {
-  users, products, categories, banners, offers, orders, orderItems, navigationSettings, homePageSettings, displaySettings,
+  users, products, categories, subcategories, banners, offers, orders, orderItems, navigationSettings, homePageSettings, displaySettings,
   homeSections,
   type User,
   type Product,
   type Category,
+  type Subcategory,
+  type InsertSubcategory,
   type Banner, type Offer,
   type Order,
   type NavigationSettings,
@@ -41,6 +43,12 @@ export interface IStorage {
   createCategory(category: InsertCategory): Promise<Category>;
   updateCategory(id: number, data: Partial<InsertCategory>): Promise<Category>;
   deleteCategory(id: number): Promise<void>;
+
+  getSubcategories(categoryId?: number): Promise<Subcategory[]>;
+  getSubcategoryBySlug(slug: string): Promise<Subcategory | undefined>;
+  createSubcategory(data: InsertSubcategory): Promise<Subcategory>;
+  updateSubcategory(id: number, data: Partial<InsertSubcategory>): Promise<Subcategory>;
+  deleteSubcategory(id: number): Promise<void>;
 
   getBanners(): Promise<Banner[]>;
   createBanner(data: any): Promise<Banner>;
@@ -165,6 +173,34 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCategory(id: number): Promise<void> {
     await db.delete(categories).where(eq(categories.id, id));
+  }
+
+  async getSubcategories(categoryId?: number): Promise<Subcategory[]> {
+    if (categoryId !== undefined) {
+      return await db.select().from(subcategories)
+        .where(eq(subcategories.categoryId, categoryId))
+        .orderBy(subcategories.sortOrder, subcategories.id);
+    }
+    return await db.select().from(subcategories).orderBy(subcategories.sortOrder, subcategories.id);
+  }
+
+  async getSubcategoryBySlug(slug: string): Promise<Subcategory | undefined> {
+    const [sub] = await db.select().from(subcategories).where(eq(subcategories.slug, slug));
+    return sub;
+  }
+
+  async createSubcategory(data: InsertSubcategory): Promise<Subcategory> {
+    const [sub] = await db.insert(subcategories).values(data).returning();
+    return sub;
+  }
+
+  async updateSubcategory(id: number, data: Partial<InsertSubcategory>): Promise<Subcategory> {
+    const [sub] = await db.update(subcategories).set(data as any).where(eq(subcategories.id, id)).returning();
+    return sub;
+  }
+
+  async deleteSubcategory(id: number): Promise<void> {
+    await db.delete(subcategories).where(eq(subcategories.id, id));
   }
 
   async getBanners(): Promise<Banner[]> {
