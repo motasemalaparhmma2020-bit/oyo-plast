@@ -516,6 +516,8 @@ export const displaySettings = pgTable("display_settings", {
   // ── تخطيط الأقسام الدائرية ──────────────────────────────────────────────────
   categoriesLayout: text("categories_layout").default("scroll").notNull(),      // scroll | grid
   categoriesRows: integer("categories_rows").default(2).notNull(),              // عدد الصفوف في وضع الشبكة
+  categoriesShape: text("categories_shape").default("circle").notNull(),        // circle | rounded
+  categoriesBorderRadius: integer("categories_border_radius").default(12).notNull(), // انحناء الزوايا (بكسل) — يُستخدم في وضع rounded
   // ── إعدادات التقسيط ────────────────────────────────────────────────────────
   installmentEnabled: boolean("installment_enabled").default(true).notNull(),           // تفعيل نظام التقسيط
   installmentMinAmount: integer("installment_min_amount").default(50000).notNull(),     // الحد الأدنى للطلب لتفعيل التقسيط (ريال يمني)

@@ -2161,6 +2161,132 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                 : `✅ الأقسام ستظهر في شبكة ${settings?.categoriesRows ?? 2} صفوف × 4 أعمدة = ${(settings?.categoriesRows ?? 2) * 4} قسم — الزائد يخفى`}
             </p>
           </div>
+
+          {/* ── شكل حدود الأقسام ── */}
+          <div className="border-t pt-4 space-y-4">
+            <Label className="text-sm font-semibold">شكل حدود الأقسام</Label>
+
+            {/* اختيار الشكل */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* دائري */}
+              <button
+                type="button"
+                onClick={() => { setSettings((s: any) => ({ ...s, categoriesShape: "circle" })); handleUpdate('categoriesShape', 'circle'); }}
+                className={`flex flex-col items-center gap-2.5 p-4 rounded-xl border-2 transition-all ${
+                  (settings?.categoriesShape ?? "circle") === "circle"
+                    ? "border-primary bg-primary/5"
+                    : "border-muted hover:border-primary/40"
+                }`}
+                data-testid="shape-circle"
+                disabled={updateMutation.isPending}
+              >
+                <div className="flex gap-2 items-center">
+                  {[0,1,2,3].map(i => (
+                    <div key={i} className="w-8 h-8 rounded-full bg-muted-foreground/25 border border-muted-foreground/20" />
+                  ))}
+                </div>
+                <span className="text-xs font-bold">دائري ●</span>
+                <span className="text-[10px] text-muted-foreground">الشكل الكامل المستدير</span>
+              </button>
+
+              {/* زوايا مستديرة */}
+              <button
+                type="button"
+                onClick={() => { setSettings((s: any) => ({ ...s, categoriesShape: "rounded" })); handleUpdate('categoriesShape', 'rounded'); }}
+                className={`flex flex-col items-center gap-2.5 p-4 rounded-xl border-2 transition-all ${
+                  (settings?.categoriesShape ?? "circle") === "rounded"
+                    ? "border-primary bg-primary/5"
+                    : "border-muted hover:border-primary/40"
+                }`}
+                data-testid="shape-rounded"
+                disabled={updateMutation.isPending}
+              >
+                <div className="flex gap-2 items-center">
+                  {[0,1,2,3].map(i => (
+                    <div
+                      key={i}
+                      className="w-8 h-8 bg-muted-foreground/25 border border-muted-foreground/20"
+                      style={{ borderRadius: `${settings?.categoriesBorderRadius ?? 12}px` }}
+                    />
+                  ))}
+                </div>
+                <span className="text-xs font-bold">زوايا مستديرة ▪</span>
+                <span className="text-[10px] text-muted-foreground">تحكم يدوي بالانحناء</span>
+              </button>
+            </div>
+
+            {/* سلايدر الانحناء — يظهر فقط في وضع rounded */}
+            {(settings?.categoriesShape ?? "circle") === "rounded" && (
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">درجة انحناء الزوايا</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={50}
+                      className="w-16 h-8 text-sm text-center font-bold"
+                      value={settings?.categoriesBorderRadius ?? 12}
+                      onChange={e => {
+                        const v = Math.max(0, Math.min(50, +e.target.value));
+                        setSettings((s: any) => ({ ...s, categoriesBorderRadius: v }));
+                      }}
+                      onBlur={e => handleUpdate('categoriesBorderRadius', Math.max(0, Math.min(50, +e.target.value)))}
+                      disabled={updateMutation.isPending}
+                      data-testid="input-border-radius"
+                    />
+                    <span className="text-xs text-muted-foreground">بكسل</span>
+                  </div>
+                </div>
+
+                {/* سلايدر */}
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground w-6 text-center">0</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={50}
+                    value={settings?.categoriesBorderRadius ?? 12}
+                    onChange={e => {
+                      const v = +e.target.value;
+                      setSettings((s: any) => ({ ...s, categoriesBorderRadius: v }));
+                    }}
+                    onMouseUp={e => handleUpdate('categoriesBorderRadius', +(e.target as HTMLInputElement).value)}
+                    onTouchEnd={e => handleUpdate('categoriesBorderRadius', +(e.target as HTMLInputElement).value)}
+                    className="flex-1 accent-primary"
+                    disabled={updateMutation.isPending}
+                    data-testid="slider-border-radius"
+                  />
+                  <span className="text-xs text-muted-foreground w-6 text-center">50</span>
+                </div>
+
+                {/* معاينة حية للشكل */}
+                <div className="flex items-center gap-3 pt-1">
+                  <span className="text-xs text-muted-foreground">معاينة:</span>
+                  <div className="flex gap-2">
+                    {[0,1,2,3].map(i => (
+                      <div
+                        key={i}
+                        className="bg-primary/20 border-2 border-primary/40 transition-all duration-200"
+                        style={{
+                          width: "36px",
+                          height: "36px",
+                          borderRadius: `${settings?.categoriesBorderRadius ?? 12}px`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs text-muted-foreground font-mono">
+                    {settings?.categoriesBorderRadius ?? 12}px
+                  </span>
+                </div>
+
+                <p className="text-[10px] text-muted-foreground">
+                  0 = مربع تماماً &nbsp;·&nbsp; 12 = ناعم &nbsp;·&nbsp; 50 = شبه دائري
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Product Card Settings */}

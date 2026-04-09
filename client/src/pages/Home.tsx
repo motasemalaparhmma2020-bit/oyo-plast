@@ -300,6 +300,8 @@ export default function Home() {
           perRow={displaySettings.categoriesPerRow}
           layout={displaySettings.categoriesLayout ?? "scroll"}
           rows={displaySettings.categoriesRows ?? 2}
+          shape={displaySettings.categoriesShape ?? "circle"}
+          borderRadius={displaySettings.categoriesBorderRadius ?? 12}
         />
       )}
 
