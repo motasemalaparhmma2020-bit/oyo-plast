@@ -6,12 +6,99 @@ import { OfferBanners } from "@/components/OfferBanners";
 import { CategoryCircles } from "@/components/CategoryCircles";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { ArrowLeft, Package } from "lucide-react";
+import { ArrowLeft, Package, Flame, ChevronLeft } from "lucide-react";
 import { WhyUsSection, StatsSection, FaqSection } from "@/components/HomeSections";
 import { useQuery } from "@tanstack/react-query";
 import useEmblaCarousel from "embla-carousel-react";
 import { useEffect, useRef, useState } from "react";
 import { useSEO } from "@/hooks/use-seo";
+
+// ── عداد تنازلي حتى منتصف الليل ────────────────────────────────────────────
+function useCountdown() {
+  const getLeft = () => {
+    const now = new Date();
+    const mid = new Date(); mid.setHours(24, 0, 0, 0);
+    return Math.max(0, Math.floor((mid.getTime() - now.getTime()) / 1000));
+  };
+  const [sec, setSec] = useState(getLeft);
+  useEffect(() => {
+    const t = setInterval(() => setSec(getLeft()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(Math.floor(sec / 3600))}:${pad(Math.floor((sec % 3600) / 60))}:${pad(sec % 60)}`;
+}
+
+// ── قسم عروض اليوم ───────────────────────────────────────────────────────────
+function FlashSaleSection({ displaySettings, primaryColor }: { displaySettings: any; primaryColor: string }) {
+  const countdown = useCountdown();
+  const [emblaRef] = useEmblaCarousel({ direction: "rtl", loop: false, align: "start", dragFree: true });
+
+  const { data: products = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/products/by-tag", "flash", 10],
+    queryFn: async () => {
+      const res = await fetch("/api/products/by-tag/flash?limit=10");
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+
+  if (!isLoading && products.length === 0) return null;
+
+  return (
+    <section className="py-3" data-testid="flash-sale-section">
+      {/* رأس القسم */}
+      <div
+        className="mx-4 rounded-2xl mb-3 px-4 py-3 flex items-center justify-between"
+        style={{ background: "linear-gradient(135deg, #ff4e00 0%, #ec9f05 100%)" }}
+      >
+        <Link href="/products?tag=flash">
+          <button className="flex items-center gap-1 text-white/90 text-sm font-medium" data-testid="btn-flash-all">
+            عرض الكل
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+        </Link>
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-1.5">
+              <Flame className="h-5 w-5 text-white" />
+              <span className="text-white font-black text-lg leading-tight">عروض اليوم</span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-white/80 text-xs">تنتهي خلال</span>
+              <span
+                className="font-mono font-black text-sm bg-white/20 text-white px-2 py-0.5 rounded-lg tracking-widest"
+                data-testid="flash-countdown"
+              >
+                {countdown}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* المنتجات */}
+      {isLoading ? (
+        <div className="flex gap-3 px-4 overflow-hidden">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="flex-shrink-0 w-40 h-60 bg-gray-100 rounded-xl animate-pulse" />
+          ))}
+        </div>
+      ) : (
+        <div className="overflow-hidden px-4" ref={emblaRef} dir="rtl">
+          <div className="flex gap-3">
+            {products.map((product: any) => (
+              <div key={product.id} className="flex-shrink-0 w-40">
+                <ProductCard product={product} cardWidth={160} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
 
 // ── قسم ديناميكي واحد ─────────────────────────────────────────────────────
 function HomeSectionBlock({ section, displaySettings, primaryColor }: {
@@ -213,6 +300,9 @@ export default function Home() {
           perRow={displaySettings.categoriesPerRow}
         />
       )}
+
+      {/* ── عروض اليوم (Flash Sale) ── */}
+      <FlashSaleSection displaySettings={displaySettings} primaryColor={primaryColor} />
 
       {/* ── الأقسام الديناميكية ── */}
       {enabledSections.map((section: any) => (
