@@ -61,6 +61,10 @@ export default function Checkout() {
   const shippingFee: number = displaySettings?.shippingFee ?? 0;
   const freeShippingMin: number = displaySettings?.sadeemFreeShippingMin ?? 0;
   const codEnabled: boolean = displaySettings?.codEnabled ?? true;
+  const installmentEnabled: boolean = displaySettings?.installmentEnabled ?? true;
+  const installmentMin: number = displaySettings?.installmentMinAmount ?? 50000;
+  const installmentPercentages: number[] = (displaySettings?.installmentPercentages ?? "30,40,50")
+    .split(",").map((p: string) => parseInt(p.trim())).filter((p: number) => !isNaN(p) && p > 0);
 
   const [formData, setFormData] = useState({
     customerName: "",
@@ -87,7 +91,7 @@ export default function Checkout() {
 
   // ─── حالة نظام التقسيط ──────────────────────────────────────────────
   const [installmentType, setInstallmentType] = useState<null | "deposit_cod" | "supplier_guaranteed">(null);
-  const [depositPercent, setDepositPercent] = useState<30 | 40 | 50>(30);
+  const [depositPercent, setDepositPercent] = useState<number>(30);
   const [guarantorName, setGuarantorName] = useState("");
   const [guarantorPhone, setGuarantorPhone] = useState("");
   const [guarantorNotes, setGuarantorNotes] = useState("");
@@ -98,6 +102,13 @@ export default function Checkout() {
     queryKey: ["/api/public/suppliers-list"],
     staleTime: 300000,
   });
+
+  // تهيئة نسبة المقدّم من الإعدادات عند تحميلها
+  useEffect(() => {
+    if (installmentPercentages.length > 0) {
+      setDepositPercent(prev => installmentPercentages.includes(prev) ? prev : installmentPercentages[0]);
+    }
+  }, [displaySettings]);
 
   const [couponCode, setCouponCode] = useState("");
   const [couponData, setCouponData] = useState<{ code: string; discountPercent: number } | null>(null);
@@ -220,7 +231,6 @@ export default function Checkout() {
   const isInstallmentOrder = installmentType !== null;
   const depositAmount = isInstallmentOrder ? Math.round(finalTotal * (depositPercent / 100)) : 0;
   const remainingAmount = isInstallmentOrder ? finalTotal - depositAmount : 0;
-  const INSTALLMENT_MIN = 50000; // الحد الأدنى لتفعيل التقسيط (50,000 ر.ي)
 
   const validateCoupon = async () => {
     if (!couponCode.trim()) { setCouponError("أدخل كود الخصم"); return; }
@@ -932,8 +942,8 @@ export default function Checkout() {
                 </>
               )}
 
-              {/* ── خيارات التقسيط (تظهر للطلبات > 50,000 ر.ي) ── */}
-              {finalTotal >= INSTALLMENT_MIN && (
+              {/* ── خيارات التقسيط ── */}
+              {installmentEnabled && finalTotal >= installmentMin && (
                 <>
                   <div className="mx-4 mt-1 mb-1">
                     <p className="text-xs text-muted-foreground font-semibold flex items-center gap-1">
@@ -1027,8 +1037,8 @@ export default function Checkout() {
               {/* نسبة المقدّم */}
               <div>
                 <p className="text-xs text-muted-foreground mb-2">اختر نسبة المقدّم</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {([30, 40, 50] as const).map((pct) => (
+                <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${Math.min(installmentPercentages.length, 4)}, 1fr)` }}>
+                  {installmentPercentages.map((pct) => (
                     <button
                       key={pct}
                       type="button"
