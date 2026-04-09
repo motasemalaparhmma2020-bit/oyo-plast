@@ -8,7 +8,7 @@ import {
   ArrowRight, Upload, Check, Loader2, Banknote,
   MapPin, Smartphone, Copy, ChevronDown, ChevronUp,
   Clock, MessageSquare, Wallet, Tag, X, CheckCircle,
-  SplitSquareVertical, Users, Phone, FileText, ChevronRight
+  SplitSquareVertical, Users, Phone, FileText, ChevronRight, Building2
 } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -44,6 +44,15 @@ export default function Checkout() {
   const isLoadingCart = !isAuthenticated ? false : isLoading;
 
   const { data: digitalWallets = [] } = useDigitalWallets();
+
+  const { data: bankAccounts = [] } = useQuery<any[]>({
+    queryKey: ["/api/bank-accounts"],
+    queryFn: async () => {
+      const res = await fetch("/api/bank-accounts");
+      return res.ok ? res.json() : [];
+    },
+    staleTime: 300000,
+  });
 
   const { data: displaySettings } = useQuery<any>({
     queryKey: ["/api/display-settings"],
@@ -202,6 +211,11 @@ export default function Checkout() {
     ? digitalWallets.find((w: any) => `wallet_${w.id}` === formData.paymentMethod)
     : null;
 
+  const isBankTransfer = formData.paymentMethod.startsWith("bank_");
+  const selectedBank = isBankTransfer
+    ? bankAccounts.find((b: any) => `bank_${b.id}` === formData.paymentMethod)
+    : null;
+
   // ─── حسابات التقسيط ───────────────────────────────────────────────
   const isInstallmentOrder = installmentType !== null;
   const depositAmount = isInstallmentOrder ? Math.round(finalTotal * (depositPercent / 100)) : 0;
@@ -251,9 +265,15 @@ export default function Checkout() {
     if (isWalletPayment && selectedWallet?.requiresProof && !receiptFile) {
       toast({ title: "خطأ", description: "ارفع صورة إيصال التحويل", variant: "destructive" }); return;
     }
+    if (isBankTransfer && !formData.purchaseCode?.trim()) {
+      toast({ title: "خطأ", description: "أدخل رقم الحوالة البنكية أو رقم الإيصال", variant: "destructive" }); return;
+    }
+    if (isBankTransfer && !receiptFile) {
+      toast({ title: "خطأ", description: "ارفع صورة إيصال التحويل البنكي", variant: "destructive" }); return;
+    }
     // تحقق من بيانات التقسيط
-    if (installmentType === "deposit_cod" && !isWalletPayment) {
-      toast({ title: "خطأ", description: "اختر محفظة إلكترونية لدفع المقدّم", variant: "destructive" }); return;
+    if (installmentType === "deposit_cod" && !isWalletPayment && !isBankTransfer) {
+      toast({ title: "خطأ", description: "اختر محفظة إلكترونية أو تحويل بنكي لدفع المقدّم", variant: "destructive" }); return;
     }
     if (installmentType === "supplier_guaranteed" && !guarantorName.trim()) {
       toast({ title: "خطأ", description: "أدخل اسم الكفيل (المورد)", variant: "destructive" }); return;
@@ -266,8 +286,13 @@ export default function Checkout() {
     try {
       const normalizedPaymentMethod = installmentType
         ? (installmentType === "deposit_cod" ? "installment_deposit_cod" : "supplier_guaranteed")
-        : (isWalletPayment ? "digital_wallet" : formData.paymentMethod);
+        : isWalletPayment ? "digital_wallet"
+        : isBankTransfer ? "bank_transfer"
+        : formData.paymentMethod;
       const deliveryNote = deliveryTime === "later" ? "\n[وقت التسليم: لاحقاً]" : "";
+      const bankTransferNote = isBankTransfer && selectedBank
+        ? `\n[تحويل بنكي إلى: ${selectedBank.bankName} — رقم الحوالة: ${formData.purchaseCode}]`
+        : "";
       const installmentNote = installmentType === "deposit_cod"
         ? `\n[تقسيط: مقدّم ${depositPercent}% = ${formatPrice(depositAmount)} ${currLabel} + باقي ${formatPrice(remainingAmount)} ${currLabel} عند التسليم]`
         : installmentType === "supplier_guaranteed"
@@ -287,7 +312,7 @@ export default function Checkout() {
           shippingCost: effectiveShippingFee,
           paymentMethod: normalizedPaymentMethod,
           purchaseCode: formData.purchaseCode || undefined,
-          notes: (formData.notes || "") + deliveryNote + installmentNote,
+          notes: (formData.notes || "") + deliveryNote + bankTransferNote + installmentNote,
           total: finalTotal,
           depositAmount: installmentType ? depositAmount : undefined,
           items: cartItems,
@@ -382,6 +407,8 @@ export default function Checkout() {
     ? "تقسيط بكفيل مورد"
     : isWalletPayment
     ? (selectedWallet?.name ?? "محفظة إلكترونية")
+    : isBankTransfer
+    ? (selectedBank ? `تحويل بنكي — ${selectedBank.bankName}` : "تحويل بنكي")
     : "الدفع عند الاستلام";
 
   return (
@@ -781,6 +808,130 @@ export default function Checkout() {
                 );
               })}
 
+              {/* ── التحويل البنكي ── */}
+              {bankAccounts.filter((b: any) => b.isActive).length > 0 && (
+                <>
+                  <div className="mx-4 mt-1 mb-1">
+                    <p className="text-xs text-muted-foreground font-semibold flex items-center gap-1">
+                      <Building2 className="h-3.5 w-3.5 text-blue-600" />
+                      تحويل بنكي
+                    </p>
+                  </div>
+                  {bankAccounts.filter((b: any) => b.isActive).map((bank: any) => {
+                    const bId = `bank_${bank.id}`;
+                    const isSelected = formData.paymentMethod === bId;
+                    return (
+                      <div key={bank.id}>
+                        <button
+                          type="button"
+                          className={`w-full flex items-center gap-3 px-4 py-3 transition-colors ${
+                            isSelected ? "bg-blue-50 dark:bg-blue-900/20" : "hover:bg-muted/50"
+                          }`}
+                          onClick={() => {
+                            setFormData({ ...formData, paymentMethod: bId, purchaseCode: "" });
+                            setReceiptFile(null);
+                            setInstallmentType(null);
+                          }}
+                          data-testid={`payment-method-${bId}`}
+                        >
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                            isSelected ? "border-blue-600" : "border-muted-foreground"
+                          }`}>
+                            {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                          </div>
+                          {bank.logoUrl ? (
+                            <img src={bank.logoUrl} alt={bank.bankName} className="w-9 h-9 rounded-lg object-contain shrink-0 border bg-white p-0.5" />
+                          ) : (
+                            <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+                              <Building2 className="h-4 w-4 text-blue-600" />
+                            </div>
+                          )}
+                          <div className="text-right flex-1">
+                            <span className="text-sm font-medium">{bank.bankName}</span>
+                            <p className="text-xs text-muted-foreground">{bank.accountName}</p>
+                          </div>
+                          {isSelected && <CheckCircle className="h-4 w-4 text-blue-600 shrink-0" />}
+                        </button>
+
+                        {isSelected && (
+                          <div className="mx-4 mb-3 rounded-xl border bg-muted/30 overflow-hidden">
+                            <div className="p-3 border-b space-y-1.5">
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-muted-foreground">اسم صاحب الحساب</span>
+                                <span className="text-sm font-bold">{bank.accountName}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-muted-foreground">رقم الحساب</span>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-sm font-mono font-bold">{bank.accountNumber}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => { navigator.clipboard.writeText(bank.accountNumber); toast({ title: "✅ تم نسخ رقم الحساب" }); }}
+                                    className="text-primary"
+                                  >
+                                    <Copy className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                              {bank.iban && (
+                                <div className="flex justify-between items-center">
+                                  <span className="text-xs text-muted-foreground">IBAN</span>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-xs font-mono">{bank.iban}</span>
+                                    <button type="button" onClick={() => { navigator.clipboard.writeText(bank.iban); toast({ title: "✅ تم نسخ IBAN" }); }} className="text-primary">
+                                      <Copy className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              {bank.branch && <p className="text-xs text-muted-foreground">الفرع: {bank.branch}</p>}
+                            </div>
+                            {bank.instructions && (
+                              <p className="px-3 py-2 text-xs text-blue-600 dark:text-blue-400 border-b bg-blue-50 dark:bg-blue-900/20">
+                                {bank.instructions}
+                              </p>
+                            )}
+                            <div className="p-3 space-y-2">
+                              <div>
+                                <p className="text-xs font-semibold mb-1">رقم الحوالة البنكية *</p>
+                                <Input
+                                  type="text"
+                                  value={formData.purchaseCode}
+                                  onChange={e => setFormData({ ...formData, purchaseCode: e.target.value })}
+                                  placeholder="أدخل رقم الحوالة أو رقم الإيصال"
+                                  className="h-9 text-sm font-mono"
+                                  data-testid="input-bank-transfer-code"
+                                />
+                              </div>
+                              <div>
+                                <p className="text-xs font-semibold mb-1">صورة إيصال التحويل *</p>
+                                <div
+                                  className="border-2 border-dashed rounded-lg p-3 text-center cursor-pointer hover:border-blue-400 transition-colors"
+                                  onClick={() => fileInputRef.current?.click()}
+                                  data-testid="upload-bank-receipt-area"
+                                >
+                                  {receiptFile ? (
+                                    <div className="flex items-center justify-center gap-2 text-green-600">
+                                      <Check className="h-4 w-4" />
+                                      <span className="text-sm font-medium truncate max-w-[180px]">{receiptFile.name}</span>
+                                    </div>
+                                  ) : (
+                                    <div className="text-muted-foreground">
+                                      <Upload className="h-5 w-5 mx-auto mb-1" />
+                                      <p className="text-xs">اضغط لرفع صورة الإيصال</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
               {/* ── خيارات التقسيط (تظهر للطلبات > 50,000 ر.ي) ── */}
               {finalTotal >= INSTALLMENT_MIN && (
                 <>
@@ -908,9 +1059,9 @@ export default function Checkout() {
                 </div>
               </div>
 
-              {/* اختيار المحفظة لدفع المقدّم */}
+              {/* اختيار طريقة دفع المقدّم */}
               <div>
-                <p className="text-xs text-muted-foreground mb-2">اختر محفظة لدفع المقدّم الآن</p>
+                <p className="text-xs text-muted-foreground mb-2">اختر طريقة دفع المقدّم الآن</p>
                 <div className="space-y-1">
                   {digitalWallets.filter((w: any) => w.isActive).map((wallet: any) => {
                     const wId = `wallet_${wallet.id}`;
@@ -940,13 +1091,43 @@ export default function Checkout() {
                       </button>
                     );
                   })}
+                  {bankAccounts.filter((b: any) => b.isActive).map((bank: any) => {
+                    const bId = `bank_${bank.id}`;
+                    const isSel = formData.paymentMethod === bId;
+                    return (
+                      <button
+                        key={bank.id}
+                        type="button"
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-right ${isSel ? "border-blue-500 bg-blue-50/80" : "border-muted hover:bg-muted/40"}`}
+                        onClick={() => setFormData(f => ({ ...f, paymentMethod: bId, purchaseCode: "" }))}
+                        data-testid={`deposit-bank-${bank.id}`}
+                      >
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${isSel ? "border-blue-500" : "border-gray-300"}`}>
+                          {isSel && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                        </div>
+                        {bank.logoUrl ? (
+                          <img src={bank.logoUrl} alt={bank.bankName} className="w-7 h-7 rounded-md object-contain border bg-white" />
+                        ) : (
+                          <Building2 className="h-4 w-4 text-blue-600" />
+                        )}
+                        <span className="text-sm font-medium">{bank.bankName}</span>
+                        <span className="text-xs text-muted-foreground mr-auto">{bank.accountNumber}</span>
+                        <button type="button" className="text-primary shrink-0"
+                          onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(bank.accountNumber); toast({ title: "✅ تم نسخ الرقم" }); }}>
+                          <Copy className="h-3 w-3" />
+                        </button>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* كود الحوالة للمقدّم */}
-              {isWalletPayment && (
+              {(isWalletPayment || isBankTransfer) && (
                 <div>
-                  <p className="text-xs font-semibold mb-1">رقم حوالة المقدّم *</p>
+                  <p className="text-xs font-semibold mb-1">
+                    {isBankTransfer ? "رقم الحوالة البنكية *" : "رقم حوالة المقدّم *"}
+                  </p>
                   <Input
                     value={formData.purchaseCode}
                     onChange={e => setFormData(f => ({ ...f, purchaseCode: e.target.value }))}

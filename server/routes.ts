@@ -2089,6 +2089,46 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── إرسال تذكير واتساب لعميل التقسيط ───────────────────────────
+  app.post("/api/admin/installment-plans/:id/remind", requireAdmin, async (req, res) => {
+    try {
+      const planId = parseInt(req.params.id);
+      const { pool: dbPool } = await import("./db");
+      const planRes = await dbPool.query(
+        `SELECT ip.*, o.shipping_city FROM installment_plans ip LEFT JOIN orders o ON o.id=ip.order_id WHERE ip.id=$1`,
+        [planId]
+      );
+      if (!planRes.rows[0]) return res.status(404).json({ message: "الخطة غير موجودة" });
+      const p = planRes.rows[0];
+      const remaining = Number(p.remaining_amount).toLocaleString("ar-YE");
+      const deposit = Number(p.deposit_amount).toLocaleString("ar-YE");
+      const status = p.deposit_paid ? `المقدّم مدفوع ✅ — الباقي: ${remaining} ر.ي` : `المقدّم المطلوب: ${deposit} ر.ي`;
+      const msgBody = `📦 أويو بلاست — تذكير بخطة التقسيط\n\nالعزيز/ة ${p.customer_name},\nلديك دفعة مستحقة لطلب رقم #${p.order_id}\n${status}\n\nللاستفسار: wa.me/967774997589`;
+      try {
+        if (process.env.TWILIO_ACCOUNT_SID) {
+          const twilio = (await import("twilio")).default;
+          const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+          const phone = p.customer_phone.replace(/^0/, "967").replace(/^\+/, "");
+          await client.messages.create({
+            from: `whatsapp:${process.env.TWILIO_FROM_NUMBER}`,
+            to: `whatsapp:+${phone}`,
+            body: msgBody,
+          });
+        }
+      } catch (twilioErr: any) {
+        console.error("Twilio reminder error:", twilioErr.message);
+        return res.status(500).json({ message: "فشل إرسال التذكير عبر واتساب", details: twilioErr.message });
+      }
+      await dbPool.query(
+        `UPDATE installment_plans SET admin_notes = COALESCE(admin_notes,'') || $1 WHERE id=$2`,
+        [`\n[تذكير أُرسل ${new Date().toLocaleDateString("ar-YE")}]`, planId]
+      );
+      res.json({ ok: true, message: "تم إرسال التذكير عبر واتساب" });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إرسال التذكير", details: e.message });
+    }
+  });
+
   // إحصائيات التقسيط للإدارة
   app.get("/api/admin/installment-plans/stats/summary", requireAdmin, async (req, res) => {
     try {
@@ -2967,6 +3007,101 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ message: "فشل حذف المحفظة", details: e.message });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════
+  // ─── Bank Accounts (حسابات بنكية للتحويل) ─────────────────────────
+  // ══════════════════════════════════════════════════════════════════
+
+  app.get("/api/bank-accounts", async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        `SELECT id, bank_name as "bankName", account_name as "accountName", account_number as "accountNumber", iban, branch, logo_url as "logoUrl", instructions, is_active as "isActive", sort_order as "sortOrder" FROM bank_accounts WHERE is_active = true ORDER BY sort_order ASC, id ASC`
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الحسابات البنكية", details: e.message });
+    }
+  });
+
+  app.get("/api/admin/bank-accounts", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        `SELECT id, bank_name as "bankName", account_name as "accountName", account_number as "accountNumber", iban, branch, logo_url as "logoUrl", instructions, is_active as "isActive", sort_order as "sortOrder" FROM bank_accounts ORDER BY sort_order ASC, id ASC`
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الحسابات البنكية", details: e.message });
+    }
+  });
+
+  app.post("/api/admin/bank-accounts", requireAdmin, upload.single("logo"), async (req, res) => {
+    try {
+      const { bankName, accountName, accountNumber, iban, branch, instructions, isActive, sortOrder } = req.body;
+      if (!bankName || !accountName || !accountNumber) {
+        return res.status(400).json({ message: "اسم البنك واسم الحساب ورقم الحساب مطلوبة" });
+      }
+      let logoUrl = "";
+      if (req.file) {
+        logoUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+      }
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        `INSERT INTO bank_accounts (bank_name, account_name, account_number, iban, branch, logo_url, instructions, is_active, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id, bank_name as "bankName", account_name as "accountName", account_number as "accountNumber", iban, branch, logo_url as "logoUrl", instructions, is_active as "isActive", sort_order as "sortOrder"`,
+        [bankName, accountName, accountNumber, iban || null, branch || null, logoUrl, instructions || null, isActive !== "false", parseInt(sortOrder) || 0]
+      );
+      res.status(201).json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إضافة الحساب البنكي", details: e.message });
+    }
+  });
+
+  app.patch("/api/admin/bank-accounts/:id", requireAdmin, upload.single("logo"), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { bankName, accountName, accountNumber, iban, branch, instructions, isActive, sortOrder } = req.body;
+      const { pool: dbPool } = await import("./db");
+      const setClauses: string[] = [];
+      const values: any[] = [];
+      let idx = 1;
+      if (bankName !== undefined) { setClauses.push(`bank_name = $${idx++}`); values.push(bankName); }
+      if (accountName !== undefined) { setClauses.push(`account_name = $${idx++}`); values.push(accountName); }
+      if (accountNumber !== undefined) { setClauses.push(`account_number = $${idx++}`); values.push(accountNumber); }
+      if (iban !== undefined) { setClauses.push(`iban = $${idx++}`); values.push(iban || null); }
+      if (branch !== undefined) { setClauses.push(`branch = $${idx++}`); values.push(branch || null); }
+      if (instructions !== undefined) { setClauses.push(`instructions = $${idx++}`); values.push(instructions || null); }
+      if (isActive !== undefined) { setClauses.push(`is_active = $${idx++}`); values.push(isActive !== "false" && isActive !== false); }
+      if (sortOrder !== undefined) { setClauses.push(`sort_order = $${idx++}`); values.push(parseInt(sortOrder) || 0); }
+      if (req.file) {
+        setClauses.push(`logo_url = $${idx++}`);
+        values.push(`data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`);
+      }
+      if (!setClauses.length) return res.status(400).json({ message: "لا توجد تحديثات" });
+      values.push(parseInt(id));
+      const result = await dbPool.query(
+        `UPDATE bank_accounts SET ${setClauses.join(", ")} WHERE id = $${idx}
+         RETURNING id, bank_name as "bankName", account_name as "accountName", account_number as "accountNumber", iban, branch, logo_url as "logoUrl", instructions, is_active as "isActive", sort_order as "sortOrder"`,
+        values
+      );
+      if (!result.rows[0]) return res.status(404).json({ message: "الحساب غير موجود" });
+      res.json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث الحساب البنكي", details: e.message });
+    }
+  });
+
+  app.delete("/api/admin/bank-accounts/:id", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query("DELETE FROM bank_accounts WHERE id = $1", [parseInt(req.params.id)]);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حذف الحساب البنكي", details: e.message });
     }
   });
 

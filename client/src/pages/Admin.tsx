@@ -3,10 +3,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Order, Product } from "@shared/schema";
 import FinancialReports from "@/components/FinancialReports";
 import AdminInstallments from "@/components/AdminInstallments";
+import AdminBankAccounts from "@/components/AdminBankAccounts";
 import AdminPricing from "@/components/AdminPricing";
 import AdminSecurityLogs from "@/components/AdminSecurityLogs";
 import { AdminReviews } from "@/components/AdminReviews";
 import AdminSectionSettings from "@/components/AdminSectionSettings";
+import { AdminSubcategories } from "@/components/AdminSubcategories";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -5457,6 +5459,7 @@ export default function Admin() {
                 )}
               </CardContent>
             </Card>
+            <AdminSubcategories />
           </TabsContent>
 
           <TabsContent value="inventory">
@@ -5724,6 +5727,7 @@ export default function Admin() {
           {/* ─── Installments Tab ──────────────────────────────────────── */}
           <TabsContent value="installments">
             <AdminInstallments adminToken={adminToken} />
+            <AdminBankAccounts adminToken={adminToken} />
           </TabsContent>
 
           {/* ─── Smart Pricing Tab ─────────────────────────────────────── */}

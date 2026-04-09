@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
   Loader2, SplitSquareVertical, Users, CheckCircle, XCircle,
-  Clock, AlertCircle, DollarSign, ShoppingBag, ArrowRight, Phone
+  Clock, AlertCircle, DollarSign, ShoppingBag, ArrowRight, Phone, Bell
 } from "lucide-react";
 
 interface InstallmentPlan {
@@ -66,6 +66,27 @@ function PlanCard({ plan, adminToken, onUpdate }: { plan: InstallmentPlan; admin
     },
     onError: (e: any) => {
       toast({ title: "خطأ", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const remindMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/admin/installment-plans/${plan.id}/remind`, {
+        method: "POST",
+        headers: { "x-admin-token": adminToken },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "فشل إرسال التذكير");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "✅ تم إرسال التذكير عبر واتساب" });
+      onUpdate();
+    },
+    onError: (e: any) => {
+      toast({ title: "خطأ في الإرسال", description: e.message, variant: "destructive" });
     },
   });
 
@@ -204,6 +225,21 @@ function PlanCard({ plan, adminToken, onUpdate }: { plan: InstallmentPlan; admin
               >
                 <XCircle className="h-3.5 w-3.5" />
                 إلغاء
+              </Button>
+            )}
+            {plan.status !== "completed" && plan.status !== "cancelled" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-blue-600 border-blue-200 gap-1"
+                onClick={() => remindMutation.mutate()}
+                disabled={remindMutation.isPending}
+                data-testid={`button-remind-plan-${plan.id}`}
+              >
+                {remindMutation.isPending
+                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                  : <Bell className="h-3.5 w-3.5" />}
+                إرسال تذكير
               </Button>
             )}
             <Button
