@@ -2261,20 +2261,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         Number(targetMarginPercent), Number(safetyMarginPercent)
       );
 
-      const result = await dbPool.query(
-        `INSERT INTO product_costs
-           (product_id, purchase_price, inland_shipping, storage_cost, operational_share,
-            red_line_price, green_line_price, suggested_price, target_margin_percent, safety_margin_percent, notes, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
-         ON CONFLICT (product_id) DO UPDATE SET
-           purchase_price=$2, inland_shipping=$3, storage_cost=$4, operational_share=$5,
-           red_line_price=$6, green_line_price=$7, suggested_price=$8,
-           target_margin_percent=$9, safety_margin_percent=$10, notes=$11, updated_at=NOW()
-         RETURNING *`,
-        [productId, purchasePrice, inlandShipping, storageCost,
-         costPerOrder.toFixed(2), redLine.toFixed(2), greenLine.toFixed(2),
-         suggestedPrice.toFixed(2), targetMarginPercent, safetyMarginPercent, notes || null]
+      // Check if a cost record already exists for this product
+      const existing = await dbPool.query(
+        `SELECT id FROM product_costs WHERE product_id = $1 LIMIT 1`,
+        [productId]
       );
+
+      let result;
+      if (existing.rows.length > 0) {
+        result = await dbPool.query(
+          `UPDATE product_costs SET
+             purchase_price=$2, inland_shipping=$3, storage_cost=$4, operational_share=$5,
+             red_line_price=$6, green_line_price=$7, suggested_price=$8,
+             target_margin_percent=$9, safety_margin_percent=$10, notes=$11, updated_at=NOW()
+           WHERE id=$1 RETURNING *`,
+          [existing.rows[0].id, purchasePrice, inlandShipping, storageCost,
+           costPerOrder.toFixed(2), redLine.toFixed(2), greenLine.toFixed(2),
+           suggestedPrice.toFixed(2), targetMarginPercent, safetyMarginPercent, notes || null]
+        );
+      } else {
+        result = await dbPool.query(
+          `INSERT INTO product_costs
+             (product_id, purchase_price, inland_shipping, storage_cost, operational_share,
+              red_line_price, green_line_price, suggested_price, target_margin_percent, safety_margin_percent, notes, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
+           RETURNING *`,
+          [productId, purchasePrice, inlandShipping, storageCost,
+           costPerOrder.toFixed(2), redLine.toFixed(2), greenLine.toFixed(2),
+           suggestedPrice.toFixed(2), targetMarginPercent, safetyMarginPercent, notes || null]
+        );
+      }
       res.json({ ...result.rows[0], redLine, greenLine, suggestedPrice });
     } catch (e: any) {
       res.status(500).json({ message: "فشل حفظ تكاليف المنتج", details: e.message });
