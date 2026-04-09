@@ -5,6 +5,7 @@ import { Search, ShoppingBag, Package } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { useSEO } from "@/hooks/use-seo";
+import { useSearch } from "wouter";
 
 export default function Products() {
   useSEO({
@@ -13,23 +14,26 @@ export default function Products() {
     keywords: "أكياس تغليف, أكياس بلاستيك, علاقي أكياس, أكياس قماشية, شراء أكياس اليمن",
     canonical: "https://oyoplast.com/products",
   });
-  const searchParams = new URLSearchParams(window.location.search);
-  const initialCategory = searchParams.get("category") || "";
-  const initialSearch = searchParams.get("search") || "";
 
-  const [selectedCategory, setSelectedCategory] = useState<string>(initialCategory);
-  const [search, setSearch] = useState(initialSearch);
-  const [searchTerm, setSearchTerm] = useState(initialSearch);
+  const rawSearch = useSearch();
+  const searchParams = new URLSearchParams(rawSearch);
+  const urlCategory = searchParams.get("category") || "";
+  const urlSearch = searchParams.get("search") || "";
+
+  const [selectedCategory, setSelectedCategory] = useState<string>(urlCategory);
+  const [search, setSearch] = useState(urlSearch);
+  const [searchTerm, setSearchTerm] = useState(urlSearch);
+
+  useEffect(() => {
+    setSelectedCategory(urlCategory);
+    setSearch(urlSearch);
+    setSearchTerm(urlSearch);
+  }, [urlCategory, urlSearch]);
 
   const { products, categories, isLoading } = useCategoriesAndProducts(
     selectedCategory || undefined,
     searchTerm
   );
-
-  useEffect(() => {
-    if (initialCategory) setSelectedCategory(initialCategory);
-    if (initialSearch) { setSearch(initialSearch); setSearchTerm(initialSearch); }
-  }, [initialCategory, initialSearch]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +50,6 @@ export default function Products() {
 
   return (
     <div className="pb-20 bg-white dark:bg-background min-h-screen">
-      {/* Header */}
       <header className="sticky top-0 z-40 bg-white dark:bg-card border-b px-4 py-3">
         <h1 className="text-xl font-bold text-center mb-3">التصنيفات</h1>
 
@@ -88,7 +91,6 @@ export default function Products() {
         </div>
       </header>
 
-      {/* Search + Count */}
       <div className="px-4 py-3 flex justify-between items-center border-b border-gray-100">
         <form onSubmit={handleSearch} className="flex-1 ml-4">
           <div className="relative">
@@ -105,7 +107,6 @@ export default function Products() {
         <span className="text-sm text-gray-500">{productCount} منتج</span>
       </div>
 
-      {/* Products Grid — all products, no pagination */}
       <div className="p-3">
         {isLoading ? (
           <div className="grid grid-cols-2 gap-3">

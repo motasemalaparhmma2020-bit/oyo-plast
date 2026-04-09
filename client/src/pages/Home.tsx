@@ -202,7 +202,6 @@ export default function Home() {
       {displaySettings.showOfferBanners && (
         <OfferBanners
           height={displaySettings.offerBannerHeight}
-          columns={displaySettings.offerBannerCols ?? 2}
         />
       )}
 
