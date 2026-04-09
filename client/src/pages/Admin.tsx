@@ -2857,6 +2857,84 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                 ⚠️ الدفع عند الاستلام معطّل — سيُجبر العملاء على استخدام المحافظ الإلكترونية
               </p>
             )}
+
+            {/* ── إعدادات التقسيط ── */}
+            <div className="border-t border-green-100 dark:border-green-900 pt-5 space-y-4">
+              <p className="text-xs font-bold text-green-700 dark:text-green-300 uppercase tracking-wide">نظام التقسيط</p>
+
+              {/* تفعيل / إيقاف التقسيط */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium">تفعيل نظام التقسيط</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    السماح للعملاء بتقسيط مشترياتهم عند الدفع
+                  </p>
+                </div>
+                <Switch
+                  checked={settings?.installmentEnabled ?? true}
+                  onCheckedChange={v => handleUpdate('installmentEnabled', v)}
+                  disabled={updateMutation.isPending}
+                  data-testid="switch-installment-enabled"
+                />
+              </div>
+              {!(settings?.installmentEnabled ?? true) && (
+                <p className="text-xs text-orange-600 bg-orange-50 dark:bg-orange-950/30 rounded-lg px-3 py-2">
+                  ⚠️ خيار التقسيط مخفي من صفحة الدفع
+                </p>
+              )}
+
+              {/* الحد الأدنى لتفعيل التقسيط */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">الحد الأدنى للتقسيط (ر.ي)</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    لا يظهر خيار التقسيط إلا إذا تجاوز إجمالي الطلب هذا المبلغ
+                  </p>
+                </div>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1000}
+                  className="w-32 h-9 text-sm text-center font-bold"
+                  value={settings?.installmentMinAmount ?? 50000}
+                  onChange={e => setSettings((s: any) => ({ ...s, installmentMinAmount: +e.target.value }))}
+                  onBlur={e => handleUpdate('installmentMinAmount', +e.target.value)}
+                  disabled={updateMutation.isPending}
+                  data-testid="input-installment-min"
+                />
+              </div>
+
+              {/* نسب البدل المتاحة */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">نسب المقدّم المتاحة (%)</Label>
+                <p className="text-xs text-muted-foreground">
+                  أدخل النسب المتاحة للعميل مفصولة بفاصلة — مثال: 30,40,50
+                </p>
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="text"
+                    className="flex-1 h-9 text-sm font-mono"
+                    placeholder="30,40,50"
+                    value={settings?.installmentPercentages ?? "30,40,50"}
+                    onChange={e => setSettings((s: any) => ({ ...s, installmentPercentages: e.target.value }))}
+                    onBlur={e => handleUpdate('installmentPercentages', e.target.value)}
+                    disabled={updateMutation.isPending}
+                    data-testid="input-installment-percentages"
+                  />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">% من الإجمالي</span>
+                </div>
+                {/* معاينة النسب */}
+                {(settings?.installmentPercentages ?? "30,40,50").split(',').filter((p: string) => p.trim()).length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {(settings?.installmentPercentages ?? "30,40,50").split(',').map((p: string) => p.trim()).filter((p: string) => p && !isNaN(Number(p))).map((p: string) => (
+                      <span key={p} className="inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 text-xs font-bold px-2 py-1 rounded-full">
+                        {p}%
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
         {/* ═══════════════════════════════════════════════════════════════ */}

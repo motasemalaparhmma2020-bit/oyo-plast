@@ -513,6 +513,10 @@ export const displaySettings = pgTable("display_settings", {
   // ── إعدادات الدفع والشحن ──────────────────────────────────────────────────
   shippingFee: integer("shipping_fee").default(0).notNull(),                            // رسوم الشحن الثابتة (0=مجاني)
   codEnabled: boolean("cod_enabled").default(true).notNull(),                           // تفعيل الدفع عند الاستلام
+  // ── إعدادات التقسيط ────────────────────────────────────────────────────────
+  installmentEnabled: boolean("installment_enabled").default(true).notNull(),           // تفعيل نظام التقسيط
+  installmentMinAmount: integer("installment_min_amount").default(50000).notNull(),     // الحد الأدنى للطلب لتفعيل التقسيط (ريال يمني)
+  installmentPercentages: text("installment_percentages").default("30,40,50").notNull(), // النسب المتاحة للمقدّم (مفصولة بفواصل)
   // ── إعدادات أقسام الصفحة الرئيسية (لماذا / إحصائيات / أسئلة) ─────────────
   showWhyUs: boolean("show_why_us").default(true).notNull(),
   whyUsSize: text("why_us_size").default("medium").notNull(),        // small | medium | large

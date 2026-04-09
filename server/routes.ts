@@ -1269,6 +1269,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         'detailPaddingV', 'detailMarginH', 'detailSectionGap', 'detailTopPadding', 'detailDiscountBubbleSize',
         'sadeemFreeShippingMin', 'sadeemMarketerDiscount',
         'shippingFee', 'sliderHeight', 'offerBannerCols',
+        'installmentMinAmount',
       ];
       // boolean fields
       const boolFields = [
@@ -1278,7 +1279,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         'sadeemShowOldPrice', 'sadeemShowDiscountBadge',
         'sadeemShowRating', 'sadeemShowSoldCount',
         'sadeemShowShipping', 'sadeemShowReturns',
-        'codEnabled',
+        'codEnabled', 'installmentEnabled',
         // ── أقسام الصفحة الرئيسية ──
         'showWhyUs', 'whyUsOnHome', 'whyUsOnAccount',
         'showStats', 'statsOnHome', 'statsOnAccount',
@@ -1288,6 +1289,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const textFields = [
         'imageMode', 'detailImageMode', 'discountBadgeBg',
         'whyUsSize', 'statsSize', 'faqSize',
+        'installmentPercentages',
       ];
 
       const body = req.body as Record<string, unknown>;
