@@ -660,7 +660,7 @@ export const operationalCosts = pgTable("operational_costs", {
 // تكاليف كل منتج مع خطوط الحماية المحسوبة
 export const productCosts = pgTable("product_costs", {
   id: serial("id").primaryKey(),
-  productId: integer("product_id").references(() => products.id).notNull(),
+  productId: integer("product_id").references(() => products.id).notNull().unique(),
   purchasePrice: numeric("purchase_price").default("0").notNull(),     // تكلفة الشراء
   inlandShipping: numeric("inland_shipping").default("0").notNull(),   // شحن داخلي
   storageCost: numeric("storage_cost").default("0").notNull(),         // تكلفة تخزين
