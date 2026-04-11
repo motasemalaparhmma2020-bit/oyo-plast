@@ -4120,6 +4120,370 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Staff: Products Management (product_manager) ──────────────────────
+  app.post("/api/staff/products", requireStaff(["product_manager", "owner"]), async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { name, price, priceSar, categoryId, stock, description } = req.body;
+      if (!name || !price || !categoryId) return res.status(400).json({ message: "الاسم والسعر والفئة مطلوبة" });
+      const r = await dbPool.query(
+        `INSERT INTO products (name, price, price_sar, category_id, stock, description, is_active) VALUES ($1,$2,$3,$4,$5,$6,true) RETURNING *`,
+        [name, price, priceSar || null, categoryId, stock || 0, description || null]
+      );
+      res.status(201).json(r.rows[0]);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put("/api/staff/products/:id", requireStaff(["product_manager", "owner"]), async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { name, price, priceSar, stock, description, isActive } = req.body;
+      const r = await dbPool.query(
+        `UPDATE products SET name=COALESCE($1,name), price=COALESCE($2,price), price_sar=COALESCE($3,price_sar),
+         stock=COALESCE($4,stock), description=COALESCE($5,description), is_active=COALESCE($6,is_active) WHERE id=$7 RETURNING *`,
+        [name||null, price||null, priceSar||null, stock!=null?stock:null, description||null, isActive!=null?isActive:null, req.params.id]
+      );
+      if (!r.rows.length) return res.status(404).json({ message: "المنتج غير موجود" });
+      res.json(r.rows[0]);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── Staff: Attendance (الحضور والانصراف) ───────────────────────────────
+  app.post("/api/staff/attendance/checkin", requireStaff([]), async (req: any, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const userId = req.user.claims.sub;
+      const today = new Date().toISOString().slice(0, 10);
+      // تحقق من عدم وجود تسجيل حضور مفتوح اليوم
+      const existing = await dbPool.query(
+        `SELECT id FROM attendance WHERE user_id=$1 AND date=$2 AND check_out IS NULL`, [userId, today]
+      );
+      if (existing.rows.length) return res.status(400).json({ message: "أنت بالفعل مسجّل حضورك، سجّل انصرافك أولاً" });
+      const r = await dbPool.query(
+        `INSERT INTO attendance (user_id, check_in, date) VALUES ($1, NOW(), $2) RETURNING *`,
+        [userId, today]
+      );
+      res.json(r.rows[0]);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/staff/attendance/checkout", requireStaff([]), async (req: any, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const userId = req.user.claims.sub;
+      const today = new Date().toISOString().slice(0, 10);
+      const open = await dbPool.query(
+        `SELECT * FROM attendance WHERE user_id=$1 AND date=$2 AND check_out IS NULL ORDER BY check_in DESC LIMIT 1`, [userId, today]
+      );
+      if (!open.rows.length) return res.status(400).json({ message: "لا يوجد تسجيل حضور مفتوح اليوم" });
+      const rec = open.rows[0];
+      const mins = Math.round((Date.now() - new Date(rec.check_in).getTime()) / 60000);
+      const r = await dbPool.query(
+        `UPDATE attendance SET check_out=NOW(), total_minutes=$1 WHERE id=$2 RETURNING *`,
+        [mins, rec.id]
+      );
+      res.json(r.rows[0]);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/staff/attendance/today", requireStaff([]), async (req: any, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const userId = req.user.claims.sub;
+      const today = new Date().toISOString().slice(0, 10);
+      const r = await dbPool.query(
+        `SELECT * FROM attendance WHERE user_id=$1 AND date=$2 ORDER BY check_in DESC LIMIT 1`, [userId, today]
+      );
+      res.json(r.rows[0] || null);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/staff/attendance/history", requireStaff([]), async (req: any, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const userId = req.user.claims.sub;
+      const r = await dbPool.query(
+        `SELECT * FROM attendance WHERE user_id=$1 ORDER BY date DESC, check_in DESC LIMIT 30`, [userId]
+      );
+      res.json(r.rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/finance/attendance-summary", requireStaff(["finance", "owner", "order_manager"]), async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
+      const r = await dbPool.query(`
+        SELECT u.id, u.full_name, u.email, u.role,
+          COUNT(DISTINCT a.date) as days_present,
+          SUM(a.total_minutes) as total_minutes,
+          MAX(CASE WHEN a.date = CURRENT_DATE::text AND a.check_out IS NULL THEN 1 ELSE 0 END) as is_checked_in_now,
+          MAX(CASE WHEN a.date = CURRENT_DATE::text THEN a.check_in ELSE NULL END) as today_check_in
+        FROM users u
+        LEFT JOIN attendance a ON a.user_id = u.id AND a.date LIKE $1 || '%'
+        WHERE u.role IN ('delivery','order_manager','product_manager','finance','owner')
+          AND (u.account_type != 'customer' OR u.role != 'customer')
+        GROUP BY u.id, u.full_name, u.email, u.role
+        ORDER BY u.role, u.full_name
+      `, [month]);
+      res.json(r.rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // تعديل الحضور (مدير فقط)
+  app.post("/api/finance/attendance/override", requireStaff(["finance", "owner"]), async (req: any, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { userId, date, checkIn, checkOut, notes } = req.body;
+      if (!userId || !date || !checkIn) return res.status(400).json({ message: "بيانات ناقصة" });
+      const mins = checkOut ? Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 60000) : null;
+      await dbPool.query(`DELETE FROM attendance WHERE user_id=$1 AND date=$2`, [userId, date]);
+      const r = await dbPool.query(
+        `INSERT INTO attendance (user_id, check_in, check_out, total_minutes, date, notes) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+        [userId, checkIn, checkOut||null, mins, date, notes||null]
+      );
+      res.json(r.rows[0]);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── Finance: Expenses (المصاريف) ───────────────────────────────────────
+  app.get("/api/finance/expenses", requireStaff(["finance", "owner"]), async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
+      const r = await dbPool.query(
+        `SELECT * FROM expenses WHERE date LIKE $1 || '%' ORDER BY date DESC, created_at DESC`, [month]
+      );
+      res.json(r.rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/finance/expenses", requireStaff(["finance", "owner"]), async (req: any, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { type, description, amount, currency, date, isRecurring, recurringDay, notes } = req.body;
+      if (!type || !description || !amount || !date) return res.status(400).json({ message: "النوع والوصف والمبلغ والتاريخ مطلوبة" });
+      const r = await dbPool.query(
+        `INSERT INTO expenses (type, description, amount, currency, date, is_recurring, recurring_day, added_by, notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+        [type, description, amount, currency||"YER", date, isRecurring||false, recurringDay||null, req.user.claims.sub, notes||null]
+      );
+      res.status(201).json(r.rows[0]);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put("/api/finance/expenses/:id", requireStaff(["finance", "owner"]), async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { type, description, amount, currency, date, notes } = req.body;
+      const r = await dbPool.query(
+        `UPDATE expenses SET type=COALESCE($1,type), description=COALESCE($2,description), amount=COALESCE($3,amount),
+         currency=COALESCE($4,currency), date=COALESCE($5,date), notes=COALESCE($6,notes) WHERE id=$7 RETURNING *`,
+        [type||null, description||null, amount||null, currency||null, date||null, notes||null, req.params.id]
+      );
+      if (!r.rows.length) return res.status(404).json({ message: "المصروف غير موجود" });
+      res.json(r.rows[0]);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/finance/expenses/:id", requireStaff(["finance", "owner"]), async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query(`DELETE FROM expenses WHERE id=$1`, [req.params.id]);
+      res.json({ message: "تم الحذف" });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── Finance: Assets / Depreciation (الأصول والاهلاكات) ────────────────
+  app.get("/api/finance/assets", requireStaff(["finance", "owner"]), async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`SELECT * FROM assets WHERE is_active=true ORDER BY created_at DESC`);
+      // احتساب القيمة الحالية والاهلاك الشهري لكل أصل
+      const enriched = r.rows.map((a: any) => {
+        const monthlyDep = Number(a.original_value) / a.useful_life_months;
+        const monthsElapsed = Math.floor(
+          (Date.now() - new Date(a.purchase_date + "-01").getTime()) / (1000 * 60 * 60 * 24 * 30)
+        );
+        const currentValue = Math.max(0, Number(a.original_value) - monthlyDep * monthsElapsed);
+        return { ...a, monthlyDepreciation: monthlyDep.toFixed(0), currentValue: currentValue.toFixed(0), monthsElapsed };
+      });
+      res.json(enriched);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/finance/assets", requireStaff(["finance", "owner"]), async (req: any, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { name, originalValue, purchaseDate, usefulLifeMonths, notes } = req.body;
+      if (!name || !originalValue || !purchaseDate || !usefulLifeMonths) return res.status(400).json({ message: "بيانات ناقصة" });
+      const r = await dbPool.query(
+        `INSERT INTO assets (name, original_value, purchase_date, useful_life_months, notes, added_by)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+        [name, originalValue, purchaseDate, usefulLifeMonths, notes||null, req.user.claims.sub]
+      );
+      res.status(201).json(r.rows[0]);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/finance/assets/:id", requireStaff(["finance", "owner"]), async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query(`UPDATE assets SET is_active=false WHERE id=$1`, [req.params.id]);
+      res.json({ message: "تم الحذف" });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── Finance: Staff Rates Config (إعداد الأجور) ────────────────────────
+  app.get("/api/finance/staff-rates", requireStaff(["finance", "owner"]), async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`SELECT * FROM staff_rate_config ORDER BY role`);
+      res.json(r.rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put("/api/finance/staff-rates/:role", requireStaff(["finance", "owner"]), async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { baseSalary, ratePerOrder, paymentModel, overtimeRatePerHour, workingDaysPerMonth } = req.body;
+      await dbPool.query(
+        `UPDATE staff_rate_config SET base_salary=COALESCE($1,base_salary), rate_per_order=COALESCE($2,rate_per_order),
+         payment_model=COALESCE($3,payment_model), overtime_rate_per_hour=COALESCE($4,overtime_rate_per_hour),
+         working_days_per_month=COALESCE($5,working_days_per_month), updated_at=NOW() WHERE role=$6`,
+        [baseSalary??null, ratePerOrder??null, paymentModel||null, overtimeRatePerHour??null, workingDaysPerMonth??null, req.params.role]
+      );
+      res.json({ message: "تم التحديث" });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── Finance: Payroll Calculation (احتساب الرواتب) ─────────────────────
+  app.get("/api/finance/payroll", requireStaff(["finance", "owner"]), async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const period = (req.query.period as string) || new Date().toISOString().slice(0, 7);
+
+      // جلب كل الموظفين + إعدادات الأجور
+      const staffRes = await dbPool.query(`
+        SELECT u.id, u.full_name, u.email, u.role
+        FROM users u WHERE u.role IN ('delivery','order_manager','product_manager','finance','owner')
+          AND u.id IN (SELECT user_id FROM team_members WHERE is_active=true)
+        ORDER BY u.role, u.full_name
+      `);
+      const ratesRes = await dbPool.query(`SELECT * FROM staff_rate_config`);
+      const rates: Record<string, any> = {};
+      ratesRes.rows.forEach((r: any) => { rates[r.role] = r; });
+
+      const result = [];
+      for (const staff of staffRes.rows) {
+        const rate = rates[staff.role] || { base_salary: 0, rate_per_order: 0, payment_model: 'fixed', working_days_per_month: 26 };
+
+        // احتساب الحضور
+        const attRes = await dbPool.query(
+          `SELECT COUNT(DISTINCT date) as days, SUM(total_minutes) as total_mins
+           FROM attendance WHERE user_id=$1 AND date LIKE $2 || '%' AND check_out IS NOT NULL`,
+          [staff.id, period]
+        );
+        const attendanceDays = parseInt(attRes.rows[0]?.days || 0);
+        const totalHours = Math.round((attRes.rows[0]?.total_mins || 0) / 60);
+        const workingDays = rate.working_days_per_month;
+        const absenceDays = Math.max(0, workingDays - attendanceDays);
+
+        // احتساب الطلبات المنجزة
+        let ordersCompleted = 0;
+        if (staff.role === 'delivery') {
+          const ordRes = await dbPool.query(
+            `SELECT COUNT(*) as cnt FROM orders WHERE assigned_to=$1 AND (status='delivered' OR status='completed')
+             AND DATE_TRUNC('month', updated_at) = DATE_TRUNC('month', ($2 || '-01')::date)`,
+            [staff.id, period]
+          );
+          ordersCompleted = parseInt(ordRes.rows[0]?.cnt || 0);
+        } else if (staff.role === 'order_manager') {
+          const ordRes = await dbPool.query(
+            `SELECT COUNT(*) as cnt FROM orders WHERE (status='completed' OR status='delivered')
+             AND DATE_TRUNC('month', updated_at) = DATE_TRUNC('month', ($1 || '-01')::date)`,
+            [period]
+          );
+          ordersCompleted = parseInt(ordRes.rows[0]?.cnt || 0);
+        }
+
+        // حساب الراتب
+        const baseSalary = Number(rate.base_salary);
+        const orderBonus = ordersCompleted * Number(rate.rate_per_order);
+        const deductionPerDay = workingDays > 0 ? baseSalary / workingDays : 0;
+        const deductions = rate.payment_model !== 'per_order' ? absenceDays * deductionPerDay : 0;
+
+        let totalPay = 0;
+        if (rate.payment_model === 'fixed') totalPay = baseSalary - deductions;
+        else if (rate.payment_model === 'per_order') totalPay = orderBonus;
+        else totalPay = (baseSalary - deductions) + orderBonus; // hybrid
+
+        // هل يوجد كشف راتب محفوظ؟
+        const savedRes = await dbPool.query(
+          `SELECT * FROM payroll_periods WHERE user_id=$1 AND period=$2`, [staff.id, period]
+        );
+
+        result.push({
+          userId: staff.id,
+          fullName: staff.full_name || staff.email,
+          role: staff.role,
+          period,
+          baseSalary,
+          ratePerOrder: Number(rate.rate_per_order),
+          paymentModel: rate.payment_model,
+          ordersCompleted,
+          orderBonus,
+          attendanceDays,
+          absenceDays,
+          totalHours,
+          deductions: Math.round(deductions),
+          bonuses: savedRes.rows[0]?.bonuses || 0,
+          totalPay: Math.max(0, Math.round(totalPay + Number(savedRes.rows[0]?.bonuses || 0))),
+          isPaid: savedRes.rows[0]?.is_paid || false,
+          savedId: savedRes.rows[0]?.id || null,
+          notes: savedRes.rows[0]?.notes || null,
+        });
+      }
+      res.json(result);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/finance/payroll/save", requireStaff(["finance", "owner"]), async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { userId, period, totalPay, bonuses, notes, isPaid, ...rest } = req.body;
+      await dbPool.query(`
+        INSERT INTO payroll_periods (user_id, period, base_salary, orders_completed, order_bonus,
+          attendance_days, absence_days, deductions, bonuses, total_pay, is_paid, paid_at, notes)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        ON CONFLICT (user_id, period) DO UPDATE SET
+          bonuses=EXCLUDED.bonuses, total_pay=EXCLUDED.total_pay,
+          is_paid=EXCLUDED.is_paid, paid_at=EXCLUDED.paid_at, notes=EXCLUDED.notes
+      `, [userId, period, rest.baseSalary||0, rest.ordersCompleted||0, rest.orderBonus||0,
+          rest.attendanceDays||0, rest.absenceDays||0, rest.deductions||0,
+          bonuses||0, totalPay, isPaid||false, isPaid ? new Date() : null, notes||null]);
+      res.json({ message: "تم الحفظ" });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── Staff: Orders pending payment verification ─────────────────────────
+  app.get("/api/staff/orders/pending-verification", requireStaff(["order_manager", "finance", "owner"]), async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`
+        SELECT o.*, array_agg(json_build_object('product_id',oi.product_id,'quantity',oi.quantity,'price',oi.price)) as items
+        FROM orders o
+        LEFT JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.payment_method IN ('bank_transfer','digital_wallet','installment_deposit_cod')
+          AND o.payment_status = 'unpaid'
+          AND o.status != 'cancelled'
+        GROUP BY o.id
+        ORDER BY o.created_at DESC
+      `);
+      res.json(r.rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // ─── جدولة تذكيرات التقسيط التلقائية (كل 24 ساعة) ─────────────────────────
   async function runInstallmentReminders() {
     try {

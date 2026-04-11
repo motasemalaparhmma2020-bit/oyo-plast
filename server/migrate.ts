@@ -274,6 +274,105 @@ export async function runMigrations(): Promise<void> {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_visitor_sessions_last_seen ON visitor_sessions(last_seen);`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_visitor_sessions_session ON visitor_sessions(session_id);`);
 
+    // ─── نظام الحضور والانصراف ─────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS attendance (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR NOT NULL REFERENCES users(id),
+        check_in TIMESTAMP NOT NULL,
+        check_out TIMESTAMP,
+        total_minutes INTEGER,
+        date TEXT NOT NULL,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_attendance_user_date ON attendance(user_id, date);`);
+
+    // ─── المصاريف التشغيلية ──────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS expenses (
+        id SERIAL PRIMARY KEY,
+        type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        amount NUMERIC NOT NULL,
+        currency TEXT DEFAULT 'YER' NOT NULL,
+        date TEXT NOT NULL,
+        is_recurring BOOLEAN DEFAULT false,
+        recurring_day INTEGER,
+        added_by VARCHAR REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);`);
+
+    // ─── الأصول الثابتة والاهلاكات ──────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS assets (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        original_value NUMERIC NOT NULL,
+        purchase_date TEXT NOT NULL,
+        useful_life_months INTEGER NOT NULL,
+        notes TEXT,
+        added_by VARCHAR REFERENCES users(id),
+        is_active BOOLEAN DEFAULT true NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    // ─── إعداد الأجور لكل دور ────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS staff_rate_config (
+        id SERIAL PRIMARY KEY,
+        role TEXT NOT NULL UNIQUE,
+        base_salary NUMERIC DEFAULT 0 NOT NULL,
+        rate_per_order NUMERIC DEFAULT 0 NOT NULL,
+        payment_model TEXT DEFAULT 'fixed' NOT NULL,
+        overtime_rate_per_hour NUMERIC DEFAULT 0 NOT NULL,
+        working_days_per_month INTEGER DEFAULT 26 NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    // Seed default rates for all roles
+    const defaultRoles = [
+      { role: 'delivery', base: 0, rate: 500, model: 'per_order' },
+      { role: 'order_manager', base: 80000, rate: 200, model: 'hybrid' },
+      { role: 'product_manager', base: 100000, rate: 0, model: 'fixed' },
+      { role: 'finance', base: 120000, rate: 0, model: 'fixed' },
+      { role: 'owner', base: 0, rate: 0, model: 'fixed' },
+    ];
+    for (const r of defaultRoles) {
+      await client.query(
+        `INSERT INTO staff_rate_config (role, base_salary, rate_per_order, payment_model)
+         VALUES ($1, $2, $3, $4) ON CONFLICT (role) DO NOTHING`,
+        [r.role, r.base, r.rate, r.model]
+      );
+    }
+
+    // ─── كشوف الرواتب الشهرية ────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS payroll_periods (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR NOT NULL REFERENCES users(id),
+        period TEXT NOT NULL,
+        base_salary NUMERIC DEFAULT 0 NOT NULL,
+        orders_completed INTEGER DEFAULT 0 NOT NULL,
+        order_bonus NUMERIC DEFAULT 0 NOT NULL,
+        attendance_days INTEGER DEFAULT 0 NOT NULL,
+        absence_days INTEGER DEFAULT 0 NOT NULL,
+        deductions NUMERIC DEFAULT 0 NOT NULL,
+        bonuses NUMERIC DEFAULT 0 NOT NULL,
+        total_pay NUMERIC NOT NULL,
+        is_paid BOOLEAN DEFAULT false NOT NULL,
+        paid_at TIMESTAMP,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_payroll_user_period ON payroll_periods(user_id, period);`);
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

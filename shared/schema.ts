@@ -697,6 +697,86 @@ export const productCosts = pgTable("product_costs", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ─── Attendance (سجلات الحضور والانصراف) ──────────────────────────────────
+export const attendance = pgTable("attendance", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  checkIn: timestamp("check_in").notNull(),
+  checkOut: timestamp("check_out"),
+  totalMinutes: integer("total_minutes"),
+  date: text("date").notNull(), // YYYY-MM-DD
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ─── Business Expenses (المصاريف التشغيلية) ────────────────────────────────
+export const expenses = pgTable("expenses", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(), // salary / rent / marketing / maintenance / utilities / depreciation / other
+  description: text("description").notNull(),
+  amount: numeric("amount").notNull(),
+  currency: text("currency").default("YER").notNull(),
+  date: text("date").notNull(), // YYYY-MM-DD
+  isRecurring: boolean("is_recurring").default(false),
+  recurringDay: integer("recurring_day"),
+  addedBy: varchar("added_by").references(() => users.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ─── Fixed Assets (الأصول الثابتة + الاهلاكات) ─────────────────────────────
+export const assets = pgTable("assets", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  originalValue: numeric("original_value").notNull(),
+  purchaseDate: text("purchase_date").notNull(), // YYYY-MM-DD
+  usefulLifeMonths: integer("useful_life_months").notNull(),
+  notes: text("notes"),
+  addedBy: varchar("added_by").references(() => users.id),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ─── Staff Rate Config (إعداد الأجور لكل دور) ──────────────────────────────
+export const staffRateConfig = pgTable("staff_rate_config", {
+  id: serial("id").primaryKey(),
+  role: text("role").notNull().unique(),
+  baseSalary: numeric("base_salary").default("0").notNull(),
+  ratePerOrder: numeric("rate_per_order").default("0").notNull(),
+  paymentModel: text("payment_model").default("fixed").notNull(), // fixed / per_order / hybrid
+  overtimeRatePerHour: numeric("overtime_rate_per_hour").default("0").notNull(),
+  workingDaysPerMonth: integer("working_days_per_month").default(26).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ─── Payroll Periods (كشوف الرواتب الشهرية) ────────────────────────────────
+export const payrollPeriods = pgTable("payroll_periods", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  period: text("period").notNull(), // YYYY-MM
+  baseSalary: numeric("base_salary").default("0").notNull(),
+  ordersCompleted: integer("orders_completed").default(0).notNull(),
+  orderBonus: numeric("order_bonus").default("0").notNull(),
+  attendanceDays: integer("attendance_days").default(0).notNull(),
+  absenceDays: integer("absence_days").default(0).notNull(),
+  deductions: numeric("deductions").default("0").notNull(),
+  bonuses: numeric("bonuses").default("0").notNull(),
+  totalPay: numeric("total_pay").notNull(),
+  isPaid: boolean("is_paid").default(false).notNull(),
+  paidAt: timestamp("paid_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAttendanceSchema = createInsertSchema(attendance).omit({ id: true, createdAt: true });
+export const insertExpenseSchema = createInsertSchema(expenses).omit({ id: true, createdAt: true });
+export const insertAssetSchema = createInsertSchema(assets).omit({ id: true, createdAt: true });
+export type AttendanceRecord = typeof attendance.$inferSelect;
+export type Expense = typeof expenses.$inferSelect;
+export type Asset = typeof assets.$inferSelect;
+export type StaffRateConfig = typeof staffRateConfig.$inferSelect;
+export type PayrollPeriod = typeof payrollPeriods.$inferSelect;
+
 export const insertOperationalCostSchema = createInsertSchema(operationalCosts).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertProductCostSchema = createInsertSchema(productCosts).omit({ id: true, updatedAt: true });
 export type OperationalCost = typeof operationalCosts.$inferSelect;
