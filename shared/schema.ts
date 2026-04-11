@@ -523,6 +523,7 @@ export const displaySettings = pgTable("display_settings", {
   installmentMinAmount: integer("installment_min_amount").default(50000).notNull(),     // الحد الأدنى للطلب لتفعيل التقسيط (ريال يمني)
   installmentPercentages: text("installment_percentages").default("30,40,50").notNull(), // النسب المتاحة للمقدّم (مفصولة بفواصل)
   // ── إعدادات أقسام الصفحة الرئيسية (لماذا / إحصائيات / أسئلة) ─────────────
+  pdpLayout: text("pdp_layout").default(null),                                   // JSON — تخطيط صفحة المنتج
   showWhyUs: boolean("show_why_us").default(true).notNull(),
   whyUsSize: text("why_us_size").default("medium").notNull(),        // small | medium | large
   whyUsOnHome: boolean("why_us_on_home").default(true).notNull(),

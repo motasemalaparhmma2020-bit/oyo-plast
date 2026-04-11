@@ -10,6 +10,7 @@ import AdminSecurityLogs from "@/components/AdminSecurityLogs";
 import AdminSupplierProducts from "@/components/AdminSupplierProducts";
 import { AdminReviews } from "@/components/AdminReviews";
 import AdminSectionSettings from "@/components/AdminSectionSettings";
+import AdminPDPLayout from "@/components/AdminPDPLayout";
 import { AdminSubcategories } from "@/components/AdminSubcategories";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -6064,7 +6065,11 @@ export default function Admin() {
 
           {/* ─── Section Settings Tab ──────────────────────────────────── */}
           <TabsContent value="section-settings">
-            <AdminSectionSettings adminToken={adminToken} />
+            <div className="space-y-8">
+              <AdminSectionSettings adminToken={adminToken} />
+              <hr />
+              <AdminPDPLayout adminToken={adminToken} />
+            </div>
           </TabsContent>
 
         </Tabs>

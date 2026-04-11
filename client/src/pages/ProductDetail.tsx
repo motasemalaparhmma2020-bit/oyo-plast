@@ -8,95 +8,134 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
 import { useAddToCart } from "@/hooks/use-cart";
-import { useAuth } from "@/hooks/use-auth";
-import { ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star, Camera, X, Zap, Package, ChevronLeft, ChevronRight, Printer, Truck, RefreshCcw, Shield, Heart } from "lucide-react";
+import {
+  ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star,
+  Camera, X, Zap, Package, ChevronLeft, ChevronRight, Printer, Truck,
+  RefreshCcw, Heart, CreditCard, Award, Lock
+} from "lucide-react";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import useEmblaCarousel from "embla-carousel-react";
 
-// Lazy image component with loading state
-const LazyImage = ({ src, alt, className }: { src: string; alt: string; className: string }) => {
+// ── Lazy Image ──────────────────────────────────────────────────────────────
+const LazyImage = ({ src, alt, className, style }: { src: string; alt: string; className: string; style?: React.CSSProperties }) => {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
-
-  useEffect(() => {
-    setLoaded(false);
-    setError(false);
-  }, [src]);
-
-  if (error) return <div className={`${className} bg-gray-200 dark:bg-gray-800`} />;
-
+  useEffect(() => { setLoaded(false); setError(false); }, [src]);
+  if (error) return <div className={`${className} bg-gray-100 dark:bg-gray-800`} style={style} />;
   return (
     <>
-      {!loaded && <div className={`${className} bg-gray-200 dark:bg-gray-800 animate-pulse`} />}
-      <img
-        src={src}
-        alt={alt}
-        className={className}
-        onLoad={() => setLoaded(true)}
-        onError={() => setError(true)}
-        style={{ display: loaded ? 'block' : 'none' }}
-      />
+      {!loaded && <div className={`${className} bg-gray-100 dark:bg-gray-800 animate-pulse`} style={style} />}
+      <img src={src} alt={alt} className={className} style={{ ...(style || {}), display: loaded ? 'block' : 'none' }}
+        onLoad={() => setLoaded(true)} onError={() => setError(true)} />
     </>
   );
 };
 
-interface BulkPricing {
-  minQty: number;
-  price: string;
+// ── Types ──────────────────────────────────────────────────────────────────
+interface BulkPricing { minQty: number; price: string; }
+interface SizePricing { size: string; price: string; priceSar?: string; colors?: string[]; stock?: number; }
+interface ColorImageEntry { color: string; hex: string; imageUrl: string; }
+type SmartVType = "color" | "size" | "weight" | "image";
+interface SmartV { id: string; type: SmartVType; label: string; price: string; priceSar: string; discount: string; hex: string; imageUrl: string; }
+interface SmartVData { activeTypes: SmartVType[]; variants: SmartV[]; }
+const SMART_V_LABELS: Record<SmartVType, string> = { color: "اللون", size: "المقاس", weight: "الوزن", image: "الصورة" };
+
+interface PdpSection {
+  id: string; visible: boolean; height?: number; thumbSize?: number; mode?: string;
+  showThumbs?: boolean; fontSize?: number; count?: number;
+}
+interface PdpLayout {
+  sections: PdpSection[];
+  stickyBar: { visible: boolean; cartHeight: number };
+  margins: { h: number; v: number; gap: number };
 }
 
-const colorMap: Record<string, string> = {
-  أبيض: "#FFFFFF",
-  أسود: "#000000",
-  أحمر: "#EF4444",
-  أزرق: "#3B82F6",
-  أخضر: "#22C55E",
-  أصفر: "#EAB308",
-  برتقالي: "#F97316",
-  وردي: "#EC4899",
-  بنفسجي: "#8B5CF6",
-  رمادي: "#6B7280",
-  بني: "#92400E",
-  ذهبي: "#D97706",
-  فضي: "#9CA3AF",
-  شفاف: "transparent",
-  سماوي: "#06B6D4",
-  زهري: "#F472B6",
-  كحلي: "#1E3A8A",
-  بيج: "#D4A574",
+const DEFAULT_PDP: PdpLayout = {
+  sections: [
+    { id: "images", visible: true, height: 420, thumbSize: 64, mode: "contain", showThumbs: true },
+    { id: "price", visible: true, fontSize: 22 },
+    { id: "title", visible: true },
+    { id: "rating", visible: true },
+    { id: "trust_badges", visible: true },
+    { id: "variants", visible: true },
+    { id: "bulk", visible: true },
+    { id: "quantity", visible: true },
+    { id: "shipping", visible: true },
+    { id: "returns", visible: true },
+    { id: "installment", visible: true },
+    { id: "printing", visible: true },
+    { id: "description", visible: true },
+    { id: "reviews", visible: true },
+    { id: "related", visible: true, count: 4 },
+  ],
+  stickyBar: { visible: true, cartHeight: 52 },
+  margins: { h: 16, v: 8, gap: 12 },
 };
 
-function getColorCode(colorName: string): string {
-  const trimmed = colorName.trim();
-  return colorMap[trimmed] ?? trimmed;
-}
+const colorMap: Record<string, string> = {
+  أبيض:"#FFFFFF",أسود:"#000000",أحمر:"#EF4444",أزرق:"#3B82F6",أخضر:"#22C55E",
+  أصفر:"#EAB308",برتقالي:"#F97316",وردي:"#EC4899",بنفسجي:"#8B5CF6",رمادي:"#6B7280",
+  بني:"#92400E",ذهبي:"#D97706",فضي:"#9CA3AF",شفاف:"transparent",سماوي:"#06B6D4",
+  زهري:"#F472B6",كحلي:"#1E3A8A",بيج:"#D4A574",
+};
+function getColorCode(c: string): string { return colorMap[c.trim()] ?? c.trim(); }
+function formatPrice(p: number | string): string { return Number(p).toLocaleString('ar-YE'); }
 
-interface SizePricing {
-  size: string;
-  price: string;
-  priceSar?: string;
-  colors?: string[];
-  stock?: number;
-}
-
-interface ColorImageEntry { color: string; hex: string; imageUrl: string; }
-
+// ── Main Component ──────────────────────────────────────────────────────────
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const { isAuthenticated } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const { data: product, isLoading } = useQuery<Product>({
-    queryKey: ['/api/products', id],
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
-  });
+  const reviewImageRef = useRef<HTMLInputElement>(null);
+
+  // ── Data fetching ───────────────────────────────────────────────────────
+  const { data: product, isLoading } = useQuery<Product>({ queryKey: ['/api/products', id], staleTime: 5 * 60000, gcTime: 10 * 60000 });
+  const { data: displaySettings } = useQuery<any>({ queryKey: ["/api/display-settings"], staleTime: 60000 });
+  const { data: pdpRaw } = useQuery<PdpLayout>({ queryKey: ["/api/pdp-layout"], staleTime: 60000 });
+  const { data: reviews = [] } = useQuery<Review[]>({ queryKey: ['/api/products', id, 'reviews'], enabled: !!id, staleTime: 2 * 60000 });
+  const { data: allProducts = [] } = useQuery<Product[]>({ queryKey: ['/api/products'], staleTime: 3 * 60000, gcTime: 10 * 60000 });
+
+  // ── PDP Layout ─────────────────────────────────────────────────────────
+  const pdp: PdpLayout = useMemo(() => {
+    if (!pdpRaw) return DEFAULT_PDP;
+    const merged = { ...DEFAULT_PDP, ...pdpRaw };
+    const existingIds = pdpRaw.sections.map((s: PdpSection) => s.id);
+    const missing = DEFAULT_PDP.sections.filter(d => !existingIds.includes(d.id));
+    merged.sections = [...pdpRaw.sections, ...missing];
+    return merged;
+  }, [pdpRaw]);
+
+  const sec = useMemo(() => {
+    const m: Record<string, PdpSection> = {};
+    pdp.sections.forEach(s => { m[s.id] = s; });
+    return m;
+  }, [pdp]);
+
+  const orderedSections = useMemo(() => pdp.sections.filter(s => s.visible && s.id !== "images"), [pdp.sections]);
+  const imagesSec = useMemo(() => pdp.sections.find(s => s.id === "images") ?? DEFAULT_PDP.sections[0], [pdp.sections]);
+
+  // ── Display settings (sadeem) ──────────────────────────────────────────
+  const sadeemShowOldPrice      = displaySettings?.sadeemShowOldPrice !== false;
+  const sadeemShowDiscountBadge = displaySettings?.sadeemShowDiscountBadge !== false;
+  const sadeemShowRating        = displaySettings?.sadeemShowRating !== false;
+  const sadeemShowSoldCount     = displaySettings?.sadeemShowSoldCount !== false;
+  const sadeemShowShipping      = displaySettings?.sadeemShowShipping !== false;
+  const sadeemShowReturns       = displaySettings?.sadeemShowReturns !== false;
+  const sadeemFreeShippingMin   = displaySettings?.sadeemFreeShippingMin ?? 0;
+  const sadeemMarketerDiscount  = displaySettings?.sadeemMarketerDiscount ?? 0;
+  const installmentEnabled      = displaySettings?.installmentEnabled !== false;
+  const installmentMinAmount    = displaySettings?.installmentMinAmount ?? 50000;
+  const installmentPercentages  = displaySettings?.installmentPercentages ?? "30,40,50";
+
+  const marketerRef = useMemo(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get('ref') || p.get('promo') || null;
+  }, []);
+  const isMarketerLink = !!marketerRef && sadeemMarketerDiscount > 0;
 
   useSEO({
     title: product ? `${product.name} | أويو بلاست` : "منتج | أويو بلاست",
@@ -106,166 +145,49 @@ export default function ProductDetail() {
     canonical: `https://oyoplast.com/products/${id}`,
   });
 
-  const { data: navSettings } = useQuery<any>({
-    queryKey: ["/api/navigation-settings"],
-    queryFn: async () => {
-      const res = await fetch("/api/navigation-settings", { credentials: "include" });
-      if (!res.ok) return {};
-      return res.json();
-    },
-    staleTime: 60000,
-  });
-
-  const { data: displaySettings } = useQuery<any>({
-    queryKey: ["/api/display-settings"],
-    staleTime: 60000,
-  });
-  const detailImgH   = displaySettings?.detailImageHeight    ?? 380;
-  const detailImgMode = displaySettings?.detailImageMode     ?? "contain";
-  const detailPriceFs = displaySettings?.detailPriceFontSize ?? 22;
-  const detailCartH  = displaySettings?.detailAddToCartHeight ?? 52;
-  const detailThumb  = displaySettings?.detailThumbnailSize  ?? 64;
-  const detailShowRelatedSetting = displaySettings?.detailShowRelated !== false;
-  const detailShowReviewsSetting = displaySettings?.detailShowReviews !== false;
-  const showStickyCartBar = displaySettings?.showStickyCartBar === true;
-  const detailPaddingV  = displaySettings?.detailPaddingV  ?? 8;
-  const detailMarginH   = displaySettings?.detailMarginH   ?? 16;
-  const detailSectionGap = displaySettings?.detailSectionGap ?? 12;
-  const detailTopPadding = displaySettings?.detailTopPadding ?? 8;
-  const detailDiscountBubble = displaySettings?.detailDiscountBubbleSize ?? 36;
-  const detailShowThumbs = displaySettings?.detailShowThumbnails !== false;
-
-  // ── سديم الذكية ──────────────────────────────────────────────────────────
-  const sadeemShowOldPrice      = displaySettings?.sadeemShowOldPrice !== false;
-  const sadeemShowDiscountBadge = displaySettings?.sadeemShowDiscountBadge !== false;
-  const sadeemShowRating        = displaySettings?.sadeemShowRating !== false;
-  const sadeemShowSoldCount     = displaySettings?.sadeemShowSoldCount !== false;
-  const sadeemShowShipping      = displaySettings?.sadeemShowShipping !== false;
-  const sadeemShowReturns       = displaySettings?.sadeemShowReturns !== false;
-  const sadeemFreeShippingMin   = displaySettings?.sadeemFreeShippingMin ?? 0;
-  const sadeemMarketerDiscount  = displaySettings?.sadeemMarketerDiscount ?? 0;
-
-  // كشف رابط المسوق ?ref=CODE أو ?promo=CODE
-  const marketerRef = useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('ref') || params.get('promo') || null;
-  }, []);
-  const isMarketerLink = !!marketerRef && sadeemMarketerDiscount > 0;
-
-  const { data: reviews = [] } = useQuery<Review[]>({
-    queryKey: ['/api/products', id, 'reviews'],
-    enabled: !!id,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-  });
-
-  const { data: relatedProducts = [] } = useQuery<Product[]>({
-    queryKey: ['/api/products'],
-    staleTime: 3 * 60 * 1000, // 3 minutes
-    gcTime: 10 * 60 * 1000,
-  });
-
-  const filteredRelatedProducts = useMemo(() => {
-    if (!product || !relatedProducts.length) return [];
-    return relatedProducts
-      .filter(p => p.id !== product.id && p.categoryId === product.categoryId)
-      .slice(0, 4);
-  }, [product, relatedProducts]);
-
-  const addToCartMutation = useAddToCart();
-  const { isPending } = addToCartMutation;
-
-  const [reviewRating, setReviewRating] = useState(5);
+  // ── State ────────────────────────────────────────────────────────────────
+  const [quantity, setQuantity]           = useState(1);
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [selectedSize, setSelectedSize]   = useState<string | null>(null);
+  const [uploadedFile, setUploadedFile]   = useState<File | null>(null);
+  const [uploadedDesignUrl, setUploadedDesignUrl] = useState<string | null>(null);
+  const [isUploadingDesign, setIsUploadingDesign] = useState(false);
+  const [designNotes, setDesignNotes]     = useState("");
+  const [enableCustomPrinting, setEnableCustomPrinting] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [variantActiveImg, setVariantActiveImg]   = useState<string | null>(null);
+  const [selectedSmartVariant, setSelectedSmartVariant] = useState<Record<string, string>>({});
+  const [reviewRating, setReviewRating]   = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   const [reviewImageUrl, setReviewImageUrl] = useState<string | null>(null);
   const [isUploadingReviewImage, setIsUploadingReviewImage] = useState(false);
-  const reviewImageRef = useRef<HTMLInputElement>(null);
+  const [activeTab, setActiveTab]         = useState<"description" | "reviews">("description");
+  const [wishlist, setWishlist]           = useState(false);
 
-  const handleReviewImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploadingReviewImage(true);
-    const formData = new FormData();
-    formData.append('image', file);
-
-    try {
-      const res = await fetch('/api/upload/review', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setReviewImageUrl(data.imageUrl);
-        toast({ title: "تم رفع الصورة بنجاح" });
-      } else {
-        toast({ title: "فشل رفع الصورة", variant: "destructive" });
-      }
-    } catch (error) {
-      toast({ title: "حدث خطأ أثناء رفع الصورة", variant: "destructive" });
-    }
-    setIsUploadingReviewImage(false);
-    e.target.value = '';
-  };
-
-  const submitReviewMutation = useMutation({
-    mutationFn: async ({ rating, comment, imageUrl }: { rating: number; comment: string; imageUrl?: string }) => {
-      return apiRequest('POST', `/api/products/${id}/reviews`, { rating, comment, imageUrl });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/products', id, 'reviews'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/products', id] });
-      setReviewComment("");
-      setReviewRating(5);
-      setReviewImageUrl(null);
-      toast({ title: "تم إضافة تقييمك بنجاح" });
-    },
-    onError: () => {
-      toast({ title: "حدث خطأ أثناء إضافة التقييم", variant: "destructive" });
-    }
-  });
-  
-  const [quantity, setQuantity] = useState(1);
-  const [selectedColor, setSelectedColor] = useState<string | null>(null);
-  const [selectedSize, setSelectedSize] = useState<string | null>(null);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [uploadedDesignUrl, setUploadedDesignUrl] = useState<string | null>(null);
-  const [isUploadingDesign, setIsUploadingDesign] = useState(false);
-  const [designNotes, setDesignNotes] = useState("");
-  const [enableCustomPrinting, setEnableCustomPrinting] = useState(false);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  
-  const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
-    return (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER';
-  });
-
+  const [currency, setCurrency] = useState<'YER' | 'SAR'>(() =>
+    (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER'
+  );
   useEffect(() => {
-    const handleCurrencyChange = () => {
-      setCurrency((localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER');
-    };
-    window.addEventListener('currencyChange', handleCurrencyChange);
-    return () => window.removeEventListener('currencyChange', handleCurrencyChange);
+    const fn = () => setCurrency((localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER');
+    window.addEventListener('currencyChange', fn);
+    return () => window.removeEventListener('currencyChange', fn);
   }, []);
 
+  // ── Derived Data ─────────────────────────────────────────────────────────
   const allImages = useMemo(() => {
     if (!product) return [];
-    const images = [product.imageUrl];
-    if (product.imageUrls && product.imageUrls.length > 0) {
-      images.push(...product.imageUrls);
-    }
-    return images;
+    const imgs = [product.imageUrl];
+    if (product.imageUrls?.length) imgs.push(...product.imageUrls);
+    return imgs;
   }, [product]);
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ direction: 'rtl' });
-
   const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
   const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
-
   const onSelect = useCallback(() => {
     if (!emblaApi) return;
     setCurrentImageIndex(emblaApi.selectedScrollSnap());
   }, [emblaApi]);
-
   useEffect(() => {
     if (!emblaApi) return;
     onSelect();
@@ -274,83 +196,45 @@ export default function ProductDetail() {
   }, [emblaApi, onSelect]);
 
   const bulkPricing: BulkPricing[] = useMemo(() => {
-    if (!product?.bulkPricing) return [];
-    try {
-      return JSON.parse(product.bulkPricing);
-    } catch {
-      return [];
-    }
+    try { return product?.bulkPricing ? JSON.parse(product.bulkPricing) : []; } catch { return []; }
   }, [product?.bulkPricing]);
 
   const sizePricing: SizePricing[] = useMemo(() => {
-    if (!product?.sizePricing) return [];
-    try {
-      return JSON.parse(product.sizePricing);
-    } catch {
-      return [];
-    }
+    try { return product?.sizePricing ? JSON.parse(product.sizePricing) : []; } catch { return []; }
   }, [product?.sizePricing]);
 
-  const currentSizeData = useMemo(() => {
-    if (!selectedSize || sizePricing.length === 0) return null;
-    return sizePricing.find(sp => sp.size === selectedSize);
-  }, [selectedSize, sizePricing]);
+  const currentSizeData = useMemo(() =>
+    selectedSize && sizePricing.length ? sizePricing.find(sp => sp.size === selectedSize) || null : null,
+    [selectedSize, sizePricing]);
 
-  const availableColors = useMemo(() => {
-    if (currentSizeData?.colors && currentSizeData.colors.length > 0) {
-      return currentSizeData.colors;
-    }
-    return product?.colors || [];
-  }, [currentSizeData, product?.colors]);
+  const availableColors = useMemo(() =>
+    (currentSizeData?.colors?.length ? currentSizeData.colors : product?.colors) || [],
+    [currentSizeData, product?.colors]);
 
   const colorImages: ColorImageEntry[] = useMemo(() => {
-    if (!(product as any)?.colorImages) return [];
-    try { return JSON.parse((product as any).colorImages); } catch { return []; }
+    try { return (product as any)?.colorImages ? JSON.parse((product as any).colorImages) : []; } catch { return []; }
   }, [(product as any)?.colorImages]);
 
-  const showVariantUI = !!(navSettings?.enableVariantProductPage && (product as any)?.enableVariantUI);
-  const parsedVariantImages: ColorImageEntry[] = useMemo(() => {
-    if (!showVariantUI || !(product as any)?.colorImages) return [];
-    try {
-      const parsed = JSON.parse((product as any).colorImages);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }, [showVariantUI, (product as any)?.colorImages]);
-
-  // ── الخيارات الذكية ──────────────────────────────────────────────
-  type SmartVType = "color" | "size" | "weight" | "image";
-  interface SmartV { id: string; type: SmartVType; label: string; price: string; priceSar: string; discount: string; hex: string; imageUrl: string; }
-  interface SmartVData { activeTypes: SmartVType[]; variants: SmartV[]; }
-  const SMART_V_LABELS: Record<SmartVType, string> = { color: "اللون", size: "المقاس", weight: "الوزن", image: "الصورة" };
-
   const smartVariantsData: SmartVData | null = useMemo(() => {
-    const sv = (product as any)?.smartVariants;
-    if (!sv) return null;
-    try { return JSON.parse(sv); } catch { return null; }
+    try { return (product as any)?.smartVariants ? JSON.parse((product as any).smartVariants) : null; } catch { return null; }
   }, [(product as any)?.smartVariants]);
-
   const showSmartVariants = !!(product as any)?.enableSmartVariants && !!smartVariantsData;
-
-  const [selectedSmartVariant, setSelectedSmartVariant] = useState<Record<string, string>>({});
 
   const selectedSmartV: SmartV | null = useMemo(() => {
     if (!smartVariantsData) return null;
-    const ids = Object.values(selectedSmartVariant);
-    for (const id of ids) {
-      const v = smartVariantsData.variants.find(v => v.id === id);
+    for (const sid of Object.values(selectedSmartVariant)) {
+      const v = smartVariantsData.variants.find(v => v.id === sid);
       if (v) return v;
     }
     return null;
   }, [selectedSmartVariant, smartVariantsData]);
-  const [variantActiveImg, setVariantActiveImg] = useState<string | null>(null);
-  const variantHeroImg = variantActiveImg || product?.imageUrl || "";
 
+  const heroImg = variantActiveImg || allImages[0] || "";
+  const sizes = product?.sizes || [];
+
+  // ── Effects ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (sizePricing.length > 0 && !selectedSize) {
-      setSelectedSize(sizePricing[0].size);
-    }
+    if (sizePricing.length > 0 && !selectedSize) setSelectedSize(sizePricing[0].size);
   }, [sizePricing, selectedSize]);
 
   useEffect(() => {
@@ -359,1246 +243,850 @@ export default function ProductDetail() {
     }
   }, [selectedSize, availableColors, selectedColor]);
 
+  // ── Price Calculation ────────────────────────────────────────────────────
   const currentPrice = useMemo(() => {
     if (!product) return '0';
-
-    // الخيارات الذكية لها الأولوية إذا كان هناك خيار محدد
     if (selectedSmartV?.price) {
-      if (currency === 'SAR' && selectedSmartV.priceSar) return selectedSmartV.priceSar;
-      return selectedSmartV.price;
+      return currency === 'SAR' && selectedSmartV.priceSar ? selectedSmartV.priceSar : selectedSmartV.price;
     }
-    
     if (currentSizeData) {
-      return currency === 'SAR' && currentSizeData.priceSar 
-        ? currentSizeData.priceSar 
-        : currentSizeData.price;
+      return currency === 'SAR' && currentSizeData.priceSar ? currentSizeData.priceSar : currentSizeData.price;
     }
-    
-    let basePrice = currency === 'SAR' && product?.priceSar 
-      ? product.priceSar 
-      : product?.price || '0';
-
+    let base = currency === 'SAR' && product?.priceSar ? product.priceSar : product?.price || '0';
     if (bulkPricing.length > 0) {
-      const applicablePricing = [...bulkPricing]
-        .sort((a, b) => b.minQty - a.minQty)
-        .find(bp => quantity >= bp.minQty);
-      
-      if (applicablePricing) {
-        basePrice = applicablePricing.price;
-      }
+      const applicable = [...bulkPricing].sort((a, b) => b.minQty - a.minQty).find(bp => quantity >= bp.minQty);
+      if (applicable) base = applicable.price;
     }
-
-    return basePrice;
+    return base;
   }, [product, quantity, currency, bulkPricing, currentSizeData, selectedSmartV]);
 
-  const printingCost = useMemo(() => {
-    if (!enableCustomPrinting || !product?.printingPricePerUnit) return 0;
-    return Number(product.printingPricePerUnit) * quantity;
-  }, [enableCustomPrinting, product?.printingPricePerUnit, quantity]);
+  const printingCost = useMemo(() =>
+    enableCustomPrinting && product?.printingPricePerUnit ? Number(product.printingPricePerUnit) * quantity : 0,
+    [enableCustomPrinting, product?.printingPricePerUnit, quantity]);
 
-  const totalPrice = useMemo(() => {
-    return (Number(currentPrice) * quantity) + printingCost;
-  }, [currentPrice, quantity, printingCost]);
+  const totalPrice = useMemo(() => (Number(currentPrice) * quantity) + printingCost, [currentPrice, quantity, printingCost]);
 
-  const currentStock = useMemo(() => {
-    if (currentSizeData?.stock !== undefined) {
-      return currentSizeData.stock;
-    }
-    return product?.stock || 0;
-  }, [currentSizeData, product?.stock]);
+  const currentStock = useMemo(() =>
+    currentSizeData?.stock !== undefined ? currentSizeData.stock : (product?.stock || 0),
+    [currentSizeData, product?.stock]);
 
-  const formatPrice = (price: number | string) => {
-    return Number(price).toLocaleString('ar-YE');
+  const effectiveDiscount = (product as any)?.effectiveDiscount ?? 0;
+  const currLabel = currency === 'YER' ? 'ر.ي' : 'ر.س';
+
+  const displayedPrice = isMarketerLink
+    ? Math.round(Number(currentPrice) * (1 - sadeemMarketerDiscount / 100))
+    : Number(currentPrice);
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+  const addToCartMutation = useAddToCart();
+  const { isPending } = addToCartMutation;
+
+  const cartPayload = useMemo(() => ({
+    productId: product?.id ?? 0,
+    quantity,
+    selectedSize: selectedSize || undefined,
+    selectedColor: selectedColor || undefined,
+    customPrinting: enableCustomPrinting,
+    designNotes: designNotes || undefined,
+    designFileUrl: uploadedDesignUrl || undefined,
+  }), [product?.id, quantity, selectedSize, selectedColor, enableCustomPrinting, designNotes, uploadedDesignUrl]);
+
+  const handleAddToCart = () => {
+    if (!product) return;
+    addToCartMutation.mutate(cartPayload);
+  };
+
+  const handleBuyNow = async () => {
+    if (!product) return;
+    try { await addToCartMutation.mutateAsync(cartPayload); setLocation('/checkout'); } catch {}
   };
 
   const handleDesignUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // Check file size (max 10MB for design)
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-      toast({ 
-        title: "❌ الملف كبير جداً",
-        description: "الحد الأقصى 10MB",
-        variant: "destructive" 
-      });
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: "❌ الملف كبير جداً (الحد 10MB)", variant: "destructive" });
       return;
     }
-
     setIsUploadingDesign(true);
     setUploadedFile(file);
-
-    try {
-      // Convert file to base64 directly (NO server upload)
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const base64String = event.target?.result as string;
-        setUploadedDesignUrl(base64String); // Store base64 directly
-        
-        const sizeInMB = (file.size / 1024 / 1024).toFixed(2);
-        toast({
-          title: "✅ تم تحضير التصميم",
-          description: `${file.name} (${sizeInMB}MB) - جاهز للإضافة`,
-        });
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      toast({ title: "❌ خطأ في قراءة الملف", variant: "destructive" });
-      setUploadedFile(null);
-    }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      setUploadedDesignUrl(ev.target?.result as string);
+      toast({ title: `✅ تم تحضير التصميم: ${file.name}` });
+    };
+    reader.readAsDataURL(file);
     setIsUploadingDesign(false);
     e.target.value = '';
   };
 
-  const handleAddToCart = () => {
-    if (!product) return;
-
+  const handleReviewImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingReviewImage(true);
+    const fd = new FormData();
+    fd.append('image', file);
     try {
-      addToCartMutation.mutate({ 
-        productId: product.id, 
-        quantity,
-        selectedSize: selectedSize || undefined,
-        selectedColor: selectedColor || undefined,
-        customPrinting: enableCustomPrinting,
-        designNotes: designNotes || undefined,
-        designFileUrl: uploadedDesignUrl || undefined
-      });
-    } catch (err) {
-      console.error('❌ خطأ في الزر:', err);
-    }
+      const r = await fetch('/api/upload/review', { method: 'POST', body: fd });
+      if (r.ok) { const d = await r.json(); setReviewImageUrl(d.imageUrl); toast({ title: "تم رفع الصورة" }); }
+      else toast({ title: "فشل رفع الصورة", variant: "destructive" });
+    } catch { toast({ title: "خطأ في رفع الصورة", variant: "destructive" }); }
+    setIsUploadingReviewImage(false);
+    e.target.value = '';
   };
 
-  const handleBuyNow = async () => {
-    if (!product) return;
-    try {
-      await addToCartMutation.mutateAsync({ 
-        productId: product.id, 
-        quantity,
-        selectedSize: selectedSize || undefined,
-        selectedColor: selectedColor || undefined,
-        customPrinting: enableCustomPrinting,
-        designNotes: designNotes || undefined,
-        designFileUrl: uploadedDesignUrl || undefined
-      });
-      setLocation('/checkout');
-    } catch (error) {
-      // Error is handled by the mutation's onError
-    }
-  };
+  const submitReviewMutation = useMutation({
+    mutationFn: async ({ rating, comment, imageUrl }: { rating: number; comment: string; imageUrl?: string }) =>
+      apiRequest('POST', `/api/products/${id}/reviews`, { rating, comment, imageUrl }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/products', id, 'reviews'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/products', id] });
+      setReviewComment(""); setReviewRating(5); setReviewImageUrl(null);
+      toast({ title: "تم إضافة تقييمك بنجاح" });
+    },
+    onError: () => toast({ title: "خطأ في إضافة التقييم", variant: "destructive" }),
+  });
 
-  const sizes = product?.sizes || [];
+  const relatedProducts = useMemo(() => {
+    if (!product || !allProducts.length) return [];
+    const count = sec["related"]?.count ?? 4;
+    return allProducts.filter(p => p.id !== product.id && p.categoryId === product.categoryId).slice(0, count);
+  }, [product, allProducts, sec]);
 
+  // ── Loading / Not Found ──────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="min-h-screen" dir="rtl">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-8" />
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="aspect-square bg-gray-200 rounded-2xl" />
-            <div className="space-y-4">
-              <div className="h-8 bg-gray-200 rounded w-3/4" />
-              <div className="h-6 bg-gray-200 rounded w-1/2" />
-              <div className="h-24 bg-gray-200 rounded" />
-            </div>
+          <div className="w-full bg-gray-200 dark:bg-gray-800" style={{ height: 380 }} />
+          <div className="p-4 space-y-3">
+            <div className="h-7 bg-gray-200 rounded w-2/3" />
+            <div className="h-5 bg-gray-200 rounded w-1/3" />
+            <div className="h-4 bg-gray-200 rounded" />
+            <div className="h-4 bg-gray-200 rounded w-3/4" />
           </div>
         </div>
       </div>
     );
   }
-
   if (!product) {
     return (
-      <div className="container mx-auto px-4 py-8 text-center">
+      <div className="container mx-auto px-4 py-8 text-center" dir="rtl">
         <h2 className="text-2xl font-bold mb-4">المنتج غير موجود</h2>
-        <Link href="/products">
-          <Button>العودة للمنتجات</Button>
-        </Link>
+        <Link href="/products"><Button>العودة للمنتجات</Button></Link>
       </div>
     );
   }
 
-  /* ───────────────────────────────────────────────────────────────
-     SHEIN-STYLE VARIANT UI  (only when BOTH flags are enabled)
-  ─────────────────────────────────────────────────────────────── */
-  if (showVariantUI) {
-    const displayPrice = currency === 'SAR' && product.priceSar ? product.priceSar : product.price;
-    const displayCurrencyLabel = currency === 'SAR' ? 'ر.س' : 'ر.ي';
-    return (
-      <div className="min-h-screen bg-background pb-28" dir="rtl">
-        {/* ── Top Nav ── */}
-        <div className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b px-3 py-2 flex items-center gap-2">
-          <Link href="/products">
-            <button className="p-2 rounded-full hover:bg-muted transition-colors" data-testid="button-variant-back">
-              <ArrowRight className="h-5 w-5" />
-            </button>
-          </Link>
-          <span className="font-semibold text-sm flex-1 truncate">{product.name}</span>
-          {currentStock > 0 && currentStock <= 10 && (
-            <span className="text-xs text-orange-500 font-bold">متبقي {currentStock}</span>
-          )}
-          {currentStock <= 0 && (
-            <Badge variant="destructive" className="text-xs">نفذت الكمية</Badge>
-          )}
-        </div>
+  // ── Sections Renderer ────────────────────────────────────────────────────
+  const renderSection = (s: PdpSection) => {
+    switch (s.id) {
 
-        {/* ── Hero Image ── */}
-        <div className="relative w-full bg-gray-50 dark:bg-gray-900" style={{ aspectRatio: '3/4', maxHeight: '75vw' }}>
-          <img
-            src={variantHeroImg}
-            alt={product.name}
-            className="w-full h-full object-cover"
-            data-testid="img-variant-hero"
-          />
-          {colorImages.length > 0 && (
-            <div className="absolute bottom-3 right-3 flex gap-1.5 flex-wrap max-w-[60%] justify-end">
-              {colorImages.map((ci, i) => (
-                <button
-                  key={i}
-                  onClick={() => { setVariantActiveImg(ci.imageUrl); setSelectedColor(ci.color); }}
-                  className={`w-10 h-10 rounded-lg overflow-hidden border-2 transition-all shadow-sm ${
-                    selectedColor === ci.color ? 'border-white ring-2 ring-primary scale-105' : 'border-white/70 opacity-80'
-                  }`}
-                  title={ci.color}
-                  data-testid={`button-variant-color-thumb-${i}`}
-                >
-                  {ci.imageUrl ? (
-                    <img src={ci.imageUrl} alt={ci.color} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full" style={{ background: ci.hex || '#ccc' }} />
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* ── Product Info Card ── */}
-        <div className="px-4 pt-4 space-y-4">
-          {/* Price */}
-          <div className="flex items-baseline gap-3">
-            <span className="text-2xl font-extrabold text-primary" data-testid="text-variant-price">
-              {formatPrice(displayPrice)} {displayCurrencyLabel}
-            </span>
-            {sizePricing.length > 0 && selectedSize && currentSizeData && (
-              <span className="text-sm text-muted-foreground line-through">
-                {formatPrice(product.price)} {displayCurrencyLabel}
-              </span>
-            )}
-            {currentStock <= 0 && (
-              <Badge variant="destructive" className="text-xs mr-auto">نفذ المخزون</Badge>
-            )}
-          </div>
-
-          {/* Title */}
-          <h1 className="text-base font-bold leading-snug" data-testid="text-variant-name">{product.name}</h1>
-
-          {/* Ratings — يتحكم بها سديم الذكية */}
-          {(sadeemShowRating || sadeemShowSoldCount) && (
-            <div className="flex items-center gap-2">
-              {sadeemShowRating && (
-                <>
-                  <div className="flex">
-                    {[1,2,3,4,5].map(s => (
-                      <Star key={s} className={`h-3.5 w-3.5 ${s <= Math.floor(Number(product.rating||5)) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
+      // ── IMAGES ──────────────────────────────────────────────────────────
+      case "images": {
+        const imgH = s.height ?? 420;
+        const thumbSz = s.thumbSize ?? 64;
+        const imgMode = s.mode ?? "contain";
+        const showThumbs = s.showThumbs !== false;
+        return (
+          <div key="images" className="relative bg-white dark:bg-gray-900 w-full" data-testid="section-images">
+            {allImages.length > 1 ? (
+              <>
+                <div className="overflow-hidden" ref={emblaRef} style={{ height: imgH }}>
+                  <div className="flex h-full">
+                    {allImages.map((img, idx) => (
+                      <div key={idx} className="flex-[0_0_100%] min-w-0 h-full flex items-center justify-center"
+                        style={{ padding: imgMode === 'contain' ? 8 : 0 }}>
+                        <LazyImage src={img} alt={`${product.name} ${idx + 1}`}
+                          className={`w-full h-full ${imgMode === 'cover' ? 'object-cover' : 'object-contain'}`} />
+                      </div>
                     ))}
                   </div>
-                  <span className="text-xs text-muted-foreground">{product.rating || "5"} ({product.reviewCount || 0} تقييم)</span>
-                </>
-              )}
-              {sadeemShowSoldCount && (
-                <span className="text-xs text-muted-foreground mr-auto">تم بيع {(product as any).soldCount || 0}</span>
-              )}
-            </div>
-          )}
-
-          {/* Colors (from colorImages) */}
-          {colorImages.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm font-semibold">اللون:</span>
-                {selectedColor && (
-                  <span className="text-sm text-muted-foreground">{selectedColor}</span>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {colorImages.map((ci, i) => (
-                  <button
-                    key={i}
-                    onClick={() => { setSelectedColor(ci.color); if (ci.imageUrl) setVariantActiveImg(ci.imageUrl); }}
-                    className={`relative w-10 h-10 rounded-full border-2 overflow-hidden transition-all ${
-                      selectedColor === ci.color ? 'border-primary ring-2 ring-primary/40 scale-110' : 'border-gray-200 hover:border-gray-400'
-                    }`}
-                    title={ci.color}
-                    data-testid={`button-variant-color-${i}`}
-                  >
-                    {ci.imageUrl ? (
-                      <img src={ci.imageUrl} alt={ci.color} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full rounded-full" style={{ background: ci.hex || getColorCode(ci.color) }} />
-                    )}
-                    {selectedColor === ci.color && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <Check className="h-3.5 w-3.5 text-white drop-shadow" />
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Sizes */}
-          {sizePricing.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm font-semibold">الحجم:</span>
-                {selectedSize && <span className="text-sm text-muted-foreground">{selectedSize}</span>}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {sizePricing.map((sp) => (
-                  <button
-                    key={sp.size}
-                    onClick={() => setSelectedSize(sp.size)}
-                    className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${
-                      selectedSize === sp.size
-                        ? 'border-primary bg-primary text-primary-foreground shadow'
-                        : 'border-gray-200 hover:border-primary/50 text-foreground'
-                    }`}
-                    data-testid={`button-variant-size-${sp.size}`}
-                  >
-                    <div>{sp.size}</div>
-                    <div className="text-xs opacity-80">{formatPrice(currency==='SAR'&&sp.priceSar?sp.priceSar:sp.price)} {displayCurrencyLabel}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {sizes.length > 0 && sizePricing.length === 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm font-semibold">الحجم:</span>
-                {selectedSize && <span className="text-sm text-muted-foreground">{selectedSize}</span>}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {sizes.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setSelectedSize(s)}
-                    className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${
-                      selectedSize === s
-                        ? 'border-primary bg-primary text-primary-foreground shadow'
-                        : 'border-gray-200 hover:border-primary/50 text-foreground'
-                    }`}
-                    data-testid={`button-variant-size-text-${s}`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Colors (legacy, no colorImages) */}
-          {colorImages.length === 0 && availableColors.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm font-semibold">اللون:</span>
-                {selectedColor && <span className="text-sm text-muted-foreground">{selectedColor}</span>}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {availableColors.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setSelectedColor(c)}
-                    className={`w-8 h-8 rounded-full border-2 transition-all ${
-                      selectedColor === c ? 'border-primary ring-2 ring-primary/40 scale-110' : 'border-gray-200'
-                    }`}
-                    style={{ background: getColorCode(c) }}
-                    title={c}
-                    data-testid={`button-variant-legacy-color-${c}`}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Description */}
-          {product.description && (
-            <div className="text-sm text-muted-foreground leading-relaxed border-t pt-3">
-              {product.description}
-            </div>
-          )}
-        </div>
-
-        {/* ── Fixed Bottom Bar ── */}
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t px-4 py-3 flex items-center gap-3 shadow-lg">
-          {/* Quantity */}
-          <div className="flex items-center border rounded-lg overflow-hidden">
-            <button
-              onClick={() => setQuantity(q => Math.max(1, q - 1))}
-              className="px-3 py-2 hover:bg-muted text-lg font-bold"
-              data-testid="button-variant-qty-minus"
-            >−</button>
-            <span className="px-3 py-2 text-sm font-bold min-w-[2rem] text-center" data-testid="text-variant-qty">{quantity}</span>
-            <button
-              onClick={() => setQuantity(q => Math.min(currentStock || 999, q + 1))}
-              className="px-3 py-2 hover:bg-muted text-lg font-bold"
-              data-testid="button-variant-qty-plus"
-            >+</button>
-          </div>
-
-          {/* Add to cart */}
-          <Button
-            className="flex-1 gap-2 font-bold"
-            disabled={currentStock <= 0 || isPending}
-            onClick={handleAddToCart}
-            data-testid="button-variant-add-to-cart"
-          >
-            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
-            {currentStock <= 0 ? 'نفذت الكمية' : 'أضف للسلة'}
-          </Button>
-
-          {/* Buy Now */}
-          <Button
-            variant="outline"
-            className="flex-1 gap-2 font-bold border-primary text-primary"
-            disabled={currentStock <= 0 || isPending}
-            onClick={handleBuyNow}
-            data-testid="button-variant-buy-now"
-          >
-            <Zap className="h-4 w-4" />
-            اشتر الآن
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="container mx-auto pb-28" style={{ paddingLeft: detailMarginH, paddingRight: detailMarginH, paddingTop: detailTopPadding }}>
-      <Link href="/products">
-        <Button variant="ghost" className="mb-4 gap-2" data-testid="button-back">
-          <ArrowRight className="h-4 w-4" />
-          العودة للمنتجات
-        </Button>
-      </Link>
-
-      <div className="grid md:grid-cols-2 gap-8">
-        <div className="relative">
-          {allImages.length > 1 ? (
-            <div className="relative">
-              <div className="overflow-hidden rounded-2xl" ref={emblaRef}>
-                <div className="flex">
-                  {allImages.map((img, idx) => (
-                    <div key={idx} className="flex-[0_0_100%] min-w-0">
-                      <div
-                        className="bg-white dark:bg-gray-900 flex items-center justify-center"
-                        style={{
-                          aspectRatio: '1 / 1',
-                          padding: detailImgMode === 'contain' ? 16 : 0,
-                          background: '#ffffff',
-                        }}
-                      >
-                        <LazyImage
-                          src={img}
-                          alt={`${product?.name || 'منتج'} - صورة ${idx + 1}`}
-                          className={`w-full h-full ${detailImgMode === 'cover' ? 'object-cover' : 'object-contain'}`}
-                        />
-                      </div>
-                    </div>
-                  ))}
                 </div>
-              </div>
-              
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full shadow-md z-10"
-                onClick={scrollNext}
-                data-testid="button-image-next"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full shadow-md z-10"
-                onClick={scrollPrev}
-                data-testid="button-image-prev"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </Button>
-
-              {detailShowThumbs && (
-                <div className="flex gap-2 mt-3 justify-center flex-wrap" data-testid="thumbnails-strip">
-                  {allImages.map((img, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => emblaApi?.scrollTo(idx)}
-                      className={`rounded-lg overflow-hidden border-2 transition-all flex-shrink-0 ${
-                        currentImageIndex === idx ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'
-                      }`}
-                      style={{ width: detailThumb, height: detailThumb }}
-                      data-testid={`button-thumbnail-${idx}`}
-                    >
-                      <LazyImage src={img} alt="" className="w-full h-full object-cover" />
-                    </button>
-                  ))}
+                <Button variant="ghost" size="icon"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white rounded-full shadow-md z-10 h-9 w-9"
+                  onClick={scrollNext} data-testid="button-image-next">
+                  <ChevronLeft className="h-5 w-5" />
+                </Button>
+                <Button variant="ghost" size="icon"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white rounded-full shadow-md z-10 h-9 w-9"
+                  onClick={scrollPrev} data-testid="button-image-prev">
+                  <ChevronRight className="h-5 w-5" />
+                </Button>
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs px-2 py-0.5 rounded-full">
+                  {currentImageIndex + 1}/{allImages.length}
                 </div>
-              )}
-            </div>
-          ) : (
-            <div
-              className="rounded-2xl overflow-hidden flex items-center justify-center"
-              style={{
-                aspectRatio: '1 / 1',
-                padding: detailImgMode === 'contain' ? 16 : 0,
-                background: '#ffffff',
-              }}
-            >
-              <LazyImage
-                src={product?.imageUrl || ''}
-                alt={product?.name || 'منتج'}
-                className={`w-full h-full ${detailImgMode === 'cover' ? 'object-cover' : 'object-contain'}`}
-              />
-            </div>
-          )}
-          
-          {currentStock <= 0 && (
-            <Badge variant="destructive" className="absolute top-4 right-4 text-sm px-4 py-2">
-              نفذت الكمية
-            </Badge>
-          )}
-          {currentStock > 0 && currentStock <= 10 && (
-            <Badge variant="secondary" className="absolute top-4 left-4 text-sm px-3 py-1 bg-orange-100 text-orange-700">
-              <Package className="h-3 w-3 ml-1" />
-              متبقي {currentStock} فقط
-            </Badge>
-          )}
-          {detailDiscountBubble > 0 && (product as any).effectiveDiscount > 0 && (
-            <div
-              className="absolute bottom-4 left-4 rounded-full flex items-center justify-center font-extrabold text-white shadow-lg"
-              style={{
-                width: detailDiscountBubble,
-                height: detailDiscountBubble,
-                fontSize: Math.max(10, detailDiscountBubble * 0.28),
-                background: 'var(--discount-badge-bg, #ef4444)',
-              }}
-              data-testid="badge-detail-discount"
-            >
-              -{(product as any).effectiveDiscount}%
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: detailSectionGap }}>
-          <div>
-            <h1 className="text-lg md:text-xl font-extrabold text-foreground mb-2" data-testid="text-product-name">
-              {product?.name || 'تحميل المنتج...'}
-            </h1>
-            
-            {/* تقييم ومبيعات — يتحكم بها سديم الذكية */}
-            {(sadeemShowRating || sadeemShowSoldCount) && (
-              <div className="flex flex-wrap items-center gap-4 mb-4 p-3 bg-muted/30 rounded-lg">
-                {sadeemShowRating && (
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-0.5">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star 
-                          key={star}
-                          className={`h-5 w-5 ${
-                            star <= Math.floor(Number(product.rating || 5))
-                              ? 'text-yellow-400 fill-yellow-400' 
-                              : star - 0.5 <= Number(product.rating || 5)
-                                ? 'text-yellow-400 fill-yellow-400/50'
-                                : 'text-gray-300'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <span className="text-lg font-bold text-foreground">{product.rating || "5"}</span>
-                    <span className="text-sm text-muted-foreground">
-                      ({product.reviewCount || 0} تقييم)
-                    </span>
-                  </div>
-                )}
-                {sadeemShowSoldCount && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Badge variant="secondary" className="gap-1.5 font-semibold">
-                      <ShoppingCart className="h-3.5 w-3.5" />
-                      تم بيع {(product as any).soldCount || 0} قطعة
-                    </Badge>
-                  </div>
-                )}
+              </>
+            ) : (
+              <div className="w-full flex items-center justify-center" style={{ height: imgH, padding: imgMode === 'contain' ? 8 : 0 }}>
+                <LazyImage src={product.imageUrl || ''} alt={product.name}
+                  className={`w-full h-full ${imgMode === 'cover' ? 'object-cover' : 'object-contain'}`} />
               </div>
             )}
-            
-            <p className="text-muted-foreground leading-relaxed" data-testid="text-product-description">
-              {product?.description || 'لا توجد وصفة متاحة'}
-            </p>
+            {/* Stock badges on image */}
+            {currentStock <= 0 && (
+              <Badge variant="destructive" className="absolute top-3 right-3 text-xs px-3 py-1">نفذت الكمية</Badge>
+            )}
+            {currentStock > 0 && currentStock <= 10 && (
+              <Badge className="absolute top-3 right-3 text-xs px-3 py-1 bg-orange-500 text-white">
+                <Package className="h-3 w-3 ml-1" />متبقي {currentStock} فقط
+              </Badge>
+            )}
+            {effectiveDiscount > 0 && (
+              <div className="absolute top-3 left-3 bg-red-500 text-white rounded-full w-10 h-10 flex items-center justify-center font-extrabold text-xs shadow-lg">
+                -{effectiveDiscount}%
+              </div>
+            )}
+            {/* Thumbnails */}
+            {showThumbs && allImages.length > 1 && (
+              <div className="flex gap-2 p-2 justify-center flex-wrap bg-white dark:bg-gray-900 border-t">
+                {allImages.map((img, idx) => (
+                  <button key={idx} onClick={() => emblaApi?.scrollTo(idx)}
+                    className={`rounded-lg overflow-hidden border-2 flex-shrink-0 transition-all ${currentImageIndex === idx ? 'border-primary' : 'border-transparent opacity-50 hover:opacity-80'}`}
+                    style={{ width: thumbSz, height: thumbSz }} data-testid={`button-thumbnail-${idx}`}>
+                    <LazyImage src={img} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+        );
+      }
 
-          {sizePricing.length > 0 && (
-            <div>
-              <Label className="text-base font-semibold mb-3 block">الحجم</Label>
-              <div className="flex flex-wrap gap-2">
-                {sizePricing.map((sp) => (
-                  <button
-                    key={sp.size}
-                    onClick={() => setSelectedSize(sp.size)}
-                    className={`px-4 py-3 rounded-xl border-2 transition-all font-medium flex flex-col items-center min-w-[80px] ${
-                      selectedSize === sp.size 
-                        ? 'border-primary bg-primary/10 text-primary shadow-md' 
-                        : 'border-gray-200 hover:border-gray-400 text-foreground hover:bg-gray-50'
-                    }`}
-                    data-testid={`button-size-${sp.size}`}
-                  >
-                    <span className="font-bold">{sp.size}</span>
-                    <span className="text-xs text-muted-foreground mt-1">
-                      {formatPrice(currency === 'SAR' && sp.priceSar ? sp.priceSar : sp.price)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
-                    </span>
-                  </button>
-                ))}
-              </div>
+      // ── PRICE ────────────────────────────────────────────────────────────
+      case "price": {
+        if (!sec["price"]?.visible) return null;
+        const priceFontSize = s.fontSize ?? 22;
+        return (
+          <div key="price" className="px-4 pt-3" data-testid="section-price">
+            <div className="flex items-end gap-3 flex-wrap">
+              {/* Original price (crossed) */}
+              {(sadeemShowOldPrice && effectiveDiscount > 0) || isMarketerLink ? (
+                <span className="text-muted-foreground line-through text-base" data-testid="text-original-price">
+                  {formatPrice(currentPrice)} {currLabel}
+                </span>
+              ) : null}
+              {/* Discount badge */}
+              {sadeemShowDiscountBadge && effectiveDiscount > 0 && (
+                <Badge className="text-xs px-2 py-0.5 font-bold" style={{ background: 'var(--discount-badge-bg,#ef4444)', color:'white' }}
+                  data-testid="badge-discount">
+                  -{effectiveDiscount}%
+                </Badge>
+              )}
+              {isMarketerLink && (
+                <Badge className="text-xs px-2 py-0.5 bg-purple-600 text-white">خصم مسوق -{sadeemMarketerDiscount}%</Badge>
+              )}
             </div>
-          )}
-
-          {sizes.length > 0 && sizePricing.length === 0 && (
-            <div>
-              <Label className="text-base font-semibold mb-3 block">اختر المقاس</Label>
-              <div className="flex flex-wrap gap-2">
-                {sizes.map((size) => (
-                  <button
-                    key={size}
-                    onClick={() => setSelectedSize(size)}
-                    className={`px-4 py-2 rounded-lg border-2 transition-all font-medium ${
-                      selectedSize === size 
-                        ? 'border-primary bg-primary/10 text-primary' 
-                        : 'border-gray-200 hover:border-gray-400 text-foreground'
-                    }`}
-                    data-testid={`button-size-${size}`}
-                  >
-                    {size}
-                  </button>
-                ))}
-              </div>
+            {/* Main price */}
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="font-extrabold text-primary leading-none" style={{ fontSize: priceFontSize }} data-testid="text-product-price">
+                {formatPrice(displayedPrice)}
+              </span>
+              <span className="text-base text-muted-foreground">{currLabel}</span>
+              {/* Smart variant price */}
+              {selectedSmartV && Number(selectedSmartV.discount || 0) > 0 && sadeemShowOldPrice && (
+                <span className="text-sm line-through text-muted-foreground ml-2">
+                  {formatPrice(Math.round(Number(currentPrice) / (1 - Number(selectedSmartV.discount) / 100)))}
+                </span>
+              )}
             </div>
-          )}
+            {/* Total */}
+            {quantity > 1 && (
+              <p className="text-sm text-muted-foreground mt-1">
+                الإجمالي: <strong className="text-foreground" data-testid="text-total-price">{formatPrice(totalPrice)} {currLabel}</strong>
+                {printingCost > 0 && <span className="mr-1">(يشمل {formatPrice(printingCost)} طباعة)</span>}
+              </p>
+            )}
+          </div>
+        );
+      }
 
-          {availableColors.length > 0 && (
-            <div>
-              <Label className="text-base font-semibold mb-3 block">اللون</Label>
-              <div className="flex flex-wrap gap-3">
-                {availableColors.map((color) => {
-                  const colorCode = getColorCode(color);
-                  const isTransparent = color === 'شفاف';
+      // ── TITLE ────────────────────────────────────────────────────────────
+      case "title": {
+        if (!sec["title"]?.visible) return null;
+        return (
+          <div key="title" className="px-4 pt-1" data-testid="section-title">
+            <h1 className="text-lg font-extrabold leading-snug text-foreground" data-testid="text-product-name">
+              {product.name}
+            </h1>
+          </div>
+        );
+      }
+
+      // ── RATING ──────────────────────────────────────────────────────────
+      case "rating": {
+        if (!sec["rating"]?.visible) return null;
+        if (!sadeemShowRating && !sadeemShowSoldCount) return null;
+        return (
+          <div key="rating" className="px-4 flex items-center gap-3 flex-wrap" data-testid="section-rating">
+            {sadeemShowRating && (
+              <div className="flex items-center gap-1.5">
+                <div className="flex">
+                  {[1,2,3,4,5].map(star => (
+                    <Star key={star} className={`h-4 w-4 ${star <= Math.floor(Number(product.rating || 5)) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
+                  ))}
+                </div>
+                <span className="text-sm font-bold">{product.rating || "5"}</span>
+                <span className="text-xs text-muted-foreground">({product.reviewCount || 0} تقييم)</span>
+              </div>
+            )}
+            {sadeemShowSoldCount && (
+              <Badge variant="secondary" className="text-xs gap-1">
+                <ShoppingCart className="h-3 w-3" />
+                تم بيع {(product as any).soldCount || 0} قطعة
+              </Badge>
+            )}
+          </div>
+        );
+      }
+
+      // ── TRUST BADGES ─────────────────────────────────────────────────────
+      case "trust_badges": {
+        if (!sec["trust_badges"]?.visible) return null;
+        return (
+          <div key="trust_badges" className="px-4" data-testid="section-trust-badges">
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { icon: Truck, label: "شحن سريع", color: "text-blue-500" },
+                { icon: Lock, label: "دفع آمن", color: "text-green-500" },
+                { icon: RefreshCcw, label: "إرجاع مجاني", color: "text-orange-500" },
+                { icon: Award, label: "جودة مضمونة", color: "text-purple-500" },
+              ].map(({ icon: Icon, label, color }) => (
+                <div key={label} className="flex flex-col items-center gap-1 p-2 rounded-xl bg-muted/40 text-center">
+                  <Icon className={`h-5 w-5 ${color}`} />
+                  <span className="text-[10px] text-muted-foreground font-medium leading-tight">{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      // ── VARIANTS ─────────────────────────────────────────────────────────
+      case "variants": {
+        if (!sec["variants"]?.visible) return null;
+        const hasVariants = sizePricing.length > 0 || sizes.length > 0 || colorImages.length > 0 || availableColors.length > 0 || showSmartVariants;
+        if (!hasVariants) return null;
+        return (
+          <div key="variants" className="px-4 space-y-4" data-testid="section-variants">
+            {/* Smart Variants */}
+            {showSmartVariants && smartVariantsData && (
+              <div className="space-y-3">
+                {smartVariantsData.activeTypes.map(type => {
+                  const typeVariants = smartVariantsData.variants.filter(v => v.type === type && v.label);
+                  if (!typeVariants.length) return null;
+                  const selectedId = selectedSmartVariant[type];
                   return (
-                    <button
-                      key={color}
-                      onClick={() => setSelectedColor(color)}
-                      className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${
-                        selectedColor === color 
-                          ? 'bg-primary/10 ring-2 ring-primary' 
-                          : 'hover:bg-muted'
-                      }`}
-                      data-testid={`button-color-${color}`}
-                    >
-                      <div 
-                        className={`w-10 h-10 rounded-full border-2 flex items-center justify-center ${
-                          selectedColor === color ? 'border-primary' : 'border-gray-300'
-                        }`}
-                        style={{ 
-                          backgroundColor: colorCode,
-                          backgroundImage: isTransparent ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)' : 'none',
-                          backgroundSize: '8px 8px',
-                          backgroundPosition: '0 0, 4px 4px'
-                        }}
-                      >
-                        {selectedColor === color && (
-                          <Check className={`h-5 w-5 drop-shadow-md ${color === 'أبيض' || isTransparent ? 'text-gray-700' : 'text-white'}`} />
-                        )}
+                    <div key={type}>
+                      <Label className="font-semibold text-sm mb-2 block">
+                        {SMART_V_LABELS[type]}
+                        {selectedId && (() => { const sv = typeVariants.find(v => v.id === selectedId); return sv ? <span className="mr-2 font-normal text-muted-foreground">— {sv.label}</span> : null; })()}
+                      </Label>
+                      <div className="flex flex-wrap gap-2">
+                        {typeVariants.map(v => {
+                          const isSelected = selectedSmartVariant[type] === v.id;
+                          const priceNum = Number(currency === 'SAR' && v.priceSar ? v.priceSar : v.price || 0);
+                          return (
+                            <button key={v.id}
+                              onClick={() => { setSelectedSmartVariant(p => ({ ...p, [type]: v.id })); if (v.imageUrl) setVariantActiveImg(v.imageUrl); }}
+                              className={`px-3 py-2 rounded-xl border-2 transition-all flex flex-col items-center min-w-[72px] text-center text-sm ${isSelected ? 'border-primary bg-primary/10 text-primary shadow-md' : 'border-gray-200 hover:border-gray-400'}`}
+                              data-testid={`button-smart-variant-${type}-${v.id}`}>
+                              {type === 'color' && v.hex && <span className="w-5 h-5 rounded-full border-2 border-white shadow mb-1 block mx-auto" style={{ background: v.hex }} />}
+                              {type === 'image' && v.imageUrl && <img src={v.imageUrl} alt={v.label} className="w-10 h-10 object-cover rounded mb-1 mx-auto" />}
+                              <span className="font-bold leading-tight">{v.label}</span>
+                              {priceNum > 0 && <span className="text-xs text-muted-foreground mt-0.5">{formatPrice(priceNum)} {currLabel}</span>}
+                              {Number(v.discount || 0) > 0 && <span className="text-[10px] text-red-500 font-bold mt-0.5">-{v.discount}%</span>}
+                            </button>
+                          );
+                        })}
                       </div>
-                      <span className="text-xs font-medium">{color}</span>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* ── الخيارات الذكية ────────────────────────────────────── */}
-          {showSmartVariants && smartVariantsData && (
-            <div className="space-y-3" data-testid="smart-variants-section">
-              {smartVariantsData.activeTypes.map(type => {
-                const typeVariants = smartVariantsData.variants.filter(v => v.type === type && v.label);
-                if (typeVariants.length === 0) return null;
-                const selectedId = selectedSmartVariant[type];
-                return (
-                  <div key={type}>
-                    <Label className="text-base font-semibold mb-2 block">
-                      {SMART_V_LABELS[type]}
-                      {selectedId && (() => {
-                        const sv = typeVariants.find(v => v.id === selectedId);
-                        return sv ? <span className="mr-2 text-sm font-normal text-muted-foreground">— {sv.label}</span> : null;
-                      })()}
-                    </Label>
-                    <div className="flex flex-wrap gap-2">
-                      {typeVariants.map((v) => {
-                        const isSelected = selectedSmartVariant[type] === v.id;
-                        const discountNum = Number(v.discount || 0);
-                        const priceNum = Number(currency === 'SAR' && v.priceSar ? v.priceSar : v.price || 0);
-                        const origPrice = discountNum > 0 ? Math.round(priceNum / (1 - discountNum / 100)) : 0;
-                        return (
-                          <button
-                            key={v.id}
-                            onClick={() => {
-                              setSelectedSmartVariant(prev => ({ ...prev, [type]: v.id }));
-                              if (v.imageUrl) setVariantActiveImg(v.imageUrl);
-                            }}
-                            className={`px-3 py-2 rounded-xl border-2 transition-all font-medium flex flex-col items-center min-w-[72px] text-center ${
-                              isSelected
-                                ? 'border-primary bg-primary/10 text-primary shadow-md ring-2 ring-primary/30'
-                                : 'border-gray-200 hover:border-gray-400 text-foreground hover:bg-gray-50 dark:hover:bg-gray-800'
-                            }`}
-                            data-testid={`button-smart-variant-${type}-${v.id}`}
-                          >
-                            {type === 'color' && v.hex && (
-                              <span className="w-5 h-5 rounded-full border-2 border-white shadow mb-1 block mx-auto" style={{ background: v.hex }} />
-                            )}
-                            {type === 'image' && v.imageUrl && (
-                              <img src={v.imageUrl} alt={v.label} className="w-10 h-10 object-cover rounded mb-1 mx-auto" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                            )}
-                            <span className="font-bold text-sm leading-tight">{v.label}</span>
-                            {priceNum > 0 && (
-                              <span className="text-xs text-muted-foreground mt-0.5 leading-tight">
-                                {formatPrice(priceNum)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
-                              </span>
-                            )}
-                            {discountNum > 0 && (
-                              <span className="text-[10px] font-bold text-red-500 mt-0.5">-{discountNum}%</span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <Card className="border-primary/20">
-            <CardContent className="p-4 space-y-4">
-              <div className="flex items-end justify-between gap-4 flex-wrap">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    {selectedSmartV ? `سعر ${selectedSmartV.label}` : 'السعر للوحدة'}
-                  </p>
-                  {/* سعر قديم + بادج خصم المتغير الذكي — يتحكم بها سديم الذكية */}
-                  {selectedSmartV && Number(selectedSmartV.discount || 0) > 0 && (sadeemShowOldPrice || sadeemShowDiscountBadge) && (() => {
-                    const priceNum = Number(currency === 'SAR' && selectedSmartV.priceSar ? selectedSmartV.priceSar : selectedSmartV.price || 0);
-                    const discountNum = Number(selectedSmartV.discount);
-                    const origPrice = Math.round(priceNum / (1 - discountNum / 100));
-                    return (
-                      <div className="flex items-center gap-2 mb-1">
-                        {sadeemShowOldPrice && (
-                          <span className="text-sm line-through text-muted-foreground">{formatPrice(origPrice)}</span>
-                        )}
-                        {sadeemShowDiscountBadge && (
-                          <Badge className="text-xs px-1.5 py-0.5" style={{ background: 'var(--discount-badge-bg, #ef4444)', color: 'white' }}>
-                            -{discountNum}%
-                          </Badge>
-                        )}
-                      </div>
-                    );
-                  })()}
-                  {/* السعر الرئيسي — مع خصم المسوق إن وُجد */}
-                  {isMarketerLink ? (
-                    <div>
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm line-through text-muted-foreground">{formatPrice(currentPrice)}</span>
-                        <Badge className="text-xs px-2 py-0.5 bg-purple-600 text-white">
-                          خصم مسوق -{sadeemMarketerDiscount}%
-                        </Badge>
-                      </div>
-                      <p className="font-extrabold text-primary" style={{ fontSize: detailPriceFs }} data-testid="text-product-price">
-                        {formatPrice(Math.round(Number(currentPrice) * (1 - sadeemMarketerDiscount / 100)))}
-                        <span className="text-lg font-normal text-muted-foreground mr-2">
-                          {currency === 'YER' ? 'ر.ي' : 'ر.س'}
-                        </span>
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="font-extrabold text-primary" style={{ fontSize: detailPriceFs }} data-testid="text-product-price">
-                      {formatPrice(currentPrice)} 
-                      <span className="text-lg font-normal text-muted-foreground mr-2">
-                        {currency === 'YER' ? 'ر.ي' : 'ر.س'}
-                      </span>
-                    </p>
-                  )}
-                </div>
-                <div className="text-left">
-                  <p className="text-sm text-muted-foreground mb-1">الإجمالي</p>
-                  <p className="text-lg font-bold text-foreground" data-testid="text-total-price">
-                    {formatPrice(totalPrice)} 
-                    <span className="text-xs font-normal text-muted-foreground mr-1">
-                      {currency === 'YER' ? 'ر.ي' : 'ر.س'}
-                    </span>
-                  </p>
-                  {printingCost > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      (يشمل {formatPrice(printingCost)} رسوم الطباعة)
-                    </p>
-                  )}
+            {/* Colors from colorImages */}
+            {colorImages.length > 0 && (
+              <div>
+                <Label className="font-semibold text-sm mb-2 block">
+                  اللون {selectedColor && <span className="font-normal text-muted-foreground mr-2">— {selectedColor}</span>}
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {colorImages.map((ci, i) => (
+                    <button key={i}
+                      onClick={() => { setSelectedColor(ci.color); if (ci.imageUrl) setVariantActiveImg(ci.imageUrl); }}
+                      className={`relative w-12 h-12 rounded-xl border-2 overflow-hidden transition-all ${selectedColor === ci.color ? 'border-primary ring-2 ring-primary/40 scale-105' : 'border-gray-200 hover:border-gray-400'}`}
+                      title={ci.color} data-testid={`button-color-img-${i}`}>
+                      {ci.imageUrl ? <img src={ci.imageUrl} alt={ci.color} className="w-full h-full object-cover" /> :
+                        <div className="w-full h-full" style={{ background: ci.hex || '#ccc' }} />}
+                      {selectedColor === ci.color && <div className="absolute inset-0 flex items-center justify-center bg-black/10"><Check className="h-4 w-4 text-white drop-shadow" /></div>}
+                    </button>
+                  ))}
                 </div>
               </div>
+            )}
 
-              {bulkPricing.length > 0 && (
-                <div className="bg-primary/5 rounded-lg p-3">
-                  <p className="text-sm font-semibold text-primary mb-2">خصومات الكميات:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {bulkPricing.map((bp, i) => (
-                      <Badge 
-                        key={i} 
-                        variant={quantity >= bp.minQty ? "default" : "outline"}
-                        className="text-xs"
-                      >
-                        {bp.minQty}+ قطعة: {formatPrice(bp.price)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
-                      </Badge>
-                    ))}
-                  </div>
+            {/* Legacy colors */}
+            {colorImages.length === 0 && availableColors.length > 0 && (
+              <div>
+                <Label className="font-semibold text-sm mb-2 block">
+                  اللون {selectedColor && <span className="font-normal text-muted-foreground mr-2">— {selectedColor}</span>}
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {availableColors.map(c => (
+                    <button key={c}
+                      onClick={() => setSelectedColor(c)}
+                      className={`flex flex-col items-center gap-1 p-1.5 rounded-xl transition-all ${selectedColor === c ? 'bg-primary/10 ring-2 ring-primary' : 'hover:bg-muted'}`}
+                      data-testid={`button-color-${c}`}>
+                      <div className="w-9 h-9 rounded-full border-2 flex items-center justify-center"
+                        style={{ backgroundColor: getColorCode(c), borderColor: selectedColor === c ? 'var(--primary)' : '#d1d5db' }}>
+                        {selectedColor === c && <Check className={`h-4 w-4 drop-shadow ${c === 'أبيض' ? 'text-gray-700' : 'text-white'}`} />}
+                      </div>
+                      <span className="text-[10px] font-medium">{c}</span>
+                    </button>
+                  ))}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            )}
 
-          {/* ── سديم الذكية: بطاقة الشحن ── */}
-          {sadeemShowShipping && (
-            <div className="border border-blue-200 dark:border-blue-800 rounded-xl p-4 bg-blue-50/50 dark:bg-blue-950/30 space-y-2" data-testid="card-sadeem-shipping">
-              <div className="flex items-center gap-2 mb-1">
+            {/* Size Pricing */}
+            {sizePricing.length > 0 && (
+              <div>
+                <Label className="font-semibold text-sm mb-2 block">
+                  الحجم {selectedSize && <span className="font-normal text-muted-foreground mr-2">— {selectedSize}</span>}
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {sizePricing.map(sp => (
+                    <button key={sp.size} onClick={() => setSelectedSize(sp.size)}
+                      className={`px-4 py-2.5 rounded-xl border-2 transition-all flex flex-col items-center min-w-[72px] text-sm font-medium ${selectedSize === sp.size ? 'border-primary bg-primary/10 text-primary shadow' : 'border-gray-200 hover:border-gray-400'}`}
+                      data-testid={`button-size-${sp.size}`}>
+                      <span className="font-bold">{sp.size}</span>
+                      <span className="text-xs text-muted-foreground mt-0.5">{formatPrice(currency==='SAR'&&sp.priceSar?sp.priceSar:sp.price)} {currLabel}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Plain sizes */}
+            {sizes.length > 0 && sizePricing.length === 0 && (
+              <div>
+                <Label className="font-semibold text-sm mb-2 block">المقاس</Label>
+                <div className="flex flex-wrap gap-2">
+                  {sizes.map(sz => (
+                    <button key={sz} onClick={() => setSelectedSize(sz)}
+                      className={`px-4 py-2 rounded-xl border-2 transition-all text-sm font-medium ${selectedSize === sz ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 hover:border-gray-400'}`}
+                      data-testid={`button-size-${sz}`}>{sz}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // ── BULK PRICING ──────────────────────────────────────────────────────
+      case "bulk": {
+        if (!sec["bulk"]?.visible || bulkPricing.length === 0) return null;
+        return (
+          <div key="bulk" className="px-4" data-testid="section-bulk">
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+              <p className="text-sm font-bold text-primary mb-2">💰 خصومات الكميات</p>
+              <div className="flex flex-wrap gap-2">
+                {bulkPricing.map((bp, i) => (
+                  <Badge key={i} variant={quantity >= bp.minQty ? "default" : "outline"} className="text-xs">
+                    {bp.minQty}+ قطعة: {formatPrice(bp.price)} {currLabel}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // ── QUANTITY ──────────────────────────────────────────────────────────
+      case "quantity": {
+        if (!sec["quantity"]?.visible) return null;
+        return (
+          <div key="quantity" className="px-4" data-testid="section-quantity">
+            <Label className="font-semibold text-sm mb-2 block">الكمية</Label>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center border rounded-xl overflow-hidden shadow-sm">
+                <Button size="icon" variant="ghost" onClick={() => setQuantity(q => Math.max(1, q - 1))} disabled={quantity <= 1} className="h-10 w-10 rounded-none" data-testid="button-decrease-quantity">
+                  <Minus className="h-4 w-4" />
+                </Button>
+                <Input type="number" min={1} max={currentStock}
+                  value={quantity}
+                  onChange={e => setQuantity(Math.max(1, Math.min(currentStock || 9999, parseInt(e.target.value) || 1)))}
+                  className="w-16 text-center font-bold border-0 border-x rounded-none h-10"
+                  data-testid="input-quantity" />
+                <Button size="icon" variant="ghost" onClick={() => setQuantity(q => Math.min(currentStock || 9999, q + 1))} disabled={currentStock > 0 && quantity >= currentStock} className="h-10 w-10 rounded-none" data-testid="button-increase-quantity">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              {currentStock > 0 ? (
+                <span className={`text-sm font-medium ${currentStock <= 10 ? 'text-orange-600' : 'text-muted-foreground'}`}>
+                  {currentStock <= 10 ? `⚠️ متبقي ${currentStock} فقط` : `متوفر: ${currentStock} قطعة`}
+                </span>
+              ) : (
+                <span className="text-sm text-red-600 font-medium">❌ غير متوفر</span>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      // ── SHIPPING ──────────────────────────────────────────────────────────
+      case "shipping": {
+        if (!sec["shipping"]?.visible || !sadeemShowShipping) return null;
+        return (
+          <div key="shipping" className="px-4" data-testid="section-shipping">
+            <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/30 p-3 space-y-1.5">
+              <div className="flex items-center gap-2">
                 <Truck className="h-4 w-4 text-blue-600" />
                 <span className="font-semibold text-sm">معلومات الشحن</span>
               </div>
               {sadeemFreeShippingMin === 0 ? (
-                <p className="text-sm text-green-700 dark:text-green-400 font-semibold flex items-center gap-1">
-                  <span>🎁</span> شحن مجاني لجميع الطلبات
-                </p>
+                <p className="text-sm text-green-700 dark:text-green-400 font-semibold">🎁 شحن مجاني لجميع الطلبات</p>
+              ) : totalPrice >= sadeemFreeShippingMin ? (
+                <p className="text-sm text-green-700 font-semibold" data-testid="text-shipping-free">✅ طلبك يستحق شحناً مجانياً</p>
               ) : (
-                <div>
-                  {totalPrice >= sadeemFreeShippingMin ? (
-                    <p className="text-sm text-green-700 dark:text-green-400 font-semibold flex items-center gap-1" data-testid="text-shipping-free">
-                      ✅ مبروك! طلبك يستحق شحناً مجانياً
-                    </p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground" data-testid="text-shipping-condition">
-                      أضف <strong className="text-foreground">{formatPrice(sadeemFreeShippingMin - totalPrice)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}</strong> للحصول على شحن مجاني
-                      <span className="block text-xs text-muted-foreground mt-0.5">
-                        (الحد الأدنى: {formatPrice(sadeemFreeShippingMin)} {currency === 'YER' ? 'ر.ي' : 'ر.س'})
-                      </span>
-                    </p>
-                  )}
-                </div>
+                <p className="text-sm text-muted-foreground" data-testid="text-shipping-condition">
+                  أضف <strong className="text-foreground">{formatPrice(sadeemFreeShippingMin - totalPrice)} {currLabel}</strong> للشحن المجاني
+                </p>
               )}
             </div>
-          )}
+          </div>
+        );
+      }
 
-          {/* ── سديم الذكية: بطاقة الإرجاع ── */}
-          {sadeemShowReturns && (
-            <div className="border border-green-200 dark:border-green-800 rounded-xl p-4 bg-green-50/50 dark:bg-green-950/30 flex items-center gap-3" data-testid="card-sadeem-returns">
+      // ── RETURNS ───────────────────────────────────────────────────────────
+      case "returns": {
+        if (!sec["returns"]?.visible || !sadeemShowReturns) return null;
+        return (
+          <div key="returns" className="px-4" data-testid="section-returns">
+            <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50/60 dark:bg-green-950/30 p-3 flex items-center gap-3">
               <RefreshCcw className="h-5 w-5 text-green-600 flex-shrink-0" />
               <div>
                 <p className="font-semibold text-sm">إرجاع مجاني</p>
                 <p className="text-xs text-muted-foreground">يمكنك إرجاع المنتج خلال 7 أيام من الاستلام</p>
               </div>
             </div>
-          )}
+          </div>
+        );
+      }
 
-          <div className="space-y-4">
-            <div>
-              <Label className="text-base font-semibold mb-3 block">الكمية</Label>
-              <div className="flex items-center gap-3">
-                <Button
-                  size="icon"
-                  variant="outline"
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  disabled={quantity <= 1}
-                  data-testid="button-decrease-quantity"
-                >
-                  <Minus className="h-4 w-4" />
-                </Button>
-                <Input
-                  type="number"
-                  min={1}
-                  max={currentStock}
-                  value={quantity}
-                  onChange={(e) => setQuantity(Math.max(1, Math.min(currentStock, parseInt(e.target.value) || 1)))}
-                  className="w-20 text-center font-bold text-lg"
-                  data-testid="input-quantity"
-                />
-                <Button
-                  size="icon"
-                  variant="outline"
-                  onClick={() => setQuantity(Math.min(currentStock, quantity + 1))}
-                  disabled={quantity >= currentStock}
-                  data-testid="button-increase-quantity"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  متوفر: {currentStock} قطعة
-                </span>
+      // ── INSTALLMENT ───────────────────────────────────────────────────────
+      case "installment": {
+        if (!sec["installment"]?.visible || !installmentEnabled) return null;
+        if (totalPrice < installmentMinAmount) return null;
+        const percs = installmentPercentages.split(',').map((p: string) => p.trim());
+        return (
+          <div key="installment" className="px-4" data-testid="section-installment">
+            <div className="rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50/60 dark:bg-purple-950/30 p-3">
+              <div className="flex items-center gap-2 mb-1.5">
+                <CreditCard className="h-4 w-4 text-purple-600" />
+                <span className="font-bold text-sm text-purple-800 dark:text-purple-300">يمكنك التقسيط!</span>
               </div>
-            </div>
-
-            {(product.allowDesignUpload || product.hasPrintingOptions) && (
-              <Card className="border-[#2196F3]/30 bg-[#2196F3]/5">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg flex items-center gap-2 text-[#2196F3]">
-                    <Printer className="h-5 w-5" />
-                    طباعة مخصصة
-                    {product.printingPricePerUnit && (
-                      <Badge variant="secondary" className="mr-2">
-                        +{formatPrice(product.printingPricePerUnit)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}/قطعة
-                      </Badge>
-                    )}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="enable-printing"
-                      checked={enableCustomPrinting}
-                      onChange={(e) => setEnableCustomPrinting(e.target.checked)}
-                      className="w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary"
-                    />
-                    <Label htmlFor="enable-printing" className="cursor-pointer">
-                      أريد طباعة شعاري أو تصميمي على المنتج
-                    </Label>
+              <p className="text-xs text-muted-foreground mb-2">هذا الطلب يؤهلك لنظام التقسيط. ادفع مقدماً وسدّد الباقي لاحقاً.</p>
+              <div className="flex gap-2 flex-wrap">
+                {percs.map((p: string) => (
+                  <div key={p} className="rounded-lg bg-purple-100 dark:bg-purple-900/40 px-2 py-1 text-xs font-bold text-purple-800 dark:text-purple-200">
+                    {p}% مقدماً ({formatPrice(Math.round(totalPrice * Number(p) / 100))} {currLabel})
                   </div>
-
-                  {enableCustomPrinting && (
-                    <div className="space-y-2">
-                      <div 
-                        className="border-2 border-dashed border-[#2196F3]/50 rounded-lg p-3 text-center cursor-pointer hover:border-[#2196F3] transition-colors bg-white dark:bg-gray-800"
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*,.pdf,.ai,.psd"
-                          onChange={handleDesignUpload}
-                          className="hidden"
-                          data-testid="input-design-upload"
-                        />
-                        {isUploadingDesign ? (
-                          <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm py-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            <span>جاري الرفع...</span>
-                          </div>
-                        ) : uploadedFile ? (
-                          <div className="flex items-center justify-center gap-2 text-[#2196F3] text-sm py-2">
-                            <Check className="h-4 w-4" />
-                            <span className="font-medium truncate">{uploadedFile.name}</span>
-                          </div>
-                        ) : (
-                          <div className="text-muted-foreground py-2">
-                            <Upload className="h-6 w-6 mx-auto mb-1 text-[#2196F3]" />
-                            <p className="font-medium text-sm">ارفع التصميم</p>
-                            <p className="text-xs mt-0.5 text-gray-400">PDF, PNG, JPG</p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <Label htmlFor="design-notes" className="text-sm mb-1 block">ملاحظات</Label>
-                        <Textarea
-                          id="design-notes"
-                          value={designNotes}
-                          onChange={(e) => setDesignNotes(e.target.value)}
-                          placeholder="ملاحظات بخصوص التصميم..."
-                          className="resize-none text-sm"
-                          rows={2}
-                          data-testid="input-design-notes"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          <div className="flex gap-3">
-            <Button
-              size="lg"
-              className="flex-1 text-lg font-extrabold gap-3 rounded-xl shadow-lg shadow-primary/20"
-              style={{ height: detailCartH }}
-              disabled={currentStock <= 0 || isPending}
-              onClick={handleAddToCart}
-              data-testid="button-add-to-cart"
-            >
-              {isPending ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <ShoppingCart className="h-5 w-5" />
-              )}
-              {currentStock <= 0 ? "غير متوفر" : "أضف للسلة"}
-            </Button>
-            
-          </div>
-        </div>
-      </div>
-
-      <Separator className="my-8" />
-      
-      {product.showReviews !== false && detailShowReviewsSetting && (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold">التقييمات والمراجعات</h2>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">أضف تقييمك</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label className="mb-2 block">التقييم</Label>
-              <div className="flex items-center gap-1">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    onClick={() => setReviewRating(star)}
-                    className="p-1"
-                    data-testid={`button-rating-${star}`}
-                  >
-                    <Star 
-                      className={`h-8 w-8 transition-colors ${
-                        star <= reviewRating
-                          ? 'text-yellow-400 fill-yellow-400' 
-                          : 'text-gray-300'
-                      }`}
-                    />
-                  </button>
                 ))}
               </div>
             </div>
-            <div>
-              <Label htmlFor="review-comment" className="mb-2 block">تعليقك (اختياري)</Label>
-              <Textarea
-                id="review-comment"
-                value={reviewComment}
-                onChange={(e) => setReviewComment(e.target.value)}
-                placeholder="شاركنا رأيك في هذا المنتج..."
-                className="resize-none"
-                rows={3}
-                data-testid="input-review-comment"
-              />
+          </div>
+        );
+      }
+
+      // ── PRINTING ──────────────────────────────────────────────────────────
+      case "printing": {
+        if (!sec["printing"]?.visible) return null;
+        if (!product.allowDesignUpload && !product.hasPrintingOptions) return null;
+        return (
+          <div key="printing" className="px-4" data-testid="section-printing">
+            <div className="rounded-xl border border-blue-300/50 bg-blue-50/40 dark:bg-blue-950/20 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Printer className="h-5 w-5 text-blue-600" />
+                <span className="font-bold text-sm">طباعة مخصصة</span>
+                {product.printingPricePerUnit && (
+                  <Badge variant="secondary" className="text-xs">+{formatPrice(product.printingPricePerUnit)} {currLabel}/قطعة</Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <input type="checkbox" id="enable-printing" checked={enableCustomPrinting}
+                  onChange={e => setEnableCustomPrinting(e.target.checked)}
+                  className="w-4 h-4 rounded text-primary" />
+                <Label htmlFor="enable-printing" className="cursor-pointer text-sm">أريد طباعة شعاري على المنتج</Label>
+              </div>
+              {enableCustomPrinting && (
+                <div className="space-y-2">
+                  <div
+                    className="border-2 border-dashed border-blue-400/50 rounded-lg p-3 text-center cursor-pointer hover:border-blue-500 transition-colors"
+                    onClick={() => fileInputRef.current?.click()}>
+                    <input ref={fileInputRef} type="file" accept="image/*,.pdf,.ai,.psd"
+                      onChange={handleDesignUpload} className="hidden" data-testid="input-design-upload" />
+                    {uploadedFile ? (
+                      <div className="flex items-center justify-center gap-2 text-blue-600 text-sm">
+                        <Check className="h-4 w-4" /><span className="truncate">{uploadedFile.name}</span>
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground text-sm">
+                        <Upload className="h-5 w-5 mx-auto mb-1 text-blue-500" />
+                        <p>ارفع التصميم (PDF, PNG, JPG)</p>
+                      </div>
+                    )}
+                  </div>
+                  <Textarea value={designNotes} onChange={e => setDesignNotes(e.target.value)}
+                    placeholder="ملاحظات التصميم..." className="resize-none text-sm" rows={2}
+                    data-testid="input-design-notes" />
+                </div>
+              )}
             </div>
-            
-            <div>
-              <Label className="mb-2 block">أضف صورة للمنتج (اختياري)</Label>
-              <div className="flex items-center gap-4">
-                <input
-                  ref={reviewImageRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleReviewImageUpload}
-                  disabled={isUploadingReviewImage}
-                  data-testid="input-review-image"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => reviewImageRef.current?.click()}
-                  disabled={isUploadingReviewImage}
-                  className="gap-2"
-                  data-testid="button-upload-review-image"
-                >
-                  {isUploadingReviewImage ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Camera className="h-4 w-4" />
-                  )}
-                  {isUploadingReviewImage ? 'جاري الرفع...' : 'رفع صورة'}
-                </Button>
-                
-                {reviewImageUrl && (
-                  <div className="relative">
-                    <img 
-                      src={reviewImageUrl} 
-                      alt="صورة التقييم" 
-                      className="w-16 h-16 object-cover rounded-lg border"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setReviewImageUrl(null)}
-                      className="absolute -top-2 -right-2 w-5 h-5 bg-destructive text-white rounded-full flex items-center justify-center"
-                      data-testid="button-remove-review-image"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
+          </div>
+        );
+      }
+
+      // ── DESCRIPTION ───────────────────────────────────────────────────────
+      case "description": {
+        if (!sec["description"]?.visible) return null;
+        return (
+          <div key="description" className="px-4" data-testid="section-description">
+            {/* Tabs: Description + Reviews toggle */}
+            <div className="flex border-b mb-3">
+              <button
+                onClick={() => setActiveTab("description")}
+                className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === "description" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}
+                data-testid="tab-description">
+                الوصف
+              </button>
+              <button
+                onClick={() => setActiveTab("reviews")}
+                className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === "reviews" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}
+                data-testid="tab-reviews">
+                التقييمات ({reviews.length})
+              </button>
+            </div>
+            {activeTab === "description" && (
+              <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-product-description">
+                {product.description || 'لا يوجد وصف متاح لهذا المنتج.'}
+              </p>
+            )}
+            {activeTab === "reviews" && (
+              <div className="space-y-4">
+                {/* Add Review */}
+                <div className="border rounded-xl p-4 space-y-3">
+                  <p className="font-semibold text-sm">أضف تقييمك</p>
+                  <div className="flex gap-1">
+                    {[1,2,3,4,5].map(star => (
+                      <button key={star} onClick={() => setReviewRating(star)} className="p-0.5" data-testid={`button-rating-${star}`}>
+                        <Star className={`h-7 w-7 transition-colors ${star <= reviewRating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
+                      </button>
+                    ))}
+                  </div>
+                  <Textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)}
+                    placeholder="شاركنا رأيك في هذا المنتج..." className="resize-none text-sm" rows={2}
+                    data-testid="input-review-comment" />
+                  <div className="flex items-center gap-3">
+                    <input ref={reviewImageRef} type="file" accept="image/*" className="hidden"
+                      onChange={handleReviewImageUpload} disabled={isUploadingReviewImage}
+                      data-testid="input-review-image" />
+                    <Button type="button" variant="outline" size="sm"
+                      onClick={() => reviewImageRef.current?.click()} disabled={isUploadingReviewImage}
+                      className="gap-2 text-xs" data-testid="button-upload-review-image">
+                      {isUploadingReviewImage ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
+                      {isUploadingReviewImage ? 'جاري...' : 'أضف صورة'}
+                    </Button>
+                    {reviewImageUrl && (
+                      <div className="relative">
+                        <img src={reviewImageUrl} alt="preview" className="w-12 h-12 object-cover rounded-lg border" />
+                        <button onClick={() => setReviewImageUrl(null)}
+                          className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-destructive text-white rounded-full flex items-center justify-center"
+                          data-testid="button-remove-review-image">
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      </div>
+                    )}
+                    <Button size="sm" onClick={() => submitReviewMutation.mutate({ rating: reviewRating, comment: reviewComment, imageUrl: reviewImageUrl || undefined })}
+                      disabled={submitReviewMutation.isPending} className="mr-auto text-xs"
+                      data-testid="button-submit-review">
+                      {submitReviewMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : null}
+                      إرسال
+                    </Button>
+                  </div>
+                </div>
+                {/* Reviews List */}
+                {reviews.length > 0 ? (
+                  <div className="space-y-3">
+                    {reviews.map(review => (
+                      <div key={review.id} className="border rounded-xl p-3" data-testid={`review-card-${review.id}`}>
+                        <div className="flex items-start gap-2">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <span className="text-primary font-bold text-xs">م</span>
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className="flex">
+                                {[1,2,3,4,5].map(s => (
+                                  <Star key={s} className={`h-3.5 w-3.5 ${s <= review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
+                                ))}
+                              </div>
+                              <span className="text-xs text-muted-foreground">{new Date(review.createdAt!).toLocaleDateString('ar-YE')}</span>
+                            </div>
+                            {review.comment && <p className="text-sm">{review.comment}</p>}
+                            {review.imageUrl && <img src={review.imageUrl} alt="تقييم" className="mt-2 w-20 h-20 object-cover rounded-lg" />}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-muted-foreground text-sm">
+                    <Star className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                    لا توجد تقييمات بعد. كن أول من يقيّم!
                   </div>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                شارك صورة المنتج بعد استلامه
-              </p>
-            </div>
-            
-            <Button
-              onClick={() => submitReviewMutation.mutate({ 
-                rating: reviewRating, 
-                comment: reviewComment,
-                imageUrl: reviewImageUrl || undefined
-              })}
-              disabled={submitReviewMutation.isPending}
-              data-testid="button-submit-review"
-            >
-              {submitReviewMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin ml-2" />
-              ) : null}
-              إرسال التقييم
-            </Button>
-          </CardContent>
-        </Card>
+            )}
+          </div>
+        );
+      }
 
-        {reviews.length > 0 ? (
-          <div className="space-y-4">
-            {reviews.map((review) => (
-              <Card key={review.id} data-testid={`review-card-${review.id}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="text-primary font-bold">م</span>
+      // ── REVIEWS (separate section — if reviews tab not used) ──────────────
+      case "reviews": return null; // Merged into description tabs
+
+      // ── RELATED ───────────────────────────────────────────────────────────
+      case "related": {
+        if (!sec["related"]?.visible || relatedProducts.length === 0) return null;
+        return (
+          <div key="related" className="px-4 pb-6" data-testid="section-related">
+            <h2 className="font-bold text-base mb-3">منتجات مشابهة</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {relatedProducts.map(p => (
+                <Link key={p.id} href={`/products/${p.id}`}>
+                  <div className="border rounded-xl overflow-hidden hover:shadow-md transition-shadow cursor-pointer bg-white dark:bg-gray-900"
+                    data-testid={`card-related-${p.id}`}>
+                    <div className="aspect-square bg-gray-50 dark:bg-gray-800">
+                      <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-2" />
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="flex items-center gap-0.5">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <Star 
-                              key={star}
-                              className={`h-4 w-4 ${
-                                star <= review.rating
-                                  ? 'text-yellow-400 fill-yellow-400' 
-                                  : 'text-gray-300'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(review.createdAt!).toLocaleDateString('ar-YE')}
-                        </span>
-                      </div>
-                      {review.comment && (
-                        <p className="text-sm text-foreground">{review.comment}</p>
-                      )}
-                      {review.imageUrl && (
-                        <img 
-                          src={review.imageUrl} 
-                          alt="صورة التقييم" 
-                          className="mt-2 w-24 h-24 object-cover rounded-lg"
-                        />
-                      )}
+                    <div className="p-2">
+                      <p className="font-medium text-xs line-clamp-2 mb-1">{p.name}</p>
+                      <p className="text-primary font-bold text-sm">{formatPrice(currency==='SAR'&&p.priceSar?p.priceSar:p.price)} {currLabel}</p>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              <Star className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-              <p>لا توجد تقييمات بعد. كن أول من يقيم هذا المنتج!</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-      )}
-
-      {filteredRelatedProducts.length > 0 && detailShowRelatedSetting && (
-        <>
-          <Separator className="my-8" />
-          <div>
-            <h2 className="text-2xl font-bold mb-4">منتجات مشابهة</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {filteredRelatedProducts.map((p) => (
-                <Link key={p.id} href={`/products/${p.id}`}>
-                  <Card className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer">
-                    <div className="aspect-square bg-gray-50 dark:bg-gray-800">
-                      <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-4" />
-                    </div>
-                    <CardContent className="p-3">
-                      <h3 className="font-medium text-sm line-clamp-2 mb-1">{p.name}</h3>
-                      <p className="text-primary font-bold text-sm">
-                        {formatPrice(currency === 'SAR' && p.priceSar ? p.priceSar : p.price)} {currency === 'YER' ? 'ر.ي' : 'ر.س'}
-                      </p>
-                    </CardContent>
-                  </Card>
                 </Link>
               ))}
             </div>
           </div>
-        </>
-      )}
+        );
+      }
 
-      {/* ── الشريط اللاصق السفلي (يظهر عند تفعيل الإعداد) ── */}
-      {showStickyCartBar && (
-        <div
-          className="fixed bottom-0 left-0 right-0 z-[60] flex items-stretch shadow-2xl border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
-          style={{ paddingBottom: 'env(safe-area-inset-bottom)', minHeight: 64 }}
-          data-testid="sticky-cart-bar"
-        >
-          {/* أضف للسلة — داكن/أسود، ممتد */}
-          <button
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 text-white font-extrabold text-sm transition-opacity disabled:opacity-50 px-4 py-3"
-            style={{ background: '#111' }}
-            disabled={currentStock <= 0 || isPending}
-            onClick={handleAddToCart}
-            data-testid="sticky-button-add-to-cart"
-          >
-            {/* بادج الخصم فوق النص */}
-            {(product as any).effectiveDiscount > 0 && (
-              <span className="text-yellow-400 text-xs font-bold leading-none mb-0.5 flex items-center gap-1">
-                <Zap className="h-3 w-3 inline" />
-                {(product as any).effectiveDiscount}% خصم!
-              </span>
-            )}
-            <span className="flex items-center gap-1.5">
-              {isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <ShoppingCart className="h-4 w-4" />
-              )}
-              {currentStock <= 0 ? "نفذ المخزون" : "أضف للسلة"}
-            </span>
-          </button>
+      default: return null;
+    }
+  };
 
-          {/* تسوق الآن — إطار أبيض */}
-          <button
-            className="flex items-center justify-center gap-1.5 border-r border-gray-200 dark:border-gray-700 px-5 font-extrabold text-sm text-foreground bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
-            style={{ minWidth: 110 }}
-            disabled={currentStock <= 0}
-            onClick={handleBuyNow}
-            data-testid="sticky-button-buy-now"
-          >
-            تسوق الآن
-          </button>
+  // ── Images section (always rendered first regardless of order) ──────────
+  const imagesSection = imagesSec.visible ? renderSection(imagesSec) : null;
+  const infoSections = orderedSections.map(s => renderSection(s));
 
-          {/* قلب/المفضلة */}
-          <button
-            className="flex items-center justify-center px-4 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            data-testid="sticky-button-wishlist"
-            onClick={() => {}}
-            aria-label="أضف للمفضلة"
-          >
-            <Heart className="h-5 w-5 text-gray-500" />
+  // ── Add to Cart buttons (inline, before sticky bar) ──────────────────────
+  const addCartButtons = (
+    <div key="add-cart-buttons" className="px-4 pb-4" data-testid="section-add-cart">
+      <div className="flex gap-3">
+        <Button
+          size="lg"
+          className="flex-1 font-extrabold gap-2 rounded-xl shadow-lg shadow-primary/20"
+          style={{ height: pdp.stickyBar.cartHeight }}
+          disabled={currentStock <= 0 || isPending}
+          onClick={handleAddToCart}
+          data-testid="button-add-to-cart">
+          {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShoppingCart className="h-5 w-5" />}
+          {currentStock <= 0 ? "غير متوفر" : "أضف للسلة"}
+        </Button>
+        <Button
+          size="lg"
+          variant="outline"
+          className="flex-1 font-extrabold gap-2 rounded-xl border-primary text-primary"
+          style={{ height: pdp.stickyBar.cartHeight }}
+          disabled={currentStock <= 0 || isPending}
+          onClick={handleBuyNow}
+          data-testid="button-buy-now">
+          <Zap className="h-5 w-5" />
+          اشتر الآن
+        </Button>
+      </div>
+    </div>
+  );
+
+  // ── Sticky Bar ───────────────────────────────────────────────────────────
+  const stickyBar = pdp.stickyBar.visible ? (
+    <div className="fixed bottom-0 left-0 right-0 z-[60] flex items-stretch shadow-2xl border-t bg-white dark:bg-gray-900"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      data-testid="sticky-cart-bar">
+      <button
+        className="flex-1 flex flex-col items-center justify-center gap-0.5 text-white font-extrabold text-sm disabled:opacity-50 px-4 py-3"
+        style={{ background: '#111' }}
+        disabled={currentStock <= 0 || isPending}
+        onClick={handleAddToCart}
+        data-testid="sticky-button-add-to-cart">
+        {effectiveDiscount > 0 && (
+          <span className="text-yellow-400 text-xs font-bold leading-none mb-0.5 flex items-center gap-1">
+            <Zap className="h-3 w-3 inline" />{effectiveDiscount}% خصم!
+          </span>
+        )}
+        <span className="flex items-center gap-1.5">
+          {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
+          {currentStock <= 0 ? "نفذ المخزون" : "أضف للسلة"}
+        </span>
+      </button>
+      <button
+        className="flex items-center justify-center gap-1.5 border-r border-gray-200 dark:border-gray-700 px-5 font-extrabold text-sm text-foreground bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+        style={{ minWidth: 100 }}
+        disabled={currentStock <= 0}
+        onClick={handleBuyNow}
+        data-testid="sticky-button-buy-now">
+        <Zap className="h-4 w-4 text-primary" />تسوق الآن
+      </button>
+      <button
+        className="flex items-center justify-center px-4 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+        data-testid="sticky-button-wishlist"
+        onClick={() => setWishlist(w => !w)}
+        aria-label="أضف للمفضلة">
+        <Heart className={`h-5 w-5 transition-colors ${wishlist ? 'text-red-500 fill-red-500' : 'text-gray-400'}`} />
+      </button>
+    </div>
+  ) : null;
+
+  // ── Render ───────────────────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-background pb-28" dir="rtl" style={{ paddingBottom: pdp.stickyBar.visible ? 84 : 24 }}>
+      {/* Back button */}
+      <div className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b px-3 py-2 flex items-center gap-2" data-testid="product-nav">
+        <Link href="/products">
+          <button className="p-2 rounded-full hover:bg-muted transition-colors" data-testid="button-back">
+            <ArrowRight className="h-5 w-5" />
           </button>
-        </div>
-      )}
+        </Link>
+        <span className="font-semibold text-sm flex-1 truncate">{product.name}</span>
+        <button
+          onClick={() => setWishlist(w => !w)}
+          className="p-2 rounded-full hover:bg-muted transition-colors"
+          data-testid="button-wishlist-top">
+          <Heart className={`h-5 w-5 ${wishlist ? 'text-red-500 fill-red-500' : 'text-gray-400'}`} />
+        </button>
+      </div>
+
+      {/* Sections in order */}
+      <div style={{ gap: pdp.margins.gap, display: 'flex', flexDirection: 'column' }}>
+        {imagesSection}
+        {infoSections}
+        {addCartButtons}
+      </div>
+
+      {stickyBar}
     </div>
   );
 }

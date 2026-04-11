@@ -1965,6 +1965,53 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── PDP Layout (Product Detail Page) ────────────────────────────────────────
+  const DEFAULT_PDP_LAYOUT = {
+    sections: [
+      { id: "images",      visible: true,  height: 420, thumbSize: 64, mode: "contain", showThumbs: true },
+      { id: "price",       visible: true,  fontSize: 22 },
+      { id: "title",       visible: true },
+      { id: "rating",      visible: true },
+      { id: "trust_badges",visible: true },
+      { id: "variants",    visible: true },
+      { id: "bulk",        visible: true },
+      { id: "quantity",    visible: true },
+      { id: "shipping",    visible: true },
+      { id: "returns",     visible: true },
+      { id: "installment", visible: true },
+      { id: "printing",    visible: true },
+      { id: "description", visible: true },
+      { id: "reviews",     visible: true },
+      { id: "related",     visible: true, count: 4 },
+    ],
+    stickyBar: { visible: true, cartHeight: 52 },
+    margins: { h: 16, v: 8, gap: 12 },
+  };
+
+  app.get("/api/pdp-layout", async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query("SELECT pdp_layout FROM display_settings LIMIT 1");
+      const raw = r.rows[0]?.pdp_layout;
+      if (raw) {
+        try { return res.json(JSON.parse(raw)); } catch {}
+      }
+      res.json(DEFAULT_PDP_LAYOUT);
+    } catch {
+      res.json(DEFAULT_PDP_LAYOUT);
+    }
+  });
+
+  app.post("/api/admin/pdp-layout", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query("UPDATE display_settings SET pdp_layout=$1", [JSON.stringify(req.body)]);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حفظ التخطيط" });
+    }
+  });
+
   // ─── Get Order Details (Public - for order confirmation) ────────────────────────
   app.get("/api/orders/:id", async (req, res) => {
     try {
