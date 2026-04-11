@@ -368,6 +368,18 @@ export default function Checkout() {
         } catch { /* non-fatal — plan can be created manually */ }
       }
 
+      // ─── رفع إيصال الدفع إن وُجد ─────────────────────────────────────
+      if (receiptFile && orderId) {
+        try {
+          const receiptForm = new FormData();
+          receiptForm.append("receipt", receiptFile);
+          await fetch(`/api/orders/${orderId}/upload-receipt`, {
+            method: "POST",
+            body: receiptForm,
+          });
+        } catch { /* non-fatal — can be uploaded later */ }
+      }
+
       try {
         localStorage.setItem(savedKey, JSON.stringify({
           customerName: formData.customerName,

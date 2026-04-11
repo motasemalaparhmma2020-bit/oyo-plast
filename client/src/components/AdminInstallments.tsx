@@ -24,6 +24,7 @@ interface InstallmentPlan {
   remaining_paid: boolean;
   remaining_paid_at: string | null;
   guarantor_supplier_name: string | null;
+  guarantor_supplier_phone: string | null;
   guarantor_notes: string | null;
   status: string;
   admin_notes: string | null;
@@ -157,6 +158,7 @@ function PlanCard({ plan, adminToken, onUpdate }: { plan: InstallmentPlan; admin
               <Users className="h-4 w-4 text-purple-500 shrink-0" />
               <div>
                 <p className="text-xs font-bold text-purple-700">{plan.guarantor_supplier_name}</p>
+                {plan.guarantor_supplier_phone && <p className="text-xs text-purple-600">📞 {plan.guarantor_supplier_phone}</p>}
                 {plan.guarantor_notes && <p className="text-xs text-gray-500">{plan.guarantor_notes}</p>}
               </div>
             </div>

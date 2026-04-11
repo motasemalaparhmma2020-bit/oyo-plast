@@ -8,7 +8,7 @@ import {
   Users, Eye, Activity, Phone, Mail, Layout, ShoppingCart, UserPlus, RefreshCw
 } from "lucide-react";
 
-interface Props { adminToken: string; }
+interface Props { adminToken: string | null; }
 
 function Toggle({ checked, onChange, label, desc, testId }: {
   checked: boolean; onChange: (v: boolean) => void;
@@ -49,7 +49,7 @@ export function LoginManagementSection({ adminToken }: Props) {
     queryKey: ["/api/admin/stats"],
     queryFn: async () => {
       const res = await fetch("/api/admin/stats", {
-        headers: { "x-admin-token": adminToken },
+        headers: { "x-admin-token": adminToken || "" },
       });
       if (!res.ok) throw new Error("فشل جلب الإحصائيات");
       return res.json();
@@ -62,7 +62,7 @@ export function LoginManagementSection({ adminToken }: Props) {
     mutationFn: async (patch: Record<string, boolean>) => {
       const res = await fetch("/api/admin/navigation-settings", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+        headers: { "Content-Type": "application/json", "x-admin-token": adminToken || "" },
         body: JSON.stringify(patch),
       });
       if (!res.ok) throw new Error("فشل التحديث");

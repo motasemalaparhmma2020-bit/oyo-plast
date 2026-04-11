@@ -1468,6 +1468,72 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── رفع إيصال الدفع لطلب ────────────────────────────────────────────────
+  app.post("/api/orders/:id/upload-receipt", upload.single("receipt"), async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const orderId = parseInt(req.params.id);
+      if (!req.file) return res.status(400).json({ message: "لم يتم إرفاق صورة" });
+      const base64 = req.file.buffer.toString("base64");
+      const dataUrl = `data:${req.file.mimetype};base64,${base64}`;
+      await dbPool.query(
+        `UPDATE orders SET receipt_image_url=$1, payment_status='pending_verification' WHERE id=$2`,
+        [dataUrl, orderId]
+      );
+      res.json({ message: "تم رفع الإيصال بنجاح", receiptUrl: dataUrl });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل رفع الإيصال", error: e.message });
+    }
+  });
+
+  // ─── الأدمن: التحقق من إيصال الدفع ──────────────────────────────────────────
+  app.get("/api/admin/payment-verifications", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(`
+        SELECT id, customer_name, customer_phone, total, payment_method, payment_status,
+               receipt_image_url, notes, created_at, shipping_city
+        FROM orders
+        WHERE payment_method IN ('bank_transfer','digital_wallet','installment_deposit_cod')
+          AND payment_status IN ('pending_verification','unpaid','partial')
+          AND receipt_image_url IS NOT NULL
+          AND status != 'cancelled'
+        ORDER BY created_at DESC
+      `);
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الطلبات" });
+    }
+  });
+
+  app.patch("/api/admin/payment-verifications/:id", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { action, note } = req.body; // action: 'approve' | 'reject'
+      const orderId = parseInt(req.params.id);
+      if (action === "approve") {
+        await dbPool.query(
+          `UPDATE orders SET payment_status='transferred' WHERE id=$1`,
+          [orderId]
+        );
+      } else if (action === "reject") {
+        await dbPool.query(
+          `UPDATE orders SET payment_status='unpaid', receipt_image_url=NULL WHERE id=$1`,
+          [orderId]
+        );
+      }
+      if (note) {
+        await dbPool.query(
+          `UPDATE orders SET notes=COALESCE(notes,'')||$1 WHERE id=$2`,
+          [`\n[ملاحظة الأدمن: ${note}]`, orderId]
+        );
+      }
+      res.json({ message: "تم تحديث حالة الدفع" });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل التحديث" });
+    }
+  });
+
   // ─── بوابة المورد — تسجيل دخول ────────────────────────────────────────────────
   app.post("/api/supplier/login", async (req, res) => {
     try {
@@ -1963,15 +2029,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           (order_id, customer_id, customer_name, customer_phone, plan_type,
            total_amount, deposit_amount, remaining_amount,
            deposit_receipt_url,
-           guarantor_supplier_name, guarantor_notes, status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending')
+           guarantor_supplier_name, guarantor_supplier_phone, guarantor_notes, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending')
          RETURNING *`,
         [
           orderId, customerId || null, customerName, customerPhone, planType,
           totalAmount, depositAmount, remaining,
           depositReceiptUrl || null,
           guarantorSupplierName || null,
-          guarantorNotes || guarantorSupplierPhone || null,
+          guarantorSupplierPhone || null,
+          guarantorNotes || null,
         ]
       );
 
@@ -3359,13 +3426,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ─── Delete / Deactivate staff ────────────────────────────────────
   app.delete("/api/admin/staff/:id", requireAdmin, async (req, res) => {
     try {
-      const { db: dbI } = await import("./db");
-      const { users: usersT } = await import("@shared/schema");
-      const { eq: eqFn } = await import("drizzle-orm");
+      const { pool: dbPool } = await import("./db");
+      const staffId = req.params.id;
       // Set role to 'customer' to deactivate (not delete — keeps order history)
-      const staffId = parseInt(req.params.id);
-      await dbI.execute(`UPDATE users SET role='customer', account_type='customer' WHERE id=$1` as any, [req.params.id]);
-      await dbI.execute(`UPDATE team_members SET is_active=false WHERE user_id=$1` as any, [req.params.id]);
+      await dbPool.query(`UPDATE users SET role='customer', account_type='customer' WHERE id=$1`, [staffId]);
+      await dbPool.query(`UPDATE team_members SET is_active=false WHERE user_id=$1`, [staffId]);
       res.json({ message: "تم إلغاء تفعيل الحساب" });
     } catch (e: any) {
       res.status(500).json({ message: "فشل حذف الموظف", error: e.message });

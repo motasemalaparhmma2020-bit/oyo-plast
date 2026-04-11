@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Order, Product } from "@shared/schema";
 import FinancialReports from "@/components/FinancialReports";
 import AdminInstallments from "@/components/AdminInstallments";
+import AdminPaymentVerification from "@/components/AdminPaymentVerification";
 import AdminBankAccounts from "@/components/AdminBankAccounts";
 import AdminPricing from "@/components/AdminPricing";
 import AdminSecurityLogs from "@/components/AdminSecurityLogs";
@@ -6018,6 +6019,11 @@ export default function Admin() {
           <TabsContent value="installments">
             <AdminInstallments adminToken={adminToken} />
             <AdminBankAccounts adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── Payment Verification Tab ──────────────────────────────── */}
+          <TabsContent value="payment-verify">
+            <AdminPaymentVerification adminToken={adminToken} />
           </TabsContent>
 
           {/* ─── Smart Pricing Tab ─────────────────────────────────────── */}
