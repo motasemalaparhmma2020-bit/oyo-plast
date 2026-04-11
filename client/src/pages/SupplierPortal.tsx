@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -15,7 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Loader2, LogOut, Package, Truck, CheckCircle2,
   MapPin, Phone, DollarSign, ChevronLeft, User,
-  Clock, AlertCircle, RefreshCw,
+  Clock, AlertCircle, RefreshCw, Plus, ImageIcon,
+  Pencil, Trash2, ShoppingBag, ClipboardList,
 } from "lucide-react";
 
 const STORAGE_KEY = "supplier_session";
@@ -288,9 +290,302 @@ function OrderDetailDialog({
 }
 
 // ── لوحة الطلبات ──────────────────────────────────────────────────────────────
+// ── تبويب منتجات المورد ────────────────────────────────────────────────────────
+const PRODUCT_STATUS: Record<string, { label: string; color: string }> = {
+  pending:  { label: "قيد المراجعة", color: "bg-yellow-100 text-yellow-800" },
+  approved: { label: "مقبول ✅",    color: "bg-green-100 text-green-800" },
+  rejected: { label: "مرفوض ❌",   color: "bg-red-100 text-red-800" },
+};
+
+function SupplierProductsTab({ session }: { session: SupplierSession }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editProduct, setEditProduct] = useState<any | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [form, setForm] = useState({
+    name: "", description: "", price: "", stock: "0",
+    categoryId: "", imageUrl: "",
+  });
+
+  const { data: categories = [] } = useQuery<any[]>({
+    queryKey: ["/api/categories"],
+    queryFn: async () => {
+      const res = await fetch("/api/categories");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const { data: products = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/supplier/products"],
+    queryFn: async () => {
+      const res = await fetch("/api/supplier/products", {
+        headers: getAuthHeaders(session),
+      });
+      if (!res.ok) throw new Error("فشل");
+      return res.json();
+    },
+  });
+
+  function resetForm() {
+    setForm({ name: "", description: "", price: "", stock: "0", categoryId: "", imageUrl: "" });
+    setEditProduct(null);
+    setShowForm(false);
+  }
+
+  function openEdit(p: any) {
+    setEditProduct(p);
+    setForm({
+      name: p.name || "",
+      description: p.description || "",
+      price: String(p.price || ""),
+      stock: String(p.stock || 0),
+      categoryId: String(p.category_id || ""),
+      imageUrl: p.image_url || "",
+    });
+    setShowForm(true);
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const maxMb = 10;
+    if (file.size > maxMb * 1024 * 1024) {
+      toast({ title: "الصورة كبيرة جداً", description: `الحد الأقصى ${maxMb} ميجابايت`, variant: "destructive" });
+      return;
+    }
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const res = await fetch("/api/supplier/upload", {
+        method: "POST",
+        headers: {
+          "x-supplier-token": session.token,
+          "x-supplier-id": String(session.supplier.id),
+        },
+        body: formData,
+      });
+      if (!res.ok) throw new Error("فشل رفع الصورة");
+      const data = await res.json();
+      setForm(f => ({ ...f, imageUrl: data.imageUrl }));
+      toast({ title: "تم رفع الصورة ✅", description: "الصورة ضُغطت تلقائياً للجودة المثالية" });
+    } catch (err: any) {
+      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+    } finally {
+      setUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!form.name || !form.price) throw new Error("الاسم والسعر مطلوبان");
+      const url = editProduct
+        ? `/api/supplier/products/${editProduct.id}`
+        : "/api/supplier/products";
+      const method = editProduct ? "PUT" : "POST";
+      const res = await fetch(url, {
+        method,
+        headers: { ...getAuthHeaders(session), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          description: form.description,
+          price: Number(form.price),
+          stock: Number(form.stock),
+          categoryId: form.categoryId ? Number(form.categoryId) : null,
+          imageUrl: form.imageUrl || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "فشل");
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: editProduct ? "تم التعديل ✅" : "تم إرسال المنتج ✅", description: editProduct ? "تم تعديل المنتج وإعادة إرساله للمراجعة" : "سيراجعه الأدمن قريباً" });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplier/products"] });
+      resetForm();
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/supplier/products/${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(session),
+      });
+      if (!res.ok) throw new Error("فشل الحذف");
+    },
+    onSuccess: () => {
+      toast({ title: "تم الحذف" });
+      queryClient.invalidateQueries({ queryKey: ["/api/supplier/products"] });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* زر إضافة منتج */}
+      <Button
+        className="w-full"
+        onClick={() => { resetForm(); setShowForm(true); }}
+        data-testid="button-add-product"
+      >
+        <Plus className="h-4 w-4 ml-1" /> إضافة منتج جديد
+      </Button>
+
+      {/* قائمة المنتجات */}
+      {isLoading ? (
+        <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+      ) : products.length === 0 ? (
+        <div className="text-center py-16 text-gray-400">
+          <ShoppingBag className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p className="font-medium">لم تُضف أي منتجات بعد</p>
+          <p className="text-xs mt-1">اضغط "إضافة منتج جديد" لإضافة منتجك الأول</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {products.map((p: any) => {
+            const st = PRODUCT_STATUS[p.product_status] ?? PRODUCT_STATUS.pending;
+            const canEdit = p.product_status !== "approved";
+            return (
+              <Card key={p.id} className="border-0 shadow-sm" data-testid={`supplier-product-${p.id}`}>
+                <CardContent className="p-3 flex gap-3">
+                  {p.image_url ? (
+                    <img src={p.image_url} alt={p.name} className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                      <ImageIcon className="h-5 w-5 text-gray-400" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-1">
+                      <p className="font-bold text-sm line-clamp-1">{p.name}</p>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${st.color}`}>
+                        {st.label}
+                      </span>
+                    </div>
+                    <p className="text-primary font-bold text-sm mt-0.5">{Number(p.price).toLocaleString()} ر.ي</p>
+                    {p.admin_notes && (
+                      <p className="text-xs text-red-500 mt-1 bg-red-50 rounded px-2 py-1">
+                        ملاحظة الإدارة: {p.admin_notes}
+                      </p>
+                    )}
+                    <div className="flex gap-2 mt-2">
+                      {canEdit && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => openEdit(p)} data-testid={`button-edit-${p.id}`}>
+                          <Pencil className="h-3 w-3 ml-1" /> تعديل
+                        </Button>
+                      )}
+                      {canEdit && (
+                        <Button size="sm" variant="ghost" className="h-7 text-xs px-2 text-red-500" onClick={() => deleteMutation.mutate(p.id)} data-testid={`button-delete-${p.id}`}>
+                          <Trash2 className="h-3 w-3 ml-1" /> حذف
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ─── نموذج إضافة/تعديل منتج ─── */}
+      <Dialog open={showForm} onOpenChange={v => { if (!v) resetForm(); }}>
+        <DialogContent className="max-w-sm" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-right">{editProduct ? "تعديل المنتج" : "إضافة منتج جديد"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {/* رفع الصورة */}
+            <div>
+              <Label className="text-xs">صورة المنتج</Label>
+              <div className="mt-1 flex gap-2 items-center">
+                {form.imageUrl ? (
+                  <img src={form.imageUrl} alt="" className="w-16 h-16 rounded-lg object-cover" />
+                ) : (
+                  <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center">
+                    <ImageIcon className="h-6 w-6 text-gray-400" />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} data-testid="input-image-file" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingImage}
+                    data-testid="button-upload-image"
+                  >
+                    {uploadingImage ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : <ImageIcon className="h-3 w-3 ml-1" />}
+                    {uploadingImage ? "جاري الرفع..." : "رفع صورة (حتى 10 ميجا)"}
+                  </Button>
+                  <p className="text-xs text-gray-400 mt-1">تُضغط تلقائياً — لا داعي لتصغيرها مسبقاً</p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">اسم المنتج *</Label>
+              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="مثال: أكياس علاقي رقم 10" data-testid="input-product-name" />
+            </div>
+            <div>
+              <Label className="text-xs">الوصف</Label>
+              <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="وصف مختصر للمنتج..." data-testid="input-product-desc" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">السعر (ر.ي) *</Label>
+                <Input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="1500" data-testid="input-product-price" />
+              </div>
+              <div>
+                <Label className="text-xs">المخزون</Label>
+                <Input type="number" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} placeholder="100" data-testid="input-product-stock" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">القسم</Label>
+              <Select value={form.categoryId} onValueChange={v => setForm(f => ({ ...f, categoryId: v }))}>
+                <SelectTrigger data-testid="select-category">
+                  <SelectValue placeholder="اختر القسم..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">بدون قسم</SelectItem>
+                  {categories.map((c: any) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3 text-xs text-amber-700 dark:text-amber-300 flex gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>المنتج سيُرسل للإدارة للمراجعة قبل نشره في المتجر. لا تضع شعارك أو اسمك التجاري على الصور.</span>
+            </div>
+            <Button
+              className="w-full"
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+              data-testid="button-save-product"
+            >
+              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin ml-1" /> : <CheckCircle2 className="h-4 w-4 ml-1" />}
+              {editProduct ? "حفظ التعديلات" : "إرسال للمراجعة"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 function Dashboard({ session, onLogout }: { session: SupplierSession; onLogout: () => void }) {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [filter, setFilter] = useState<"all" | "active" | "delivered">("active");
+  const [activeTab, setActiveTab] = useState<"orders" | "products">("orders");
   const queryClient = useQueryClient();
 
   const { data: supplierInfo } = useQuery<any>({
@@ -345,9 +640,36 @@ function Dashboard({ session, onLogout }: { session: SupplierSession; onLogout: 
             </Button>
           </div>
         </div>
+        {/* Tab Navigation */}
+        <div className="flex border-t">
+          <button
+            onClick={() => setActiveTab("orders")}
+            data-testid="tab-orders"
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors
+              ${activeTab === "orders" ? "text-primary border-b-2 border-primary bg-primary/5" : "text-gray-500 hover:text-gray-700"}`}
+          >
+            <ClipboardList className="h-4 w-4" />
+            الطلبات
+          </button>
+          <button
+            onClick={() => setActiveTab("products")}
+            data-testid="tab-products"
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors
+              ${activeTab === "products" ? "text-primary border-b-2 border-primary bg-primary/5" : "text-gray-500 hover:text-gray-700"}`}
+          >
+            <ShoppingBag className="h-4 w-4" />
+            منتجاتي
+          </button>
+        </div>
       </header>
 
       <div className="px-4 py-4 space-y-4 max-w-xl mx-auto">
+
+        {/* ─── تبويب المنتجات ─── */}
+        {activeTab === "products" && <SupplierProductsTab session={session} />}
+
+        {/* ─── تبويب الطلبات ─── */}
+        {activeTab === "orders" && <>
 
         {/* إحصائيات */}
         <div className="grid grid-cols-3 gap-3">
@@ -454,6 +776,7 @@ function Dashboard({ session, onLogout }: { session: SupplierSession; onLogout: 
             })}
           </div>
         )}
+        </>}
       </div>
 
       <OrderDetailDialog

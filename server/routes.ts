@@ -7,7 +7,37 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import sharp from "sharp";
 import { adminLimiter, orderLimiter, loginLimiter, logSecurityEvent, getSecurityLogs } from "./security";
+
+// ─── معالجة الصورة بالضغط والتقليص ─────────────────────────────────────────
+async function processImage(
+  buffer: Buffer,
+  mimetype: string,
+  opts?: { maxWidth?: number; maxHeight?: number; quality?: number }
+): Promise<{ buffer: Buffer; mimeOut: string }> {
+  const maxW = opts?.maxWidth ?? 1200;
+  const maxH = opts?.maxHeight ?? 1200;
+  const quality = opts?.quality ?? 80;
+  try {
+    const processed = await sharp(buffer)
+      .resize(maxW, maxH, { fit: "inside", withoutEnlargement: true })
+      .webp({ quality })
+      .toBuffer();
+    return { buffer: processed, mimeOut: "image/webp" };
+  } catch {
+    // fallback: return original if sharp fails
+    return { buffer, mimeOut: mimetype };
+  }
+}
+
+async function getImageSettings(dbPool: any) {
+  try {
+    const r = await dbPool.query("SELECT img_max_width, img_max_height, img_quality, img_max_size_mb FROM display_settings LIMIT 1");
+    if (r.rows.length) return r.rows[0];
+  } catch {}
+  return { img_max_width: 1200, img_max_height: 1200, img_quality: 80, img_max_size_mb: 5 };
+}
 
 const rootDir = process.cwd();
 
@@ -29,6 +59,16 @@ if (!fs.existsSync(uploadsDir)) {
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) cb(null, true);
+    else cb(new Error("Only images are allowed"));
+  },
+});
+
+// Supplier upload: allows up to 10MB (sharp will compress it)
+const supplierUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
   fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith("image/")) cb(null, true);
     else cb(new Error("Only images are allowed"));
@@ -128,13 +168,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ token: getAdminToken() });
   });
 
-  // ─── Image Upload - Base64 (permanent, survives deploys) ────────────
-  app.post("/api/admin/upload", requireAdmin, upload.single("image"), (req, res) => {
+  // ─── Image Upload - Base64 with sharp compression ─────────────────
+  app.post("/api/admin/upload", requireAdmin, upload.single("image"), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: "لم يتم رفع صورة" });
-    // Convert to base64 data URL - stored in DB, never deleted on redeploy
-    const base64 = req.file.buffer.toString("base64");
-    const imageUrl = `data:${req.file.mimetype};base64,${base64}`;
-    res.json({ imageUrl });
+    try {
+      const { pool: dbPool } = await import("./db");
+      const settings = await getImageSettings(dbPool);
+      const { buffer, mimeOut } = await processImage(req.file.buffer, req.file.mimetype, {
+        maxWidth: settings.img_max_width,
+        maxHeight: settings.img_max_height,
+        quality: settings.img_quality,
+      });
+      const base64 = buffer.toString("base64");
+      const imageUrl = `data:${mimeOut};base64,${base64}`;
+      res.json({ imageUrl });
+    } catch {
+      const base64 = req.file.buffer.toString("base64");
+      res.json({ imageUrl: `data:${req.file.mimetype};base64,${base64}` });
+    }
+  });
+
+  // ─── Image Upload for Supplier (with compression, up to 10MB) ────────
+  app.post("/api/supplier/upload", supplierUpload.single("image"), requireSupplier, async (req: any, res) => {
+    if (!req.file) return res.status(400).json({ message: "لم يتم رفع صورة" });
+    try {
+      const { pool: dbPool } = await import("./db");
+      const settings = await getImageSettings(dbPool);
+      const { buffer, mimeOut } = await processImage(req.file.buffer, req.file.mimetype, {
+        maxWidth: settings.img_max_width,
+        maxHeight: settings.img_max_height,
+        quality: settings.img_quality,
+      });
+      const base64 = buffer.toString("base64");
+      const imageUrl = `data:${mimeOut};base64,${base64}`;
+      res.json({ imageUrl });
+    } catch {
+      const base64 = req.file.buffer.toString("base64");
+      res.json({ imageUrl: `data:${req.file.mimetype};base64,${base64}` });
+    }
   });
 
   // ─── Design Upload (Public) - still uses disk for large files ────────
@@ -728,6 +799,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const conditions: string[] = [];
       let idx = 1;
 
+      // إخفاء منتجات الموردين غير المعتمدة من المتجر العام
+      conditions.push(`(product_status IS NULL OR product_status = 'approved')`);
+
       if (categoryId !== undefined && !Number.isNaN(categoryId)) {
         conditions.push(`category_id = $${idx++}`);
         params.push(categoryId);
@@ -763,7 +837,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { pool: dbPool } = await import("./db");
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 8;
       const result = await dbPool.query(
-        `SELECT ${LITE_COLS} FROM products ORDER BY sold_count DESC NULLS LAST LIMIT $1`,
+        `SELECT ${LITE_COLS} FROM products WHERE (product_status IS NULL OR product_status = 'approved') ORDER BY sold_count DESC NULLS LAST LIMIT $1`,
         [limit]
       );
       res.json(result.rows.map(mapProductRow));
@@ -1662,6 +1736,229 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { pin } = req.body;
       if (!pin || pin.length < 4) return res.status(400).json({ message: "الرمز يجب أن يكون 4 أرقام على الأقل" });
       await dbPool.query("UPDATE suppliers SET pin=$1 WHERE id=$2", [pin, parseInt(req.params.id)]);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ─── منتجات المورد: إدارة من بوابة المورد ──────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // جلب منتجات المورد الخاصة به
+  app.get("/api/supplier/products", requireSupplier, async (req: any, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const supplier = req.supplier;
+      const result = await dbPool.query(
+        `SELECT p.*, c.name as category_name
+         FROM products p
+         LEFT JOIN categories c ON p.category_id = c.id
+         WHERE p.submitted_by_supplier_id = $1
+         ORDER BY p.id DESC`,
+        [supplier.id]
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب المنتجات" });
+    }
+  });
+
+  // إضافة منتج جديد من المورد (يذهب للمراجعة)
+  app.post("/api/supplier/products", requireSupplier, async (req: any, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const supplier = req.supplier;
+      const { name, description, price, categoryId, imageUrl, stock, notes } = req.body;
+      if (!name || !price) return res.status(400).json({ message: "الاسم والسعر مطلوبان" });
+
+      // هل الموافقة التلقائية مفعّلة؟
+      const settingsRes = await dbPool.query("SELECT supplier_product_auto_approve FROM display_settings LIMIT 1");
+      const autoApprove = settingsRes.rows[0]?.supplier_product_auto_approve ?? false;
+      const status = autoApprove ? "approved" : "pending";
+
+      const result = await dbPool.query(
+        `INSERT INTO products
+          (name, description, price, category_id, image_url, stock,
+           supplier_id, submitted_by_supplier_id, product_status, admin_notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$7,$8,$9) RETURNING *`,
+        [name, description || null, price, categoryId || null, imageUrl || null,
+         stock || 0, supplier.id, status, notes || null]
+      );
+      res.status(201).json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إضافة المنتج", details: e.message });
+    }
+  });
+
+  // تعديل منتج من المورد (فقط إذا كان pending أو rejected)
+  app.put("/api/supplier/products/:id", requireSupplier, async (req: any, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const supplier = req.supplier;
+      const productId = parseInt(req.params.id);
+      // التحقق من ملكية المورد للمنتج
+      const check = await dbPool.query(
+        "SELECT * FROM products WHERE id=$1 AND submitted_by_supplier_id=$2",
+        [productId, supplier.id]
+      );
+      if (!check.rows.length) return res.status(403).json({ message: "غير مصرح" });
+      const existing = check.rows[0];
+      if (existing.product_status === "approved") {
+        return res.status(400).json({ message: "لا يمكن تعديل منتج موافق عليه — تواصل مع الإدارة" });
+      }
+      const { name, description, price, categoryId, imageUrl, stock } = req.body;
+      const result = await dbPool.query(
+        `UPDATE products SET
+           name=COALESCE($1, name),
+           description=COALESCE($2, description),
+           price=COALESCE($3, price),
+           category_id=COALESCE($4, category_id),
+           image_url=COALESCE($5, image_url),
+           stock=COALESCE($6, stock),
+           product_status='pending'
+         WHERE id=$7 RETURNING *`,
+        [name, description, price, categoryId, imageUrl, stock, productId]
+      );
+      res.json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل التعديل" });
+    }
+  });
+
+  // حذف منتج معلق من المورد
+  app.delete("/api/supplier/products/:id", requireSupplier, async (req: any, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const supplier = req.supplier;
+      const productId = parseInt(req.params.id);
+      const check = await dbPool.query(
+        "SELECT product_status FROM products WHERE id=$1 AND submitted_by_supplier_id=$2",
+        [productId, supplier.id]
+      );
+      if (!check.rows.length) return res.status(403).json({ message: "غير مصرح" });
+      if (check.rows[0].product_status === "approved") {
+        return res.status(400).json({ message: "لا يمكن حذف منتج موافق عليه" });
+      }
+      await dbPool.query("DELETE FROM products WHERE id=$1", [productId]);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل الحذف" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ─── موافقة الأدمن على منتجات الموردين ─────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // جلب جميع منتجات الموردين المعلقة والمعتمدة والمرفوضة
+  app.get("/api/admin/supplier-products", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const status = req.query.status as string | undefined;
+      let query = `
+        SELECT p.*, s.name as supplier_name, s.phone as supplier_phone,
+               c.name as category_name
+        FROM products p
+        LEFT JOIN suppliers s ON p.submitted_by_supplier_id = s.id
+        LEFT JOIN categories c ON p.category_id = c.id
+        WHERE p.submitted_by_supplier_id IS NOT NULL
+      `;
+      const params: any[] = [];
+      if (status) {
+        query += ` AND p.product_status = $1`;
+        params.push(status);
+      }
+      query += ` ORDER BY p.id DESC`;
+      const result = await dbPool.query(query, params);
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب المنتجات" });
+    }
+  });
+
+  // موافقة الأدمن على منتج (مع تعديلات اختيارية)
+  app.put("/api/admin/supplier-products/:id/approve", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const productId = parseInt(req.params.id);
+      const { name, description, price, categoryId, imageUrl, stock, adminNotes } = req.body;
+      const result = await dbPool.query(
+        `UPDATE products SET
+           product_status='approved',
+           name=COALESCE($1, name),
+           description=COALESCE($2, description),
+           price=COALESCE($3, price),
+           category_id=COALESCE($4, category_id),
+           image_url=COALESCE($5, image_url),
+           stock=COALESCE($6, stock),
+           admin_notes=COALESCE($7, admin_notes)
+         WHERE id=$8 AND submitted_by_supplier_id IS NOT NULL RETURNING *`,
+        [name || null, description || null, price || null, categoryId || null,
+         imageUrl || null, stock || null, adminNotes || null, productId]
+      );
+      if (!result.rows.length) return res.status(404).json({ message: "المنتج غير موجود" });
+      res.json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل الموافقة" });
+    }
+  });
+
+  // رفض منتج مع ملاحظة للمورد
+  app.put("/api/admin/supplier-products/:id/reject", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const productId = parseInt(req.params.id);
+      const { adminNotes } = req.body;
+      const result = await dbPool.query(
+        `UPDATE products SET product_status='rejected', admin_notes=$1
+         WHERE id=$2 AND submitted_by_supplier_id IS NOT NULL RETURNING *`,
+        [adminNotes || null, productId]
+      );
+      if (!result.rows.length) return res.status(404).json({ message: "المنتج غير موجود" });
+      res.json(result.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل الرفض" });
+    }
+  });
+
+  // حذف منتج مورد من الأدمن
+  app.delete("/api/admin/supplier-products/:id", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const productId = parseInt(req.params.id);
+      await dbPool.query("DELETE FROM products WHERE id=$1 AND submitted_by_supplier_id IS NOT NULL", [productId]);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل الحذف" });
+    }
+  });
+
+  // إعدادات الصور وموافقة المنتجات
+  app.get("/api/admin/image-settings", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(
+        "SELECT img_max_width, img_max_height, img_quality, img_max_size_mb, supplier_product_auto_approve FROM display_settings LIMIT 1"
+      );
+      res.json(r.rows[0] ?? {});
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  app.put("/api/admin/image-settings", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { imgMaxWidth, imgMaxHeight, imgQuality, imgMaxSizeMb, supplierProductAutoApprove } = req.body;
+      await dbPool.query(
+        `UPDATE display_settings SET
+           img_max_width=$1, img_max_height=$2, img_quality=$3,
+           img_max_size_mb=$4, supplier_product_auto_approve=$5`,
+        [imgMaxWidth ?? 1200, imgMaxHeight ?? 1200, imgQuality ?? 80,
+         imgMaxSizeMb ?? 5, supplierProductAutoApprove ?? false]
+      );
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ message: "فشل" });

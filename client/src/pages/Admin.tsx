@@ -7,6 +7,7 @@ import AdminPaymentVerification from "@/components/AdminPaymentVerification";
 import AdminBankAccounts from "@/components/AdminBankAccounts";
 import AdminPricing from "@/components/AdminPricing";
 import AdminSecurityLogs from "@/components/AdminSecurityLogs";
+import AdminSupplierProducts from "@/components/AdminSupplierProducts";
 import { AdminReviews } from "@/components/AdminReviews";
 import AdminSectionSettings from "@/components/AdminSectionSettings";
 import { AdminSubcategories } from "@/components/AdminSubcategories";
@@ -6018,6 +6019,11 @@ export default function Admin() {
           {/* ─── Suppliers Tab ─────────────────────────────────────────── */}
           <TabsContent value="suppliers">
             <SupplierManagement adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── Supplier Products Approval Tab ───────────────────────── */}
+          <TabsContent value="supplier-products">
+            <AdminSupplierProducts adminToken={adminToken} />
           </TabsContent>
 
           {/* ─── Installments Tab ──────────────────────────────────────── */}

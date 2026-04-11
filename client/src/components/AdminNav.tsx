@@ -1,4 +1,4 @@
-import { Package, Grid3x3, Tags, ShoppingCart, Zap, Palette, Image, BarChart3, Settings, Printer, Wallet, LayoutDashboard, UserCog, MessageSquareWarning, Users, Receipt, Handshake, SplitSquareVertical, TrendingUp, ShieldAlert, Star, Layers, BadgeCheck } from "lucide-react";
+import { Package, Grid3x3, Tags, ShoppingCart, Zap, Palette, Image, BarChart3, Settings, Printer, Wallet, LayoutDashboard, UserCog, MessageSquareWarning, Users, Receipt, Handshake, SplitSquareVertical, TrendingUp, ShieldAlert, Star, Layers, BadgeCheck, ClipboardCheck } from "lucide-react";
 
 interface AdminNavItem {
   id: string;
@@ -23,6 +23,7 @@ export const adminNavItems: AdminNavItem[] = [
   { id: "login-management", label: "إدارة الدخول", icon: <UserCog className="h-8 w-8" />, color: "from-violet-400 to-violet-600" },
   { id: "sms-test", label: "بوابة فحص الرسائل", icon: <MessageSquareWarning className="h-8 w-8" />, color: "from-sky-400 to-sky-600" },
   { id: "suppliers", label: "الموردون والموزعون", icon: <Handshake className="h-8 w-8" />, color: "from-cyan-400 to-cyan-600" },
+  { id: "supplier-products", label: "منتجات الموردين", icon: <ClipboardCheck className="h-8 w-8" />, color: "from-lime-500 to-green-600" },
   { id: "installments", label: "التقسيط والمدفوعات", icon: <SplitSquareVertical className="h-8 w-8" />, color: "from-amber-400 to-orange-600" },
   { id: "payment-verify", label: "التحقق من الدفع", icon: <BadgeCheck className="h-8 w-8" />, color: "from-green-400 to-emerald-600" },
   { id: "pricing", label: "التسعير الذكي", icon: <TrendingUp className="h-8 w-8" />, color: "from-emerald-400 to-teal-600" },
