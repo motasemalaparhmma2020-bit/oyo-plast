@@ -278,11 +278,14 @@ export default function Home() {
   // هل يوجد قسم "الأكثر مبيعاً" في الأقسام الديناميكية؟
   const hasBestsellerSection = enabledSections.some((s: any) => s.promotionalTag === 'bestsellers');
 
+  const NAVBAR_H = 56; // ارتفاع الـ navbar (h-14 = 56px)
+  const hasBanners = homeSettings?.showBanners !== false && banners.length > 0;
+
   return (
-    <div className="flex flex-col pb-20 bg-white dark:bg-background min-h-screen">
-      {/* Banner Carousel Section */}
-      {homeSettings?.showBanners !== false && banners.length > 0 && (
-        <BannerCarousel banners={banners} height={displaySettings.sliderHeight ?? 414} />
+    <div className={`flex flex-col pb-20 bg-white dark:bg-background min-h-screen ${hasBanners ? "-mt-14" : ""}`}>
+      {/* Banner Carousel Section — يبدأ من أعلى الصفحة خلف الـ navbar */}
+      {hasBanners && (
+        <BannerCarousel banners={banners} height={(displaySettings.sliderHeight ?? 414) + NAVBAR_H} />
       )}
 
       {/* Offer Banners Section */}

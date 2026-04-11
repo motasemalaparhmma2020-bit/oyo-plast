@@ -7,22 +7,9 @@ import { ProductCard } from "@/components/ProductCard";
 export default function CategoryPage() {
   const { slug } = useParams<{ slug: string }>();
 
-  const { data: category } = useQuery<any>({
-    queryKey: ["/api/categories"],
-    queryFn: async () => {
-      const res = await fetch("/api/categories");
-      if (!res.ok) return [];
-      const cats = await res.json();
-      return cats.find((c: any) => c.slug === slug) || null;
-    },
-    select: (data: any) => {
-      if (Array.isArray(data)) return data.find((c: any) => c.slug === slug) || null;
-      return data;
-    },
-  });
-
+  // استعلام واحد فقط لجلب جميع الأقسام — مفتاح مختلف لتجنّب تعارض الكاش
   const { data: allCategories = [] } = useQuery<any[]>({
-    queryKey: ["/api/categories"],
+    queryKey: ["/api/categories", "all-list"],
     queryFn: async () => {
       const res = await fetch("/api/categories");
       if (!res.ok) return [];
@@ -30,7 +17,9 @@ export default function CategoryPage() {
     },
   });
 
-  const cat = allCategories.find((c: any) => c.slug === slug);
+  // البحث عن القسم المطلوب — يدعم الـ slug العربي والمُشفَّر
+  const decodedSlug = (() => { try { return decodeURIComponent(slug || ""); } catch { return slug || ""; } })();
+  const cat = allCategories.find((c: any) => c.slug === decodedSlug || c.slug === slug);
 
   const { data: subcategories = [], isLoading: subLoading } = useQuery<any[]>({
     queryKey: ["/api/subcategories", cat?.id],

@@ -701,8 +701,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ─── Categories (Public) ─────────────────────────────────────────
   app.get("/api/categories", async (_req, res) => {
+    const { pool: dbPool } = await import("./db");
     const cats = await storage.getCategories();
-    res.json(cats);
+    // إضافة عدد المنتجات لكل قسم
+    const countResult = await dbPool.query(
+      `SELECT category_id, COUNT(*) as count FROM products WHERE (product_status IS NULL OR product_status = 'approved') GROUP BY category_id`
+    );
+    const countMap: Record<number, number> = {};
+    for (const row of countResult.rows) { countMap[row.category_id] = parseInt(row.count); }
+    res.json(cats.map((c: any) => ({ ...c, productCount: countMap[c.id] || 0 })));
   });
 
   // ─── Subcategories (Public) ──────────────────────────────────────

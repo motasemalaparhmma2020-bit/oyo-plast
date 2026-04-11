@@ -5,6 +5,7 @@ interface Category {
   name: string;
   slug: string;
   imageUrl: string;
+  productCount?: number;
 }
 
 interface CategoryCirclesProps {
@@ -42,23 +43,36 @@ export function CategoryCircles({
         data-testid={`category-circle-${category.id}`}
         style={{ width: `${itemWidth}px` }}
       >
-        <div
-          className="overflow-hidden flex-shrink-0 shadow-md group-hover:shadow-lg transition-all group-hover:scale-105 bg-gray-100 dark:bg-gray-800 ring-2 ring-transparent group-hover:ring-primary/30 mx-auto"
-          style={{ width: `${circleSize}px`, height: `${circleSize}px`, borderRadius: shapeRadius }}
-        >
-          {category.imageUrl ? (
-            <img
-              src={category.imageUrl}
-              alt={category.name}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              decoding="async"
-              data-testid={`category-image-${category.id}`}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-bold text-lg">
-              {category.name.charAt(0)}
-            </div>
+        <div className="relative mx-auto flex-shrink-0">
+          <div
+            className="overflow-hidden shadow-md group-hover:shadow-lg transition-all group-hover:scale-105 bg-gray-100 dark:bg-gray-800 ring-2 ring-transparent group-hover:ring-primary/30"
+            style={{ width: `${circleSize}px`, height: `${circleSize}px`, borderRadius: shapeRadius }}
+          >
+            {category.imageUrl ? (
+              <img
+                src={category.imageUrl}
+                alt={category.name}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                decoding="async"
+                data-testid={`category-image-${category.id}`}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-bold text-lg">
+                {category.name.charAt(0)}
+              </div>
+            )}
+          </div>
+          {/* شارة عدد المنتجات */}
+          {typeof category.productCount === "number" && (
+            <span
+              className={`absolute -bottom-1 -left-1 text-white text-[9px] font-bold px-1 py-0.5 rounded-full min-w-[16px] text-center leading-none ${
+                category.productCount > 0 ? "bg-primary" : "bg-gray-400"
+              }`}
+              style={{ fontSize: "9px" }}
+            >
+              {category.productCount > 0 ? category.productCount : "0"}
+            </span>
           )}
         </div>
         <p
@@ -87,38 +101,7 @@ export function CategoryCircles({
           dir="rtl"
         >
           {visible.map((category) => (
-            <Link key={category.id} href={`/category/${category.slug}`}>
-              <div
-                className="flex flex-col items-center gap-1.5 cursor-pointer group"
-                data-testid={`category-circle-${category.id}`}
-              >
-                <div
-                  className="overflow-hidden shadow-md group-hover:shadow-lg transition-all group-hover:scale-105 bg-gray-100 dark:bg-gray-800 ring-2 ring-transparent group-hover:ring-primary/30 mx-auto"
-                  style={{ width: `${circleSize}px`, height: `${circleSize}px`, borderRadius: shapeRadius }}
-                >
-                  {category.imageUrl ? (
-                    <img
-                      src={category.imageUrl}
-                      alt={category.name}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      decoding="async"
-                      data-testid={`category-image-${category.id}`}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-bold text-lg">
-                      {category.name.charAt(0)}
-                    </div>
-                  )}
-                </div>
-                <p
-                  className="text-center font-semibold text-gray-800 dark:text-white line-clamp-2 leading-tight w-full"
-                  style={{ fontSize }}
-                >
-                  {category.name}
-                </p>
-              </div>
-            </Link>
+            <CategoryItem key={category.id} category={category} />
           ))}
         </div>
       </div>

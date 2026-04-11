@@ -28,7 +28,7 @@ import { useLogoSettings } from "@/hooks/use-logo-settings";
 import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
 
 // ─── Search Bar Component ────────────────────────────────────────
-function SearchBar({ compact, onClose }: { compact?: boolean; onClose?: () => void }) {
+function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: () => void; glassy?: boolean }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -81,7 +81,11 @@ function SearchBar({ compact, onClose }: { compact?: boolean; onClose?: () => vo
     <div ref={containerRef} className="relative w-full" data-testid="search-container">
       <form
         onSubmit={handleSubmit}
-        className="flex items-center rounded-full overflow-hidden border border-gray-200 bg-white shadow-sm"
+        className={`flex items-center rounded-full overflow-hidden border shadow-sm transition-all ${
+          glassy
+            ? "border-white/40 bg-white/20 backdrop-blur-md"
+            : "border-gray-200 bg-white"
+        }`}
         style={{ height: h }}
       >
         {/* زر البحث — على اليسار */}
@@ -105,7 +109,7 @@ function SearchBar({ compact, onClose }: { compact?: boolean; onClose?: () => vo
           }}
           onFocus={() => query.length >= 2 && setOpen(true)}
           placeholder="ابحث عن منتج..."
-          className="flex-1 min-w-0 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none px-3 text-right"
+          className={`flex-1 min-w-0 bg-transparent text-sm outline-none px-3 text-right ${glassy ? "text-white placeholder-white/70" : "text-gray-700 placeholder-gray-400"}`}
           style={{ direction: "rtl" }}
           data-testid="input-search"
           autoComplete="off"
@@ -174,6 +178,20 @@ export function Navbar() {
   const { data: logoSettings } = useLogoSettings();
   const [isOpen, setIsOpen] = useState(false);
   const [location] = useLocation();
+  const [scrolled, setScrolled] = useState(false);
+
+  const isHome = location === "/";
+
+  // تتبع التمرير — شفاف في الأعلى، صلب عند التمرير
+  useEffect(() => {
+    if (!isHome) { setScrolled(true); return; }
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [isHome]);
+
+  const transparent = isHome && !scrolled;
   
   const logoSrc = logoSettings?.logoUrl || oyoLogo;
   const [currency, setCurrency] = useState<'YER' | 'SAR'>(() => {
@@ -208,7 +226,13 @@ export function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-white dark:bg-background shadow-sm">
+    <header
+      className={`sticky top-0 z-50 w-full transition-all duration-300 ${
+        transparent
+          ? "bg-transparent border-transparent shadow-none"
+          : "bg-white/95 dark:bg-background/95 backdrop-blur-md border-b shadow-sm"
+      }`}
+    >
       {/* ── السطر الوحيد (موبايل + ديسكتوب) ───────────────────── */}
       <div className="container mx-auto px-3 h-14 flex items-center gap-2">
 
@@ -217,7 +241,7 @@ export function Navbar() {
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="md:hidden" data-testid="button-mobile-menu">
-                <Menu className="h-5 w-5" />
+                <Menu className={`h-5 w-5 transition-colors ${transparent ? "text-white drop-shadow" : ""}`} />
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
@@ -249,18 +273,18 @@ export function Navbar() {
             <img
               src={logoSrc}
               alt="OYO PLAST"
-              className="h-9 w-9 md:h-11 md:w-11 object-contain rounded-lg shadow-md"
+              className={`h-9 w-9 md:h-11 md:w-11 object-contain rounded-lg ${transparent ? "shadow-xl ring-2 ring-white/30" : "shadow-md"}`}
             />
             <div className="hidden sm:flex flex-col">
-              <span className="text-base font-extrabold text-[#2196F3] leading-tight">OYO PLAST</span>
-              <span className="text-[10px] text-muted-foreground font-medium">مستلزمات التغليف</span>
+              <span className={`text-base font-extrabold leading-tight transition-colors ${transparent ? "text-white drop-shadow-md" : "text-[#2196F3]"}`}>OYO PLAST</span>
+              <span className={`text-[10px] font-medium transition-colors ${transparent ? "text-white/80 drop-shadow" : "text-muted-foreground"}`}>مستلزمات التغليف</span>
             </div>
           </Link>
         </div>
 
         {/* ── شريط البحث — ممتد بين الشعار وأزرار الإجراءات ── */}
         <div className="flex-1 min-w-0 md:max-w-md">
-          <SearchBar compact />
+          <SearchBar compact glassy={transparent} />
         </div>
 
         {/* روابط الديسكتوب */}
@@ -278,7 +302,7 @@ export function Navbar() {
             variant="outline"
             size="sm"
             onClick={toggleCurrency}
-            className="font-bold border-2 border-[#2196F3] text-[#2196F3] hover:bg-[#2196F3] hover:text-white transition-all text-xs px-2"
+            className={`font-bold border-2 transition-all text-xs px-2 ${transparent ? "border-white/60 text-white bg-white/10 hover:bg-white/25" : "border-[#2196F3] text-[#2196F3] hover:bg-[#2196F3] hover:text-white"}`}
             data-testid="button-toggle-currency"
           >
             {currency === 'YER' ? 'SAR' : 'YER'}
@@ -288,7 +312,7 @@ export function Navbar() {
           {isAuthenticated && (
             <Link href="/notifications">
               <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
-                <Bell className="h-5 w-5 text-[#2196F3]" />
+                <Bell className={`h-5 w-5 transition-colors ${transparent ? "text-white drop-shadow" : "text-[#2196F3]"}`} />
                 {unreadCount && unreadCount.count > 0 && (
                   <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-500 text-white rounded-full text-xs">
                     {unreadCount.count}
@@ -301,9 +325,9 @@ export function Navbar() {
           {/* السلة */}
           <Link href="/cart">
             <Button variant="ghost" size="icon" className="relative" data-testid="button-cart">
-              <ShoppingCart className="h-5 w-5 text-[#2196F3]" />
+              <ShoppingCart className={`h-5 w-5 transition-colors ${transparent ? "text-white drop-shadow" : "text-[#2196F3]"}`} />
               {cartCount > 0 && (
-                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-[#2196F3] text-white rounded-full text-xs">
+                <Badge className={`absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-white rounded-full text-xs ${transparent ? "bg-white/90 text-[#2196F3]" : "bg-[#2196F3]"}`}>
                   {cartCount}
                 </Badge>
               )}
@@ -315,7 +339,7 @@ export function Navbar() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full hidden md:flex" data-testid="button-user-menu">
-                  <UserIcon className="h-5 w-5 text-[#2196F3]" />
+                  <UserIcon className={`h-5 w-5 transition-colors ${transparent ? "text-white drop-shadow" : "text-[#2196F3]"}`} />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
