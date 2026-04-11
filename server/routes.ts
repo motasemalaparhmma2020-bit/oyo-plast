@@ -129,6 +129,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.send("google-site-verification: google2bec18c5e7a1da83.html");
   });
 
+  // ─── Digital Asset Links (لربط تطبيق جوجل بلاي بالموقع) ──────────────
+  // يتم تحديث sha256_cert_fingerprints بعد الحصول على التوقيع من Google Play Console
+  app.get("/.well-known/assetlinks.json", (_req, res) => {
+    const { PLAY_SIGNING_SHA256 } = process.env;
+    const fingerprint = PLAY_SIGNING_SHA256 || "REPLACE_WITH_SHA256_FROM_GOOGLE_PLAY_CONSOLE";
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.json([{
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: {
+        namespace: "android_app",
+        package_name: "com.oyoplast.app",
+        sha256_cert_fingerprints: [fingerprint]
+      }
+    }]);
+  });
+
   // ─── Dynamic Sitemap ─────────────────────────────────────────────
   app.get("/sitemap.xml", async (_req, res) => {
     try {
