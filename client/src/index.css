@@ -39,6 +39,7 @@
     direction: rtl; /* Enforce RTL globally */
     overscroll-behavior: none;
     touch-action: pan-y;
+    background-color: #e5e7eb; /* لون رمادي خارج إطار التطبيق على الكمبيوتر */
   }
 
   body {
@@ -47,9 +48,37 @@
     overflow-x: hidden;
   }
 
+  /* قفل التطبيق بعرض الجوال دائماً */
+  #root {
+    max-width: 500px;
+    margin: 0 auto;
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+    background: white;
+    box-shadow: 0 0 40px rgba(0,0,0,0.15);
+  }
+
+  /* استثناء: صفحات الأدمن والموردين تأخذ العرض الكامل */
+  #root.fullwidth-mode {
+    max-width: none;
+    box-shadow: none;
+    margin: 0;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
     @apply font-bold tracking-tight text-foreground;
+  }
+}
+
+/* تثبيت العناصر الثابتة (fixed) داخل إطار الـ 500px على الشاشات الكبيرة */
+@media (min-width: 501px) {
+  .app-fixed-bar {
+    max-width: 500px !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
   }
 }
 

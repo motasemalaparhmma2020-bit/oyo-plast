@@ -11,7 +11,7 @@ export function CompareBar() {
 
   return (
     <div
-      className="fixed bottom-20 left-0 right-0 z-40 px-3 animate-in slide-in-from-bottom-4 duration-300"
+      className="app-fixed-bar fixed bottom-20 left-0 right-0 z-40 px-3 animate-in slide-in-from-bottom-4 duration-300"
       data-testid="compare-bar"
     >
       <div className="bg-white dark:bg-gray-900 border border-border rounded-2xl shadow-2xl p-3">

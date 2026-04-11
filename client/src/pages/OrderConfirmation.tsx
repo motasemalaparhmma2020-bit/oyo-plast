@@ -206,7 +206,7 @@ export default function OrderConfirmation() {
       </div>
 
       {/* أزرار الأسفل */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t px-4 py-3 flex gap-3 shadow-lg" data-testid="section-actions">
+      <div className="app-fixed-bar fixed bottom-0 left-0 right-0 z-50 bg-background border-t px-4 py-3 flex gap-3 shadow-lg" data-testid="section-actions">
         <Button
           className="flex-1 h-12 font-bold rounded-xl"
           onClick={() => navigate("/")}

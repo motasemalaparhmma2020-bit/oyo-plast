@@ -36,7 +36,7 @@ export function GlobalBottomNav() {
 
   return (
     <nav
-      className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-50"
+      className="app-fixed-bar fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-50"
       data-testid="global-bottom-nav"
     >
       <div className="flex items-stretch justify-around h-16 w-full px-1">

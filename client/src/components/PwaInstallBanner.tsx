@@ -59,7 +59,7 @@ export function PwaInstallBanner() {
 
   return (
     <div
-      className="fixed bottom-20 left-3 right-3 z-50 animate-in slide-in-from-bottom-4 duration-300"
+      className="app-fixed-bar fixed bottom-20 left-3 right-3 z-50 animate-in slide-in-from-bottom-4 duration-300"
       data-testid="pwa-install-banner"
     >
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-2xl shadow-2xl p-4 flex items-center gap-3">

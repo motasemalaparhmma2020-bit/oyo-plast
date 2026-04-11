@@ -1372,7 +1372,7 @@ export default function Checkout() {
       </div>
 
       {/* ── أزرار الأسفل الثابتة ── */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t px-4 py-4 flex gap-3 shadow-xl">
+      <div className="app-fixed-bar fixed bottom-0 left-0 right-0 z-50 bg-background border-t px-4 py-4 flex gap-3 shadow-xl">
         <Link href="/cart" className="flex-1">
           <Button
             variant="outline"

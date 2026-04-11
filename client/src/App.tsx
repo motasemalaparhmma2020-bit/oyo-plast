@@ -73,7 +73,6 @@ import NotFound from "@/pages/not-found";
 
 import { Footer, MobileFooter } from "@/components/Footer";
 import { GlobalBottomNav } from "@/components/GlobalBottomNav";
-import { DesktopSidebar } from "@/components/DesktopSidebar";
 import { SplashScreen } from "@/components/SplashScreen";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { CompareBar } from "@/components/CompareBar";
@@ -342,6 +341,18 @@ function Router() {
   const { isAuthenticated, user, isLoading } = useAuth();
   const [location] = useLocation();
 
+  // تفعيل وضع العرض الكامل على صفحات الأدمن والموردين
+  useEffect(() => {
+    const root = document.getElementById('root');
+    if (!root) return;
+    const isFullwidth = location === '/admin' || location === '/staff' || location === '/supplier';
+    if (isFullwidth) {
+      root.classList.add('fullwidth-mode');
+    } else {
+      root.classList.remove('fullwidth-mode');
+    }
+  }, [location]);
+
   // ⚠️ جميع hooks يجب أن تكون قبل أي return مشروط (قواعد React Hooks)
   // قراءة إعدادات العرض لإخفاء شريط التنقل السفلي على صفحة المنتج
   const { data: displaySettingsForNav } = useQuery<any>({
@@ -384,11 +395,10 @@ function Router() {
       <DisplaySettingsInjector />
       <VisitorTracker />
       <OfflineSyncProvider />
-      <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16 lg:pb-0">
+      <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16">
         <LoginTopBanner />
         <Navbar />
-        <DesktopSidebar />
-        <main className={`flex-grow ${location !== '/admin' && location !== '/staff' && location !== '/supplier' ? 'lg:mr-56' : ''}`}>
+        <main className="flex-grow">
           <Switch>
             {/* Public pages - no auth required */}
             <Route path="/auth">

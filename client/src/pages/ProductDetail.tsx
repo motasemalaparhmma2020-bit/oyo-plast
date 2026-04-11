@@ -1023,7 +1023,7 @@ export default function ProductDetail() {
 
   // ── Sticky Bar ───────────────────────────────────────────────────────────
   const stickyBar = pdp.stickyBar.visible ? (
-    <div className="fixed bottom-0 left-0 right-0 z-[60] flex items-stretch shadow-2xl border-t bg-white dark:bg-gray-900"
+    <div className="app-fixed-bar fixed bottom-0 left-0 right-0 z-[60] flex items-stretch shadow-2xl border-t bg-white dark:bg-gray-900"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       data-testid="sticky-cart-bar">
       <button

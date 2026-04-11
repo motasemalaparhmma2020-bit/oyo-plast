@@ -210,7 +210,7 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white dark:bg-background shadow-sm">
       {/* ── السطر الوحيد (موبايل + ديسكتوب) ───────────────────── */}
-      <div className={`container mx-auto px-3 h-14 flex items-center gap-2 ${location !== '/admin' && location !== '/staff' && location !== '/supplier' ? 'lg:pr-60' : ''}`}>
+      <div className="container mx-auto px-3 h-14 flex items-center gap-2">
 
         {/* زر القائمة — موبايل فقط */}
         <div className="flex items-center md:hidden flex-shrink-0">
