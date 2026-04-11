@@ -178,7 +178,7 @@ function HomeSectionBlock({ section, displaySettings, primaryColor }: {
 
       {/* شبكة 2×2 */}
       {section.displayMode === 'grid2' && (
-        <div className="grid grid-cols-2 gap-3 px-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 px-4">
           {products.map((product: any) => (
             <ProductCard
               key={product.id}

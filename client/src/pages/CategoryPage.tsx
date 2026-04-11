@@ -178,13 +178,13 @@ export default function CategoryPage() {
         </div>
 
         {prodLoading ? (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="h-64 bg-gray-100 rounded-xl animate-pulse" />
             ))}
           </div>
         ) : products.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {products.slice(0, 6).map((product: any) => (
               <ProductCard key={product.id} product={product} />
             ))}

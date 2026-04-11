@@ -109,13 +109,13 @@ export default function Products() {
 
       <div className="p-3">
         {isLoading ? (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="h-64 bg-gray-100 rounded-xl animate-pulse" />
             ))}
           </div>
         ) : products && products.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {products.map((product: any) => (
               <ProductCard key={product.id} product={product} />
             ))}

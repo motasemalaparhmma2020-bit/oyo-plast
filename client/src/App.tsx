@@ -73,6 +73,7 @@ import NotFound from "@/pages/not-found";
 
 import { Footer, MobileFooter } from "@/components/Footer";
 import { GlobalBottomNav } from "@/components/GlobalBottomNav";
+import { DesktopSidebar } from "@/components/DesktopSidebar";
 import { SplashScreen } from "@/components/SplashScreen";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { CompareBar } from "@/components/CompareBar";
@@ -383,10 +384,11 @@ function Router() {
       <DisplaySettingsInjector />
       <VisitorTracker />
       <OfflineSyncProvider />
-      <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16 md:pb-0">
+      <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16 lg:pb-0">
         <LoginTopBanner />
         <Navbar />
-        <main className="flex-grow">
+        <DesktopSidebar />
+        <main className={`flex-grow ${location !== '/admin' && location !== '/staff' && location !== '/supplier' ? 'lg:mr-56' : ''}`}>
           <Switch>
             {/* Public pages - no auth required */}
             <Route path="/auth">
