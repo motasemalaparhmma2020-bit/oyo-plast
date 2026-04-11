@@ -5,9 +5,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import {
   ArrowRight, Package, Truck, CheckCircle2, Clock, XCircle,
-  Loader2, MapPin, CreditCard, Phone, ShoppingBag, Search
+  Loader2, MapPin, CreditCard, Phone, ShoppingBag, Search,
+  Upload, AlertCircle
 } from "lucide-react";
 
 type TrackOrder = {
@@ -157,6 +159,65 @@ function SearchForm({ onResult }: { onResult: (o: TrackOrder) => void }) {
   );
 }
 
+function PaymentStatusCard({ order }: { order: TrackOrder }) {
+  const { toast } = useToast();
+  const [uploading, setUploading] = useState(false);
+  const [uploaded, setUploaded] = useState(false);
+
+  const isNonCOD = order.paymentMethod && !["cash_on_delivery", "cod"].includes(order.paymentMethod);
+  const ps = order.paymentStatus;
+
+  if (!isNonCOD || ps === "cod_collected") return null;
+
+  const config = ps === "transferred"
+    ? { color: "bg-green-50 border-green-200", icon: <CheckCircle2 className="h-5 w-5 text-green-600" />, label: "تم التحقق من الدفع ✓", sub: "تأكدنا من استلام دفعتك." }
+    : ps === "pending_verification"
+    ? { color: "bg-blue-50 border-blue-200", icon: <Clock className="h-5 w-5 text-blue-600 animate-pulse" />, label: "جاري التحقق من الإيصال", sub: "سيصلك واتساب بعد التحقق." }
+    : { color: "bg-amber-50 border-amber-200", icon: <AlertCircle className="h-5 w-5 text-amber-600" />, label: uploaded ? "تم رفع الإيصال بنجاح" : "في انتظار إيصال الدفع", sub: uploaded ? "سيراجعه فريقنا قريباً." : "يرجى رفع صورة إيصال التحويل." };
+
+  const handleReupload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("receipt", file);
+      const res = await fetch(`/api/orders/${order.id}/upload-receipt`, { method: "POST", body: form });
+      if (res.ok) {
+        setUploaded(true);
+        toast({ title: "✅ تم رفع الإيصال بنجاح", description: "سيراجعه فريقنا قريباً وستصلك رسالة واتساب." });
+      } else {
+        toast({ title: "فشل رفع الإيصال", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "خطأ في الاتصال", variant: "destructive" });
+    }
+    setUploading(false);
+    e.target.value = "";
+  };
+
+  return (
+    <Card className={`border shadow-sm ${config.color}`}>
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 mt-0.5">{config.icon}</div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm" data-testid="text-payment-status">{config.label}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{config.sub}</p>
+            {(ps === "unpaid" || !ps) && !uploaded && (
+              <label className="mt-3 flex items-center justify-center gap-2 cursor-pointer rounded-lg border-2 border-dashed border-amber-400 bg-white py-2.5 px-4 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors" data-testid="label-reupload-receipt">
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {uploading ? "جاري الرفع..." : "رفع / إعادة رفع الإيصال"}
+                <input type="file" accept="image/*" className="hidden" onChange={handleReupload} disabled={uploading} data-testid="input-receipt-file" />
+              </label>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function OrderResult({ order, onBack }: { order: TrackOrder; onBack: () => void }) {
   const [, navigate] = useLocation();
   const stepIndex = getStepIndex(order.status, order.deliveryStatus);
@@ -236,6 +297,9 @@ function OrderResult({ order, onBack }: { order: TrackOrder; onBack: () => void 
             </CardContent>
           </Card>
         )}
+
+        {/* حالة الدفع (للتحويل والمحفظة) */}
+        <PaymentStatusCard order={order} />
 
         {/* معلومات التوصيل */}
         <Card className="border-0 shadow-sm">

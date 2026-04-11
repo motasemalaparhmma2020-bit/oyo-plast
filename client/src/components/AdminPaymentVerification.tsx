@@ -129,14 +129,20 @@ function ReceiptCard({
             عرض إيصال الدفع
           </button>
 
-          {/* Admin note */}
+          {/* Admin note / rejection reason */}
           <Textarea
-            placeholder="ملاحظة للأدمن (اختياري)..."
+            placeholder="ملاحظة / سبب الرفض (سيُرسَل للعميل عبر واتساب)..."
             value={note}
             onChange={e => setNote(e.target.value)}
             className="text-sm resize-none h-16"
             data-testid={`input-note-${payment.id}`}
           />
+
+          {/* WhatsApp notification hint */}
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <span className="text-green-600">📲</span>
+            سيُبلَّغ العميل تلقائياً عبر واتساب عند القبول أو الرفض
+          </p>
 
           {/* Actions */}
           <div className="flex gap-2 pt-1">

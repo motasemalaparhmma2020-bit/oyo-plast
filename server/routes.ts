@@ -1572,6 +1572,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         `UPDATE orders SET receipt_image_url=$1, payment_status='pending_verification' WHERE id=$2`,
         [dataUrl, orderId]
       );
+
+      // إشعار المشرف بواتساب عند رفع إيصال جديد
+      try {
+        const orderRow = await dbPool.query(
+          `SELECT customer_name, customer_phone, total, payment_method FROM orders WHERE id=$1`,
+          [orderId]
+        );
+        if (orderRow.rows.length) {
+          const o = orderRow.rows[0];
+          const methodLabel = o.payment_method === "bank_transfer" ? "تحويل بنكي" : "محفظة إلكترونية";
+          const adminPhone = process.env.ADMIN_WHATSAPP_NUMBER || process.env.TWILIO_FROM_NUMBER;
+          const accountSid = process.env.TWILIO_ACCOUNT_SID;
+          const authToken = process.env.TWILIO_AUTH_TOKEN;
+          const fromNumber = process.env.TWILIO_FROM_NUMBER;
+          if (adminPhone && accountSid && authToken && fromNumber) {
+            const msg = `📥 إيصال دفع جديد!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 طلب: #${orderId}\n👤 العميل: ${o.customer_name}\n📱 الجوال: ${o.customer_phone}\n💰 المبلغ: ${Number(o.total).toLocaleString()} ر.ي\n💳 طريقة الدفع: ${methodLabel}\n━━━━━━━━━━━━━━━━━━━━━\nراجع التحقق: https://oyoplast.com/admin`;
+            await fetch(
+              `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: "Basic " + Buffer.from(`${accountSid}:${authToken}`).toString("base64"),
+                  "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: new URLSearchParams({ To: `whatsapp:${adminPhone}`, From: `whatsapp:${fromNumber}`, Body: msg }),
+              }
+            );
+          }
+        }
+      } catch { /* non-fatal */ }
+
       res.json({ message: "تم رفع الإيصال بنجاح", receiptUrl: dataUrl });
     } catch (e: any) {
       res.status(500).json({ message: "فشل رفع الإيصال", error: e.message });
@@ -1603,6 +1634,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { pool: dbPool } = await import("./db");
       const { action, note } = req.body; // action: 'approve' | 'reject'
       const orderId = parseInt(req.params.id);
+
+      // جلب بيانات الطلب قبل التحديث (لإرسال الإشعار)
+      const orderRow = await dbPool.query(
+        `SELECT customer_name, customer_phone, total, payment_method FROM orders WHERE id=$1`,
+        [orderId]
+      );
+      const orderData = orderRow.rows[0];
+
       if (action === "approve") {
         await dbPool.query(
           `UPDATE orders SET payment_status='transferred' WHERE id=$1`,
@@ -1620,6 +1659,39 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           [`\n[ملاحظة الأدمن: ${note}]`, orderId]
         );
       }
+
+      // إشعار العميل بواتساب عند قبول أو رفض الدفع
+      if (orderData?.customer_phone) {
+        try {
+          const phone = orderData.customer_phone.replace(/\s+/g, "").replace(/^00/, "+");
+          const accountSid = process.env.TWILIO_ACCOUNT_SID;
+          const authToken = process.env.TWILIO_AUTH_TOKEN;
+          const fromNumber = process.env.TWILIO_FROM_NUMBER;
+          if (phone.startsWith("+") && accountSid && authToken && fromNumber) {
+            const trackLink = `https://oyoplast.com/track`;
+            let msg = "";
+            if (action === "approve") {
+              msg = `✅ تم التحقق من دفعك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\n💰 المبلغ: ${Number(orderData.total).toLocaleString()} ر.ي\nتم استلام دفعك وتأكيده. سيتم تجهيز طلبك الآن.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`;
+            } else if (action === "reject") {
+              msg = `❌ تعذّر التحقق من دفعك\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\n${note ? `📝 السبب: ${note}\n` : ""}يرجى إعادة رفع صورة الإيصال أو التواصل معنا.\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`;
+            }
+            if (msg) {
+              await fetch(
+                `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+                {
+                  method: "POST",
+                  headers: {
+                    Authorization: "Basic " + Buffer.from(`${accountSid}:${authToken}`).toString("base64"),
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  body: new URLSearchParams({ To: `whatsapp:${phone}`, From: `whatsapp:${fromNumber}`, Body: msg }),
+                }
+              );
+            }
+          }
+        } catch { /* non-fatal */ }
+      }
+
       res.json({ message: "تم تحديث حالة الدفع" });
     } catch (e: any) {
       res.status(500).json({ message: "فشل التحديث" });
@@ -2484,6 +2556,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       let values: any[] = [];
       let idx = 1;
 
+      // جلب بيانات الخطة لإرسال الإشعار لاحقاً
+      const planRow = await dbPool.query(
+        `SELECT * FROM installment_plans WHERE id=$1`,
+        [planId]
+      );
+      const planData = planRow.rows[0];
+
       if (action === "confirm_deposit") {
         setClauses.push(`deposit_paid = true, deposit_paid_at = NOW(), status = 'deposit_paid'`);
         // تحديث الطلب بحالة deposit_paid
@@ -2491,12 +2570,46 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (plan.rows[0]) {
           await dbPool.query(`UPDATE orders SET status='deposit_paid', payment_status='partial' WHERE id=$1`, [plan.rows[0].order_id]);
         }
+        // إشعار العميل بواتساب
+        try {
+          if (planData?.customer_phone) {
+            const phone = planData.customer_phone.replace(/\s+/g, "").replace(/^00/, "+");
+            const accountSid = process.env.TWILIO_ACCOUNT_SID;
+            const authToken = process.env.TWILIO_AUTH_TOKEN;
+            const fromNumber = process.env.TWILIO_FROM_NUMBER;
+            if (phone.startsWith("+") && accountSid && authToken && fromNumber) {
+              const msg = `✅ تم تأكيد مقدّم التقسيط!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 طلب: #${planData.order_id}\n💰 المقدّم: ${Number(planData.deposit_amount).toLocaleString()} ر.ي\n💳 الباقي عند التسليم: ${Number(planData.remaining_amount).toLocaleString()} ر.ي\nسيتم تجهيز طلبك الآن.\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`;
+              await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+                method: "POST",
+                headers: { Authorization: "Basic " + Buffer.from(`${accountSid}:${authToken}`).toString("base64"), "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({ To: `whatsapp:${phone}`, From: `whatsapp:${fromNumber}`, Body: msg }),
+              });
+            }
+          }
+        } catch { /* non-fatal */ }
       } else if (action === "confirm_remaining") {
         setClauses.push(`remaining_paid = true, remaining_paid_at = NOW(), status = 'completed'`);
         const plan = await dbPool.query(`SELECT order_id FROM installment_plans WHERE id=$1`, [planId]);
         if (plan.rows[0]) {
           await dbPool.query(`UPDATE orders SET payment_status='cod_collected' WHERE id=$1`, [plan.rows[0].order_id]);
         }
+        // إشعار العميل بواتساب
+        try {
+          if (planData?.customer_phone) {
+            const phone = planData.customer_phone.replace(/\s+/g, "").replace(/^00/, "+");
+            const accountSid = process.env.TWILIO_ACCOUNT_SID;
+            const authToken = process.env.TWILIO_AUTH_TOKEN;
+            const fromNumber = process.env.TWILIO_FROM_NUMBER;
+            if (phone.startsWith("+") && accountSid && authToken && fromNumber) {
+              const msg = `🎉 تم سداد التقسيط بالكامل!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 طلب: #${planData.order_id}\nشكراً لثقتك بأويو بلاست! نتمنى أن ينال طلبك إعجابك 💙\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`;
+              await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+                method: "POST",
+                headers: { Authorization: "Basic " + Buffer.from(`${accountSid}:${authToken}`).toString("base64"), "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({ To: `whatsapp:${phone}`, From: `whatsapp:${fromNumber}`, Body: msg }),
+              });
+            }
+          }
+        } catch { /* non-fatal */ }
       } else if (action === "cancel") {
         setClauses.push(`status = 'cancelled'`);
       }
@@ -3980,4 +4093,64 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(500).json({ message: "فشل جلب الملخص المالي" });
     }
   });
+
+  // ─── جدولة تذكيرات التقسيط التلقائية (كل 24 ساعة) ─────────────────────────
+  async function runInstallmentReminders() {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const accountSid = process.env.TWILIO_ACCOUNT_SID;
+      const authToken = process.env.TWILIO_AUTH_TOKEN;
+      const fromNumber = process.env.TWILIO_FROM_NUMBER;
+      if (!accountSid || !authToken || !fromNumber) return;
+
+      // خطط التقسيط المؤكدة (دفع المقدم) ولم يُسدَّد الباقي، ومر عليها 3 أيام على الأقل
+      // يُرسل تذكير تلقائي واحد فقط (ما لم يُرسَل من قبل)
+      const plans = await dbPool.query(`
+        SELECT ip.id, ip.customer_name, ip.customer_phone,
+               ip.remaining_amount, ip.order_id,
+               o.shipping_city
+        FROM installment_plans ip
+        JOIN orders o ON o.id = ip.order_id
+        WHERE ip.status = 'deposit_paid'
+          AND ip.remaining_paid = false
+          AND ip.created_at <= NOW() - INTERVAL '3 days'
+          AND (ip.admin_notes IS NULL OR ip.admin_notes NOT LIKE '%[تذكير تلقائي%')
+        LIMIT 20
+      `);
+
+      for (const plan of plans.rows) {
+        try {
+          const phone = (plan.customer_phone || "").replace(/\s+/g, "").replace(/^00/, "+");
+          if (!phone.startsWith("+")) continue;
+
+          const msg = `⏰ تذكير بدفع قسط التقسيط\n━━━━━━━━━━━━━━━━━━━━━\n🆔 طلب: #${plan.order_id}\n💰 المبلغ المتبقي: ${Number(plan.remaining_amount).toLocaleString()} ر.ي\nيرجى تسديد الباقي عند الاستلام أو التواصل معنا.\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`;
+
+          await fetch(
+            `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: "Basic " + Buffer.from(`${accountSid}:${authToken}`).toString("base64"),
+                "Content-Type": "application/x-www-form-urlencoded",
+              },
+              body: new URLSearchParams({ To: `whatsapp:${phone}`, From: `whatsapp:${fromNumber}`, Body: msg }),
+            }
+          );
+
+          // تسجيل التذكير في ملاحظات الأدمن
+          await dbPool.query(
+            `UPDATE installment_plans SET admin_notes = COALESCE(admin_notes,'') || $1 WHERE id = $2`,
+            [`\n[تذكير تلقائي: ${new Date().toLocaleDateString("ar-YE")}]`, plan.id]
+          );
+        } catch { /* skip individual failures */ }
+      }
+    } catch (e: any) {
+      console.error("Auto installment reminder error:", e.message);
+    }
+  }
+
+  // تشغيل التذكيرات مرة كل 24 ساعة
+  setInterval(runInstallmentReminders, 24 * 60 * 60 * 1000);
+  // تشغيل أولي بعد 5 دقائق من بدء الخادم
+  setTimeout(runInstallmentReminders, 5 * 60 * 1000);
 }
