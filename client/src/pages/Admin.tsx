@@ -3283,6 +3283,74 @@ function HomePageSettingsSection({ adminToken }: { adminToken: string | null }) 
 
         <Separator />
 
+        {/* ─── إعدادات القائمة الجانبية (Drawer) ─── */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">☰</span>
+            <Label className="text-base font-semibold">القائمة الجانبية (الخطوط الثلاثة)</Label>
+          </div>
+          <p className="text-xs text-muted-foreground -mt-2">تحكم في مظهر القائمة التي تظهر عند الضغط على الخطوط الثلاثة في الجوال</p>
+
+          <div className="grid grid-cols-2 gap-4">
+            {/* لون البداية */}
+            <div className="space-y-2">
+              <Label className="text-sm">لون الخلفية — البداية</Label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={settings?.drawerBgFrom || "#0891B2"}
+                  onChange={(e) => setSettings((s: any) => ({ ...s, drawerBgFrom: e.target.value }))}
+                  onBlur={(e) => handleUpdate('drawerBgFrom', e.target.value)}
+                  className="w-14 h-10 rounded cursor-pointer border-2 border-gray-200"
+                  data-testid="input-drawer-bg-from"
+                />
+                <code className="text-xs text-gray-500">{settings?.drawerBgFrom || "#0891B2"}</code>
+              </div>
+            </div>
+            {/* لون النهاية */}
+            <div className="space-y-2">
+              <Label className="text-sm">لون الخلفية — النهاية</Label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={settings?.drawerBgTo || "#164e63"}
+                  onChange={(e) => setSettings((s: any) => ({ ...s, drawerBgTo: e.target.value }))}
+                  onBlur={(e) => handleUpdate('drawerBgTo', e.target.value)}
+                  className="w-14 h-10 rounded cursor-pointer border-2 border-gray-200"
+                  data-testid="input-drawer-bg-to"
+                />
+                <code className="text-xs text-gray-500">{settings?.drawerBgTo || "#164e63"}</code>
+              </div>
+            </div>
+          </div>
+
+          {/* معاينة التدرج */}
+          <div
+            className="w-full h-12 rounded-xl shadow-inner"
+            style={{ background: `linear-gradient(135deg, ${settings?.drawerBgFrom || "#0891B2"} 0%, ${settings?.drawerBgTo || "#164e63"} 100%)` }}
+          />
+
+          {/* العرض */}
+          <div className="space-y-2">
+            <Label className="text-sm">عرض القائمة: <strong>{settings?.drawerWidth ?? 300}px</strong></Label>
+            <input
+              type="range" min={260} max={380} step={10}
+              value={settings?.drawerWidth ?? 300}
+              onChange={(e) => setSettings((s: any) => ({ ...s, drawerWidth: +e.target.value }))}
+              onMouseUp={(e) => handleUpdate('drawerWidth', +(e.target as HTMLInputElement).value)}
+              onTouchEnd={(e) => handleUpdate('drawerWidth', +(e.target as HTMLInputElement).value)}
+              className="w-full accent-primary"
+              data-testid="input-drawer-width"
+            />
+            <div className="flex justify-between text-xs text-gray-400">
+              <span>260px (ضيق)</span>
+              <span>380px (واسع)</span>
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
         <div className="space-y-4">
           <Label className="text-base font-semibold block">تحكم التذييل</Label>
           <div className="grid gap-4">
