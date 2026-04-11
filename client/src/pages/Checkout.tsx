@@ -97,6 +97,15 @@ export default function Checkout() {
   const [guarantorNotes, setGuarantorNotes] = useState("");
   const [receiptCountdown, setReceiptCountdown] = useState<number | null>(null);
 
+  // ── GPS / الموقع الجغرافي ────────────────────────────────────────────────
+  const [locationLat, setLocationLat] = useState<number | null>(null);
+  const [locationLng, setLocationLng] = useState<number | null>(null);
+  const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
+  const [locationMethod, setLocationMethod] = useState<"gps" | "manual">("manual");
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationLabel, setLocationLabel] = useState<string>("");
+  const [nearestDistributor, setNearestDistributor] = useState<{ name: string; distanceKm: number; withinRadius: boolean } | null>(null);
+
   // جلب الموردين النشطين للكفيل
   const { data: suppliersList = [] } = useQuery<any[]>({
     queryKey: ["/api/public/suppliers-list"],
@@ -254,6 +263,43 @@ export default function Checkout() {
     if (file) { setReceiptFile(file); toast({ title: "✅ تم رفع الإيصال" }); }
   };
 
+  // ── تحديد الموقع الجغرافي بـ GPS ──────────────────────────────────────────
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      toast({ title: "GPS غير مدعوم", description: "يرجى إدخال العنوان يدوياً", variant: "destructive" });
+      return;
+    }
+    setLocationLoading(true);
+    setNearestDistributor(null);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        setLocationLat(latitude);
+        setLocationLng(longitude);
+        setLocationAccuracy(accuracy);
+        setLocationMethod("gps");
+        setLocationLabel(`${latitude.toFixed(5)}° ، ${longitude.toFixed(5)}°`);
+        setLocationLoading(false);
+        // جلب أقرب موزع
+        try {
+          const r = await fetch(`/api/location/nearest-distributors?lat=${latitude}&lng=${longitude}`);
+          if (r.ok) {
+            const data = await r.json();
+            if (data.length > 0) setNearestDistributor(data[0]);
+          }
+        } catch { /* silent */ }
+      },
+      (err) => {
+        setLocationLoading(false);
+        const msg = err.code === 1
+          ? "يرجى السماح للمتصفح بالوصول إلى موقعك، أو أدخل العنوان يدوياً"
+          : "تعذّر تحديد الموقع، يرجى إدخال العنوان يدوياً";
+        toast({ title: "⚠️ تعذّر تحديد الموقع", description: msg, variant: "destructive" });
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 300000 }
+    );
+  };
+
   const handleSubmit = async () => {
     if (!formData.customerName.trim() || formData.customerName.trim().length < 2) {
       toast({ title: "خطأ", description: "الاسم مطلوب (حرفين على الأقل)", variant: "destructive" }); return;
@@ -328,6 +374,11 @@ export default function Checkout() {
           items: cartItems,
           couponCode: couponData?.code || null,
           discountAmount: discountAmount > 0 ? discountAmount : null,
+          // ── GPS Coordinates ──
+          customerLat: locationLat ?? undefined,
+          customerLng: locationLng ?? undefined,
+          locationAccuracy: locationAccuracy ?? undefined,
+          locationMethod: locationLat ? "gps" : "manual",
         }),
       });
 
@@ -531,9 +582,10 @@ export default function Checkout() {
               <div className="text-right flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">عنوان التوصيل:</p>
                 {hasAddress ? (
-                  <p className="text-sm font-semibold truncate">
-                    {formData.shippingCity}، {formData.shippingAddress}
-                  </p>
+                  <div>
+                    <p className="text-sm font-semibold truncate">{formData.shippingCity}، {formData.shippingAddress}</p>
+                    {locationLat && <p className="text-[10px] text-green-600 flex items-center gap-1 mt-0.5"><MapPin className="w-2.5 h-2.5" />📍 GPS محدد{nearestDistributor ? ` — ${nearestDistributor.name} (${nearestDistributor.distanceKm} كم)` : ""}</p>}
+                  </div>
                 ) : (
                   <p className="text-sm text-orange-500 font-semibold">أضف عنوان التوصيل</p>
                 )}
@@ -556,6 +608,58 @@ export default function Checkout() {
           {/* Address Form */}
           {showAddressForm && (
             <div className="px-4 pb-4 space-y-2 border-t pt-3">
+              {/* ── GPS Widget ── */}
+              <div className="rounded-xl overflow-hidden border border-green-200">
+                {locationLat ? (
+                  <div className="bg-green-50 p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-green-700">
+                      <MapPin className="h-4 w-4 shrink-0 text-green-600" />
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-green-800">✅ تم تحديد موقعك بنجاح</p>
+                        <p className="text-xs text-green-600 font-mono">{locationLabel}</p>
+                        {locationAccuracy && <p className="text-[10px] text-green-500">دقة التحديد: ±{Math.round(locationAccuracy)} متر</p>}
+                      </div>
+                      <button onClick={() => { setLocationLat(null); setLocationLng(null); setLocationLabel(""); setNearestDistributor(null); }} className="text-green-400 hover:text-red-500 text-xs">✕</button>
+                    </div>
+                    {nearestDistributor && (
+                      <div className={`flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 ${nearestDistributor.withinRadius ? "bg-blue-50 text-blue-700" : "bg-orange-50 text-orange-700"}`}>
+                        <span className="text-base">{nearestDistributor.withinRadius ? "🏪" : "📍"}</span>
+                        <span>أقرب موزع: <strong>{nearestDistributor.name}</strong> ({nearestDistributor.distanceKm} كم)</span>
+                        {!nearestDistributor.withinRadius && <span className="text-[10px] opacity-75">— خارج نطاق التغطية المعتادة</span>}
+                      </div>
+                    )}
+                    <button onClick={handleGetLocation} disabled={locationLoading} className="w-full text-xs text-green-600 underline text-center">
+                      إعادة تحديد الموقع
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleGetLocation}
+                    disabled={locationLoading}
+                    className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-bold py-3 transition-colors"
+                    data-testid="button-get-location"
+                  >
+                    {locationLoading ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        جاري تحديد الموقع...
+                      </>
+                    ) : (
+                      <>
+                        <MapPin className="h-4 w-4" />
+                        📍 تحديد موقعي تلقائياً (GPS)
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2 my-1">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-xs text-muted-foreground px-2">أو أدخل العنوان يدوياً</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">الاسم الكامل *</p>

@@ -373,6 +373,50 @@ export async function runMigrations(): Promise<void> {
     `);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_payroll_user_period ON payroll_periods(user_id, period);`);
 
+    // ─── نظام GPS — أعمدة الموردين ──────────────────────────────────────
+    await client.query(`ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS lat NUMERIC;`);
+    await client.query(`ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS lng NUMERIC;`);
+    await client.query(`ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS service_radius_km INTEGER NOT NULL DEFAULT 20;`);
+    await client.query(`ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS province TEXT;`);
+    await client.query(`ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS district TEXT;`);
+
+    // ─── نظام GPS — أعمدة الطلبات ────────────────────────────────────────
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_lat NUMERIC;`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_lng NUMERIC;`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS location_accuracy NUMERIC;`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS location_method TEXT DEFAULT 'manual';`);
+
+    // ─── جدول إعدادات مناطق الخدمة ──────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS service_area_config (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        city TEXT NOT NULL,
+        district TEXT,
+        center_lat NUMERIC,
+        center_lng NUMERIC,
+        radius_km INTEGER NOT NULL DEFAULT 20,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    // إدخال المناطق الافتراضية لليمن
+    const defaultAreas = [
+      { name: "صنعاء المركز", city: "صنعاء", district: null, lat: 15.3694, lng: 44.1910, radius: 15 },
+      { name: "عدن", city: "عدن", district: null, lat: 12.7797, lng: 45.0095, radius: 20 },
+      { name: "تعز", city: "تعز", district: null, lat: 13.5794, lng: 44.0210, radius: 20 },
+      { name: "الحديدة", city: "الحديدة", district: null, lat: 14.7978, lng: 42.9539, radius: 25 },
+      { name: "إب", city: "إب", district: null, lat: 13.9767, lng: 44.1786, radius: 20 },
+    ];
+    for (const a of defaultAreas) {
+      await client.query(
+        `INSERT INTO service_area_config (name, city, district, center_lat, center_lng, radius_km)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT DO NOTHING`,
+        [a.name, a.city, a.district, a.lat, a.lng, a.radius]
+      );
+    }
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

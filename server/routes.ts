@@ -361,33 +361,87 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   }
 
-  // دالة تعيين المورد تلقائياً بناءً على مدينة العميل
-  async function autoAssignSupplier(orderId: number, city: string, orderTotal: number, currency: string, customerName: string, customerPhone: string) {
+  // ─── Haversine: احتساب المسافة بين نقطتين جغرافيتين (كيلومتر) ──────────
+  function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  // دالة تعيين المورد تلقائياً: GPS أولاً ثم المدينة ثم الأقرب عموماً
+  async function autoAssignSupplier(
+    orderId: number, city: string, orderTotal: number, currency: string,
+    customerName: string, customerPhone: string,
+    customerLat?: number, customerLng?: number
+  ) {
     try {
       const { pool: dbPool } = await import("./db");
-      // ابحث عن مورد يغطي هذه المدينة (الأول نشاطاً)
-      const res = await dbPool.query(
-        `SELECT * FROM suppliers WHERE is_active=true AND $1=ANY(cities) ORDER BY id LIMIT 1`,
-        [city]
-      );
-      if (!res.rows.length) return; // لا يوجد مورد يغطي هذه المدينة
-      const supplier = res.rows[0];
+      let supplier: any = null;
+      let distanceKm: number | null = null;
+
+      // ── المرحلة ١: GPS-based — أقرب موزع ضمن نطاق خدمته ──────────────
+      if (customerLat && customerLng) {
+        const gpsRes = await dbPool.query(
+          `SELECT * FROM suppliers WHERE is_active=true AND lat IS NOT NULL AND lng IS NOT NULL`
+        );
+        const withDist = gpsRes.rows.map((s: any) => ({
+          ...s,
+          _dist: haversineKm(customerLat!, customerLng!, Number(s.lat), Number(s.lng))
+        }))
+          .filter((s: any) => s._dist <= (s.service_radius_km || 20))
+          .sort((a: any, b: any) => a._dist - b._dist);
+
+        if (withDist.length > 0) {
+          supplier = withDist[0];
+          distanceKm = withDist[0]._dist;
+        }
+      }
+
+      // ── المرحلة ٢: مطابقة المدينة — fallback ──────────────────────────
+      if (!supplier && city) {
+        const cityRes = await dbPool.query(
+          `SELECT * FROM suppliers WHERE is_active=true AND $1=ANY(cities) ORDER BY id LIMIT 1`,
+          [city]
+        );
+        if (cityRes.rows.length) supplier = cityRes.rows[0];
+      }
+
+      // ── المرحلة ٣: أقرب موزع متاح بصرف النظر عن المسافة ───────────────
+      if (!supplier && customerLat && customerLng) {
+        const allRes = await dbPool.query(
+          `SELECT * FROM suppliers WHERE is_active=true AND lat IS NOT NULL AND lng IS NOT NULL`
+        );
+        if (allRes.rows.length) {
+          const sorted = allRes.rows.map((s: any) => ({
+            ...s,
+            _dist: haversineKm(customerLat!, customerLng!, Number(s.lat), Number(s.lng))
+          })).sort((a: any, b: any) => a._dist - b._dist);
+          supplier = sorted[0];
+          distanceKm = sorted[0]._dist;
+        }
+      }
+
+      if (!supplier) return; // لا يوجد أي موزع نشط
+
       const commissionRate = Number(supplier.commission_rate || 10);
       const platformCommission = orderTotal * commissionRate / 100;
       const supplierAmount = orderTotal - platformCommission;
 
       await dbPool.query(
-        `UPDATE orders SET supplier_id=$1, supplier_amount=$2, platform_commission=$3
-         WHERE id=$4`,
+        `UPDATE orders SET supplier_id=$1, supplier_amount=$2, platform_commission=$3 WHERE id=$4`,
         [supplier.id, supplierAmount.toFixed(2), platformCommission.toFixed(2), orderId]
       );
-      // تحديث إجمالي مبيعات المورد
       await dbPool.query(
         `UPDATE suppliers SET total_sales=COALESCE(total_sales,0)+$1, balance_due=COALESCE(balance_due,0)+$2 WHERE id=$3`,
         [orderTotal, supplierAmount, supplier.id]
       );
-      // إرسال إشعار واتساب
-      await notifySupplier(supplier.id, orderId, { customerName, customerPhone, shippingCity: city, supplierAmount, currency });
+      await notifySupplier(supplier.id, orderId, {
+        customerName, customerPhone, shippingCity: city, supplierAmount, currency,
+        distanceKm: distanceKm ? distanceKm.toFixed(1) : null
+      });
     } catch (e: any) {
       console.error("Auto-assign supplier error:", e.message);
     }
@@ -432,12 +486,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const { pool: dbPool } = await import("./db");
       const id = parseInt(req.params.id);
-      const { name, phone, email, cities, commissionRate, notes, isActive, pin } = req.body;
+      const { name, phone, email, cities, commissionRate, notes, isActive, pin, lat, lng, serviceRadiusKm, province, district } = req.body;
       const citiesArr = Array.isArray(cities) ? cities : (cities ? cities.split(",").map((c: string) => c.trim()) : []);
       const result = await dbPool.query(
-        `UPDATE suppliers SET name=$1, phone=$2, email=$3, cities=$4, commission_rate=$5, notes=$6, is_active=$7, pin=COALESCE($8, pin)
-         WHERE id=$9 RETURNING *`,
-        [name, phone, email || null, citiesArr, commissionRate || 10, notes || null, isActive !== false, pin || null, id]
+        `UPDATE suppliers SET name=$1, phone=$2, email=$3, cities=$4, commission_rate=$5, notes=$6, is_active=$7, pin=COALESCE($8, pin),
+         lat=COALESCE($9, lat), lng=COALESCE($10, lng), service_radius_km=COALESCE($11, service_radius_km),
+         province=COALESCE($12, province), district=COALESCE($13, district)
+         WHERE id=$14 RETURNING *`,
+        [name, phone, email || null, citiesArr, commissionRate || 10, notes || null, isActive !== false, pin || null,
+         lat != null ? lat : null, lng != null ? lng : null, serviceRadiusKm || null,
+         province || null, district || null, id]
       );
       if (!result.rows.length) return res.status(404).json({ message: "المورد غير موجود" });
       res.json(result.rows[0]);
@@ -1494,7 +1552,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ message: "بيانات الطلب غير مكتملة", errors: validation.errors });
       }
 
-      const { customerName, customerEmail, customerPhone, shippingCity, shippingAddress, shippingOption, shippingCost, notes, total, items, paymentMethod = "cash_on_delivery" } = req.body;
+      const {
+        customerName, customerEmail, customerPhone, shippingCity, shippingAddress,
+        shippingOption, shippingCost, notes, total, items, paymentMethod = "cash_on_delivery",
+        customerLat, customerLng, locationAccuracy, locationMethod,
+      } = req.body;
       const user = (req as any).user;
 
       const order = await storage.createOrder({
@@ -1512,6 +1574,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         userId: getUserId(user),
       });
 
+      // حفظ إحداثيات GPS في الطلب
+      if (customerLat != null && customerLng != null) {
+        try {
+          const { pool: gpsPool } = await import("./db");
+          await gpsPool.query(
+            `UPDATE orders SET customer_lat=$1, customer_lng=$2, location_accuracy=$3, location_method=$4 WHERE id=$5`,
+            [customerLat, customerLng, locationAccuracy || null, locationMethod || "gps", order.id]
+          );
+        } catch { /* non-fatal */ }
+      }
+
       logOrderCreation(order.id, {
         customerName,
         customerPhone,
@@ -1523,8 +1596,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await Promise.allSettled([
         sendOrderConfirmation(customerPhone, order.id, Number(total), "SAR"),
         sendAdminNotification(order.id, customerName, customerPhone, Number(total), items.length),
-        // تعيين المورد تلقائياً حسب مدينة العميل
-        shippingCity ? autoAssignSupplier(order.id, shippingCity, Number(total), req.body.currency || "YER", customerName, customerPhone) : Promise.resolve(),
+        // تعيين المورد تلقائياً: GPS أولاً ثم المدينة
+        autoAssignSupplier(
+          order.id, shippingCity || "", Number(total), req.body.currency || "YER",
+          customerName, customerPhone,
+          customerLat ? Number(customerLat) : undefined,
+          customerLng ? Number(customerLng) : undefined
+        ),
       ]);
 
       res.json(order);
@@ -2738,6 +2816,115 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) {
       res.status(500).json({ message: "فشل" });
     }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ─── نظام GPS وإيجاد أقرب موزع ──────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // أقرب الموزعين من موقع العميل (public)
+  app.get("/api/location/nearest-distributors", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const lat = parseFloat(req.query.lat as string);
+      const lng = parseFloat(req.query.lng as string);
+      if (isNaN(lat) || isNaN(lng)) return res.status(400).json({ message: "إحداثيات غير صالحة" });
+
+      const suppRes = await dbPool.query(
+        `SELECT id, name, phone, cities, province, district, lat, lng, service_radius_km
+         FROM suppliers WHERE is_active=true AND lat IS NOT NULL AND lng IS NOT NULL`
+      );
+      const withDist = suppRes.rows.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        cities: s.cities,
+        province: s.province,
+        district: s.district,
+        serviceRadiusKm: s.service_radius_km,
+        distanceKm: parseFloat(haversineKm(lat, lng, Number(s.lat), Number(s.lng)).toFixed(2)),
+        withinRadius: haversineKm(lat, lng, Number(s.lat), Number(s.lng)) <= (s.service_radius_km || 20),
+      })).sort((a, b) => a.distanceKm - b.distanceKm);
+
+      res.json(withDist.slice(0, 10));
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل البحث" });
+    }
+  });
+
+  // ── إعدادات مناطق الخدمة (admin) ─────────────────────────────────────
+  app.get("/api/admin/service-areas", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`SELECT * FROM service_area_config ORDER BY city, name`);
+      res.json(r.rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/service-areas", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { name, city, district, centerLat, centerLng, radiusKm, notes } = req.body;
+      if (!name || !city) return res.status(400).json({ message: "الاسم والمدينة مطلوبان" });
+      const r = await dbPool.query(
+        `INSERT INTO service_area_config (name, city, district, center_lat, center_lng, radius_km, notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+        [name, city, district || null, centerLat || null, centerLng || null, radiusKm || 20, notes || null]
+      );
+      res.status(201).json(r.rows[0]);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put("/api/admin/service-areas/:id", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { name, city, district, centerLat, centerLng, radiusKm, notes } = req.body;
+      const r = await dbPool.query(
+        `UPDATE service_area_config SET name=COALESCE($1,name), city=COALESCE($2,city),
+         district=COALESCE($3,district), center_lat=COALESCE($4,center_lat), center_lng=COALESCE($5,center_lng),
+         radius_km=COALESCE($6,radius_km), notes=COALESCE($7,notes) WHERE id=$8 RETURNING *`,
+        [name||null, city||null, district||null, centerLat!=null?centerLat:null, centerLng!=null?centerLng:null, radiusKm||null, notes||null, req.params.id]
+      );
+      if (!r.rows.length) return res.status(404).json({ message: "المنطقة غير موجودة" });
+      res.json(r.rows[0]);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/admin/service-areas/:id", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query(`DELETE FROM service_area_config WHERE id=$1`, [req.params.id]);
+      res.json({ message: "تم الحذف" });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── تحديث موقع الموزع من بوابة الموزع نفسه ───────────────────────────
+  app.put("/api/supplier/location", requireSupplier, async (req: any, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { lat, lng, serviceRadiusKm, district, province } = req.body;
+      if (!lat || !lng) return res.status(400).json({ message: "الإحداثيات مطلوبة" });
+      const suppId = req.supplierId;
+      await dbPool.query(
+        `UPDATE suppliers SET lat=$1, lng=$2, service_radius_km=COALESCE($3, service_radius_km),
+         district=COALESCE($4, district), province=COALESCE($5, province) WHERE id=$6`,
+        [lat, lng, serviceRadiusKm || null, district || null, province || null, suppId]
+      );
+      res.json({ message: "تم تحديث الموقع" });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── إحصائيات طلبات حسب الموقع (admin - للخريطة) ─────────────────────
+  app.get("/api/admin/orders-geo", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`
+        SELECT id, shipping_city, customer_lat, customer_lng, total, status, payment_status, location_method
+        FROM orders
+        WHERE customer_lat IS NOT NULL AND customer_lng IS NOT NULL
+        ORDER BY created_at DESC LIMIT 500
+      `);
+      res.json(r.rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
   // إشعار المشرف عند رفع إيصال الدفع (بدون تقسيط)
