@@ -706,8 +706,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/products", async (req, res) => {
     try {
       const { pool: dbPool } = await import("./db");
-      const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
+      let categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
+      const categorySlug = req.query.category as string | undefined;
+      const subcategorySlug = req.query.subcategory as string | undefined;
       const search = req.query.search as string | undefined;
+
+      // resolve slug → id if needed
+      if ((!categoryId || Number.isNaN(categoryId)) && categorySlug) {
+        const catRow = await dbPool.query(`SELECT id FROM categories WHERE slug = $1 LIMIT 1`, [categorySlug]);
+        if (catRow.rows.length > 0) categoryId = catRow.rows[0].id;
+      }
+
+      let subcategoryId: number | undefined;
+      if (subcategorySlug) {
+        const subRow = await dbPool.query(`SELECT id FROM subcategories WHERE slug = $1 LIMIT 1`, [subcategorySlug]);
+        if (subRow.rows.length > 0) subcategoryId = subRow.rows[0].id;
+      }
 
       let query = `SELECT ${LITE_COLS} FROM products`;
       const params: any[] = [];
@@ -717,6 +731,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (categoryId !== undefined && !Number.isNaN(categoryId)) {
         conditions.push(`category_id = $${idx++}`);
         params.push(categoryId);
+      }
+      if (subcategoryId !== undefined) {
+        conditions.push(`subcategory_id = $${idx++}`);
+        params.push(subcategoryId);
       }
       if (conditions.length > 0) query += ` WHERE ${conditions.join(" AND ")}`;
       query += ` ORDER BY id DESC`;

@@ -46,12 +46,14 @@ export default function CategoryPage() {
   const activeSubcategories = subcategories.filter((s: any) => s.isActive);
 
   const { data: products = [], isLoading: prodLoading } = useQuery<any[]>({
-    queryKey: ["/api/products", "category", slug],
+    queryKey: ["/api/products", "category", cat?.id],
     queryFn: async () => {
-      const res = await fetch(`/api/products?category=${slug}&limit=20`);
+      if (!cat?.id) return [];
+      const res = await fetch(`/api/products?categoryId=${cat.id}`);
       if (!res.ok) return [];
       return res.json();
     },
+    enabled: !!cat?.id,
   });
 
   const circleSize = 72;
