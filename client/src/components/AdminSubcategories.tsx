@@ -8,8 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, ImagePlus, Loader2, FolderTree, X, RefreshCw } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { Plus, Pencil, Trash2, ImagePlus, Loader2, FolderTree, X, RefreshCw, Filter } from "lucide-react";
 
 interface SubcategoryForm {
   name: string;
@@ -29,9 +28,10 @@ const emptyForm: SubcategoryForm = {
   isActive: true,
 };
 
-export function AdminSubcategories() {
+export function AdminSubcategories({ adminToken }: { adminToken?: string | null }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const token = adminToken || localStorage.getItem("adminToken") || "";
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -56,7 +56,15 @@ export function AdminSubcategories() {
   });
 
   const createMut = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/admin/subcategories", data),
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/admin/subcategories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-token": token },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || "فشل الإنشاء"); }
+      return res.json();
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/subcategories"] });
       toast({ title: "✅ تم إضافة القسم الفرعي" });
@@ -67,8 +75,15 @@ export function AdminSubcategories() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) =>
-      apiRequest("PATCH", `/api/admin/subcategories/${id}`, data),
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await fetch(`/api/admin/subcategories/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-token": token },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || "فشل التحديث"); }
+      return res.json();
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/subcategories"] });
       toast({ title: "✅ تم تحديث القسم الفرعي" });
@@ -80,7 +95,14 @@ export function AdminSubcategories() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/subcategories/${id}`),
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/admin/subcategories/${id}`, {
+        method: "DELETE",
+        headers: { "x-admin-token": token },
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || "فشل الحذف"); }
+      return res.json();
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/subcategories"] });
       toast({ title: "✅ تم حذف القسم الفرعي" });
@@ -95,10 +117,15 @@ export function AdminSubcategories() {
     try {
       const fd = new FormData();
       fd.append("image", file);
-      const res = await fetch("/api/upload-image", { method: "POST", body: fd, credentials: "include" });
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        headers: { "x-admin-token": token },
+        body: fd,
+      });
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
       setForm((f) => ({ ...f, imageUrl: data.url }));
+      toast({ title: "✅ تم رفع الصورة" });
     } catch {
       toast({ title: "فشل رفع الصورة", variant: "destructive" });
     } finally {

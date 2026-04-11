@@ -5750,7 +5750,12 @@ export default function Admin() {
                 )}
               </CardContent>
             </Card>
-            <AdminSubcategories />
+            <AdminSubcategories adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── Subcategories Tab ─────────────────────────────────────── */}
+          <TabsContent value="subcategories">
+            <AdminSubcategories adminToken={adminToken} />
           </TabsContent>
 
           <TabsContent value="inventory">

@@ -10,6 +10,7 @@ interface AdminNavItem {
 export const adminNavItems: AdminNavItem[] = [
   { id: "products", label: "المنتجات", icon: <Package className="h-8 w-8" />, color: "from-blue-400 to-blue-600" },
   { id: "categories", label: "الأقسام", icon: <Grid3x3 className="h-8 w-8" />, color: "from-purple-400 to-purple-600" },
+  { id: "subcategories", label: "الأقسام الفرعية", icon: <Layers className="h-8 w-8" />, color: "from-fuchsia-400 to-purple-600" },
   { id: "inventory", label: "المخزون", icon: <ShoppingCart className="h-8 w-8" />, color: "from-orange-400 to-orange-600" },
   { id: "orders", label: "الطلبات", icon: <ShoppingCart className="h-8 w-8" />, color: "from-green-400 to-green-600" },
   { id: "dimensions", label: "مقاسات الصور", icon: <Image className="h-8 w-8" />, color: "from-cyan-400 to-cyan-600" },
