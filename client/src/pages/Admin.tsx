@@ -3564,6 +3564,104 @@ function OrderSupplierAssign({ order, adminToken }: { order: any; adminToken: st
   );
 }
 
+// ── مكوّن إدارة مناطق الخدمة GPS ─────────────────────────────────────────────
+function AdminServiceAreas({ adminToken }: { adminToken: string }) {
+  const { data: areas = [], refetch } = useQuery<any[]>({
+    queryKey: ["/api/admin/service-areas"],
+    queryFn: () =>
+      fetch("/api/admin/service-areas", { headers: { "x-admin-token": adminToken } })
+        .then(r => r.json()),
+  });
+
+  const [form, setForm] = useState({ city: "", radiusKm: "15", lat: "", lng: "", isActive: true });
+  const [saving, setSaving] = useState(false);
+  const toast = useToast().toast;
+
+  const handleSave = async () => {
+    if (!form.city) return;
+    setSaving(true);
+    await fetch("/api/admin/service-areas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+      body: JSON.stringify({ city: form.city, radiusKm: parseFloat(form.radiusKm), lat: form.lat ? parseFloat(form.lat) : null, lng: form.lng ? parseFloat(form.lng) : null, isActive: form.isActive }),
+    });
+    setSaving(false);
+    setForm({ city: "", radiusKm: "15", lat: "", lng: "", isActive: true });
+    refetch();
+    toast({ title: "✅ تم حفظ منطقة الخدمة" });
+  };
+
+  const handleDelete = async (id: number) => {
+    await fetch(`/api/admin/service-areas/${id}`, { method: "DELETE", headers: { "x-admin-token": adminToken } });
+    refetch();
+    toast({ title: "🗑️ تم حذف المنطقة" });
+  };
+
+  const handleToggle = async (id: number, current: boolean) => {
+    await fetch(`/api/admin/service-areas/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+      body: JSON.stringify({ isActive: !current }),
+    });
+    refetch();
+  };
+
+  return (
+    <div className="mt-6 border rounded-xl p-4 bg-green-50/30 space-y-4" dir="rtl">
+      <h3 className="font-bold text-green-900 flex items-center gap-2">📍 إدارة مناطق خدمة GPS</h3>
+      <p className="text-xs text-muted-foreground">حدّد نطاق التغطية لكل مدينة — الطلبات داخل النطاق تُوجَّه لأقرب موزع GPS أولاً</p>
+
+      {/* إضافة منطقة */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 bg-white p-3 rounded-lg border">
+        <div>
+          <Label className="text-xs">المدينة</Label>
+          <Input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="صنعاء" className="mt-1" />
+        </div>
+        <div>
+          <Label className="text-xs">نطاق التغطية (كم)</Label>
+          <Input type="number" min={1} value={form.radiusKm} onChange={e => setForm(f => ({ ...f, radiusKm: e.target.value }))} className="mt-1" dir="ltr" />
+        </div>
+        <div>
+          <Label className="text-xs">خط العرض (Lat) — اختياري</Label>
+          <Input value={form.lat} onChange={e => setForm(f => ({ ...f, lat: e.target.value }))} placeholder="15.3547" className="mt-1 font-mono text-xs" dir="ltr" />
+        </div>
+        <div>
+          <Label className="text-xs">خط الطول (Lng) — اختياري</Label>
+          <Input value={form.lng} onChange={e => setForm(f => ({ ...f, lng: e.target.value }))} placeholder="44.2067" className="mt-1 font-mono text-xs" dir="ltr" />
+        </div>
+        <div className="flex items-end">
+          <Button onClick={handleSave} disabled={saving || !form.city} size="sm" className="w-full">
+            {saving ? "..." : "+ إضافة منطقة"}
+          </Button>
+        </div>
+      </div>
+
+      {/* قائمة المناطق */}
+      <div className="space-y-2">
+        {areas.map((area: any) => (
+          <div key={area.id} className="flex items-center justify-between bg-white border rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold">{area.city}</span>
+              <span className="text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full">{area.radius_km} كم</span>
+              {area.lat && area.lng && <span className="text-[10px] text-green-600 font-mono">{Number(area.lat).toFixed(3)}°، {Number(area.lng).toFixed(3)}°</span>}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleToggle(area.id, area.is_active)}
+                className={`text-xs px-2 py-0.5 rounded-full font-semibold ${area.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}
+              >
+                {area.is_active ? "نشط" : "معطّل"}
+              </button>
+              <button onClick={() => handleDelete(area.id)} className="text-red-400 hover:text-red-600 text-sm">×</button>
+            </div>
+          </div>
+        ))}
+        {areas.length === 0 && <p className="text-center text-sm text-muted-foreground py-4">لا توجد مناطق خدمة محددة بعد</p>}
+      </div>
+    </div>
+  );
+}
+
 export default function Admin() {
   const [activeSection, setActiveSection] = useState("orders");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -6041,6 +6139,7 @@ export default function Admin() {
           {/* ─── Suppliers Tab ─────────────────────────────────────────── */}
           <TabsContent value="suppliers">
             <SupplierManagement adminToken={adminToken} />
+            <AdminServiceAreas adminToken={adminToken} />
           </TabsContent>
 
           {/* ─── Supplier Products Approval Tab ───────────────────────── */}

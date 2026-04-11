@@ -62,6 +62,12 @@ function SupplierForm({
     notes: initial?.notes || "",
     isActive: initial?.is_active !== false,
     pin: (initial as any)?.pin || "1234",
+    // GPS
+    lat: (initial as any)?.lat || "",
+    lng: (initial as any)?.lng || "",
+    serviceRadiusKm: (initial as any)?.service_radius_km || "15",
+    province: (initial as any)?.province || "",
+    district: (initial as any)?.district || "",
   });
   const [cityInput, setCityInput] = useState("");
 
@@ -78,7 +84,14 @@ function SupplierForm({
 
   const handleSubmit = () => {
     if (!form.name || !form.phone) return;
-    onSave({ ...form, commissionRate: Number(form.commissionRate), pin: form.pin });
+    onSave({
+      ...form,
+      commissionRate: Number(form.commissionRate),
+      pin: form.pin,
+      lat: form.lat ? parseFloat(form.lat) : null,
+      lng: form.lng ? parseFloat(form.lng) : null,
+      serviceRadiusKm: form.serviceRadiusKm ? parseFloat(form.serviceRadiusKm) : 15,
+    });
   };
 
   return (
@@ -188,6 +201,73 @@ function SupplierForm({
             ))}
           </div>
         )}
+      </div>
+
+      {/* ── إعدادات GPS / الموقع الجغرافي ── */}
+      <div className="border border-green-200 rounded-xl p-3 bg-green-50/40 space-y-3">
+        <p className="text-xs font-bold text-green-800 flex items-center gap-1">📍 الموقع الجغرافي (GPS) — اختياري</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label className="text-xs">خط العرض (Latitude)</Label>
+            <Input
+              type="number"
+              step="0.00001"
+              value={form.lat}
+              onChange={e => setForm(f => ({ ...f, lat: e.target.value }))}
+              placeholder="15.35472"
+              dir="ltr"
+              className="mt-1 font-mono text-xs"
+              data-testid="input-supplier-lat"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">خط الطول (Longitude)</Label>
+            <Input
+              type="number"
+              step="0.00001"
+              value={form.lng}
+              onChange={e => setForm(f => ({ ...f, lng: e.target.value }))}
+              placeholder="44.20667"
+              dir="ltr"
+              className="mt-1 font-mono text-xs"
+              data-testid="input-supplier-lng"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">نطاق التغطية (كم)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={200}
+              value={form.serviceRadiusKm}
+              onChange={e => setForm(f => ({ ...f, serviceRadiusKm: e.target.value }))}
+              placeholder="15"
+              dir="ltr"
+              className="mt-1"
+              data-testid="input-supplier-radius"
+            />
+            <p className="text-[10px] text-muted-foreground mt-0.5">الطلبات داخل هذا النطاق تُوجَّه تلقائياً</p>
+          </div>
+          <div>
+            <Label className="text-xs">المحافظة</Label>
+            <Input
+              value={form.province}
+              onChange={e => setForm(f => ({ ...f, province: e.target.value }))}
+              placeholder="صنعاء"
+              className="mt-1"
+            />
+          </div>
+        </div>
+        <div>
+          <Label className="text-xs">المنطقة / الحي</Label>
+          <Input
+            value={form.district}
+            onChange={e => setForm(f => ({ ...f, district: e.target.value }))}
+            placeholder="حدة، الجراف..."
+            className="mt-1"
+          />
+        </div>
+        <p className="text-[10px] text-muted-foreground">احصل على الإحداثيات من Google Maps: انقر على الخريطة ← انسخ lat, lng</p>
       </div>
 
       <div>
