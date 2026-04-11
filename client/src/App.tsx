@@ -112,6 +112,10 @@ function RequireAccountType({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function StaffGate() {
+  return <StaffPortal />;
+}
+
 // Merges guest cart into server cart when user logs in
 function CartMerger() {
   const { isAuthenticated } = useAuth();
@@ -358,7 +362,7 @@ function Router() {
   // 1. صفحة الإدارة دائماً
   // 2. صفحة المنتج عند تفعيل الشريط الثابت (بديله يكون زر شراء)
   // صفحة الموظفين وبوابة الموردين مستقلة تماماً بدون navbar/footer
-  if (location === '/staff') return <StaffPortal />;
+  if (location === '/staff') return <StaffGate />;
   if (location === '/supplier') return <SupplierPortal />;
 
   const isProductDetail = /^\/products\/[^/]+$/.test(location);
@@ -441,7 +445,7 @@ function Router() {
               <RequireAccountType><MarketerCoupons /></RequireAccountType>
             </Route>
             <Route path="/printing" component={Printing} />
-            <Route path="/staff" component={StaffPortal} />
+            <Route path="/staff" component={StaffGate} />
             <Route component={NotFound} />
           </Switch>
         </main>

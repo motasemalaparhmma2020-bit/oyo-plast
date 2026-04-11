@@ -3364,8 +3364,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { eq: eqFn } = await import("drizzle-orm");
       // Set role to 'customer' to deactivate (not delete — keeps order history)
       const staffId = parseInt(req.params.id);
-      await dbI.update(usersT).set({ role: "customer", accountType: "customer" }).where(eqFn(usersT.id, staffId));
-      await dbI.query(`UPDATE team_members SET is_active=false WHERE user_id=$1`, [staffId]);
+      await dbI.execute(`UPDATE users SET role='customer', account_type='customer' WHERE id=$1` as any, [req.params.id]);
+      await dbI.execute(`UPDATE team_members SET is_active=false WHERE user_id=$1` as any, [req.params.id]);
       res.json({ message: "تم إلغاء تفعيل الحساب" });
     } catch (e: any) {
       res.status(500).json({ message: "فشل حذف الموظف", error: e.message });

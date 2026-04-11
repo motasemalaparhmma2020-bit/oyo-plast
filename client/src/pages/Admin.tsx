@@ -3963,8 +3963,9 @@ export default function Admin() {
       if (data.imageUrls && data.imageUrls.length > 0) {
         payload.imageUrls = data.imageUrls;
         payload.imageUrl = data.imageUrls[0];
-      } else if (data.imageUrl) {
-        payload.imageUrl = data.imageUrl;
+      } else {
+        delete payload.imageUrls;
+        if (data.imageUrl) payload.imageUrl = data.imageUrl;
       }
       
       const res = await fetch(`/api/admin/products/${id}`, {
@@ -4160,7 +4161,7 @@ export default function Admin() {
     // Parse colorImages JSON if present
     try {
       const ci = (product as any).colorImages;
-      setColorImagesList(ci ? JSON.parse(ci) : []);
+      setColorImagesList(ci ? (typeof ci === "string" ? JSON.parse(ci) : ci) : []);
     } catch {
       setColorImagesList([]);
     }
@@ -4168,7 +4169,7 @@ export default function Admin() {
     try {
       const sv = (product as any).smartVariants;
       if (sv) {
-        const parsed = JSON.parse(sv);
+        const parsed = typeof sv === "string" ? JSON.parse(sv) : sv;
         setSmartVariantsList(parsed.variants ?? []);
         setSmartActiveTypes(parsed.activeTypes ?? []);
       } else {
