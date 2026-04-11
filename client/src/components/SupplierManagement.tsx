@@ -61,7 +61,7 @@ function SupplierForm({
     commissionRate: initial?.commission_rate || "10",
     notes: initial?.notes || "",
     isActive: initial?.is_active !== false,
-    pin: initial?.pin || "1234",
+    pin: (initial as any)?.pin || "1234",
   });
   const [cityInput, setCityInput] = useState("");
 
@@ -83,7 +83,7 @@ function SupplierForm({
 
   return (
     <div className="space-y-4 text-right" dir="rtl">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <Label className="text-xs">اسم المورد / الشركة *</Label>
           <Input
@@ -214,8 +214,8 @@ function SupplierForm({
       )}
 
       <div className="flex gap-2 justify-end pt-2 border-t">
-        <Button variant="outline" onClick={onClose}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={isPending || !form.name || !form.phone}>
+        <Button variant="outline" onClick={onClose} data-testid="button-supplier-cancel">إلغاء</Button>
+        <Button onClick={handleSubmit} disabled={isPending || !form.name || !form.phone} data-testid="button-save-supplier">
           {isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
           <span className="mr-1">{initial?.id ? "حفظ التعديلات" : "إضافة المورد"}</span>
         </Button>
@@ -484,6 +484,7 @@ export default function SupplierManagement({ adminToken }: SupplierManagementPro
 
   const { mutate: addSupplier, isPending: isAdding } = useMutation({
     mutationFn: async (data: any) => {
+      if (!adminToken) throw new Error("رمز الأدمن مفقود");
       const res = await fetch("/api/admin/suppliers", {
         method: "POST",
         headers: { "x-admin-token": adminToken!, "Content-Type": "application/json" },
@@ -498,6 +499,7 @@ export default function SupplierManagement({ adminToken }: SupplierManagementPro
 
   const { mutate: updateSupplier, isPending: isUpdating } = useMutation({
     mutationFn: async (data: any) => {
+      if (!adminToken) throw new Error("رمز الأدمن مفقود");
       const res = await fetch(`/api/admin/suppliers/${editSupplier!.id}`, {
         method: "PUT",
         headers: { "x-admin-token": adminToken!, "Content-Type": "application/json" },
@@ -512,6 +514,7 @@ export default function SupplierManagement({ adminToken }: SupplierManagementPro
 
   const { mutate: deleteSupplier } = useMutation({
     mutationFn: async (id: number) => {
+      if (!adminToken) throw new Error("رمز الأدمن مفقود");
       const res = await fetch(`/api/admin/suppliers/${id}`, {
         method: "DELETE",
         headers: { "x-admin-token": adminToken! },
@@ -727,7 +730,7 @@ export default function SupplierManagement({ adminToken }: SupplierManagementPro
               إضافة مورد
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl" dir="rtl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
             <DialogHeader>
               <DialogTitle>إضافة مورد جديد</DialogTitle>
             </DialogHeader>
