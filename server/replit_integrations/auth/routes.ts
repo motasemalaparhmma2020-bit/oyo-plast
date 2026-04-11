@@ -308,6 +308,30 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
+  // ── تحديث الاسم بعد التحقق من OTP (المستخدم مسجّل بالفعل) ──────────
+  app.post("/api/auth/update-profile", async (req: any, res) => {
+    if (!req.isAuthenticated() || !req.user?.claims?.sub) {
+      return res.status(401).json({ message: "غير مصرح" });
+    }
+    try {
+      const { fullName } = req.body;
+      const userId = req.user.claims.sub;
+      if (fullName && fullName.trim().length >= 2) {
+        const client = await pool.connect();
+        try {
+          await client.query(`UPDATE users SET full_name = $1 WHERE id = $2`, [fullName.trim(), userId]);
+        } finally {
+          client.release();
+        }
+      }
+      const user = await authStorage.getUser(userId);
+      res.json({ message: "تم تحديث الملف الشخصي", user });
+    } catch (error) {
+      console.error("Update profile error:", error);
+      res.status(500).json({ message: "حدث خطأ أثناء تحديث البيانات" });
+    }
+  });
+
   // Get current user (for email auth)
   app.get("/api/auth/me", async (req: any, res) => {
     if (!req.isAuthenticated() || !req.user?.claims?.sub) {

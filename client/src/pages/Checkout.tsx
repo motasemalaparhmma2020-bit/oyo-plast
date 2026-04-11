@@ -27,7 +27,7 @@ export default function Checkout() {
   const { data: authCartItems, isLoading } = useCart();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, isLoading: isAuthLoading } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addressRef = useRef<HTMLDivElement>(null);
 
@@ -405,10 +405,39 @@ export default function Checkout() {
     }
   };
 
-  if (isLoadingCart) {
+  if (isLoadingCart || isAuthLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // ── تسجيل الدخول إلزامي قبل إتمام الطلب ─────────────────────────
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex flex-col items-center justify-center p-6 text-center" dir="rtl">
+        <div className="bg-card border rounded-2xl shadow-xl p-8 w-full max-w-sm space-y-5">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+            <ArrowRight className="h-8 w-8 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-xl font-extrabold mb-2">يجب تسجيل الدخول أولاً</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              لإتمام طلبك وتتبّعه لاحقاً، يرجى تسجيل الدخول أو إنشاء حساب
+            </p>
+          </div>
+          <Link href="/auth?redirect=/checkout">
+            <Button className="w-full h-12 text-base font-extrabold rounded-xl" data-testid="button-go-login">
+              تسجيل الدخول / إنشاء حساب
+            </Button>
+          </Link>
+          <Link href="/">
+            <button className="text-sm text-muted-foreground hover:text-foreground w-full py-1" data-testid="button-back-home">
+              العودة للمتجر
+            </button>
+          </Link>
+        </div>
       </div>
     );
   }
