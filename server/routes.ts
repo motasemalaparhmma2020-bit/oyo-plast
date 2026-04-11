@@ -1689,7 +1689,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       // منح نقاط الولاء عند تسليم الطلب
       if (newStatus === "delivered" && order?.userId && order?.total) {
-        awardOrderPoints(order.userId, order.id, Number(order.total));
+        await awardOrderPoints(Number(order.userId), order.id, Number(order.total));
       }
     } catch (e: any) {
       res.status(500).json({ message: "فشل تحديث حالة الطلب", details: e.message });
@@ -3363,8 +3363,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { users: usersT } = await import("@shared/schema");
       const { eq: eqFn } = await import("drizzle-orm");
       // Set role to 'customer' to deactivate (not delete — keeps order history)
-      await dbI.update(usersT).set({ role: "customer", accountType: "customer" }).where(eqFn(usersT.id, req.params.id));
-      await dbI.execute(`UPDATE team_members SET is_active=false WHERE user_id=$1` as any, [req.params.id]);
+      const staffId = parseInt(req.params.id);
+      await dbI.update(usersT).set({ role: "customer", accountType: "customer" }).where(eqFn(usersT.id, staffId));
+      await dbI.query(`UPDATE team_members SET is_active=false WHERE user_id=$1`, [staffId]);
       res.json({ message: "تم إلغاء تفعيل الحساب" });
     } catch (e: any) {
       res.status(500).json({ message: "فشل حذف الموظف", error: e.message });
