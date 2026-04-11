@@ -1084,7 +1084,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete("/api/admin/products/:id", requireAdmin, async (req, res) => {
     try {
-      await storage.deleteProduct(parseInt(req.params.id));
+      const pid = parseInt(req.params.id);
+      const { pool: dbPool } = await import("./db");
+      // حذف آمن: نزيل أو نلغي كل المراجع قبل حذف المنتج
+      await dbPool.query(`DELETE FROM cart_items WHERE product_id = $1`, [pid]);
+      await dbPool.query(`UPDATE order_items SET product_id = NULL WHERE product_id = $1`, [pid]);
+      await dbPool.query(`DELETE FROM reviews WHERE product_id = $1`, [pid]);
+      await dbPool.query(`DELETE FROM wishlist WHERE product_id = $1`, [pid]);
+      await dbPool.query(`DELETE FROM product_views WHERE product_id = $1`, [pid]);
+      await dbPool.query(`DELETE FROM product_costs WHERE product_id = $1`, [pid]);
+      await storage.deleteProduct(pid);
       res.json({ message: "تم الحذف بنجاح" });
     } catch (e: any) {
       res.status(500).json({ message: "فشل حذف المنتج", details: e.message });

@@ -3909,7 +3909,7 @@ export default function Admin() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.details || 'Failed to create product');
+        throw new Error(err.message || err.details || 'فشل إنشاء المنتج');
       }
       return res.json();
     },
@@ -3925,8 +3925,12 @@ export default function Admin() {
       setSmartVariantsList([]);
       setSmartActiveTypes([]);
     },
-    onError: () => {
-      toast({ title: "حدث خطأ أثناء إضافة المنتج", variant: "destructive" });
+    onError: (error: any) => {
+      toast({ 
+        title: "حدث خطأ أثناء إضافة المنتج", 
+        description: error.message || "تأكد من اكتمال جميع الحقول المطلوبة",
+        variant: "destructive" 
+      });
     }
   });
 
@@ -4188,6 +4192,23 @@ export default function Admin() {
 
   const handleProductSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const imageUrl = productForm.imageUrls[0] || productForm.imageUrl;
+    if (!productForm.name?.trim()) {
+      toast({ title: "يرجى إدخال اسم المنتج", variant: "destructive" });
+      return;
+    }
+    if (!productForm.price) {
+      toast({ title: "يرجى إدخال سعر المنتج", variant: "destructive" });
+      return;
+    }
+    if (!productForm.categoryId) {
+      toast({ title: "يرجى اختيار قسم المنتج", variant: "destructive" });
+      return;
+    }
+    if (!imageUrl) {
+      toast({ title: "يرجى رفع صورة واحدة على الأقل للمنتج", variant: "destructive" });
+      return;
+    }
     if (editingProduct) {
       updateProductMutation.mutate({ id: editingProduct.id, data: productForm });
     } else {
