@@ -189,6 +189,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/admin/upload", requireAdmin, upload.single("image"), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: "لم يتم رفع صورة" });
     try {
+      // ─── Cloudinary upload (if configured) ──────────────────────────
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+      const apiKey = process.env.CLOUDINARY_API_KEY;
+      const apiSecret = process.env.CLOUDINARY_API_SECRET;
+      if (cloudName && apiKey && apiSecret) {
+        const { v2: cloudinary } = await import("cloudinary");
+        cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
+        const uploadRes: any = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "oyo-plast", resource_type: "image" },
+            (err: any, result: any) => err ? reject(err) : resolve(result)
+          );
+          stream.end(req.file!.buffer);
+        });
+        return res.json({ imageUrl: uploadRes.secure_url, provider: "cloudinary" });
+      }
+      // ─── Fallback: base64 ────────────────────────────────────────────
       const { pool: dbPool } = await import("./db");
       const settings = await getImageSettings(dbPool);
       const { buffer, mimeOut } = await processImage(req.file.buffer, req.file.mimetype, {
@@ -198,10 +215,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
       const base64 = buffer.toString("base64");
       const imageUrl = `data:${mimeOut};base64,${base64}`;
-      res.json({ imageUrl });
-    } catch {
+      res.json({ imageUrl, provider: "base64" });
+    } catch (e: any) {
       const base64 = req.file.buffer.toString("base64");
-      res.json({ imageUrl: `data:${req.file.mimetype};base64,${base64}` });
+      res.json({ imageUrl: `data:${req.file.mimetype};base64,${base64}`, provider: "base64" });
     }
   });
 
@@ -1003,6 +1020,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json(reviews);
     } catch (e: any) {
       res.status(500).json({ message: "فشل جلب التقييمات" });
+    }
+  });
+
+  // ─── Approve review ──────────────────────────────────────────────
+  app.patch("/api/admin/reviews/:id/approve", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { approved } = req.body;
+      await dbPool.query(`UPDATE reviews SET is_approved=$1 WHERE id=$2`, [approved !== false, req.params.id]);
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث التقييم" });
     }
   });
 
@@ -3174,11 +3203,95 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ─── Admin Product Stock ─────────────────────────────────────────
   app.patch("/api/admin/products/:id/stock", requireAdmin, async (req, res) => {
     try {
-      const product = await storage.updateProduct(parseInt(req.params.id), { stock: req.body.stock });
-      res.json(product);
+      const { pool: dbPool } = await import("./db");
+      const id = parseInt(req.params.id);
+      if (req.body.reorderPoint !== undefined) {
+        await dbPool.query(`UPDATE products SET reorder_point=$1 WHERE id=$2`, [req.body.reorderPoint, id]);
+      }
+      if (req.body.stock !== undefined) {
+        await storage.updateProduct(id, { stock: req.body.stock });
+      }
+      const r = await dbPool.query(`SELECT id, name, stock, reorder_point FROM products WHERE id=$1`, [id]);
+      res.json(r.rows[0]);
     } catch (e: any) {
       res.status(500).json({ message: "فشل تحديث المخزون", details: e.message });
     }
+  });
+
+  // ─── Admin Payroll (accessible by admin token) ────────────────────
+  app.get("/api/admin/payroll", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const period = (req.query.period as string) || new Date().toISOString().slice(0, 7);
+      const staffRes = await dbPool.query(`
+        SELECT u.id, u.full_name, u.email, u.role
+        FROM users u WHERE u.role IN ('delivery','order_manager','product_manager','finance','owner')
+          AND u.id IN (SELECT user_id FROM team_members WHERE is_active=true)
+        ORDER BY u.role, u.full_name
+      `);
+      const ratesRes = await dbPool.query(`SELECT * FROM staff_rate_config`);
+      const rates: Record<string, any> = {};
+      ratesRes.rows.forEach((r: any) => { rates[r.role] = r; });
+
+      const result = [];
+      for (const staff of staffRes.rows) {
+        const rate = rates[staff.role] || { base_salary: 0, rate_per_order: 0, payment_model: 'fixed', working_days_per_month: 26 };
+        const attRes = await dbPool.query(
+          `SELECT COUNT(DISTINCT date) as days FROM attendance WHERE user_id=$1 AND date LIKE $2 || '%' AND check_out IS NOT NULL`,
+          [staff.id, period]
+        );
+        const attendanceDays = parseInt(attRes.rows[0]?.days || 0);
+        const workingDays = Number(rate.working_days_per_month) || 26;
+        const absenceDays = Math.max(0, workingDays - attendanceDays);
+        const baseSalary = Number(rate.base_salary);
+        const deductionPerDay = workingDays > 0 ? baseSalary / workingDays : 0;
+        const deductions = rate.payment_model !== 'per_order' ? absenceDays * deductionPerDay : 0;
+        let ordersCompleted = 0;
+        if (staff.role === 'delivery') {
+          const ordRes = await dbPool.query(
+            `SELECT COUNT(*) as cnt FROM orders WHERE assigned_to=$1 AND status IN ('delivered','completed') AND DATE_TRUNC('month', updated_at) = DATE_TRUNC('month', ($2 || '-01')::date)`,
+            [staff.id, period]
+          );
+          ordersCompleted = parseInt(ordRes.rows[0]?.cnt || 0);
+        }
+        const orderBonus = ordersCompleted * Number(rate.rate_per_order);
+        const savedRes = await dbPool.query(`SELECT * FROM payroll_periods WHERE user_id=$1 AND period=$2`, [staff.id, period]);
+        const saved = savedRes.rows[0];
+        const bonuses = Number(saved?.bonuses || 0);
+        let totalPay = 0;
+        if (rate.payment_model === 'fixed') totalPay = baseSalary - deductions + bonuses;
+        else if (rate.payment_model === 'per_order') totalPay = orderBonus + bonuses;
+        else totalPay = (baseSalary - deductions) + orderBonus + bonuses;
+
+        result.push({
+          userId: staff.id, fullName: staff.full_name || staff.email, role: staff.role, period,
+          baseSalary, ratePerOrder: Number(rate.rate_per_order), paymentModel: rate.payment_model,
+          ordersCompleted, orderBonus, attendanceDays, absenceDays,
+          deductions: Math.round(deductions), bonuses,
+          totalPay: Math.max(0, Math.round(totalPay)),
+          isPaid: saved?.is_paid || false, savedId: saved?.id || null, notes: saved?.notes || null,
+        });
+      }
+      res.json(result);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/admin/payroll/save", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { userId, period, totalPay, bonuses, notes, isPaid, ...rest } = req.body;
+      await dbPool.query(`
+        INSERT INTO payroll_periods (user_id, period, base_salary, orders_completed, order_bonus,
+          attendance_days, absence_days, deductions, bonuses, total_pay, is_paid, paid_at, notes)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        ON CONFLICT (user_id, period) DO UPDATE SET
+          bonuses=EXCLUDED.bonuses, total_pay=EXCLUDED.total_pay,
+          is_paid=EXCLUDED.is_paid, paid_at=EXCLUDED.paid_at, notes=EXCLUDED.notes
+      `, [userId, period, rest.baseSalary||0, rest.ordersCompleted||0, rest.orderBonus||0,
+          rest.attendanceDays||0, rest.absenceDays||0, rest.deductions||0,
+          bonuses||0, totalPay, isPaid||false, isPaid ? new Date() : null, notes||null]);
+      res.json({ message: "تم الحفظ" });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
   // ─── Admin Settings ──────────────────────────────────────────────

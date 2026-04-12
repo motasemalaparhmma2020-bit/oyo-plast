@@ -9,6 +9,7 @@ import AdminPricing from "@/components/AdminPricing";
 import AdminSecurityLogs from "@/components/AdminSecurityLogs";
 import AdminSupplierProducts from "@/components/AdminSupplierProducts";
 import { AdminReviews } from "@/components/AdminReviews";
+import AdminPayroll from "@/components/AdminPayroll";
 import AdminSectionSettings from "@/components/AdminSectionSettings";
 import AdminPDPLayout from "@/components/AdminPDPLayout";
 import { AdminSubcategories } from "@/components/AdminSubcategories";
@@ -3977,14 +3978,14 @@ export default function Admin() {
   });
 
   const updateProductStock = useMutation({
-    mutationFn: async ({ productId, stock }: { productId: number; stock: number }) => {
+    mutationFn: async ({ productId, stock, reorderPoint }: { productId: number; stock?: number; reorderPoint?: number }) => {
       const res = await fetch(`/api/admin/products/${productId}/stock`, {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',
           'x-admin-token': adminToken || '' 
         },
-        body: JSON.stringify({ stock })
+        body: JSON.stringify({ ...(stock !== undefined ? { stock } : {}), ...(reorderPoint !== undefined ? { reorderPoint } : {}) })
       });
       if (!res.ok) throw new Error('Failed to update stock');
       return res.json();
@@ -5998,55 +5999,83 @@ export default function Admin() {
                   </div>
                 ) : productsList.length > 0 ? (
                   <div className="space-y-2">
-                    {productsList.map((product) => (
-                      <div
-                        key={product.id}
-                        className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm"
-                        data-testid={`row-inventory-${product.id}`}
-                      >
-                        {/* صورة المنتج */}
-                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted">
-                          <img
-                            src={product.imageUrl}
-                            alt={product.name}
-                            className="h-full w-full object-contain"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                          />
-                        </div>
-
-                        {/* اسم المنتج والأسعار */}
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-sm truncate">{product.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatPrice(product.price)} ر.ي
-                            {product.priceSar ? ` · ${formatPrice(product.priceSar)} ر.س` : ''}
-                          </p>
-                        </div>
-
-                        {/* حالة المخزون الحالي */}
-                        <Badge
-                          variant={product.stock > 10 ? "default" : product.stock > 0 ? "secondary" : "destructive"}
-                          className="shrink-0 text-xs"
+                    {/* ─── مفتاح الألوان ─── */}
+                    <div className="flex gap-3 text-xs text-muted-foreground mb-3 flex-wrap">
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500 inline-block" />متاح بشكل جيد</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-yellow-400 inline-block" />قارب على النفاد</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500 inline-block" />نفذ / تحت الحد</span>
+                    </div>
+                    {productsList.map((product) => {
+                      const reorderPt = (product as any).reorderPoint ?? (product as any).reorder_point ?? 5;
+                      const stockStatus = product.stock === 0 ? "out" : product.stock <= reorderPt ? "low" : "ok";
+                      const borderColor = stockStatus === "out" ? "border-red-300 bg-red-50/40" : stockStatus === "low" ? "border-yellow-300 bg-yellow-50/40" : "border-gray-200 bg-card";
+                      const dotColor = stockStatus === "out" ? "bg-red-500" : stockStatus === "low" ? "bg-yellow-400" : "bg-green-500";
+                      return (
+                        <div
+                          key={product.id}
+                          className={`flex items-center gap-3 rounded-xl border-2 p-3 shadow-sm transition-colors ${borderColor}`}
+                          data-testid={`row-inventory-${product.id}`}
                         >
-                          {product.stock > 0 ? `${product.stock} قطعة` : 'نفذ'}
-                        </Badge>
+                          {/* مؤشر الحالة */}
+                          <div className={`w-3 h-3 rounded-full shrink-0 ${dotColor}`} />
 
-                        {/* حقل تعديل المخزون */}
-                        <Input
-                          type="number"
-                          min={0}
-                          defaultValue={product.stock}
-                          className="w-20 shrink-0 text-center"
-                          onBlur={(e) => {
-                            const newStock = parseInt(e.target.value);
-                            if (!isNaN(newStock) && newStock !== product.stock) {
-                              updateProductStock.mutate({ productId: product.id, stock: newStock });
-                            }
-                          }}
-                          data-testid={`input-stock-${product.id}`}
-                        />
-                      </div>
-                    ))}
+                          {/* صورة المنتج */}
+                          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-muted">
+                            <img
+                              src={product.imageUrl}
+                              alt={product.name}
+                              className="h-full w-full object-contain"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          </div>
+
+                          {/* اسم المنتج */}
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-sm truncate">{product.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatPrice(product.price)} ر.ي
+                              {stockStatus === "low" && <span className="text-yellow-600 font-medium mr-2">⚠️ قارب على النفاد</span>}
+                              {stockStatus === "out" && <span className="text-red-600 font-medium mr-2">🔴 نفذ من المخزون</span>}
+                            </p>
+                          </div>
+
+                          {/* حد إعادة الطلب */}
+                          <div className="flex flex-col items-center gap-1 shrink-0">
+                            <span className="text-[10px] text-muted-foreground">الحد الأدنى</span>
+                            <Input
+                              type="number"
+                              min={0}
+                              defaultValue={reorderPt}
+                              className="w-16 h-7 text-center text-xs"
+                              title="حد إعادة الطلب"
+                              onBlur={(e) => {
+                                const val = parseInt(e.target.value);
+                                if (!isNaN(val)) updateProductStock.mutate({ productId: product.id, reorderPoint: val });
+                              }}
+                              data-testid={`input-reorder-${product.id}`}
+                            />
+                          </div>
+
+                          {/* المخزون الحالي */}
+                          <div className="flex flex-col items-center gap-1 shrink-0">
+                            <span className="text-[10px] text-muted-foreground">المخزون</span>
+                            <Input
+                              type="number"
+                              min={0}
+                              defaultValue={product.stock}
+                              className={`w-20 h-7 text-center text-xs font-bold ${stockStatus === "out" ? "border-red-400 text-red-600" : stockStatus === "low" ? "border-yellow-400 text-yellow-700" : ""}`}
+                              onBlur={(e) => {
+                                const newStock = parseInt(e.target.value);
+                                if (!isNaN(newStock) && newStock !== product.stock) {
+                                  updateProductStock.mutate({ productId: product.id, stock: newStock });
+                                }
+                              }}
+                              data-testid={`input-stock-${product.id}`}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-10 text-muted-foreground">
@@ -6248,7 +6277,16 @@ export default function Admin() {
 
           {/* ─── Team Management Tab ───────────────────────────────────── */}
           <TabsContent value="team">
-            <TeamManagement adminToken={adminToken} />
+            <div className="space-y-8">
+              <TeamManagement adminToken={adminToken} />
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-6 w-1 rounded bg-primary" />
+                  <h2 className="text-lg font-bold">كشف الرواتب الشهري</h2>
+                </div>
+                <AdminPayroll adminToken={adminToken} />
+              </div>
+            </div>
           </TabsContent>
 
           {/* ─── Section Settings Tab ──────────────────────────────────── */}

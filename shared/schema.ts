@@ -36,6 +36,7 @@ export const products = pgTable("products", {
   imageUrl: text("image_url").notNull(),
   imageUrls: text("image_urls").array(), // Multiple product images (gallery)
   stock: integer("stock").default(100).notNull(),
+  reorderPoint: integer("reorder_point").default(10), // حد التنبيه للمخزون المنخفض
   colors: text("colors").array(), // For color customization
   sizes: text("sizes").array(), // For size customization (e.g., "صغير", "وسط", "كبير")
   allowDesignUpload: boolean("allow_design_upload").default(false).notNull(),
@@ -202,6 +203,7 @@ export const reviews = pgTable("reviews", {
   rating: integer("rating").notNull(), // 1-5
   comment: text("comment"),
   imageUrl: text("image_url"), // Customer uploaded photo of the product
+  isApproved: boolean("is_approved").default(false).notNull(), // موافقة الأدمن قبل النشر
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -1,5 +1,6 @@
 import { useParams, Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
 import { Product, Review } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { useSEO } from "@/hooks/use-seo";
@@ -92,12 +93,29 @@ export default function ProductDetail() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const reviewImageRef = useRef<HTMLInputElement>(null);
 
+  const { isAuthenticated } = useAuth();
+
   // ── Data fetching ───────────────────────────────────────────────────────
   const { data: product, isLoading } = useQuery<Product>({ queryKey: ['/api/products', id], staleTime: 5 * 60000, gcTime: 10 * 60000 });
   const { data: displaySettings } = useQuery<any>({ queryKey: ["/api/display-settings"], staleTime: 60000 });
   const { data: pdpRaw } = useQuery<PdpLayout>({ queryKey: ["/api/pdp-layout"], staleTime: 60000 });
   const { data: reviews = [] } = useQuery<Review[]>({ queryKey: ['/api/products', id, 'reviews'], enabled: !!id, staleTime: 2 * 60000 });
   const { data: allProducts = [] } = useQuery<Product[]>({ queryKey: ['/api/products'], staleTime: 3 * 60000, gcTime: 10 * 60000 });
+
+  // ── Check if user has a delivered order containing this product ──────────
+  const { data: userOrders = [] } = useQuery<any[]>({
+    queryKey: ["/api/orders"],
+    enabled: isAuthenticated,
+    staleTime: 2 * 60000,
+  });
+  const hasDeliveredOrder = useMemo(() => {
+    if (!isAuthenticated || !id) return false;
+    return userOrders.some(order =>
+      (order.status === "delivered" || order.status === "completed") &&
+      Array.isArray(order.items) &&
+      order.items.some((item: any) => item.product_id === Number(id) || item.productId === Number(id))
+    );
+  }, [userOrders, id, isAuthenticated]);
 
   // ── PDP Layout ─────────────────────────────────────────────────────────
   const pdp: PdpLayout = useMemo(() => {
@@ -877,47 +895,68 @@ export default function ProductDetail() {
             )}
             {activeTab === "reviews" && (
               <div className="space-y-4">
-                {/* Add Review */}
-                <div className="border rounded-xl p-4 space-y-3">
-                  <p className="font-semibold text-sm">أضف تقييمك</p>
-                  <div className="flex gap-1">
-                    {[1,2,3,4,5].map(star => (
-                      <button key={star} onClick={() => setReviewRating(star)} className="p-0.5" data-testid={`button-rating-${star}`}>
-                        <Star className={`h-7 w-7 transition-colors ${star <= reviewRating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
-                      </button>
-                    ))}
-                  </div>
-                  <Textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)}
-                    placeholder="شاركنا رأيك في هذا المنتج..." className="resize-none text-sm" rows={2}
-                    data-testid="input-review-comment" />
-                  <div className="flex items-center gap-3">
-                    <input ref={reviewImageRef} type="file" accept="image/*" className="hidden"
-                      onChange={handleReviewImageUpload} disabled={isUploadingReviewImage}
-                      data-testid="input-review-image" />
-                    <Button type="button" variant="outline" size="sm"
-                      onClick={() => reviewImageRef.current?.click()} disabled={isUploadingReviewImage}
-                      className="gap-2 text-xs" data-testid="button-upload-review-image">
-                      {isUploadingReviewImage ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
-                      {isUploadingReviewImage ? 'جاري...' : 'أضف صورة'}
+                {/* Add Review - only for buyers with delivered orders */}
+                {!isAuthenticated ? (
+                  <div className="border rounded-xl p-4 text-center space-y-2 bg-gray-50 dark:bg-gray-800/50">
+                    <Star className="h-8 w-8 mx-auto text-yellow-400 fill-yellow-200" />
+                    <p className="font-semibold text-sm">هل اشتريت هذا المنتج؟</p>
+                    <p className="text-xs text-muted-foreground">سجّل دخولك لتترك تقييمك</p>
+                    <Button size="sm" variant="outline" onClick={() => setLocation("/login")} className="text-xs" data-testid="button-login-to-review">
+                      تسجيل الدخول
                     </Button>
-                    {reviewImageUrl && (
-                      <div className="relative">
-                        <img src={reviewImageUrl} alt="preview" className="w-12 h-12 object-cover rounded-lg border" />
-                        <button onClick={() => setReviewImageUrl(null)}
-                          className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-destructive text-white rounded-full flex items-center justify-center"
-                          data-testid="button-remove-review-image">
-                          <X className="h-2.5 w-2.5" />
+                  </div>
+                ) : hasDeliveredOrder ? (
+                  <div className="border rounded-xl p-4 space-y-3 bg-green-50/30 dark:bg-green-950/20 border-green-200">
+                    <p className="font-semibold text-sm flex items-center gap-2">
+                      <Star className="h-4 w-4 text-yellow-500 fill-yellow-400" />
+                      أضف تقييمك <span className="text-xs text-green-600 font-normal">✅ عميل مشترٍ</span>
+                    </p>
+                    <div className="flex gap-1">
+                      {[1,2,3,4,5].map(star => (
+                        <button key={star} onClick={() => setReviewRating(star)} className="p-0.5" data-testid={`button-rating-${star}`}>
+                          <Star className={`h-7 w-7 transition-colors ${star <= reviewRating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
                         </button>
-                      </div>
-                    )}
-                    <Button size="sm" onClick={() => submitReviewMutation.mutate({ rating: reviewRating, comment: reviewComment, imageUrl: reviewImageUrl || undefined })}
-                      disabled={submitReviewMutation.isPending} className="mr-auto text-xs"
-                      data-testid="button-submit-review">
-                      {submitReviewMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : null}
-                      إرسال
-                    </Button>
+                      ))}
+                    </div>
+                    <Textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)}
+                      placeholder="شاركنا رأيك في هذا المنتج..." className="resize-none text-sm" rows={2}
+                      data-testid="input-review-comment" />
+                    <div className="flex items-center gap-3">
+                      <input ref={reviewImageRef} type="file" accept="image/*" className="hidden"
+                        onChange={handleReviewImageUpload} disabled={isUploadingReviewImage}
+                        data-testid="input-review-image" />
+                      <Button type="button" variant="outline" size="sm"
+                        onClick={() => reviewImageRef.current?.click()} disabled={isUploadingReviewImage}
+                        className="gap-2 text-xs" data-testid="button-upload-review-image">
+                        {isUploadingReviewImage ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
+                        {isUploadingReviewImage ? 'جاري...' : 'أضف صورة'}
+                      </Button>
+                      {reviewImageUrl && (
+                        <div className="relative">
+                          <img src={reviewImageUrl} alt="preview" className="w-12 h-12 object-cover rounded-lg border" />
+                          <button onClick={() => setReviewImageUrl(null)}
+                            className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-destructive text-white rounded-full flex items-center justify-center"
+                            data-testid="button-remove-review-image">
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        </div>
+                      )}
+                      <Button size="sm" onClick={() => submitReviewMutation.mutate({ rating: reviewRating, comment: reviewComment, imageUrl: reviewImageUrl || undefined })}
+                        disabled={submitReviewMutation.isPending} className="mr-auto text-xs"
+                        data-testid="button-submit-review">
+                        {submitReviewMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : null}
+                        إرسال التقييم
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">سيظهر تقييمك بعد مراجعة الفريق</p>
                   </div>
-                </div>
+                ) : (
+                  <div className="border rounded-xl p-4 text-center space-y-2 bg-gray-50 dark:bg-gray-800/50">
+                    <Package className="h-8 w-8 mx-auto text-gray-300" />
+                    <p className="font-semibold text-sm">التقييم متاح للمشترين فقط</p>
+                    <p className="text-xs text-muted-foreground">يمكنك تقييم المنتج بعد استلام طلبك</p>
+                  </div>
+                )}
                 {/* Reviews List */}
                 {reviews.length > 0 ? (
                   <div className="space-y-3">

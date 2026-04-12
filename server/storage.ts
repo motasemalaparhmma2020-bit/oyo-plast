@@ -462,7 +462,7 @@ export class DatabaseStorage implements IStorage {
       `SELECT r.*, u.full_name as user_name, u.id as user_id
        FROM reviews r
        LEFT JOIN users u ON r.user_id = u.id
-       WHERE r.product_id = $1
+       WHERE r.product_id = $1 AND r.is_approved = true
        ORDER BY r.created_at DESC`,
       [productId]
     );
