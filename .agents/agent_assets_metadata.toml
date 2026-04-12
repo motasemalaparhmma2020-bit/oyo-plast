@@ -1,5 +1,100 @@
 uploads = []
-generated = []
+
+[[generated]]
+id = "nHQryMC-kfMoEDD-GJcKB"
+uri = "file://attached_assets/generated_images/app_icon_512.png"
+type = "image"
+title = "oyo plast app icon"
+
+[[generated]]
+id = "McjbqONjJmqEFX-eRk5k6"
+uri = "file://attached_assets/generated_images/feature_graphic_1024x500.png"
+type = "image"
+title = "play store feature graphic"
+
+[[generated]]
+id = "fvxLhCQeaeHQxUS-BhGT9"
+uri = "file://attached_assets/generated_images/banner_hero_main.png"
+type = "image"
+title = "hero banner main"
+
+[[generated]]
+id = "XFtlHoI3U3poPV7ruqS-A"
+uri = "file://attached_assets/generated_images/banner_offers.png"
+type = "image"
+title = "offers banner"
+
+[[generated]]
+id = "nCCz1x75kVvAgv-hAAoOo"
+uri = "file://attached_assets/generated_images/category_cartons.png"
+type = "image"
+title = "cartons category icon"
+
+[[generated]]
+id = "2JLl31zoga97FufrcD1O4"
+uri = "file://attached_assets/generated_images/category_bags.png"
+type = "image"
+title = "plastic bags category icon"
+
+[[generated]]
+id = "o_JgnM6CA396spLlbjEWt"
+uri = "file://attached_assets/generated_images/category_rolls.png"
+type = "image"
+title = "film rolls category icon"
+
+[[generated]]
+id = "bZQGKE5JoPGdiduMGzGZ6"
+uri = "file://attached_assets/generated_images/category_tape.png"
+type = "image"
+title = "tape category icon"
+
+[[generated]]
+id = "fbpLup5pkpVY4zi90xGUS"
+uri = "file://attached_assets/generated_images/category_bubble.png"
+type = "image"
+title = "bubble wrap category icon"
+
+[[generated]]
+id = "v_mqVpTVu-OklGt4Q8d2c"
+uri = "file://attached_assets/generated_images/category_labels.png"
+type = "image"
+title = "labels category icon"
+
+[[generated]]
+id = "3qMN8RCOUFTY9Wqrna9WO"
+uri = "file://attached_assets/generated_images/product_cardboard_boxes.png"
+type = "image"
+title = "cardboard boxes product"
+
+[[generated]]
+id = "xsTdlNZyLYAvj_RvaL6fR"
+uri = "file://attached_assets/generated_images/product_plastic_bags.png"
+type = "image"
+title = "plastic bags product"
+
+[[generated]]
+id = "GH7YPfuPU3sqIFFunHc45"
+uri = "file://attached_assets/generated_images/product_stretch_film.png"
+type = "image"
+title = "stretch film roll product"
+
+[[generated]]
+id = "N0R-2x3HFOudszEggwHPu"
+uri = "file://attached_assets/generated_images/product_packing_tape.png"
+type = "image"
+title = "packing tape product"
+
+[[generated]]
+id = "DC8ka-Gvgd3hIAktNCDv4"
+uri = "file://attached_assets/generated_images/product_bubble_wrap.png"
+type = "image"
+title = "bubble wrap product"
+
+[[generated]]
+id = "2USoPRIFCkSyDoMkLerWV"
+uri = "file://attached_assets/generated_images/product_labels.png"
+type = "image"
+title = "labels stickers product"
 
 [[outputs]]
 id = "9khr7Nh71CvY-pKqMhryJ"
@@ -24,3 +119,99 @@ id = "S1h6vN2ol_HJXhgFKlI6e"
 uri = "file://oyoplast_database_backup.txt"
 type = "text"
 title = "قاعدة البيانات كاملة - المنتجات والفئات والإعدادات (78 كيلو)"
+
+[[outputs]]
+id = "fbfM4lFTqlII9qvTL0fCM"
+uri = "file://attached_assets/generated_images/app_icon_512.png"
+type = "image"
+title = "🎯 أيقونة التطبيق (512×512) — Google Play"
+
+[[outputs]]
+id = "ck5A6qORzk9s4u9B3Pi3L"
+uri = "file://attached_assets/generated_images/feature_graphic_1024x500.png"
+type = "image"
+title = "🖼️ صورة الغلاف (Feature Graphic) — Google Play"
+
+[[outputs]]
+id = "wAlwZCnzTUEaVmxljuKaE"
+uri = "file://attached_assets/generated_images/banner_hero_main.png"
+type = "image"
+title = "🌟 بنر الرئيسي — صفحة المتجر"
+
+[[outputs]]
+id = "iL2rDDuvKvE1khGBlUU-T"
+uri = "file://attached_assets/generated_images/banner_offers.png"
+type = "image"
+title = "🔥 بنر العروض والخصومات"
+
+[[outputs]]
+id = "YDAEMdDvXXTM31wluVvgg"
+uri = "file://attached_assets/generated_images/category_cartons.png"
+type = "image"
+title = "📦 قسم الكراتين"
+
+[[outputs]]
+id = "jOY5H68r63jS_3gj5PbcW"
+uri = "file://attached_assets/generated_images/category_bags.png"
+type = "image"
+title = "🛒 قسم الأكياس"
+
+[[outputs]]
+id = "0r7a8gexXDxp1V77mPlya"
+uri = "file://attached_assets/generated_images/category_rolls.png"
+type = "image"
+title = "🌀 قسم الرولات"
+
+[[outputs]]
+id = "KqzFrB13Xzrfa5q-2PNzY"
+uri = "file://attached_assets/generated_images/category_tape.png"
+type = "image"
+title = "🏷️ قسم الشريط اللاصق"
+
+[[outputs]]
+id = "ygvwYsZnmeRzawqD3UPdg"
+uri = "file://attached_assets/generated_images/category_bubble.png"
+type = "image"
+title = "🤪 قسم الفقاعات"
+
+[[outputs]]
+id = "H9JZYV78b2R97vZHTMdWQ"
+uri = "file://attached_assets/generated_images/category_labels.png"
+type = "image"
+title = "🏷️ قسم الليبلات"
+
+[[outputs]]
+id = "gbGl5P2mxqxBp0KjV3wQv"
+uri = "file://attached_assets/generated_images/product_cardboard_boxes.png"
+type = "image"
+title = "📦 صورة منتج — كراتين كرتون"
+
+[[outputs]]
+id = "sniIzcyqX-1-Y3xZCayAV"
+uri = "file://attached_assets/generated_images/product_plastic_bags.png"
+type = "image"
+title = "🛒 صورة منتج — أكياس بلاستيك"
+
+[[outputs]]
+id = "XGxpNw5Zy8jYI57_KpKpJ"
+uri = "file://attached_assets/generated_images/product_stretch_film.png"
+type = "image"
+title = "🌀 صورة منتج — رول ستريتش فيلم"
+
+[[outputs]]
+id = "ZfEzhyPUnVyF9OC22EcYs"
+uri = "file://attached_assets/generated_images/product_packing_tape.png"
+type = "image"
+title = "🏷️ صورة منتج — شريط لاصق"
+
+[[outputs]]
+id = "DMbGFeiERDym-x163I0g7"
+uri = "file://attached_assets/generated_images/product_bubble_wrap.png"
+type = "image"
+title = "🤪 صورة منتج — فقاعات واقية"
+
+[[outputs]]
+id = "YlR33S2zvPCNQ0J77PmVe"
+uri = "file://attached_assets/generated_images/product_labels.png"
+type = "image"
+title = "🏷️ صورة منتج — ليبلات وستيكر"
