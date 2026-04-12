@@ -150,6 +150,7 @@ export default function ProductDetail() {
   const installmentPercentages  = displaySettings?.installmentPercentages ?? "30,40,50";
   const detailShowAddToCart     = displaySettings?.detailShowAddToCart !== false;
   const detailShowShopNow       = displaySettings?.detailShowShopNow !== false;
+  const numberFontClass = displaySettings?.appFontNumbers ? `font-${displaySettings.appFontNumbers}` : "price-num";
 
   const marketerRef = useMemo(() => {
     const p = new URLSearchParams(window.location.search);
