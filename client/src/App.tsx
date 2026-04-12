@@ -200,6 +200,10 @@ function DisplaySettingsInjector() {
       root.style.setProperty('--font-numbers', numFont);
       root.style.setProperty('--font-sans', arabicFont);
       root.style.setProperty('--font-display', arabicFont);
+      root.style.setProperty('--font-family-arabic', arabicFont);
+      root.style.setProperty('--font-family-numbers', numFont);
+      document.body.style.fontFamily = arabicFont;
+      document.documentElement.style.setProperty('font-family', arabicFont);
     };
     fetch('/api/display-settings')
       .then(r => r.ok ? r.json() : null)
