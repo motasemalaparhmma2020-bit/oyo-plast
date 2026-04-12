@@ -148,6 +148,8 @@ export default function ProductDetail() {
   const installmentEnabled      = displaySettings?.installmentEnabled !== false;
   const installmentMinAmount    = displaySettings?.installmentMinAmount ?? 50000;
   const installmentPercentages  = displaySettings?.installmentPercentages ?? "30,40,50";
+  const detailShowAddToCart     = displaySettings?.detailShowAddToCart !== false;
+  const detailShowShopNow       = displaySettings?.detailShowShopNow !== false;
 
   const marketerRef = useMemo(() => {
     const p = new URLSearchParams(window.location.search);
@@ -445,7 +447,7 @@ export default function ProductDetail() {
             {currentStock <= 0 && (
               <Badge variant="destructive" className="absolute top-3 right-3 text-xs px-3 py-1">نفذت الكمية</Badge>
             )}
-            {currentStock > 0 && currentStock <= 10 && (
+            {currentStock > 0 && currentStock <= (product?.reorderPoint ?? 10) && (
               <Badge className="absolute top-3 right-3 text-xs px-3 py-1 bg-orange-500 text-white">
                 <Package className="h-3 w-3 ml-1" />متبقي {currentStock} فقط
               </Badge>
@@ -744,8 +746,8 @@ export default function ProductDetail() {
                 </Button>
               </div>
               {currentStock > 0 ? (
-                <span className={`text-sm font-medium ${currentStock <= 10 ? 'text-orange-600' : 'text-muted-foreground'}`}>
-                  {currentStock <= 10 ? `⚠️ متبقي ${currentStock} فقط` : `متوفر: ${currentStock} قطعة`}
+                <span className={`text-sm font-medium ${currentStock <= (product?.reorderPoint ?? 10) ? 'text-orange-600' : 'text-muted-foreground'}`}>
+                  {currentStock <= (product?.reorderPoint ?? 10) ? `⚠️ متبقي ${currentStock} فقط` : `متوفر: ${currentStock} قطعة`}
                 </span>
               ) : (
                 <span className="text-sm text-red-600 font-medium">❌ غير متوفر</span>
@@ -1065,30 +1067,34 @@ export default function ProductDetail() {
     <div className="app-fixed-bar fixed bottom-0 left-0 right-0 z-[60] flex items-stretch shadow-2xl border-t bg-white dark:bg-gray-900"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       data-testid="sticky-cart-bar">
-      <button
-        className="flex-1 flex flex-col items-center justify-center gap-0.5 text-white font-extrabold text-sm disabled:opacity-50 px-4 py-3"
-        style={{ background: '#111' }}
-        disabled={currentStock <= 0 || isPending}
-        onClick={handleAddToCart}
-        data-testid="sticky-button-add-to-cart">
-        {effectiveDiscount > 0 && (
-          <span className="text-yellow-400 text-xs font-bold leading-none mb-0.5 flex items-center gap-1">
-            <Zap className="h-3 w-3 inline" />{effectiveDiscount}% خصم!
+      {detailShowAddToCart && (
+        <button
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 text-white font-extrabold text-sm disabled:opacity-50 px-4 py-3"
+          style={{ background: '#111' }}
+          disabled={currentStock <= 0 || isPending}
+          onClick={handleAddToCart}
+          data-testid="sticky-button-add-to-cart">
+          {effectiveDiscount > 0 && (
+            <span className="text-yellow-400 text-xs font-bold leading-none mb-0.5 flex items-center gap-1">
+              <Zap className="h-3 w-3 inline" />{effectiveDiscount}% خصم!
+            </span>
+          )}
+          <span className="flex items-center gap-1.5">
+            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
+            {currentStock <= 0 ? "نفذ المخزون" : "أضف للسلة"}
           </span>
-        )}
-        <span className="flex items-center gap-1.5">
-          {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
-          {currentStock <= 0 ? "نفذ المخزون" : "أضف للسلة"}
-        </span>
-      </button>
-      <button
-        className="flex items-center justify-center gap-1.5 border-r border-gray-200 dark:border-gray-700 px-5 font-extrabold text-sm text-foreground bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
-        style={{ minWidth: 100 }}
-        disabled={currentStock <= 0}
-        onClick={handleBuyNow}
-        data-testid="sticky-button-buy-now">
-        <Zap className="h-4 w-4 text-primary" />تسوق الآن
-      </button>
+        </button>
+      )}
+      {detailShowShopNow && (
+        <button
+          className="flex items-center justify-center gap-1.5 border-r border-gray-200 dark:border-gray-700 px-5 font-extrabold text-sm text-foreground bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+          style={{ minWidth: 100 }}
+          disabled={currentStock <= 0}
+          onClick={handleBuyNow}
+          data-testid="sticky-button-buy-now">
+          <Zap className="h-4 w-4 text-primary" />تسوق الآن
+        </button>
+      )}
       <button
         className="flex items-center justify-center px-4 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
         data-testid="sticky-button-wishlist"

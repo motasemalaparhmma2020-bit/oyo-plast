@@ -2644,6 +2644,32 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
               />
             </div>
 
+            {/* أزرار السلة في صفحة المنتج */}
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>زر "أضف للسلة" في الشريط الثابت</Label>
+                <p className="text-xs text-muted-foreground">يُظهر/يُخفي زر إضافة للسلة في الشريط اللاصق أسفل صفحة المنتج</p>
+              </div>
+              <Switch
+                checked={settings?.detailShowAddToCart ?? true}
+                onCheckedChange={v => handleUpdate('detailShowAddToCart', v)}
+                disabled={updateMutation.isPending}
+                data-testid="switch-detail-show-add-to-cart"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>زر "تسوق الآن" في الشريط الثابت</Label>
+                <p className="text-xs text-muted-foreground">يُظهر/يُخفي زر الشراء الفوري في الشريط اللاصق أسفل صفحة المنتج</p>
+              </div>
+              <Switch
+                checked={settings?.detailShowShopNow ?? true}
+                onCheckedChange={v => handleUpdate('detailShowShopNow', v)}
+                disabled={updateMutation.isPending}
+                data-testid="switch-detail-show-shop-now"
+              />
+            </div>
+
             {/* لون بادج الخصم */}
             <div className="flex items-center justify-between">
               <div>
@@ -2660,6 +2686,82 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                   data-testid="input-discount-badge-bg"
                 />
                 <span className="text-xs font-mono">{settings?.discountBadgeBg ?? '#ef4444'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ─── الخطوط وتصميم الواجهة ──────────────────────────────────────── */}
+        <div className="border-2 border-purple-200 dark:border-purple-800 rounded-xl overflow-hidden">
+          <div className="bg-gradient-to-l from-purple-600 to-violet-600 px-5 py-4 flex items-center gap-3">
+            <span className="text-xl">🔤</span>
+            <div>
+              <h3 className="font-bold text-white text-base">الخطوط وتصميم الواجهة</h3>
+              <p className="text-purple-100 text-xs">اختر خط النصوص العربية وخط الأرقام لمطابقة هوية متجرك</p>
+            </div>
+          </div>
+          <div className="p-4 space-y-4 bg-white dark:bg-gray-900">
+            {/* خط العربية */}
+            <div className="space-y-2">
+              <Label className="font-semibold">خط النصوص العربية</Label>
+              <p className="text-xs text-muted-foreground">يطبّق على جميع نصوص الواجهة — العناوين، الأوصاف، الأزرار</p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { key: 'cairo',           label: 'Cairo',            preview: 'أويو بلاست',    hint: 'مستخدم في Noon / Namshi' },
+                  { key: 'tajawal',         label: 'Tajawal',          preview: 'أويو بلاست',    hint: 'مستخدم في Amazon Arabia' },
+                  { key: 'almarai',         label: 'Almarai',          preview: 'أويو بلاست',    hint: 'مستخدم في أسواق الخليج' },
+                  { key: 'ibm-plex-arabic', label: 'IBM Plex Arabic',  preview: 'أويو بلاست',    hint: 'خط تقني واضح' },
+                  { key: 'noto-kufi',       label: 'Noto Kufi Arabic', preview: 'أويو بلاست',    hint: 'خط كوفي حديث' },
+                ].map(f => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => handleUpdate('appFontArabic', f.key)}
+                    data-testid={`button-font-arabic-${f.key}`}
+                    className={`p-3 rounded-xl border-2 text-right transition-all ${
+                      (settings?.appFontArabic ?? 'cairo') === f.key
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                        : 'border-gray-200 hover:border-purple-300'
+                    }`}
+                    style={{ fontFamily: f.key === 'cairo' ? 'Cairo' : f.key === 'tajawal' ? 'Tajawal' : f.key === 'almarai' ? 'Almarai' : f.key === 'ibm-plex-arabic' ? '"IBM Plex Sans Arabic"' : '"Noto Kufi Arabic"' }}
+                  >
+                    <div className="text-sm font-bold">{f.preview}</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">{f.label}</div>
+                    <div className="text-[9px] text-purple-500 mt-0.5">{f.hint}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* خط الأرقام */}
+            <div className="space-y-2">
+              <Label className="font-semibold">خط الأرقام والأسعار</Label>
+              <p className="text-xs text-muted-foreground">يطبّق على الأرقام والأسعار فقط — يمنح مظهر متجر احترافي</p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { key: 'cairo',            label: 'Cairo',             preview: '١٢٫٥٠٠ ر.ي', hint: 'افتراضي' },
+                  { key: 'roboto-condensed', label: 'Roboto Condensed',  preview: '12,500 ر.ي',  hint: 'مستخدم في Amazon' },
+                  { key: 'barlow',           label: 'Barlow',            preview: '12,500 ر.ي',  hint: 'خط عصري' },
+                  { key: 'inter',            label: 'Inter',             preview: '12,500 ر.ي',  hint: 'مستخدم في SHEIN' },
+                  { key: 'oswald',           label: 'Oswald',            preview: '12,500 ر.ي',  hint: 'خط قوي للأسعار' },
+                ].map(f => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => handleUpdate('appFontNumbers', f.key)}
+                    data-testid={`button-font-numbers-${f.key}`}
+                    className={`p-3 rounded-xl border-2 text-right transition-all ${
+                      (settings?.appFontNumbers ?? 'cairo') === f.key
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                        : 'border-gray-200 hover:border-purple-300'
+                    }`}
+                    style={{ fontFamily: f.key === 'cairo' ? 'Cairo' : f.key === 'roboto-condensed' ? '"Roboto Condensed"' : f.key === 'barlow' ? 'Barlow' : f.key === 'inter' ? 'Inter' : 'Oswald' }}
+                  >
+                    <div className="text-base font-bold">{f.preview}</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">{f.label}</div>
+                    <div className="text-[9px] text-purple-500 mt-0.5">{f.hint}</div>
+                  </button>
+                ))}
               </div>
             </div>
           </div>

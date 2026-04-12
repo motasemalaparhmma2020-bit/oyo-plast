@@ -830,7 +830,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   const LITE_COLS = `id, name, description, price, price_sar, category_id, image_url,
-    stock, colors, sizes, allow_design_upload, bulk_pricing, size_pricing,
+    stock, reorder_point, colors, sizes, allow_design_upload, bulk_pricing, size_pricing,
     printing_price_per_unit, rating, review_count, sold_count, commission_hold_days,
     marketer_commission_rate, has_printing_options, base_bag_price, single_color_print_price,
     available_bag_colors, tags, show_reviews, show_in_printing, enable_variant_ui, color_images,
@@ -860,6 +860,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       imageUrl: rawImg.startsWith("data:") ? `/api/products/image/${r.id}` : (rawImg || null),
       imageUrls: [],
       stock: r.stock,
+      reorderPoint: r.reorder_point ?? 10,
       colors: r.colors,
       sizes: r.sizes,
       allowDesignUpload: r.allow_design_upload,
