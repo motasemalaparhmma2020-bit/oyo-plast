@@ -3294,6 +3294,156 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ════════════════════════════════════════════════════════════════
+  // ─── العقود الرقمية Digital Contracts ──────────────────────────
+  // ════════════════════════════════════════════════════════════════
+
+  // جلب نص عقد معين (admin + عام)
+  app.get("/api/contracts/:type", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`SELECT * FROM contract_texts WHERE contract_type=$1`, [req.params.type]);
+      if (!r.rows[0]) return res.status(404).json({ message: "العقد غير موجود" });
+      res.json(r.rows[0]);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // حفظ / تحديث نص عقد (admin only)
+  app.put("/api/admin/contracts/:type", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { title, body, version } = req.body;
+      await dbPool.query(`
+        INSERT INTO contract_texts (contract_type, title, body, version, updated_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (contract_type) DO UPDATE SET title=EXCLUDED.title, body=EXCLUDED.body, version=EXCLUDED.version, updated_at=NOW()
+      `, [req.params.type, title, body, version || "1.0"]);
+      res.json({ message: "تم حفظ العقد" });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // جلب جميع سجلات القبول (admin)
+  app.get("/api/admin/contracts/acceptances", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const type = req.query.type as string;
+      const q = type
+        ? `SELECT * FROM contract_acceptances WHERE contract_type=$1 ORDER BY accepted_at DESC`
+        : `SELECT * FROM contract_acceptances ORDER BY accepted_at DESC`;
+      const r = await dbPool.query(q, type ? [type] : []);
+      res.json(r.rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // قبول عقد (موردون / موظفون / مسوّقون / عملاء)
+  app.post("/api/contracts/accept", async (req: any, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { contractType, partyId, partyName, partyRole, contractVersion } = req.body;
+      if (!contractType || !partyId) return res.status(400).json({ message: "بيانات ناقصة" });
+      const ip = req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown";
+      const ua = req.headers["user-agent"] || "unknown";
+      // تجنب التكرار لنفس الشخص ونفس النوع والإصدار
+      const existing = await dbPool.query(
+        `SELECT id FROM contract_acceptances WHERE contract_type=$1 AND party_id=$2 AND contract_version=$3`,
+        [contractType, partyId, contractVersion || "1.0"]
+      );
+      if (existing.rows.length > 0) return res.json({ message: "تم التوثيق مسبقاً", alreadyAccepted: true });
+      await dbPool.query(`
+        INSERT INTO contract_acceptances (contract_type, contract_version, party_id, party_name, party_role, ip_address, user_agent)
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
+      `, [contractType, contractVersion || "1.0", String(partyId), partyName || null, partyRole || null, String(ip), String(ua)]);
+      res.json({ message: "تم توثيق القبول بنجاح", accepted: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // فحص هل وقّع طرف معين؟
+  app.get("/api/contracts/status", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { type, partyId } = req.query;
+      if (!type || !partyId) return res.status(400).json({ message: "بيانات ناقصة" });
+      const r = await dbPool.query(
+        `SELECT * FROM contract_acceptances WHERE contract_type=$1 AND party_id=$2 ORDER BY accepted_at DESC LIMIT 1`,
+        [type, partyId]
+      );
+      res.json({ accepted: r.rows.length > 0, record: r.rows[0] || null });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // إحصاء الموقّعين وغير الموقّعين (admin dashboard)
+  app.get("/api/admin/contracts/stats", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`
+        SELECT contract_type, COUNT(*) as total, MAX(accepted_at) as latest
+        FROM contract_acceptances GROUP BY contract_type
+      `);
+      res.json(r.rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  // ─── النسخ الاحتياطية Backup System ────────────────────────────
+  // ════════════════════════════════════════════════════════════════
+
+  // تصدير النسخة الاحتياطية (admin only) — JSON كامل لكل الجداول
+  app.get("/api/admin/backup/export", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const tables = [
+        "users","products","categories","subcategories","orders","order_items",
+        "reviews","suppliers","team_members","banners","offers","settings",
+        "display_settings","navigation_settings","home_sections","home_page_settings",
+        "reward_points","points_transactions","wallets","wallet_transactions",
+        "notifications","user_addresses","wishlist","cart_items",
+        "marketer_profiles","marketer_commissions","coupons","attendance",
+        "payroll_periods","staff_rate_config","contract_texts","contract_acceptances",
+        "installment_plans","supplier_payments"
+      ];
+      const backup: Record<string, any[]> = {};
+      let totalRows = 0;
+      for (const table of tables) {
+        try {
+          const r = await dbPool.query(`SELECT * FROM ${table}`);
+          backup[table] = r.rows;
+          totalRows += r.rows.length;
+        } catch { backup[table] = []; }
+      }
+      const exportObj = {
+        exportedAt: new Date().toISOString(),
+        version: "OyoPlast-v1",
+        tablesCount: tables.length,
+        totalRows,
+        data: backup,
+      };
+      const json = JSON.stringify(exportObj, null, 2);
+      const sizeBytes = Buffer.byteLength(json, "utf8");
+      // سجل في backup_logs
+      await dbPool.query(`
+        INSERT INTO backup_logs (triggered_by, size_bytes, tables_count, status)
+        VALUES ('admin', $1, $2, 'success')
+      `, [sizeBytes, tables.length]);
+      const filename = `oyoplast-backup-${new Date().toISOString().slice(0,10)}.json`;
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(json);
+    } catch (e: any) {
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query(`INSERT INTO backup_logs (triggered_by, status, notes) VALUES ('admin','failed',$1)`, [e.message]);
+      res.status(500).json({ message: "فشل تصدير النسخة الاحتياطية", details: e.message });
+    }
+  });
+
+  // سجل النسخ السابقة
+  app.get("/api/admin/backup/logs", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`SELECT * FROM backup_logs ORDER BY created_at DESC LIMIT 50`);
+      res.json(r.rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // ─── Admin Settings ──────────────────────────────────────────────
   app.get("/api/admin/settings", requireAdmin, async (_req, res) => {
     try {

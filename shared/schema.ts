@@ -630,6 +630,42 @@ export const installmentPlans = pgTable("installment_plans", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ─── جداول العقود الرقمية ──────────────────────────────────────────────────────
+// نصوص العقود (يحررها الأدمن)
+export const contractTexts = pgTable("contract_texts", {
+  id: serial("id").primaryKey(),
+  contractType: text("contract_type").notNull().unique(), // supplier | employee | marketer | terms | privacy
+  title: text("title").notNull(),
+  body: text("body").notNull(), // نص العقد كامل
+  version: text("version").default("1.0"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// سجل قبول العقود
+export const contractAcceptances = pgTable("contract_acceptances", {
+  id: serial("id").primaryKey(),
+  contractType: text("contract_type").notNull(), // supplier | employee | marketer | terms
+  contractVersion: text("contract_version").default("1.0"),
+  partyId: text("party_id").notNull(),           // user.id أو supplier.id
+  partyName: text("party_name"),
+  partyRole: text("party_role"),                 // supplier | employee | marketer | customer
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  acceptedAt: timestamp("accepted_at").defaultNow(),
+  notes: text("notes"),
+});
+
+// ─── جدول النسخ الاحتياطية ────────────────────────────────────────────────────
+export const backupLogs = pgTable("backup_logs", {
+  id: serial("id").primaryKey(),
+  triggeredBy: text("triggered_by").default("admin"),
+  sizeBytes: integer("size_bytes"),
+  tablesCount: integer("tables_count"),
+  status: text("status").default("success"), // success | failed
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Schemas
 export const insertHomeSectionSchema = createInsertSchema(homeSections).omit({ id: true, createdAt: true });
 export type InsertHomeSection = z.infer<typeof insertHomeSectionSchema>;

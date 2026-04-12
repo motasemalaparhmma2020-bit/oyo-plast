@@ -2,7 +2,8 @@ import {
   Package, Grid3x3, ShoppingCart, Zap, Palette, Image, BarChart3,
   Settings, Printer, Wallet, LayoutDashboard, UserCog, MessageSquareWarning,
   Users, Receipt, Handshake, SplitSquareVertical, TrendingUp, ShieldAlert,
-  Star, Layers, BadgeCheck, ClipboardCheck, ChevronDown, ChevronUp
+  Star, Layers, BadgeCheck, ClipboardCheck, ChevronDown, ChevronUp,
+  FileText, HardDrive
 } from "lucide-react";
 import { useState } from "react";
 
@@ -46,6 +47,8 @@ export const adminNavItems: AdminNavItem[] = [
   { id: "team", label: "إدارة الفريق", icon: <Users />, color: "from-emerald-400 to-emerald-600" },
   { id: "reviews", label: "التقييمات", icon: <Star />, color: "from-yellow-400 to-yellow-600" },
   { id: "section-settings", label: "إعدادات عرض المنتج", icon: <Layers />, color: "from-rose-400 to-rose-600" },
+  { id: "contracts", label: "العقود الرقمية", icon: <FileText />, color: "from-blue-500 to-indigo-600" },
+  { id: "backup", label: "النسخ الاحتياطية", icon: <HardDrive />, color: "from-green-500 to-emerald-600" },
   { id: "settings", label: "إعدادات المتجر", icon: <Settings />, color: "from-slate-400 to-slate-600" },
 ];
 
@@ -104,6 +107,15 @@ const navGroups: AdminNavGroup[] = [
     groupColor: "border-indigo-200 bg-indigo-50 dark:bg-indigo-950/30 dark:border-indigo-800",
     items: [
       { id: "reports", label: "تقارير المبيعات", icon: <BarChart3 className="h-6 w-6" />, color: "from-indigo-400 to-indigo-600" },
+    ],
+  },
+  {
+    groupLabel: "الثقة والتوثيق",
+    groupIcon: "🔒",
+    groupColor: "border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800",
+    items: [
+      { id: "contracts", label: "العقود الرقمية", icon: <FileText className="h-6 w-6" />, color: "from-blue-500 to-indigo-600", badge: "جديد" },
+      { id: "backup", label: "النسخ الاحتياطية", icon: <HardDrive className="h-6 w-6" />, color: "from-green-500 to-emerald-600" },
     ],
   },
   {

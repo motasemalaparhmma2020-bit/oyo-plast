@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { ContractGate } from "@/components/ContractGate";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -809,5 +810,16 @@ export default function SupplierPortal() {
   }
 
   if (!session) return <LoginScreen onLogin={handleLogin} />;
-  return <Dashboard session={session} onLogout={handleLogout} />;
+
+  return (
+    <ContractGate
+      contractType="supplier"
+      partyId={String(session.supplier.id)}
+      partyName={session.supplier.name || session.supplier.business_name || "المورد"}
+      partyRole="supplier"
+      onAccepted={() => {}}
+    >
+      <Dashboard session={session} onLogout={handleLogout} />
+    </ContractGate>
+  );
 }

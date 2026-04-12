@@ -10,6 +10,8 @@ import AdminSecurityLogs from "@/components/AdminSecurityLogs";
 import AdminSupplierProducts from "@/components/AdminSupplierProducts";
 import { AdminReviews } from "@/components/AdminReviews";
 import AdminPayroll from "@/components/AdminPayroll";
+import AdminContracts from "@/components/AdminContracts";
+import AdminBackup from "@/components/AdminBackup";
 import AdminSectionSettings from "@/components/AdminSectionSettings";
 import AdminPDPLayout from "@/components/AdminPDPLayout";
 import { AdminSubcategories } from "@/components/AdminSubcategories";
@@ -6296,6 +6298,16 @@ export default function Admin() {
               <hr />
               <AdminPDPLayout adminToken={adminToken} />
             </div>
+          </TabsContent>
+
+          {/* ─── Digital Contracts Tab ─────────────────────────────────── */}
+          <TabsContent value="contracts">
+            <AdminContracts adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── Backup System Tab ─────────────────────────────────────── */}
+          <TabsContent value="backup">
+            <AdminBackup adminToken={adminToken} />
           </TabsContent>
 
         </Tabs>
