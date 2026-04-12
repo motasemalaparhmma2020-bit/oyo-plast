@@ -146,9 +146,10 @@ export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSiz
         <div className="space-y-0.5">
           <div className="flex items-baseline gap-1 flex-wrap">
             <span
-              className="font-extrabold text-primary"
-              style={{ fontSize: bannerPriceFontSize ? `${bannerPriceFontSize}px` : 'var(--price-font-size, 16px)' }}
+              className="font-extrabold text-primary price-num"
+              style={{ fontSize: bannerPriceFontSize ? `${bannerPriceFontSize}px` : 'var(--price-font-size, 16px)', fontFamily: 'var(--font-numbers)' }}
               data-testid={`price-${product.id}`}
+              data-price="true"
             >
               {formatPrice(currency === 'SAR' ? product.priceSar : product.price)}
             </span>
@@ -157,12 +158,12 @@ export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSiz
             </span>
             {/* السعر الأصلي مشطوب */}
             {currency === 'YER' && showOriginalPrice && (
-              <span className="text-xs line-through text-gray-400" data-testid={`original-price-${product.id}`}>
+              <span className="text-xs line-through text-gray-400 price-num" data-price="true" data-testid={`original-price-${product.id}`} style={{ fontFamily: 'var(--font-numbers)' }}>
                 {formatPrice(originalPrice)} ر.ي
               </span>
             )}
             {currency === 'SAR' && showOriginalPriceSar && (
-              <span className="text-xs line-through text-gray-400">
+              <span className="text-xs line-through text-gray-400 price-num" data-price="true" style={{ fontFamily: 'var(--font-numbers)' }}>
                 {formatPrice(originalPriceSar)} ر.س
               </span>
             )}

@@ -500,7 +500,7 @@ export default function ProductDetail() {
             </div>
             {/* Main price */}
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="font-extrabold text-primary leading-none" style={{ fontSize: priceFontSize }} data-testid="text-product-price">
+              <span className="font-extrabold text-primary leading-none price-num" style={{ fontSize: priceFontSize, fontFamily: 'var(--font-numbers)' }} data-testid="text-product-price" data-price="true">
                 {formatPrice(displayedPrice)}
               </span>
               <span className="text-base text-muted-foreground">{currLabel}</span>

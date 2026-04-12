@@ -209,14 +209,23 @@ function DisplaySettingsInjector() {
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) applySettings(data); });
 
-    // إعادة التطبيق عند تغيير الإعدادات (poll كل 10 ثوانٍ فقط في الإدارة)
-    const interval = setInterval(() => {
-      if (window.location.pathname === '/admin') return;
+    // الاستماع لحدث تغيير الخط من الأدمن — يُطبَّق فوراً دون poll
+    const onFontChange = () => {
       fetch('/api/display-settings')
         .then(r => r.ok ? r.json() : null)
         .then(data => { if (data) applySettings(data); });
-    }, 30000);
-    return () => clearInterval(interval);
+    };
+    window.addEventListener('oyo-font-numbers-change', onFontChange);
+    // poll كل 60 ثانية فقط للحالات الأخرى
+    const interval = setInterval(() => {
+      fetch('/api/display-settings')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data) applySettings(data); });
+    }, 60000);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('oyo-font-numbers-change', onFontChange);
+    };
   }, []);
   return null;
 }

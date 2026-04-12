@@ -1968,6 +1968,31 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
     if (cssMap[key]) root.style.setProperty(cssMap[key], typeof value === 'number' ? `${value}px` : String(value));
     if (key === 'discountBubbleSize') root.style.setProperty('--discount-bubble-display', Number(value) > 0 ? 'flex' : 'none');
     if (key === 'imageMode') root.style.setProperty('--card-border-radius', value === 'full-bleed' ? '4px' : '16px');
+    // ── تطبيق الخطوط فوراً ─────────────────────────────────────────────────
+    const FONT_MAP: Record<string, string> = {
+      'cairo':           "'Cairo', 'Segoe UI', sans-serif",
+      'tajawal':         "'Tajawal', sans-serif",
+      'almarai':         "'Almarai', sans-serif",
+      'ibm-plex-arabic': "'IBM Plex Sans Arabic', sans-serif",
+      'noto-kufi':       "'Noto Kufi Arabic', sans-serif",
+      'roboto-condensed':"'Roboto Condensed', sans-serif",
+      'barlow':          "'Barlow', sans-serif",
+      'inter':           "'Inter', sans-serif",
+      'oswald':          "'Oswald', sans-serif",
+    };
+    if (key === 'appFontArabic') {
+      const f = FONT_MAP[value] ?? FONT_MAP['cairo'];
+      root.style.setProperty('--font-arabic', f);
+      root.style.setProperty('--font-sans', f);
+      root.style.setProperty('--font-display', f);
+      document.body.style.fontFamily = f;
+    }
+    if (key === 'appFontNumbers') {
+      const f = FONT_MAP[value] ?? FONT_MAP['cairo'];
+      root.style.setProperty('--font-numbers', f);
+      // بث حدث مخصص ليلتقطه أي مكوّن يستمع
+      window.dispatchEvent(new CustomEvent('oyo-font-numbers-change', { detail: { font: f } }));
+    }
   };
 
   const handleUpdateLive = (key: string, value: any) => {
@@ -2716,7 +2741,7 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                   <button
                     key={f.key}
                     type="button"
-                    onClick={() => handleUpdate('appFontArabic', f.key)}
+                    onClick={() => { setSettings((s: any) => ({ ...s, appFontArabic: f.key })); handleUpdateLive('appFontArabic', f.key); }}
                     data-testid={`button-font-arabic-${f.key}`}
                     className={`p-3 rounded-xl border-2 text-right transition-all ${
                       (settings?.appFontArabic ?? 'cairo') === f.key
@@ -2748,7 +2773,7 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                   <button
                     key={f.key}
                     type="button"
-                    onClick={() => handleUpdate('appFontNumbers', f.key)}
+                    onClick={() => { setSettings((s: any) => ({ ...s, appFontNumbers: f.key })); handleUpdateLive('appFontNumbers', f.key); }}
                     data-testid={`button-font-numbers-${f.key}`}
                     className={`p-3 rounded-xl border-2 text-right transition-all ${
                       (settings?.appFontNumbers ?? 'cairo') === f.key
