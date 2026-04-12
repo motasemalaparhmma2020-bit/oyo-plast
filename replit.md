@@ -6,6 +6,14 @@
 **الشعار الجديد**: أويو بلاست - لطباعة ومستلزمات البلاستيك
 
 ## Recent Changes (April 2026 — Latest)
+- **بنرات قابلة للنقر**: بنر "شحن مجاني" → /products?filter=free-shipping | بنر "عروض سريعة" → /products?filter=flash-deals
+- **hasFreeShipping**: حقل جديد في جدول products — toggle في فورم تعديل المنتج بالأدمن
+- **فلتر المنتجات**: /api/products?filter=free-shipping|flash-deals — دعم مباشر في الـ API
+- **ألوان البنرات**: `offerBannerShippingBg` و`offerBannerDealsBg` في display_settings — color picker في الأدمن
+- **صفحة منتجات مُحسّنة**: header خاص لكل فلتر مع أيقونة وتلوين مناسب + زر رجوع
+- **تحكم كامل من الأدمن**: الارتفاع + عدد الأعمدة + ألوان كل بنر + تفعيل/تعطيل
+
+## Recent Changes (April 2026 — Previous)
 - **التحويل البنكي**: إضافة `bank_accounts` table + API routes (CRUD admin + public GET)
 - **حسابات بنك كريمي**: حساب ريال يمني (3002724617) + حساب ريال سعودي (3020971273) — باسم معتصم محمد أحمد الأهدل — مفعّلان
 - **Checkout**: خيار "تحويل بنكي" بجانب المحافظ الإلكترونية — يعرض بيانات البنك + نسخ رقم الحساب + رفع إيصال

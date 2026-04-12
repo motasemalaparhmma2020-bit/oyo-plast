@@ -204,6 +204,7 @@ interface ProductFormData {
   originalPriceSar: string;
   discountPercent: string;
   promotionalTags: string[];
+  hasFreeShipping: boolean;
   supplierId: number;
 }
 
@@ -233,6 +234,7 @@ const emptyProductForm: ProductFormData = {
   originalPriceSar: "",
   discountPercent: "",
   promotionalTags: [],
+  hasFreeShipping: false,
   supplierId: 0,
 };
 
@@ -2760,6 +2762,58 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                 </div>
               </div>
 
+              {/* ألوان البنرات */}
+              <div className="py-3 border-t border-blue-100 dark:border-blue-900 space-y-3">
+                <Label className="text-sm font-medium block">ألوان خلفية البنرات</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* شحن مجاني */}
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">🚚 شحن مجاني</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={settings?.offerBannerShippingBg?.startsWith('#') ? settings.offerBannerShippingBg : '#f0fdf4'}
+                        onChange={e => setSettings((s: any) => ({ ...s, offerBannerShippingBg: e.target.value }))}
+                        onBlur={e => handleUpdate('offerBannerShippingBg', e.target.value)}
+                        className="h-9 w-12 rounded border cursor-pointer"
+                        data-testid="color-shipping-bg"
+                      />
+                      <Input
+                        value={settings?.offerBannerShippingBg ?? ''}
+                        onChange={e => setSettings((s: any) => ({ ...s, offerBannerShippingBg: e.target.value }))}
+                        onBlur={e => handleUpdate('offerBannerShippingBg', e.target.value)}
+                        placeholder="linear-gradient(…) أو #f0fdf4"
+                        className="text-xs h-9 font-mono"
+                        data-testid="input-shipping-bg"
+                      />
+                    </div>
+                  </div>
+                  {/* عروض سريعة */}
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">⚡ عروض سريعة</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={settings?.offerBannerDealsBg?.startsWith('#') ? settings.offerBannerDealsBg : '#fefce8'}
+                        onChange={e => setSettings((s: any) => ({ ...s, offerBannerDealsBg: e.target.value }))}
+                        onBlur={e => handleUpdate('offerBannerDealsBg', e.target.value)}
+                        className="h-9 w-12 rounded border cursor-pointer"
+                        data-testid="color-deals-bg"
+                      />
+                      <Input
+                        value={settings?.offerBannerDealsBg ?? ''}
+                        onChange={e => setSettings((s: any) => ({ ...s, offerBannerDealsBg: e.target.value }))}
+                        onBlur={e => handleUpdate('offerBannerDealsBg', e.target.value)}
+                        placeholder="linear-gradient(…) أو #fefce8"
+                        className="text-xs h-9 font-mono"
+                        data-testid="input-deals-bg"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">يمكنك إدخال لون (#hex) أو تدرج (linear-gradient(…))</p>
+              </div>
+
               {/* العرض — عدد الأعمدة */}
               <div className="flex items-center justify-between py-3 border-t border-blue-100 dark:border-blue-900">
                 <div>
@@ -4073,6 +4127,7 @@ export default function Admin() {
           originalPriceSar: data.originalPriceSar || null,
           discountPercent: data.discountPercent ? Number(data.discountPercent) : null,
           promotionalTags: data.promotionalTags.length > 0 ? data.promotionalTags : null,
+          hasFreeShipping: data.hasFreeShipping,
           supplierId: data.supplierId || null,
         })
       });
@@ -4133,6 +4188,7 @@ export default function Admin() {
         originalPriceSar: data.originalPriceSar || null,
         discountPercent: data.discountPercent ? Number(data.discountPercent) : null,
         promotionalTags: data.promotionalTags.length > 0 ? data.promotionalTags : null,
+        hasFreeShipping: data.hasFreeShipping,
         supplierId: data.supplierId || null,
       };
       
@@ -4332,6 +4388,7 @@ export default function Admin() {
       originalPriceSar: (product as any).originalPriceSar != null ? String((product as any).originalPriceSar) : "",
       discountPercent: (product as any).discountPercent != null ? String((product as any).discountPercent) : "",
       promotionalTags: (product as any).promotionalTags ?? [],
+      hasFreeShipping: (product as any).hasFreeShipping ?? false,
       supplierId: (product as any).supplierId ?? (product as any).supplier_id ?? 0,
     });
     // Parse colorImages JSON if present
@@ -4995,8 +5052,23 @@ export default function Admin() {
                         )}
                       </div>
 
-                      <div className="border-t pt-4 mt-4">
-                        <div className="flex items-center gap-2 mb-4">
+                      <div className="border-t pt-4 mt-4 space-y-3">
+                        {/* شحن مجاني */}
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="product-free-shipping"
+                            checked={productForm.hasFreeShipping}
+                            onChange={(e) => setProductForm({...productForm, hasFreeShipping: e.target.checked})}
+                            className="rounded border-gray-300"
+                            data-testid="checkbox-free-shipping"
+                          />
+                          <Label htmlFor="product-free-shipping" className="font-bold flex items-center gap-2">
+                            🚚 شحن مجاني على هذا المنتج
+                          </Label>
+                        </div>
+                        {/* إظهار التقييمات */}
+                        <div className="flex items-center gap-2">
                           <input
                             type="checkbox"
                             id="product-show-reviews"

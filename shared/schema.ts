@@ -70,6 +70,7 @@ export const products = pgTable("products", {
   discountPercent: integer("discount_percent"),        // نسبة الخصم يدوياً (تتغلب على الحسابي)
   // ── التصنيفات الترويجية ─────────────────────────────────────────────────────
   promotionalTags: text("promotional_tags").array(),  // ['new','offers','exclusive','discounts','deals','clearance','featured']
+  hasFreeShipping: boolean("has_free_shipping").default(false), // شحن مجاني لهذا المنتج
   // ── المورد المسؤول عن هذا المنتج ──────────────────────────────────────────
   supplierId: integer("supplier_id"),           // المورد الافتراضي لهذا المنتج
   productCommissionRate: numeric("product_commission_rate"), // عمولة خاصة تتغلب على العمولة العامة
@@ -512,6 +513,8 @@ export const displaySettings = pgTable("display_settings", {
   // ── إعدادات البنرات والعروض (الأبعاد) ────────────────────────────────────
   sliderHeight: integer("slider_height").default(414).notNull(),                        // ارتفاع السلايدر الرئيسي (بكسل)
   offerBannerCols: integer("offer_banner_cols").default(2).notNull(),                   // عدد أعمدة العروض (1=عرض كامل، 2=نصف)
+  offerBannerShippingBg: text("offer_banner_shipping_bg"),                              // لون/تدرج خلفية بنر الشحن المجاني
+  offerBannerDealsBg: text("offer_banner_deals_bg"),                                    // لون/تدرج خلفية بنر العروض السريعة
   // ── إعدادات الدفع والشحن ──────────────────────────────────────────────────
   shippingFee: integer("shipping_fee").default(0).notNull(),                            // رسوم الشحن الثابتة (0=مجاني)
   codEnabled: boolean("cod_enabled").default(true).notNull(),                           // تفعيل الدفع عند الاستلام

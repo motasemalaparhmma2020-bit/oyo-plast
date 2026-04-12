@@ -3,13 +3,14 @@ import { api, buildUrl } from "@shared/routes";
 import { useMemo } from "react";
 
 // GET /api/products
-export function useProducts(categorySlug?: string, search?: string) {
+export function useProducts(categorySlug?: string, search?: string, filter?: string) {
   return useQuery({
-    queryKey: [api.products.list.path, categorySlug, search],
+    queryKey: [api.products.list.path, categorySlug, search, filter],
     queryFn: async () => {
       const url = new URL(api.products.list.path, window.location.origin);
       if (categorySlug) url.searchParams.append("category", categorySlug);
       if (search) url.searchParams.append("search", search);
+      if (filter) url.searchParams.append("filter", filter);
       
       const res = await fetch(url.toString(), { credentials: "include" });
       if (!res.ok) throw new Error(`Failed to fetch products: ${res.status}`);
@@ -34,8 +35,8 @@ export function useCategories() {
   });
 }
 
-export function useCategoriesAndProducts(categorySlug?: string, search?: string) {
-  const productsQuery = useProducts(categorySlug, search);
+export function useCategoriesAndProducts(categorySlug?: string, search?: string, filter?: string) {
+  const productsQuery = useProducts(categorySlug, search, filter);
   const categoriesQuery = useCategories();
   return useMemo(() => ({
     products: productsQuery.data ?? [],

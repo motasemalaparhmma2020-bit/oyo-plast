@@ -818,7 +818,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     marketer_commission_rate, has_printing_options, base_bag_price, single_color_print_price,
     available_bag_colors, tags, show_reviews, show_in_printing, enable_variant_ui, color_images,
     original_price, original_price_sar, discount_percent, promotional_tags,
-    enable_smart_variants, smart_variants`;
+    has_free_shipping, enable_smart_variants, smart_variants`;
 
   function mapProductRow(r: any) {
     const rawImg: string = r.image_url || "";
@@ -868,6 +868,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       discountPercent: r.discount_percent ?? null,
       effectiveDiscount,
       promotionalTags: r.promotional_tags ?? [],
+      hasFreeShipping: r.has_free_shipping ?? false,
       enableSmartVariants: r.enable_smart_variants ?? false,
       smartVariants: r.smart_variants ?? null,
     };
@@ -880,6 +881,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const categorySlug = req.query.category as string | undefined;
       const subcategorySlug = req.query.subcategory as string | undefined;
       const search = req.query.search as string | undefined;
+      const filter = req.query.filter as string | undefined; // free-shipping | flash-deals
 
       // resolve slug → id if needed
       if ((!categoryId || Number.isNaN(categoryId)) && categorySlug) {
@@ -900,6 +902,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // إخفاء منتجات الموردين غير المعتمدة من المتجر العام
       conditions.push(`(product_status IS NULL OR product_status = 'approved')`);
+
+      // فلترة البنرات الخاصة
+      if (filter === 'free-shipping') {
+        conditions.push(`has_free_shipping = true`);
+      } else if (filter === 'flash-deals') {
+        conditions.push(`(original_price IS NOT NULL OR discount_percent IS NOT NULL)`);
+      }
 
       if (categoryId !== undefined && !Number.isNaN(categoryId)) {
         conditions.push(`category_id = $${idx++}`);
@@ -1183,7 +1192,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "baseBagPrice", "singleColorPrintPrice", "availableBagColors", "tags",
         "bulkPricing", "sizePricing", "showReviews", "enableVariantUI", "colorImages",
         "originalPrice", "originalPriceSar", "discountPercent", "promotionalTags",
-        "enableSmartVariants", "smartVariants"
+        "hasFreeShipping", "enableSmartVariants", "smartVariants"
       ];
       const update = pickFields(data as Record<string, unknown>, fields);
       const product = await storage.updateProduct(id, update);
@@ -1504,6 +1513,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         'whyUsSize', 'statsSize', 'faqSize',
         'installmentPercentages', 'categoriesLayout', 'categoriesShape',
         'drawerBgFrom', 'drawerBgTo',
+        'offerBannerShippingBg', 'offerBannerDealsBg',
       ];
 
       const body = req.body as Record<string, unknown>;

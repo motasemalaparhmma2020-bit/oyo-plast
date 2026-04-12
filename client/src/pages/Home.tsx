@@ -292,6 +292,8 @@ export default function Home() {
       {displaySettings.showOfferBanners && (
         <OfferBanners
           height={displaySettings.offerBannerHeight}
+          shippingBg={displaySettings.offerBannerShippingBg}
+          dealsBg={displaySettings.offerBannerDealsBg}
         />
       )}
 
