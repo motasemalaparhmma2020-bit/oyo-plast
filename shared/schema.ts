@@ -541,6 +541,13 @@ export const displaySettings = pgTable("display_settings", {
   faqSize: text("faq_size").default("medium").notNull(),
   faqOnHome: boolean("faq_on_home").default(true).notNull(),
   faqOnAccount: boolean("faq_on_account").default(false).notNull(),
+  // ── الخطوط وتصميم الواجهة ────────────────────────────────────────────────
+  appFontArabic: text("app_font_arabic").default("cairo"),    // cairo|tajawal|almarai|ibm-plex-arabic|noto-kufi|rubik
+  appFontNumbers: text("app_font_numbers").default("cairo"),  // cairo|roboto-condensed|barlow|inter|oswald
+  // ── صفحة المنتج — نمط SHEIN وأزرار السلة ──────────────────────────────
+  detailSheinLayout: boolean("detail_shein_layout").default(false), // نمط SHEIN: صورة من رأس الصفحة
+  detailShowAddToCart: boolean("detail_show_add_to_cart").default(true), // إظهار زر "أضف للسلة"
+  detailShowShopNow: boolean("detail_show_shop_now").default(true),      // إظهار زر "تسوق الآن"
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

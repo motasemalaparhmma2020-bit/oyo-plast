@@ -1506,6 +1506,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         'showWhyUs', 'whyUsOnHome', 'whyUsOnAccount',
         'showStats', 'statsOnHome', 'statsOnAccount',
         'showFaq', 'faqOnHome', 'faqOnAccount',
+        // ── صفحة المنتج — نمط وأزرار ──
+        'detailSheinLayout', 'detailShowAddToCart', 'detailShowShopNow',
       ];
       // text fields
       const textFields = [
@@ -1514,6 +1516,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         'installmentPercentages', 'categoriesLayout', 'categoriesShape',
         'drawerBgFrom', 'drawerBgTo',
         'offerBannerShippingBg', 'offerBannerDealsBg',
+        'appFontArabic', 'appFontNumbers',
       ];
 
       const body = req.body as Record<string, unknown>;
