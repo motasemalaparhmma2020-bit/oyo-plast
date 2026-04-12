@@ -408,7 +408,7 @@ function Router() {
   if (location === '/staff') return <StaffGate />;
   if (location === '/supplier') return <SupplierPortal />;
 
-  const isProductDetail = /^\/products\/[^/]+$/.test(location);
+  const isProductDetail = /^\/products?\/[^/]+$/.test(location);
   // إخفاء شريط التنقل السفلي في الصفحات التي لها شريط ثابت خاص بها
   const hideBottomNav =
     location === '/admin' ||
@@ -428,7 +428,7 @@ function Router() {
       <OfflineSyncProvider />
       <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16">
         <LoginTopBanner />
-        <Navbar />
+        {!isProductDetail && <Navbar />}
         <main className="flex-grow">
           <Switch>
             {/* Public pages - no auth required */}
