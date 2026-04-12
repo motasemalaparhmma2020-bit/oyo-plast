@@ -1,6 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
 import { useOrders } from "@/hooks/use-orders";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useState } from "react";
 import {
@@ -9,6 +10,7 @@ import {
   Tag, ChevronLeft, LogIn, LogOut, Truck, Package, CreditCard,
   RotateCcw
 } from "lucide-react";
+import { WhyUsSection, StatsSection, FaqSection } from "@/components/HomeSections";
 
 const APP_VERSION = "1.0.0";
 
@@ -17,6 +19,11 @@ export default function Profile() {
   const { data: orders } = useOrders();
   const { data: cart } = useCart();
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+
+  const { data: displaySettings } = useQuery<any>({
+    queryKey: ["/api/display-settings"],
+    staleTime: 60_000,
+  });
 
   const toggleDark = () => {
     const next = !dark;
@@ -238,6 +245,23 @@ export default function Profile() {
           </Link>
         )}
       </div>
+
+      {/* ── Dynamic Sections (controlled by admin) ────────────── */}
+      {displaySettings?.showWhyUs === true && displaySettings?.whyUsOnAccount === true && (
+        <div className="mt-3">
+          <WhyUsSection size={displaySettings.whyUsSize ?? "medium"} />
+        </div>
+      )}
+      {displaySettings?.showStats === true && displaySettings?.statsOnAccount === true && (
+        <div className="mt-3">
+          <StatsSection size={displaySettings.statsSize ?? "medium"} />
+        </div>
+      )}
+      {displaySettings?.showFaq === true && displaySettings?.faqOnAccount === true && (
+        <div className="mt-3">
+          <FaqSection size={displaySettings.faqSize ?? "medium"} />
+        </div>
+      )}
 
       {/* ── Version ───────────────────────────────────────────── */}
       <div className="text-center mt-6 mb-2">

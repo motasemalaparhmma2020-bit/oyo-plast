@@ -327,17 +327,17 @@ export default function Home() {
       )}
 
       {/* ── لماذا أويو بلاست؟ ── */}
-      {displaySettings.showWhyUs !== false && displaySettings.whyUsOnHome !== false && (
+      {displaySettings.showWhyUs === true && displaySettings.whyUsOnHome === true && (
         <WhyUsSection size={displaySettings.whyUsSize ?? "medium"} />
       )}
 
       {/* ── أرقامنا تتحدث ── */}
-      {displaySettings.showStats !== false && displaySettings.statsOnHome !== false && (
+      {displaySettings.showStats === true && displaySettings.statsOnHome === true && (
         <StatsSection size={displaySettings.statsSize ?? "medium"} />
       )}
 
       {/* ── الأسئلة الشائعة ── */}
-      {displaySettings.showFaq !== false && displaySettings.faqOnHome !== false && (
+      {displaySettings.showFaq === true && displaySettings.faqOnHome === true && (
         <FaqSection size={displaySettings.faqSize ?? "medium"} />
       )}
     </div>
