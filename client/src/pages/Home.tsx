@@ -34,26 +34,34 @@ function FlashSaleSection({ displaySettings, primaryColor }: { displaySettings: 
   const countdown = useCountdown();
   const [emblaRef] = useEmblaCarousel({ direction: "rtl", loop: false, align: "start", dragFree: true });
 
+  const flashEnabled  = displaySettings?.flashSaleEnabled !== false; // true by default
+  const flashBg       = displaySettings?.flashSaleBg ?? "linear-gradient(135deg, #ff4e00 0%, #ec9f05 100%)";
+  const flashTag      = displaySettings?.flashSaleTag ?? "flash";
+  const cardW         = displaySettings?.productCardWidth ?? 160;
+  const cardH         = displaySettings?.productCardHeight ?? 200;
+
   const { data: products = [], isLoading } = useQuery<any[]>({
-    queryKey: ["/api/products/by-tag", "flash", 10],
+    queryKey: ["/api/products/by-tag", flashTag, 10],
     queryFn: async () => {
-      const res = await fetch("/api/products/by-tag/flash?limit=10");
+      const res = await fetch(`/api/products/by-tag/${flashTag}?limit=10`);
       if (!res.ok) return [];
       return res.json();
     },
     staleTime: 60_000,
+    enabled: flashEnabled,
   });
 
-  if (!isLoading && products.length === 0) return null;
+  // لا تُظهر القسم إذا أخفاه الأدمن
+  if (!flashEnabled) return null;
 
   return (
     <section className="py-3" data-testid="flash-sale-section">
       {/* رأس القسم */}
       <div
         className="mx-4 rounded-2xl mb-3 px-4 py-3 flex items-center justify-between"
-        style={{ background: "linear-gradient(135deg, #ff4e00 0%, #ec9f05 100%)" }}
+        style={{ background: flashBg }}
       >
-        <Link href="/products?tag=flash">
+        <Link href={`/products?tag=${flashTag}`}>
           <button className="flex items-center gap-1 text-white/90 text-sm font-medium" data-testid="btn-flash-all">
             عرض الكل
             <ChevronLeft className="h-4 w-4" />
@@ -82,15 +90,20 @@ function FlashSaleSection({ displaySettings, primaryColor }: { displaySettings: 
       {isLoading ? (
         <div className="flex gap-3 px-4 overflow-hidden">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="flex-shrink-0 w-40 h-60 bg-gray-100 rounded-xl animate-pulse" />
+            <div key={i} className="flex-shrink-0 rounded-xl animate-pulse bg-gray-100"
+              style={{ width: cardW, height: cardH + 80 }} />
           ))}
+        </div>
+      ) : products.length === 0 ? (
+        <div className="px-4 py-6 text-center text-muted-foreground text-sm">
+          لا توجد منتجات عروض اليوم حالياً — أضف منتجات بوسم <strong>{flashTag}</strong> من لوحة الإدارة
         </div>
       ) : (
         <div className="overflow-hidden px-4" ref={emblaRef} dir="rtl">
           <div className="flex gap-3">
             {products.map((product: any) => (
-              <div key={product.id} className="flex-shrink-0 w-40">
-                <ProductCard product={product} cardWidth={160} />
+              <div key={product.id} className="flex-shrink-0" style={{ width: cardW }}>
+                <ProductCard product={product} cardWidth={cardW} imageHeight={cardH} />
               </div>
             ))}
           </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Order, Product } from "@shared/schema";
 import FinancialReports from "@/components/FinancialReports";
@@ -2985,6 +2985,62 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                 />
               </div>
 
+              {/* ── بنر عروض اليوم (Flash Sale) ── */}
+              <div className="space-y-3 rounded-xl border-2 border-orange-200 dark:border-orange-800 p-4 bg-orange-50/30 dark:bg-orange-950/20 mt-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="font-semibold text-sm">🔥 بنر عروض اليوم</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">إظهار/إخفاء قسم عروض اليوم في الصفحة الرئيسية</p>
+                  </div>
+                  <Switch
+                    checked={settings?.flashSaleEnabled !== false}
+                    onCheckedChange={v => { setSettings((s: any) => ({ ...s, flashSaleEnabled: v })); handleUpdate('flashSaleEnabled', v); }}
+                    disabled={updateMutation.isPending}
+                    data-testid="switch-flash-sale-enabled"
+                  />
+                </div>
+                {settings?.flashSaleEnabled !== false && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">الوسم المرتبط بالمنتجات</Label>
+                      <Input
+                        value={settings?.flashSaleTag ?? "flash"}
+                        onChange={e => setSettings((s: any) => ({ ...s, flashSaleTag: e.target.value }))}
+                        onBlur={e => handleUpdate('flashSaleTag', e.target.value)}
+                        placeholder="flash"
+                        data-testid="input-flash-sale-tag"
+                      />
+                      <p className="text-xs text-muted-foreground">أضف منتجات بهذا الوسم من إدارة المنتجات لتظهر هنا</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">لون/تدرج خلفية البنر</Label>
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          type="color"
+                          defaultValue="#ff4e00"
+                          onChange={e => { setSettings((s: any) => ({ ...s, flashSaleBg: e.target.value })); handleUpdate('flashSaleBg', e.target.value); }}
+                          className="w-12 h-9 p-1 cursor-pointer"
+                          data-testid="color-flash-sale-bg"
+                        />
+                        <Input
+                          value={settings?.flashSaleBg ?? "linear-gradient(135deg, #ff4e00 0%, #ec9f05 100%)"}
+                          onChange={e => setSettings((s: any) => ({ ...s, flashSaleBg: e.target.value }))}
+                          onBlur={e => handleUpdate('flashSaleBg', e.target.value)}
+                          placeholder="linear-gradient(…) أو #hex"
+                          className="text-xs h-9 font-mono flex-1"
+                          data-testid="input-flash-sale-bg"
+                        />
+                      </div>
+                      <div className="rounded-xl px-4 py-2.5 flex items-center gap-2"
+                        style={{ background: settings?.flashSaleBg ?? "linear-gradient(135deg, #ff4e00 0%, #ec9f05 100%)" }}>
+                        <span className="text-white font-black text-sm">🔥 عروض اليوم</span>
+                        <span className="text-white/80 text-xs">— معاينة</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
               {/* معاينة مصغّرة */}
               <div className="bg-blue-100/50 dark:bg-blue-900/20 rounded-xl p-3">
                 <p className="text-xs text-blue-600 dark:text-blue-400 text-center mb-2">معاينة التخطيط</p>
@@ -3570,7 +3626,7 @@ function HomePageSettingsSection({ adminToken }: { adminToken: string | null }) 
                   type="color"
                   value={settings?.drawerBgFrom || "#0891B2"}
                   onChange={(e) => setSettings((s: any) => ({ ...s, drawerBgFrom: e.target.value }))}
-                  onBlur={(e) => handleUpdate('drawerBgFrom', e.target.value)}
+                  onBlur={(e) => updateSettingsMutation.mutate({ drawerBgFrom: e.target.value })}
                   className="w-14 h-10 rounded cursor-pointer border-2 border-gray-200"
                   data-testid="input-drawer-bg-from"
                 />
@@ -3585,7 +3641,7 @@ function HomePageSettingsSection({ adminToken }: { adminToken: string | null }) 
                   type="color"
                   value={settings?.drawerBgTo || "#164e63"}
                   onChange={(e) => setSettings((s: any) => ({ ...s, drawerBgTo: e.target.value }))}
-                  onBlur={(e) => handleUpdate('drawerBgTo', e.target.value)}
+                  onBlur={(e) => updateSettingsMutation.mutate({ drawerBgTo: e.target.value })}
                   className="w-14 h-10 rounded cursor-pointer border-2 border-gray-200"
                   data-testid="input-drawer-bg-to"
                 />
@@ -3607,8 +3663,8 @@ function HomePageSettingsSection({ adminToken }: { adminToken: string | null }) 
               type="range" min={260} max={380} step={10}
               value={settings?.drawerWidth ?? 300}
               onChange={(e) => setSettings((s: any) => ({ ...s, drawerWidth: +e.target.value }))}
-              onMouseUp={(e) => handleUpdate('drawerWidth', +(e.target as HTMLInputElement).value)}
-              onTouchEnd={(e) => handleUpdate('drawerWidth', +(e.target as HTMLInputElement).value)}
+              onMouseUp={(e) => updateSettingsMutation.mutate({ drawerWidth: +(e.target as HTMLInputElement).value })}
+              onTouchEnd={(e) => updateSettingsMutation.mutate({ drawerWidth: +(e.target as HTMLInputElement).value })}
               className="w-full accent-primary"
               data-testid="input-drawer-width"
             />
@@ -3903,11 +3959,11 @@ function OrderSupplierAssign({ order, adminToken }: { order: any; adminToken: st
 }
 
 // ── مكوّن إدارة مناطق الخدمة GPS ─────────────────────────────────────────────
-function AdminServiceAreas({ adminToken }: { adminToken: string }) {
+function AdminServiceAreas({ adminToken }: { adminToken: string | null }) {
   const { data: areas = [], refetch } = useQuery<any[]>({
     queryKey: ["/api/admin/service-areas"],
     queryFn: () =>
-      fetch("/api/admin/service-areas", { headers: { "x-admin-token": adminToken } })
+      fetch("/api/admin/service-areas", { headers: { "x-admin-token": adminToken ?? "" } })
         .then(r => r.json()),
   });
 
@@ -3920,7 +3976,7 @@ function AdminServiceAreas({ adminToken }: { adminToken: string }) {
     setSaving(true);
     await fetch("/api/admin/service-areas", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+      headers: { "Content-Type": "application/json", "x-admin-token": adminToken ?? "" },
       body: JSON.stringify({ city: form.city, radiusKm: parseFloat(form.radiusKm), lat: form.lat ? parseFloat(form.lat) : null, lng: form.lng ? parseFloat(form.lng) : null, isActive: form.isActive }),
     });
     setSaving(false);
@@ -3930,7 +3986,7 @@ function AdminServiceAreas({ adminToken }: { adminToken: string }) {
   };
 
   const handleDelete = async (id: number) => {
-    await fetch(`/api/admin/service-areas/${id}`, { method: "DELETE", headers: { "x-admin-token": adminToken } });
+    await fetch(`/api/admin/service-areas/${id}`, { method: "DELETE", headers: { "x-admin-token": adminToken ?? "" } });
     refetch();
     toast({ title: "🗑️ تم حذف المنطقة" });
   };
@@ -3938,7 +3994,7 @@ function AdminServiceAreas({ adminToken }: { adminToken: string }) {
   const handleToggle = async (id: number, current: boolean) => {
     await fetch(`/api/admin/service-areas/${id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+      headers: { "Content-Type": "application/json", "x-admin-token": adminToken ?? "" },
       body: JSON.stringify({ isActive: !current }),
     });
     refetch();
@@ -3996,6 +4052,185 @@ function AdminServiceAreas({ adminToken }: { adminToken: string }) {
         ))}
         {areas.length === 0 && <p className="text-center text-sm text-muted-foreground py-4">لا توجد مناطق خدمة محددة بعد</p>}
       </div>
+    </div>
+  );
+}
+
+// ── InventorySection — إدارة المخزون المتقدمة ────────────────────────────────
+function InventorySection({ productsList, productsLoading, productsError, refetchProducts, refreshAll, categoriesLoading, updateProductStock, formatPrice }: {
+  productsList: any[];
+  productsLoading: boolean;
+  productsError: any;
+  refetchProducts: () => void;
+  refreshAll: () => void;
+  categoriesLoading: boolean;
+  updateProductStock: any;
+  formatPrice: (v: any) => string;
+}) {
+  const [stockFilter, setStockFilter] = useState<"all" | "low" | "out">("all");
+  const [search, setSearch] = useState("");
+
+  const stats = useMemo(() => {
+    const out = productsList.filter(p => p.stock === 0).length;
+    const low = productsList.filter(p => {
+      const rp = (p as any).reorderPoint ?? (p as any).reorder_point ?? 5;
+      return p.stock > 0 && p.stock <= rp;
+    }).length;
+    return { total: productsList.length, out, low, ok: productsList.length - out - low };
+  }, [productsList]);
+
+  const filtered = useMemo(() => {
+    let list = productsList;
+    if (search.trim()) list = list.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+    if (stockFilter === "out") list = list.filter(p => p.stock === 0);
+    else if (stockFilter === "low") list = list.filter(p => {
+      const rp = (p as any).reorderPoint ?? (p as any).reorder_point ?? 5;
+      return p.stock > 0 && p.stock <= rp;
+    });
+    return list;
+  }, [productsList, stockFilter, search]);
+
+  return (
+    <div className="space-y-4" dir="rtl">
+      {/* ─── إحصائيات المخزون ─── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="border-gray-200">
+          <CardContent className="pt-4 pb-3 text-center">
+            <Package className="h-5 w-5 mx-auto mb-1 text-blue-500" />
+            <p className="text-2xl font-bold text-blue-600">{stats.total}</p>
+            <p className="text-xs text-muted-foreground">إجمالي المنتجات</p>
+          </CardContent>
+        </Card>
+        <Card className="border-green-200 bg-green-50/30 dark:bg-green-950/10">
+          <CardContent className="pt-4 pb-3 text-center">
+            <div className="w-5 h-5 rounded-full bg-green-500 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-green-600">{stats.ok}</p>
+            <p className="text-xs text-muted-foreground">متاح بشكل جيد</p>
+          </CardContent>
+        </Card>
+        <Card className={`border-yellow-200 ${stats.low > 0 ? "bg-yellow-50/40 dark:bg-yellow-950/10" : ""}`}>
+          <CardContent className="pt-4 pb-3 text-center">
+            <div className="w-5 h-5 rounded-full bg-yellow-400 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-yellow-600">{stats.low}</p>
+            <p className="text-xs text-muted-foreground">قارب على النفاد</p>
+          </CardContent>
+        </Card>
+        <Card className={`border-red-200 ${stats.out > 0 ? "bg-red-50/40 dark:bg-red-950/10" : ""}`}>
+          <CardContent className="pt-4 pb-3 text-center">
+            <div className="w-5 h-5 rounded-full bg-red-500 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-red-600">{stats.out}</p>
+            <p className="text-xs text-muted-foreground">نفذ من المخزون</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-base">قائمة المنتجات</CardTitle>
+            <Button variant="outline" size="sm" className="gap-2" onClick={refetchProducts} disabled={productsLoading} data-testid="button-refresh-inventory">
+              {productsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              تحديث
+            </Button>
+          </div>
+          {/* ─── فلتر + بحث ─── */}
+          <div className="flex flex-col sm:flex-row gap-2 mt-2">
+            <Input
+              placeholder="🔍 ابحث عن منتج..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="h-9 text-sm flex-1"
+              data-testid="input-inventory-search"
+            />
+            <div className="flex gap-1">
+              {([["all","الكل"], ["low","منخفض ⚠️"], ["out","نفذ 🔴"]] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setStockFilter(val)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    stockFilter === val
+                      ? val === "all" ? "bg-primary text-white" : val === "low" ? "bg-yellow-500 text-white" : "bg-red-500 text-white"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                  data-testid={`button-filter-${val}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {productsLoading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : productsError ? (
+            <div className="text-center py-10">
+              <Package className="h-12 w-12 mx-auto mb-4 text-destructive opacity-60" />
+              <p className="text-destructive font-medium mb-2">تعذّر تحميل المخزون</p>
+              <Button variant="outline" className="gap-2" onClick={refetchProducts} data-testid="button-retry-inventory">
+                <RefreshCw className="h-4 w-4" /> إعادة المحاولة
+              </Button>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">
+              <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>{search || stockFilter !== "all" ? "لا توجد منتجات تطابق الفلتر" : "لا توجد منتجات بعد"}</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {/* مفتاح الألوان */}
+              <div className="flex gap-3 text-xs text-muted-foreground mb-3 flex-wrap">
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" />متاح</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block" />قارب على النفاد</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" />نفذ</span>
+                <span className="text-muted-foreground/60 mr-2">({filtered.length} منتج)</span>
+              </div>
+              {filtered.map((product) => {
+                const reorderPt = (product as any).reorderPoint ?? (product as any).reorder_point ?? 5;
+                const stockStatus = product.stock === 0 ? "out" : product.stock <= reorderPt ? "low" : "ok";
+                const borderColor = stockStatus === "out" ? "border-red-300 bg-red-50/40 dark:bg-red-950/10" : stockStatus === "low" ? "border-yellow-300 bg-yellow-50/40 dark:bg-yellow-950/10" : "border-gray-200 bg-card";
+                const dotColor = stockStatus === "out" ? "bg-red-500" : stockStatus === "low" ? "bg-yellow-400" : "bg-green-500";
+                return (
+                  <div key={product.id} className={`flex items-center gap-3 rounded-xl border-2 p-3 shadow-sm transition-colors ${borderColor}`} data-testid={`row-inventory-${product.id}`}>
+                    <div className={`w-3 h-3 rounded-full shrink-0 ${dotColor}`} />
+                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-muted">
+                      <img src={product.imageUrl} alt={product.name} className="h-full w-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{product.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatPrice(product.price)} ر.ي
+                        {stockStatus === "low" && <span className="text-yellow-600 font-medium mr-2">⚠️ قارب على النفاد</span>}
+                        {stockStatus === "out" && <span className="text-red-600 font-medium mr-2">🔴 نفذ من المخزون</span>}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      <span className="text-[10px] text-muted-foreground">الحد</span>
+                      <Input
+                        type="number" min={0} defaultValue={reorderPt} className="w-16 h-7 text-center text-xs" title="حد إعادة الطلب"
+                        onBlur={(e) => { const val = parseInt(e.target.value); if (!isNaN(val)) updateProductStock.mutate({ productId: product.id, reorderPoint: val }); }}
+                        data-testid={`input-reorder-${product.id}`}
+                      />
+                    </div>
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      <span className="text-[10px] text-muted-foreground">المخزون</span>
+                      <Input
+                        type="number" min={0} defaultValue={product.stock}
+                        className={`w-20 h-7 text-center text-xs font-bold ${stockStatus === "out" ? "border-red-400 text-red-600" : stockStatus === "low" ? "border-yellow-400 text-yellow-700" : ""}`}
+                        onBlur={(e) => { const newStock = parseInt(e.target.value); if (!isNaN(newStock) && newStock !== product.stock) updateProductStock.mutate({ productId: product.id, stock: newStock }); }}
+                        data-testid={`input-stock-${product.id}`}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -6236,142 +6471,16 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="inventory">
-            <Card>
-              <CardHeader>
-                <CardTitle>إدارة المخزون</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex justify-end mb-3 gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => refetchProducts()}
-                    disabled={productsLoading}
-                    data-testid="button-refresh-inventory"
-                  >
-                    {productsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                    تحديث
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={refreshAll}
-                    disabled={productsLoading || categoriesLoading}
-                    data-testid="button-refresh-all-inventory"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    تحديث الكل
-                  </Button>
-                </div>
-
-                {productsLoading ? (
-                  <div className="flex justify-center py-10">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  </div>
-                ) : productsError ? (
-                  <div className="text-center py-10">
-                    <Package className="h-12 w-12 mx-auto mb-4 text-destructive opacity-60" />
-                    <p className="text-destructive font-medium mb-2">تعذّر تحميل المخزون</p>
-                    <Button
-                      variant="outline"
-                      className="gap-2"
-                      onClick={() => refetchProducts()}
-                      data-testid="button-retry-inventory"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      إعادة المحاولة
-                    </Button>
-                  </div>
-                ) : productsList.length > 0 ? (
-                  <div className="space-y-2">
-                    {/* ─── مفتاح الألوان ─── */}
-                    <div className="flex gap-3 text-xs text-muted-foreground mb-3 flex-wrap">
-                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500 inline-block" />متاح بشكل جيد</span>
-                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-yellow-400 inline-block" />قارب على النفاد</span>
-                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500 inline-block" />نفذ / تحت الحد</span>
-                    </div>
-                    {productsList.map((product) => {
-                      const reorderPt = (product as any).reorderPoint ?? (product as any).reorder_point ?? 5;
-                      const stockStatus = product.stock === 0 ? "out" : product.stock <= reorderPt ? "low" : "ok";
-                      const borderColor = stockStatus === "out" ? "border-red-300 bg-red-50/40" : stockStatus === "low" ? "border-yellow-300 bg-yellow-50/40" : "border-gray-200 bg-card";
-                      const dotColor = stockStatus === "out" ? "bg-red-500" : stockStatus === "low" ? "bg-yellow-400" : "bg-green-500";
-                      return (
-                        <div
-                          key={product.id}
-                          className={`flex items-center gap-3 rounded-xl border-2 p-3 shadow-sm transition-colors ${borderColor}`}
-                          data-testid={`row-inventory-${product.id}`}
-                        >
-                          {/* مؤشر الحالة */}
-                          <div className={`w-3 h-3 rounded-full shrink-0 ${dotColor}`} />
-
-                          {/* صورة المنتج */}
-                          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-muted">
-                            <img
-                              src={product.imageUrl}
-                              alt={product.name}
-                              className="h-full w-full object-contain"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                            />
-                          </div>
-
-                          {/* اسم المنتج */}
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium text-sm truncate">{product.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatPrice(product.price)} ر.ي
-                              {stockStatus === "low" && <span className="text-yellow-600 font-medium mr-2">⚠️ قارب على النفاد</span>}
-                              {stockStatus === "out" && <span className="text-red-600 font-medium mr-2">🔴 نفذ من المخزون</span>}
-                            </p>
-                          </div>
-
-                          {/* حد إعادة الطلب */}
-                          <div className="flex flex-col items-center gap-1 shrink-0">
-                            <span className="text-[10px] text-muted-foreground">الحد الأدنى</span>
-                            <Input
-                              type="number"
-                              min={0}
-                              defaultValue={reorderPt}
-                              className="w-16 h-7 text-center text-xs"
-                              title="حد إعادة الطلب"
-                              onBlur={(e) => {
-                                const val = parseInt(e.target.value);
-                                if (!isNaN(val)) updateProductStock.mutate({ productId: product.id, reorderPoint: val });
-                              }}
-                              data-testid={`input-reorder-${product.id}`}
-                            />
-                          </div>
-
-                          {/* المخزون الحالي */}
-                          <div className="flex flex-col items-center gap-1 shrink-0">
-                            <span className="text-[10px] text-muted-foreground">المخزون</span>
-                            <Input
-                              type="number"
-                              min={0}
-                              defaultValue={product.stock}
-                              className={`w-20 h-7 text-center text-xs font-bold ${stockStatus === "out" ? "border-red-400 text-red-600" : stockStatus === "low" ? "border-yellow-400 text-yellow-700" : ""}`}
-                              onBlur={(e) => {
-                                const newStock = parseInt(e.target.value);
-                                if (!isNaN(newStock) && newStock !== product.stock) {
-                                  updateProductStock.mutate({ productId: product.id, stock: newStock });
-                                }
-                              }}
-                              data-testid={`input-stock-${product.id}`}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-10 text-muted-foreground">
-                    <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>لا توجد منتجات بعد</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <InventorySection
+              productsList={productsList}
+              productsLoading={productsLoading}
+              productsError={productsError}
+              refetchProducts={refetchProducts}
+              refreshAll={refreshAll}
+              categoriesLoading={categoriesLoading}
+              updateProductStock={updateProductStock}
+              formatPrice={formatPrice}
+            />
           </TabsContent>
 
           <TabsContent value="home-sections">

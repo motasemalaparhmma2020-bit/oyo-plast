@@ -528,7 +528,7 @@ export const displaySettings = pgTable("display_settings", {
   installmentMinAmount: integer("installment_min_amount").default(50000).notNull(),     // الحد الأدنى للطلب لتفعيل التقسيط (ريال يمني)
   installmentPercentages: text("installment_percentages").default("30,40,50").notNull(), // النسب المتاحة للمقدّم (مفصولة بفواصل)
   // ── إعدادات أقسام الصفحة الرئيسية (لماذا / إحصائيات / أسئلة) ─────────────
-  pdpLayout: text("pdp_layout").default(null),                                   // JSON — تخطيط صفحة المنتج
+  pdpLayout: text("pdp_layout"),                                                 // JSON — تخطيط صفحة المنتج
   showWhyUs: boolean("show_why_us").default(true).notNull(),
   whyUsSize: text("why_us_size").default("medium").notNull(),        // small | medium | large
   whyUsOnHome: boolean("why_us_on_home").default(true).notNull(),
@@ -548,6 +548,10 @@ export const displaySettings = pgTable("display_settings", {
   detailSheinLayout: boolean("detail_shein_layout").default(false), // نمط SHEIN: صورة من رأس الصفحة
   detailShowAddToCart: boolean("detail_show_add_to_cart").default(true), // إظهار زر "أضف للسلة"
   detailShowShopNow: boolean("detail_show_shop_now").default(true),      // إظهار زر "تسوق الآن"
+  // ── بنر عروض اليوم (Flash Sale) ──────────────────────────────────────────────
+  flashSaleEnabled: boolean("flash_sale_enabled").default(true),         // إظهار بنر عروض اليوم
+  flashSaleBg: text("flash_sale_bg").default("linear-gradient(135deg, #ff4e00 0%, #ec9f05 100%)"), // خلفية البنر
+  flashSaleTag: text("flash_sale_tag").default("flash"),                 // وسم المنتجات المرتبطة
   // ── شريط العروض الترويجية (SHEIN-style promo bar) ──────────────────────────
   promoBarEnabled: boolean("promo_bar_enabled").default(false),          // تفعيل الشريط
   promoBarText: text("promo_bar_text").default("خصم 15%: بدون حد أدنى للشراء"),  // نص الشريط

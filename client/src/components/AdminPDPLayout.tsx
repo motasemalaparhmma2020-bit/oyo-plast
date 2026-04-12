@@ -66,7 +66,7 @@ const DEFAULT_LAYOUT: PdpLayout = {
   margins: { h: 16, v: 8, gap: 12 },
 };
 
-export default function AdminPDPLayout({ adminToken }: { adminToken: string }) {
+export default function AdminPDPLayout({ adminToken }: { adminToken: string | null | undefined }) {
   const { toast } = useToast();
   const [layout, setLayout] = useState<PdpLayout>(DEFAULT_LAYOUT);
   const [saving, setSaving] = useState(false);
@@ -113,7 +113,7 @@ export default function AdminPDPLayout({ adminToken }: { adminToken: string }) {
     try {
       const r = await fetch("/api/admin/pdp-layout", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+        headers: { "Content-Type": "application/json", "x-admin-token": adminToken ?? "" },
         body: JSON.stringify(layout),
       });
       if (r.ok) toast({ title: "✅ تم حفظ تخطيط صفحة المنتج" });

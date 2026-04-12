@@ -30,7 +30,7 @@ function formatPrice(p: any) {
 }
 
 interface Props {
-  adminToken: string;
+  adminToken: string | null;
 }
 
 export default function AdminSupplierProducts({ adminToken }: Props) {
@@ -44,7 +44,7 @@ export default function AdminSupplierProducts({ adminToken }: Props) {
   const [showSettings, setShowSettings] = useState(false);
   const [imgSettings, setImgSettings] = useState<any>({});
 
-  const headers = { "x-admin-token": adminToken };
+  const headers = { "x-admin-token": adminToken ?? "" };
 
   // ─── جلب المنتجات ──────────────────────────────────────────────────
   const { data: products = [], isLoading } = useQuery<any[]>({

@@ -1023,10 +1023,40 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const userId = req.user?.id || req.session?.userId;
       if (!userId) return res.status(401).json({ message: "غير مصرح" });
+
+      // ── منع التقييم المكرر من نفس المستخدم ──────────────────────────
+      const { pool: dbPool } = await import("./db");
+      const existing = await dbPool.query(
+        `SELECT id FROM reviews WHERE product_id=$1 AND user_id=$2 LIMIT 1`,
+        [productId, userId]
+      );
+      if (existing.rows.length > 0) {
+        return res.status(409).json({ message: "لقد قمت بتقييم هذا المنتج مسبقاً", alreadyReviewed: true });
+      }
+
       const review = await storage.createReview({ productId, userId, rating: parseInt(rating), comment, imageUrl });
       res.status(201).json(review);
     } catch (e: any) {
       res.status(500).json({ message: "فشل إضافة التقييم" });
+    }
+  });
+
+  // ── هل قيّم المستخدم هذا المنتج مسبقاً؟ ─────────────────────────────────
+  app.get("/api/products/:id/my-review", async (req: any, res) => {
+    try {
+      const userId = req.user?.id || req.session?.userId;
+      if (!userId) return res.json({ reviewed: false });
+      const { pool: dbPool } = await import("./db");
+      const productId = parseInt(req.params.id);
+      const r = await dbPool.query(
+        `SELECT id, rating, comment, is_approved FROM reviews WHERE product_id=$1 AND user_id=$2 LIMIT 1`,
+        [productId, userId]
+      );
+      if (r.rows.length === 0) return res.json({ reviewed: false });
+      const row = r.rows[0];
+      res.json({ reviewed: true, rating: row.rating, comment: row.comment, isApproved: row.is_approved });
+    } catch {
+      res.json({ reviewed: false });
     }
   });
 
@@ -1548,6 +1578,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         'showFaq', 'faqOnHome', 'faqOnAccount',
         // ── صفحة المنتج — نمط وأزرار ──
         'detailSheinLayout', 'detailShowAddToCart', 'detailShowShopNow',
+        // ── إعدادات جديدة ──
+        'promoBarEnabled', 'showMarketerCouponToAll', 'detailHideHeaderName',
+        'flashSaleEnabled',
       ];
       // text fields
       const textFields = [
@@ -1557,6 +1590,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         'drawerBgFrom', 'drawerBgTo',
         'offerBannerShippingBg', 'offerBannerDealsBg',
         'appFontArabic', 'appFontNumbers',
+        // ── إعدادات جديدة ──
+        'promoBarText', 'promoBarColor', 'promoBarDetails',
+        'flashSaleBg', 'flashSaleTag',
       ];
 
       const body = req.body as Record<string, unknown>;

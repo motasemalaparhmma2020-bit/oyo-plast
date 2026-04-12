@@ -13,7 +13,7 @@ import { useAddToCart } from "@/hooks/use-cart";
 import {
   ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star,
   Camera, X, Zap, Package, ChevronLeft, ChevronRight, Printer, Truck,
-  RefreshCcw, Heart, CreditCard, Award, Lock
+  RefreshCcw, Heart, CreditCard, Award, Lock, CheckCircle2
 } from "lucide-react";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -116,6 +116,19 @@ export default function ProductDetail() {
       order.items.some((item: any) => item.product_id === Number(id) || item.productId === Number(id))
     );
   }, [userOrders, id, isAuthenticated]);
+
+  // ── هل قيّم المستخدم هذا المنتج مسبقاً؟ ─────────────────────────────────
+  const { data: myReviewData } = useQuery<{ reviewed: boolean; rating?: number; comment?: string; isApproved?: boolean }>({
+    queryKey: ['/api/products', id, 'my-review'],
+    queryFn: async () => {
+      const res = await fetch(`/api/products/${id}/my-review`, { credentials: 'include' });
+      if (!res.ok) return { reviewed: false };
+      return res.json();
+    },
+    enabled: isAuthenticated && !!id,
+    staleTime: 2 * 60000,
+  });
+  const alreadyReviewed = myReviewData?.reviewed === true;
 
   // ── PDP Layout ─────────────────────────────────────────────────────────
   const pdp: PdpLayout = useMemo(() => {
@@ -369,10 +382,18 @@ export default function ProductDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/products', id, 'reviews'] });
       queryClient.invalidateQueries({ queryKey: ['/api/products', id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/products', id, 'my-review'] });
       setReviewComment(""); setReviewRating(5); setReviewImageUrl(null);
-      toast({ title: "تم إضافة تقييمك بنجاح" });
+      toast({ title: "✅ تم إرسال تقييمك — سيظهر بعد المراجعة" });
     },
-    onError: () => toast({ title: "خطأ في إضافة التقييم", variant: "destructive" }),
+    onError: (err: any) => {
+      if (err?.status === 409) {
+        toast({ title: "لقد قيّمت هذا المنتج مسبقاً", variant: "destructive" });
+        queryClient.invalidateQueries({ queryKey: ['/api/products', id, 'my-review'] });
+      } else {
+        toast({ title: "خطأ في إضافة التقييم", variant: "destructive" });
+      }
+    },
   });
 
   const relatedProducts = useMemo(() => {
@@ -958,6 +979,20 @@ export default function ProductDetail() {
                     <Button size="sm" variant="outline" onClick={() => setLocation("/login")} className="text-xs" data-testid="button-login-to-review">
                       تسجيل الدخول
                     </Button>
+                  </div>
+                ) : hasDeliveredOrder && alreadyReviewed ? (
+                  <div className="border rounded-xl p-4 text-center space-y-2 bg-blue-50/40 dark:bg-blue-950/20 border-blue-200">
+                    <CheckCircle2 className="h-8 w-8 mx-auto text-blue-500" />
+                    <p className="font-semibold text-sm">شكراً على تقييمك!</p>
+                    {myReviewData?.isApproved === false && (
+                      <p className="text-xs text-muted-foreground">تقييمك بانتظار موافقة الفريق</p>
+                    )}
+                    <div className="flex justify-center gap-0.5 mt-1">
+                      {[1,2,3,4,5].map(s => (
+                        <Star key={s} className={`h-4 w-4 ${s <= (myReviewData?.rating ?? 5) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                      ))}
+                    </div>
+                    {myReviewData?.comment && <p className="text-xs text-muted-foreground italic">{myReviewData.comment}</p>}
                   </div>
                 ) : hasDeliveredOrder ? (
                   <div className="border rounded-xl p-4 space-y-3 bg-green-50/30 dark:bg-green-950/20 border-green-200">
