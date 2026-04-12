@@ -83,7 +83,7 @@ const colorMap: Record<string, string> = {
   زهري:"#F472B6",كحلي:"#1E3A8A",بيج:"#D4A574",
 };
 function getColorCode(c: string): string { return colorMap[c.trim()] ?? c.trim(); }
-function formatPrice(p: number | string): string { return Number(p).toLocaleString('ar-YE'); }
+function formatPrice(p: number | string): string { return Number(p).toLocaleString('en-US'); }
 
 // ── Main Component ──────────────────────────────────────────────────────────
 export default function ProductDetail() {
@@ -148,8 +148,14 @@ export default function ProductDetail() {
   const installmentEnabled      = displaySettings?.installmentEnabled !== false;
   const installmentMinAmount    = displaySettings?.installmentMinAmount ?? 50000;
   const installmentPercentages  = displaySettings?.installmentPercentages ?? "30,40,50";
-  const detailShowAddToCart     = displaySettings?.detailShowAddToCart !== false;
-  const detailShowShopNow       = displaySettings?.detailShowShopNow !== false;
+  const detailShowAddToCart        = displaySettings?.detailShowAddToCart !== false;
+  const detailShowShopNow          = displaySettings?.detailShowShopNow !== false;
+  const detailHideHeaderName       = displaySettings?.detailHideHeaderName === true;
+  const promoBarEnabled            = displaySettings?.promoBarEnabled === true;
+  const promoBarText               = displaySettings?.promoBarText ?? "خصم 15%: بدون حد أدنى للشراء";
+  const promoBarColor              = displaySettings?.promoBarColor ?? "#ef4444";
+  const promoBarDetails            = displaySettings?.promoBarDetails ?? "";
+  const showMarketerCouponToAll    = displaySettings?.showMarketerCouponToAll === true;
   const numberFontClass = displaySettings?.appFontNumbers ? `font-${displaySettings.appFontNumbers}` : "price-num";
 
   const marketerRef = useMemo(() => {
@@ -177,6 +183,7 @@ export default function ProductDetail() {
   const [enableCustomPrinting, setEnableCustomPrinting] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [variantActiveImg, setVariantActiveImg]   = useState<string | null>(null);
+  const [promoBarOpen, setPromoBarOpen]           = useState(false);
   const [selectedSmartVariant, setSelectedSmartVariant] = useState<Record<string, string>>({});
   const [reviewRating, setReviewRating]   = useState(5);
   const [reviewComment, setReviewComment] = useState("");
@@ -478,16 +485,19 @@ export default function ProductDetail() {
       case "price": {
         if (!sec["price"]?.visible) return null;
         const priceFontSize = s.fontSize ?? 22;
+        const couponPrice = sadeemMarketerDiscount > 0
+          ? Math.round(Number(currentPrice) * (1 - sadeemMarketerDiscount / 100))
+          : null;
+        const showCoupon = couponPrice && (isMarketerLink || showMarketerCouponToAll);
         return (
           <div key="price" className="px-4 pt-3" data-testid="section-price">
-            <div className="flex items-end gap-3 flex-wrap">
-              {/* Original price (crossed) */}
+            {/* Row 1: old price + discount badges */}
+            <div className="flex items-center gap-2 flex-wrap mb-1">
               {(sadeemShowOldPrice && effectiveDiscount > 0) || isMarketerLink ? (
-                <span className="text-muted-foreground line-through text-base" data-testid="text-original-price">
+                <span className="text-muted-foreground line-through text-sm" data-testid="text-original-price">
                   {formatPrice(currentPrice)} {currLabel}
                 </span>
               ) : null}
-              {/* Discount badge */}
               {sadeemShowDiscountBadge && effectiveDiscount > 0 && (
                 <Badge className="text-xs px-2 py-0.5 font-bold" style={{ background: 'var(--discount-badge-bg,#ef4444)', color:'white' }}
                   data-testid="badge-discount">
@@ -495,28 +505,69 @@ export default function ProductDetail() {
                 </Badge>
               )}
               {isMarketerLink && (
-                <Badge className="text-xs px-2 py-0.5 bg-purple-600 text-white">خصم مسوق -{sadeemMarketerDiscount}%</Badge>
+                <Badge className="text-xs px-2 py-0.5 bg-purple-600 text-white">مسوق -{sadeemMarketerDiscount}%</Badge>
               )}
             </div>
-            {/* Main price */}
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="font-extrabold text-primary leading-none price-num" style={{ fontSize: priceFontSize, fontFamily: 'var(--font-numbers)' }} data-testid="text-product-price" data-price="true">
+            {/* Row 2: main price */}
+            <div className="flex items-baseline gap-2">
+              <span className="font-extrabold text-primary leading-none price-num"
+                style={{ fontSize: priceFontSize, fontFamily: 'var(--font-numbers)' }}
+                data-testid="text-product-price" data-price="true">
                 {formatPrice(displayedPrice)}
               </span>
               <span className="text-base text-muted-foreground">{currLabel}</span>
-              {/* Smart variant price */}
               {selectedSmartV && Number(selectedSmartV.discount || 0) > 0 && sadeemShowOldPrice && (
-                <span className="text-sm line-through text-muted-foreground ml-2">
+                <span className="text-sm line-through text-muted-foreground">
                   {formatPrice(Math.round(Number(currentPrice) / (1 - Number(selectedSmartV.discount) / 100)))}
                 </span>
               )}
             </div>
-            {/* Total */}
+            {/* Row 3: كوبون SHEIN-style */}
+            {showCoupon && (
+              <div className="flex items-center gap-2 mt-1.5">
+                <span className="bg-purple-600 text-white text-xs px-2 py-0.5 rounded-md font-bold">مع كوبون</span>
+                <span className="font-extrabold text-purple-700 price-num text-base"
+                  style={{ fontFamily: 'var(--font-numbers)' }} data-price="true">
+                  {formatPrice(couponPrice)} {currLabel}
+                </span>
+              </div>
+            )}
+            {/* Row 4: الإجمالي */}
             {quantity > 1 && (
               <p className="text-sm text-muted-foreground mt-1">
                 الإجمالي: <strong className="text-foreground" data-testid="text-total-price">{formatPrice(totalPrice)} {currLabel}</strong>
                 {printingCost > 0 && <span className="mr-1">(يشمل {formatPrice(printingCost)} طباعة)</span>}
               </p>
+            )}
+            {/* شريط العروض الترويجية (SHEIN-style) */}
+            {promoBarEnabled && (
+              <>
+                <button
+                  className="mt-3 w-full flex items-center justify-between rounded-lg px-3 py-2 text-white text-sm font-semibold"
+                  style={{ background: promoBarColor }}
+                  onClick={() => setPromoBarOpen(true)}
+                  data-testid="button-promo-bar">
+                  <span>🏷️ {promoBarText}</span>
+                  <span className="text-white/80 text-xs">›</span>
+                </button>
+                {promoBarOpen && (
+                  <div className="fixed inset-0 z-[100] flex items-end" onClick={() => setPromoBarOpen(false)}>
+                    <div className="absolute inset-0 bg-black/40" />
+                    <div className="relative w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+                      <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
+                      <h3 className="text-lg font-bold mb-3 text-center" style={{ color: promoBarColor }}>🏷️ تفاصيل العروض الترويجية</h3>
+                      <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{promoBarDetails || promoBarText}</p>
+                      <button
+                        className="mt-4 w-full py-3 rounded-xl font-bold text-white"
+                        style={{ background: promoBarColor }}
+                        onClick={() => setPromoBarOpen(false)}
+                        data-testid="button-promo-close">
+                        حسناً، فهمت
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         );
@@ -1109,17 +1160,29 @@ export default function ProductDetail() {
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background pb-28" dir="rtl" style={{ paddingBottom: pdp.stickyBar.visible ? 84 : 24 }}>
-      {/* Back button */}
-      <div className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b px-3 py-2 flex items-center gap-2" data-testid="product-nav">
+      {/* Back button — when hiding name the bar becomes transparent overlay on the image */}
+      <div
+        className={`sticky top-0 z-40 px-3 py-2 flex items-center gap-2 ${
+          detailHideHeaderName
+            ? 'bg-transparent absolute top-0 left-0 right-0'
+            : 'bg-background/95 backdrop-blur border-b'
+        }`}
+        data-testid="product-nav"
+      >
         <Link href="/products">
-          <button className="p-2 rounded-full hover:bg-muted transition-colors" data-testid="button-back">
+          <button
+            className={`p-2 rounded-full transition-colors ${detailHideHeaderName ? 'bg-white/80 shadow' : 'hover:bg-muted'}`}
+            data-testid="button-back">
             <ArrowRight className="h-5 w-5" />
           </button>
         </Link>
-        <span className="font-semibold text-sm flex-1 truncate">{product.name}</span>
+        {!detailHideHeaderName && (
+          <span className="font-semibold text-sm flex-1 truncate">{product.name}</span>
+        )}
+        {detailHideHeaderName && <span className="flex-1" />}
         <button
           onClick={() => setWishlist(w => !w)}
-          className="p-2 rounded-full hover:bg-muted transition-colors"
+          className={`p-2 rounded-full transition-colors ${detailHideHeaderName ? 'bg-white/80 shadow' : 'hover:bg-muted'}`}
           data-testid="button-wishlist-top">
           <Heart className={`h-5 w-5 ${wishlist ? 'text-red-500 fill-red-500' : 'text-gray-400'}`} />
         </button>

@@ -198,7 +198,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
         const uploadRes: any = await new Promise((resolve, reject) => {
           const stream = cloudinary.uploader.upload_stream(
-            { folder: "oyo-plast", resource_type: "image" },
+            { folder: "oyo-plast/products", resource_type: "image",
+              transformation: [{ quality: "auto:best", fetch_format: "auto", width: 900, crop: "limit" }] },
             (err: any, result: any) => err ? reject(err) : resolve(result)
           );
           stream.end(req.file!.buffer);
@@ -235,7 +236,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
         const uploadRes: any = await new Promise((resolve, reject) => {
           const stream = cloudinary.uploader.upload_stream(
-            { folder: "oyo-plast/supplier", resource_type: "image" },
+            { folder: "oyo-plast/supplier", resource_type: "image",
+              transformation: [{ quality: "auto:best", fetch_format: "auto", width: 900, crop: "limit" }] },
             (err: any, result: any) => err ? reject(err) : resolve(result)
           );
           stream.end(req.file!.buffer);

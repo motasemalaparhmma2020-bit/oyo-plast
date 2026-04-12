@@ -117,7 +117,7 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
               <img src={product.imageUrl} alt={product.name} className="w-10 h-10 object-contain rounded-lg bg-gray-100 flex-shrink-0" loading="lazy" />
               <div className="flex-1 min-w-0 text-right">
                 <p className="text-sm font-semibold text-gray-800 line-clamp-1">{product.name}</p>
-                <p className="text-xs text-blue-600 font-bold">{Number(product.price).toLocaleString("ar-YE")} ر.ي</p>
+                <p className="text-xs text-blue-600 font-bold price-num" style={{ fontFamily: 'var(--font-numbers)' }} data-price="true">{Number(product.price).toLocaleString("en-US")} ر.ي</p>
               </div>
             </button>
           ))}

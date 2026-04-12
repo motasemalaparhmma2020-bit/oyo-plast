@@ -3187,8 +3187,94 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                   <p className="text-xs text-muted-foreground italic">اضبط نسبة {'>'} 0 لتفعيل نظام المسوقين</p>
                 )}
               </div>
-            </div>
 
+              {/* ── إظهار سعر الكوبون لجميع العملاء ── */}
+              {(settings?.sadeemMarketerDiscount ?? 0) > 0 && (
+                <div className="flex items-center justify-between rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 px-4 py-3">
+                  <div>
+                    <Label className="font-semibold text-sm">إظهار سعر الكوبون لجميع العملاء</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">يظهر "مع كوبون: X ر.ي" بأسلوب SHEIN لجميع الزوار</p>
+                  </div>
+                  <Switch
+                    checked={settings?.showMarketerCouponToAll ?? false}
+                    onCheckedChange={v => handleUpdate('showMarketerCouponToAll', v)}
+                    disabled={updateMutation.isPending}
+                    data-testid="switch-show-marketer-coupon-all"
+                  />
+                </div>
+              )}
+
+              {/* ── شريط العروض الترويجية (SHEIN-style) ── */}
+              <div className="space-y-3 rounded-lg border-2 border-orange-200 dark:border-orange-800 p-4 bg-orange-50/30 dark:bg-orange-950/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="font-semibold text-sm">شريط العروض الترويجية</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">شريط برتقالي/أحمر قابل للضغط تحت السعر مباشرة</p>
+                  </div>
+                  <Switch
+                    checked={settings?.promoBarEnabled ?? false}
+                    onCheckedChange={v => handleUpdate('promoBarEnabled', v)}
+                    disabled={updateMutation.isPending}
+                    data-testid="switch-promo-bar-enabled"
+                  />
+                </div>
+                {(settings?.promoBarEnabled ?? false) && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">نص الشريط</Label>
+                      <Input
+                        value={settings?.promoBarText ?? "خصم 15%: بدون حد أدنى للشراء"}
+                        onChange={e => setSettings((s: any) => ({ ...s, promoBarText: e.target.value }))}
+                        onBlur={e => handleUpdate('promoBarText', e.target.value)}
+                        placeholder="خصم 15%: بدون حد أدنى للشراء"
+                        data-testid="input-promo-bar-text"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">لون الخلفية</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="color"
+                          value={settings?.promoBarColor ?? "#ef4444"}
+                          onChange={e => { setSettings((s: any) => ({ ...s, promoBarColor: e.target.value })); handleUpdate('promoBarColor', e.target.value); }}
+                          className="w-12 h-9 p-1 cursor-pointer"
+                          data-testid="input-promo-bar-color"
+                        />
+                        <div className="flex-1 rounded-lg py-2 px-3 text-white text-sm font-semibold text-center"
+                          style={{ background: settings?.promoBarColor ?? '#ef4444' }}>
+                          🏷️ {settings?.promoBarText ?? "خصم 15%: بدون حد أدنى للشراء"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">تفاصيل العروض (تظهر عند الضغط)</Label>
+                      <Textarea
+                        value={settings?.promoBarDetails ?? ""}
+                        onChange={e => setSettings((s: any) => ({ ...s, promoBarDetails: e.target.value }))}
+                        onBlur={e => handleUpdate('promoBarDetails', e.target.value)}
+                        placeholder="اكتب تفاصيل العروض هنا... مثلاً: خصم 15% على جميع المنتجات بدون حد أدنى للشراء"
+                        rows={3}
+                        data-testid="input-promo-bar-details"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* ── إخفاء اسم المنتج في الشريط العلوي ── */}
+              <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                <div>
+                  <Label className="font-semibold text-sm">إخفاء الاسم فوق الصورة (نمط SHEIN)</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">الصورة تبدأ من أعلى الشاشة مباشرة — الرجوع يكون أيقونة شفافة على الصورة</p>
+                </div>
+                <Switch
+                  checked={settings?.detailHideHeaderName ?? false}
+                  onCheckedChange={v => handleUpdate('detailHideHeaderName', v)}
+                  disabled={updateMutation.isPending}
+                  data-testid="switch-detail-hide-header-name"
+                />
+              </div>
+            </div>
           </div>
         </div>
         {/* ═══════════════════════════════════════════════════════════════ */}

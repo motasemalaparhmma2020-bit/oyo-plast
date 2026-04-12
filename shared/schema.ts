@@ -548,6 +548,15 @@ export const displaySettings = pgTable("display_settings", {
   detailSheinLayout: boolean("detail_shein_layout").default(false), // نمط SHEIN: صورة من رأس الصفحة
   detailShowAddToCart: boolean("detail_show_add_to_cart").default(true), // إظهار زر "أضف للسلة"
   detailShowShopNow: boolean("detail_show_shop_now").default(true),      // إظهار زر "تسوق الآن"
+  // ── شريط العروض الترويجية (SHEIN-style promo bar) ──────────────────────────
+  promoBarEnabled: boolean("promo_bar_enabled").default(false),          // تفعيل الشريط
+  promoBarText: text("promo_bar_text").default("خصم 15%: بدون حد أدنى للشراء"),  // نص الشريط
+  promoBarColor: text("promo_bar_color").default("#ef4444"),             // لون الخلفية
+  promoBarDetails: text("promo_bar_details").default(""),                // تفاصيل تظهر عند الضغط
+  // ── سعر كوبون المسوقين ──────────────────────────────────────────────────────
+  showMarketerCouponToAll: boolean("show_marketer_coupon_to_all").default(false), // إظهار سعر الكوبون لجميع العملاء
+  // ── نمط رأس صفحة المنتج ────────────────────────────────────────────────────
+  detailHideHeaderName: boolean("detail_hide_header_name").default(false),        // إخفاء اسم المنتج في الشريط العلوي
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

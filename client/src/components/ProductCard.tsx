@@ -35,7 +35,7 @@ export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSiz
 
   const formatPrice = (price: string | null | undefined) => {
     if (!price) return '0';
-    return Number(price).toLocaleString('ar-YE');
+    return Number(price).toLocaleString('en-US');
   };
 
   // حساب الخصم الفعلي: effectiveDiscount من الباكند أو من bulkPricing
