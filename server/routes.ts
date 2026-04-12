@@ -226,6 +226,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/supplier/upload", supplierUpload.single("image"), requireSupplier, async (req: any, res) => {
     if (!req.file) return res.status(400).json({ message: "لم يتم رفع صورة" });
     try {
+      // ─── Cloudinary upload (if configured) ──────────────────────────
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+      const apiKey = process.env.CLOUDINARY_API_KEY;
+      const apiSecret = process.env.CLOUDINARY_API_SECRET;
+      if (cloudName && apiKey && apiSecret) {
+        const { v2: cloudinary } = await import("cloudinary");
+        cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
+        const uploadRes: any = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "oyo-plast/supplier", resource_type: "image" },
+            (err: any, result: any) => err ? reject(err) : resolve(result)
+          );
+          stream.end(req.file!.buffer);
+        });
+        return res.json({ imageUrl: uploadRes.secure_url, provider: "cloudinary" });
+      }
+      // ─── Fallback: base64 ────────────────────────────────────────────
       const { pool: dbPool } = await import("./db");
       const settings = await getImageSettings(dbPool);
       const { buffer, mimeOut } = await processImage(req.file.buffer, req.file.mimetype, {
@@ -235,10 +252,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
       const base64 = buffer.toString("base64");
       const imageUrl = `data:${mimeOut};base64,${base64}`;
-      res.json({ imageUrl });
+      res.json({ imageUrl, provider: "base64" });
     } catch {
       const base64 = req.file.buffer.toString("base64");
-      res.json({ imageUrl: `data:${req.file.mimetype};base64,${base64}` });
+      res.json({ imageUrl: `data:${req.file.mimetype};base64,${base64}`, provider: "base64" });
     }
   });
 
@@ -313,7 +330,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         confirmed: `✅ تم تأكيد طلبك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\nسنبدأ تجهيز طلبك قريباً.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
         preparing:  `⚙️ جاري تجهيز طلبك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\nطلبك قيد التجهيز والتعبئة الآن.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
         shipped:    `🚚 تم شحن طلبك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\n${extra?.trackingNumber ? `📦 رقم التتبع: ${extra.trackingNumber}\n` : ""}طلبك في الطريق إليك.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
-        delivered:  `🎉 تم تسليم طلبك بنجاح!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\nنتمنى أن ينال طلبك إعجابك.\nشكراً لثقتك بأويو بلاست! 💙\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
+        delivered:  `🎉 تم تسليم طلبك بنجاح!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\nنتمنى أن ينال طلبك إعجابك.\nشكراً لثقتك بأويو بلاست! 💙\n\n⭐ شاركنا رأيك وقيّم منتجاتك:\n🔗 https://oyoplast.replit.app/orders\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
         cancelled:  `❌ تم إلغاء طلبك\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\nللاستفسار تواصل معنا.\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
       };
 
@@ -1010,16 +1027,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.post("/api/upload/review", async (req: any, res) => {
+  app.post("/api/upload/review", upload.single("image"), async (req: any, res) => {
+    if (!req.file) return res.status(400).json({ message: "لا يوجد ملف" });
     try {
-      upload.single("image")(req, res, async (err) => {
-        if (err) return res.status(400).json({ message: "فشل رفع الصورة" });
-        if (!req.file) return res.status(400).json({ message: "لا يوجد ملف" });
-        const imageUrl = `/api/admin/upload-serve/${req.file.filename}`;
-        res.json({ imageUrl: `/uploads/${req.file.filename}` });
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+      const apiKey = process.env.CLOUDINARY_API_KEY;
+      const apiSecret = process.env.CLOUDINARY_API_SECRET;
+      if (cloudName && apiKey && apiSecret) {
+        const { v2: cloudinary } = await import("cloudinary");
+        cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
+        const uploadRes: any = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "oyo-plast/reviews", resource_type: "image" },
+            (err: any, result: any) => err ? reject(err) : resolve(result)
+          );
+          stream.end(req.file!.buffer);
+        });
+        return res.json({ imageUrl: uploadRes.secure_url });
+      }
+      // fallback: base64
+      const { pool: dbPool } = await import("./db");
+      const settings = await getImageSettings(dbPool);
+      const { buffer, mimeOut } = await processImage(req.file.buffer, req.file.mimetype, {
+        maxWidth: Math.min(settings.img_max_width, 800),
+        maxHeight: Math.min(settings.img_max_height, 800),
+        quality: settings.img_quality,
       });
+      res.json({ imageUrl: `data:${mimeOut};base64,${buffer.toString("base64")}` });
     } catch (e: any) {
-      res.status(500).json({ message: "فشل رفع الصورة" });
+      const base64 = req.file.buffer.toString("base64");
+      res.json({ imageUrl: `data:${req.file.mimetype};base64,${base64}` });
     }
   });
 

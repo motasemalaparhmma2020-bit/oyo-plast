@@ -168,6 +168,17 @@ function CartMerger() {
 // تحميل إعدادات العرض وتطبيقها كـ CSS Variables على مستوى الجذر
 function DisplaySettingsInjector() {
   useEffect(() => {
+    const FONT_MAP: Record<string, string> = {
+      'cairo':           "'Cairo', 'Segoe UI', sans-serif",
+      'tajawal':         "'Tajawal', sans-serif",
+      'almarai':         "'Almarai', sans-serif",
+      'ibm-plex-arabic': "'IBM Plex Sans Arabic', sans-serif",
+      'noto-kufi':       "'Noto Kufi Arabic', sans-serif",
+      'roboto-condensed':"'Roboto Condensed', sans-serif",
+      'barlow':          "'Barlow', sans-serif",
+      'inter':           "'Inter', sans-serif",
+      'oswald':          "'Oswald', sans-serif",
+    };
     const applySettings = (data: any) => {
       const root = document.documentElement;
       root.style.setProperty('--card-image-height', `${data.productCardHeight ?? 200}px`);
@@ -182,6 +193,13 @@ function DisplaySettingsInjector() {
       root.style.setProperty('--card-border-radius', isFullBleed ? '4px' : '16px');
       root.style.setProperty('--card-width', `${data.productCardWidth ?? 160}px`);
       root.style.setProperty('--discount-badge-bg', data.discountBadgeBg ?? '#ef4444');
+      // خطوط الواجهة
+      const arabicFont = FONT_MAP[data.appFontArabic ?? 'cairo'] ?? FONT_MAP['cairo'];
+      const numFont = FONT_MAP[data.appFontNumbers ?? 'cairo'] ?? FONT_MAP['cairo'];
+      root.style.setProperty('--font-arabic', arabicFont);
+      root.style.setProperty('--font-numbers', numFont);
+      root.style.setProperty('--font-sans', arabicFont);
+      root.style.setProperty('--font-display', arabicFont);
     };
     fetch('/api/display-settings')
       .then(r => r.ok ? r.json() : null)
