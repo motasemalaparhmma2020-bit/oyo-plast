@@ -596,6 +596,30 @@ export const displaySettings = pgTable("display_settings", {
   whatsappNumber: text("whatsapp_number").default(""),                            // رقم واتساب خدمة العملاء
   showWhatsappButton: boolean("show_whatsapp_button").default(false),             // إظهار زر واتساب العائم
   whatsappMessage: text("whatsapp_message").default("مرحباً، أحتاج مساعدة"), // الرسالة الافتراضية
+  // ── إعدادات عرض تفاصيل المنتج — السلة ──────────────────────────────────────
+  cartShowColor: boolean("cart_show_color").default(true).notNull(),          // إظهار اللون في السلة
+  cartShowSize: boolean("cart_show_size").default(true).notNull(),            // إظهار المقاس في السلة
+  cartShowBagColor: boolean("cart_show_bag_color").default(true).notNull(),   // إظهار لون الكيس في السلة
+  cartShowPrintColors: boolean("cart_show_print_colors").default(true).notNull(), // إظهار ألوان الطباعة في السلة
+  cartShowDesignFile: boolean("cart_show_design_file").default(true).notNull(),   // إظهار مؤشر ملف التصميم
+  cartShowDesignNotes: boolean("cart_show_design_notes").default(true).notNull(), // إظهار ملاحظات التصميم
+  cartItemMode: text("cart_item_mode").default("compact").notNull(),           // compact | collapsible
+  // ── إعدادات عرض تفاصيل المنتج — صفحة الدفع ─────────────────────────────────
+  checkoutShowColor: boolean("checkout_show_color").default(true).notNull(),
+  checkoutShowSize: boolean("checkout_show_size").default(true).notNull(),
+  checkoutShowBagColor: boolean("checkout_show_bag_color").default(true).notNull(),
+  checkoutShowPrintColors: boolean("checkout_show_print_colors").default(true).notNull(),
+  checkoutShowDesignFile: boolean("checkout_show_design_file").default(true).notNull(),
+  checkoutShowDesignNotes: boolean("checkout_show_design_notes").default(true).notNull(),
+  checkoutItemMode: text("checkout_item_mode").default("compact").notNull(),   // compact | collapsible
+  // ── إعدادات عرض تفاصيل المنتج — تأكيد الطلب ────────────────────────────────
+  orderShowColor: boolean("order_show_color").default(true).notNull(),
+  orderShowSize: boolean("order_show_size").default(true).notNull(),
+  orderShowBagColor: boolean("order_show_bag_color").default(true).notNull(),
+  orderShowPrintColors: boolean("order_show_print_colors").default(true).notNull(),
+  orderShowDesignFile: boolean("order_show_design_file").default(true).notNull(),
+  orderShowDesignNotes: boolean("order_show_design_notes").default(true).notNull(),
+  orderItemMode: text("order_item_mode").default("collapsible").notNull(),     // compact | collapsible
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

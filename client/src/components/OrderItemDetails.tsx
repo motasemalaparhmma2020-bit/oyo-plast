@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Printer, Paperclip, StickyNote, ExternalLink } from "lucide-react";
+import type { ItemDisplayConfig } from "@/hooks/use-display-settings";
 
 /* ── خريطة الألوان ── */
 const colorMap: Record<string, string> = {
@@ -17,7 +18,7 @@ function getColorHex(name?: string | null): string {
   return colorMap[name.trim()] ?? "#E5E7EB";
 }
 
-function ColorDot({ color, size = "sm" }: { color: string; size?: "sm" | "xs" }) {
+export function ColorDot({ color, size = "sm" }: { color: string; size?: "sm" | "xs" }) {
   const dim = size === "xs" ? "w-3 h-3" : "w-3.5 h-3.5";
   return (
     <span
@@ -40,10 +41,20 @@ export interface OrderItemMeta {
   designFileUrl?: string | null;
 }
 
-function hasMeta(item: OrderItemMeta): boolean {
+const ALL_ON: ItemDisplayConfig = {
+  showColor: true, showSize: true, showBagColor: true,
+  showPrintColors: true, showDesignFile: true, showDesignNotes: true,
+  mode: "compact",
+};
+
+function hasMeta(item: OrderItemMeta, cfg: ItemDisplayConfig = ALL_ON): boolean {
   return !!(
-    item.selectedSize || item.selectedColor || item.selectedBagColor ||
-    item.printColor1 || item.customPrinting || item.designNotes || item.designFileUrl
+    (cfg.showColor && item.selectedColor) ||
+    (cfg.showSize && item.selectedSize) ||
+    (cfg.showBagColor && item.selectedBagColor) ||
+    (cfg.showPrintColors && item.printColor1) ||
+    (cfg.showDesignNotes && item.designNotes) ||
+    (cfg.showDesignFile && item.designFileUrl)
   );
 }
 
@@ -62,46 +73,46 @@ function Chip({ children, color = "default" }: { children: React.ReactNode; colo
   );
 }
 
-/* ── عرض بسيط مضغوط (للفاتورة المطبوعة) ── */
-export function OrderItemInlineMeta({ item }: { item: OrderItemMeta }) {
-  if (!hasMeta(item)) return null;
+/* ── Compact inline chips — للفاتورة والسلة المضغوطة ── */
+export function OrderItemInlineMeta({ item, cfg = ALL_ON }: { item: OrderItemMeta; cfg?: ItemDisplayConfig }) {
+  if (!hasMeta(item, cfg)) return null;
   const printColors = [item.printColor1, item.printColor2, item.printColor3].filter(Boolean) as string[];
 
   return (
     <div className="flex flex-wrap gap-1 mt-0.5">
-      {item.selectedColor && (
+      {cfg.showColor && item.selectedColor && (
         <span className="inline-flex items-center gap-0.5 text-[9px] border rounded px-1 py-0.5 bg-gray-50 text-gray-600">
           <ColorDot color={item.selectedColor} size="xs" />
           {item.selectedColor}
         </span>
       )}
-      {item.selectedSize && (
+      {cfg.showSize && item.selectedSize && (
         <span className="inline-flex items-center gap-0.5 text-[9px] border rounded px-1 py-0.5 bg-gray-50 text-gray-600">
           📐 {item.selectedSize}
         </span>
       )}
-      {item.selectedBagColor && (
+      {cfg.showBagColor && item.selectedBagColor && (
         <span className="inline-flex items-center gap-0.5 text-[9px] border rounded px-1 py-0.5 bg-cyan-50 text-cyan-700">
           <ColorDot color={item.selectedBagColor} size="xs" />
           كيس: {item.selectedBagColor}
         </span>
       )}
-      {printColors.length > 0 && (
+      {cfg.showPrintColors && printColors.length > 0 && (
         <span className="inline-flex items-center gap-0.5 text-[9px] border rounded px-1 py-0.5 bg-violet-50 text-violet-700">
           🖨️ {printColors.map((c, i) => (
             <span key={i} className="inline-flex items-center gap-0.5">
               <ColorDot color={c} size="xs" />
-              {c}{i < printColors.length - 1 && "+"}
+              {c}{i < printColors.length - 1 && <span className="text-violet-300">+</span>}
             </span>
           ))}
         </span>
       )}
-      {item.designNotes && (
+      {cfg.showDesignNotes && item.designNotes && (
         <span className="inline-flex items-center gap-0.5 text-[9px] border rounded px-1 py-0.5 bg-amber-50 text-amber-700">
           📝 {item.designNotes}
         </span>
       )}
-      {item.designFileUrl && (
+      {cfg.showDesignFile && item.designFileUrl && (
         <span className="inline-flex items-center gap-0.5 text-[9px] border rounded px-1 py-0.5 bg-blue-50 text-blue-600">
           📎 تصميم مرفق
         </span>
@@ -110,13 +121,96 @@ export function OrderItemInlineMeta({ item }: { item: OrderItemMeta }) {
   );
 }
 
-/* ── عرض قابل للطي (للعميل والأدمن والموصل) ── */
-export function OrderItemCollapsibleMeta({ item, defaultOpen = false }: { item: OrderItemMeta; defaultOpen?: boolean }) {
+/* ── Compact SHEIN-style — للسلة وصفحة الدفع ── */
+export function OrderItemCompactMeta({ item, cfg = ALL_ON }: { item: OrderItemMeta; cfg?: ItemDisplayConfig }) {
+  if (!hasMeta(item, cfg)) return null;
+  const printColors = [item.printColor1, item.printColor2, item.printColor3].filter(Boolean) as string[];
+  const hasBaseInfo = (cfg.showColor && item.selectedColor) || (cfg.showSize && item.selectedSize);
+  const hasPrinting = item.customPrinting && (
+    (cfg.showBagColor && item.selectedBagColor) ||
+    (cfg.showPrintColors && printColors.length > 0)
+  );
+  const hasDesignInfo = (cfg.showDesignFile && item.designFileUrl) || (cfg.showDesignNotes && item.designNotes);
+
+  return (
+    <div className="flex flex-col gap-0.5 mt-0.5">
+      {/* سطر اللون / المقاس — SHEIN style */}
+      {hasBaseInfo && (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          {cfg.showColor && item.selectedColor && (
+            <>
+              <ColorDot color={item.selectedColor} size="xs" />
+              <span>{item.selectedColor}</span>
+            </>
+          )}
+          {cfg.showColor && item.selectedColor && cfg.showSize && item.selectedSize && (
+            <span className="text-muted-foreground/50">/</span>
+          )}
+          {cfg.showSize && item.selectedSize && (
+            <span>{item.selectedSize}</span>
+          )}
+        </div>
+      )}
+
+      {/* طباعة: لون الكيس + ألوان الطباعة */}
+      {hasPrinting && (
+        <div className="flex items-center gap-1 flex-wrap">
+          {cfg.showBagColor && item.selectedBagColor && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-cyan-700 bg-cyan-50 rounded-full px-1.5 py-0.5 border border-cyan-200">
+              <ColorDot color={item.selectedBagColor} size="xs" />
+              {item.selectedBagColor}
+            </span>
+          )}
+          {cfg.showPrintColors && printColors.length > 0 && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-violet-700 bg-violet-50 rounded-full px-1.5 py-0.5 border border-violet-200">
+              <Printer className="w-2.5 h-2.5" />
+              {printColors.length} ألوان:
+              {printColors.map((c, i) => (
+                <span key={i} className="inline-flex items-center gap-0.5">
+                  <ColorDot color={c} size="xs" />
+                  {c}{i < printColors.length - 1 && <span className="text-violet-300">+</span>}
+                </span>
+              ))}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* ملف + ملاحظات */}
+      {hasDesignInfo && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {cfg.showDesignFile && item.designFileUrl && (
+            <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-600">
+              <Paperclip className="w-2.5 h-2.5" />
+              مرفق
+            </span>
+          )}
+          {cfg.showDesignNotes && item.designNotes && (
+            <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-700 truncate max-w-[140px]">
+              <StickyNote className="w-2.5 h-2.5 shrink-0" />
+              {item.designNotes}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Collapsible — للطلبات / تأكيد الطلب / الأدمن ── */
+export function OrderItemCollapsibleMeta({
+  item, cfg = ALL_ON, defaultOpen = false,
+}: {
+  item: OrderItemMeta; cfg?: ItemDisplayConfig; defaultOpen?: boolean;
+}) {
   const [open, setOpen] = useState(defaultOpen);
-  if (!hasMeta(item)) return null;
+  if (!hasMeta(item, cfg)) return null;
 
   const printColors = [item.printColor1, item.printColor2, item.printColor3].filter(Boolean) as string[];
-  const hasPrinting = item.customPrinting && (item.selectedBagColor || printColors.length > 0);
+  const hasPrinting = item.customPrinting && (
+    (cfg.showBagColor && item.selectedBagColor) ||
+    (cfg.showPrintColors && printColors.length > 0)
+  );
 
   return (
     <div className="mt-1">
@@ -127,13 +221,14 @@ export function OrderItemCollapsibleMeta({ item, defaultOpen = false }: { item: 
       >
         {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
         <span>التفاصيل</span>
-        {/* ملخص سريع حين مطوية */}
         {!open && (
           <span className="flex items-center gap-0.5 mr-1">
-            {item.selectedColor && <ColorDot color={item.selectedColor} />}
-            {item.selectedSize && <span className="text-[10px] bg-gray-100 rounded px-1">{item.selectedSize}</span>}
+            {cfg.showColor && item.selectedColor && <ColorDot color={item.selectedColor} />}
+            {cfg.showSize && item.selectedSize && (
+              <span className="text-[10px] bg-gray-100 rounded px-1">{item.selectedSize}</span>
+            )}
             {item.customPrinting && <Printer className="h-3 w-3 text-violet-500" />}
-            {item.designFileUrl && <Paperclip className="h-3 w-3 text-blue-500" />}
+            {cfg.showDesignFile && item.designFileUrl && <Paperclip className="h-3 w-3 text-blue-500" />}
           </span>
         )}
       </button>
@@ -141,18 +236,13 @@ export function OrderItemCollapsibleMeta({ item, defaultOpen = false }: { item: 
       {open && (
         <div className="mt-1.5 space-y-1.5 bg-gray-50 dark:bg-gray-800/40 rounded-lg p-2 border border-border/50">
           {/* اللون والمقاس */}
-          {(item.selectedColor || item.selectedSize) && (
+          {((cfg.showColor && item.selectedColor) || (cfg.showSize && item.selectedSize)) && (
             <div className="flex flex-wrap gap-1">
-              {item.selectedColor && (
-                <Chip>
-                  <ColorDot color={item.selectedColor} />
-                  {item.selectedColor}
-                </Chip>
+              {cfg.showColor && item.selectedColor && (
+                <Chip><ColorDot color={item.selectedColor} />{item.selectedColor}</Chip>
               )}
-              {item.selectedSize && (
-                <Chip>
-                  📐 {item.selectedSize}
-                </Chip>
+              {cfg.showSize && item.selectedSize && (
+                <Chip>📐 {item.selectedSize}</Chip>
               )}
             </div>
           )}
@@ -160,22 +250,20 @@ export function OrderItemCollapsibleMeta({ item, defaultOpen = false }: { item: 
           {/* طباعة مخصصة */}
           {hasPrinting && (
             <div className="space-y-1">
-              {item.selectedBagColor && (
+              {cfg.showBagColor && item.selectedBagColor && (
                 <div className="flex items-center gap-1">
                   <span className="text-[10px] text-muted-foreground w-16 shrink-0">لون الكيس:</span>
                   <Chip color="cyan">
-                    <ColorDot color={item.selectedBagColor} />
-                    {item.selectedBagColor}
+                    <ColorDot color={item.selectedBagColor} />{item.selectedBagColor}
                   </Chip>
                 </div>
               )}
-              {printColors.length > 0 && (
+              {cfg.showPrintColors && printColors.length > 0 && (
                 <div className="flex items-center gap-1 flex-wrap">
                   <span className="text-[10px] text-muted-foreground w-16 shrink-0">ألوان طباعة:</span>
                   {printColors.map((c, i) => (
                     <Chip key={i} color="violet">
-                      <ColorDot color={c} />
-                      {c}
+                      <ColorDot color={c} />{c}
                     </Chip>
                   ))}
                 </div>
@@ -184,7 +272,7 @@ export function OrderItemCollapsibleMeta({ item, defaultOpen = false }: { item: 
           )}
 
           {/* الملاحظات */}
-          {item.designNotes && (
+          {cfg.showDesignNotes && item.designNotes && (
             <div className="flex items-start gap-1">
               <StickyNote className="h-3 w-3 text-amber-500 shrink-0 mt-0.5" />
               <span className="text-[10px] text-amber-700 dark:text-amber-400">{item.designNotes}</span>
@@ -192,7 +280,7 @@ export function OrderItemCollapsibleMeta({ item, defaultOpen = false }: { item: 
           )}
 
           {/* ملف التصميم */}
-          {item.designFileUrl && (
+          {cfg.showDesignFile && item.designFileUrl && (
             <a
               href={item.designFileUrl}
               target="_blank"

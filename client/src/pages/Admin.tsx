@@ -3459,6 +3459,104 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
         </CollapsibleSection>
         {/* ═══════════════════════════════════════════════════════════════ */}
 
+        {/* 🛒 إعدادات عرض تفاصيل المنتج في السلة / الدفع / الطلب */}
+        <CollapsibleSection
+          id="item-display-settings"
+          title="تفاصيل المنتج في السلة والطلبات"
+          subtitle="تحكم بما يظهر في السلة وصفحة الدفع وتأكيد الطلب"
+          icon={<ShoppingBag className="h-5 w-5 text-white flex-shrink-0" />}
+          gradient="bg-gradient-to-l from-teal-600 to-cyan-600"
+          border="border-teal-200 dark:border-teal-800"
+        >
+          <div className="p-5 space-y-6 bg-teal-50/30 dark:bg-teal-950/20">
+            {/* ─── دالة مساعدة للتبديل ─── */}
+            {(["cart", "checkout", "order"] as const).map((section) => {
+              const labels: Record<string, string> = {
+                cart: "🛒 سلة التسوق",
+                checkout: "💳 صفحة الدفع",
+                order: "✅ تأكيد الطلب",
+              };
+              const keyMap: Record<string, Record<string, string>> = {
+                cart: {
+                  showColor: "cartShowColor", showSize: "cartShowSize",
+                  showBagColor: "cartShowBagColor", showPrintColors: "cartShowPrintColors",
+                  showDesignFile: "cartShowDesignFile", showDesignNotes: "cartShowDesignNotes",
+                  mode: "cartItemMode",
+                },
+                checkout: {
+                  showColor: "checkoutShowColor", showSize: "checkoutShowSize",
+                  showBagColor: "checkoutShowBagColor", showPrintColors: "checkoutShowPrintColors",
+                  showDesignFile: "checkoutShowDesignFile", showDesignNotes: "checkoutShowDesignNotes",
+                  mode: "checkoutItemMode",
+                },
+                order: {
+                  showColor: "orderShowColor", showSize: "orderShowSize",
+                  showBagColor: "orderShowBagColor", showPrintColors: "orderShowPrintColors",
+                  showDesignFile: "orderShowDesignFile", showDesignNotes: "orderShowDesignNotes",
+                  mode: "orderItemMode",
+                },
+              };
+              const km = keyMap[section];
+              return (
+                <div key={section} className="rounded-xl border border-teal-200/60 bg-white dark:bg-card p-4 space-y-4">
+                  <p className="font-bold text-sm text-teal-700 dark:text-teal-300">{labels[section]}</p>
+
+                  {/* طريقة العرض */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">طريقة العرض</p>
+                      <p className="text-xs text-muted-foreground">مضغوط: كل شيء ظاهر مباشرة | قابل للطي: تُخفى التفاصيل داخل زر</p>
+                    </div>
+                    <div className="flex items-center gap-1 bg-muted rounded-full p-0.5">
+                      {(["compact", "collapsible"] as const).map(mode => (
+                        <button
+                          key={mode}
+                          onClick={() => handleUpdate(km.mode, mode)}
+                          className={`px-3 py-1.5 text-xs font-bold rounded-full transition-colors ${
+                            (settings?.[km.mode] ?? (section === "order" ? "collapsible" : "compact")) === mode
+                              ? "bg-teal-500 text-white shadow"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                          data-testid={`button-${section}-mode-${mode}`}
+                        >
+                          {mode === "compact" ? "مضغوط" : "قابل للطي"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="h-px bg-border" />
+
+                  {/* التبديلات */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { key: "showColor", label: "اللون", desc: "دائرة اللون + اسمه" },
+                      { key: "showSize", label: "المقاس", desc: "مقاس المنتج (S/M/XL...)" },
+                      { key: "showBagColor", label: "لون الكيس", desc: "لون كيس الطباعة" },
+                      { key: "showPrintColors", label: "ألوان الطباعة", desc: "ألوان الطباعة المختارة" },
+                      { key: "showDesignFile", label: "ملف التصميم", desc: "مؤشر وجود ملف مرفق" },
+                      { key: "showDesignNotes", label: "ملاحظات التصميم", desc: "ملاحظات الطباعة المخصصة" },
+                    ].map(({ key, label, desc }) => (
+                      <div key={key} className="flex items-center justify-between gap-2 bg-muted/40 rounded-lg px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold">{label}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{desc}</p>
+                        </div>
+                        <Switch
+                          checked={settings?.[km[key]] ?? true}
+                          onCheckedChange={v => handleUpdate(km[key], v)}
+                          data-testid={`switch-${section}-${key}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CollapsibleSection>
+        {/* ═══════════════════════════════════════════════════════════════ */}
+
         {/* 💳 إعدادات الدفع والشحن */}
         <CollapsibleSection
           id="payment-shipping"

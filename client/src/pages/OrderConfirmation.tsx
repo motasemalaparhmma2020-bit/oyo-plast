@@ -3,7 +3,8 @@ import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Package, Truck, ArrowRight, Loader2, Phone, MapPin, CreditCard, Clock } from "lucide-react";
-import { OrderItemCollapsibleMeta } from "@/components/OrderItemDetails";
+import { OrderItemCollapsibleMeta, OrderItemCompactMeta } from "@/components/OrderItemDetails";
+import { useDisplaySettings } from "@/hooks/use-display-settings";
 
 export default function OrderConfirmation() {
   const [_location, navigate] = useLocation();
@@ -34,6 +35,9 @@ export default function OrderConfirmation() {
     },
     enabled: !!orderId,
   });
+
+  const displaySettings = useDisplaySettings();
+  const orderCfg = displaySettings.order;
 
   if (isLoading) {
     return (
@@ -161,7 +165,10 @@ export default function OrderConfirmation() {
               <div className="grid grid-cols-4 items-start">
                 <div className="col-span-2 pr-1">
                   <span className="font-medium leading-tight block">{item.productName}</span>
-                  <OrderItemCollapsibleMeta item={item} />
+                  {orderCfg.mode === "collapsible"
+                    ? <OrderItemCollapsibleMeta item={item} cfg={orderCfg} />
+                    : <OrderItemCompactMeta item={item} cfg={orderCfg} />
+                  }
                 </div>
                 <span className="text-center">{Number(item.price).toLocaleString("ar-YE")}</span>
                 <span className="text-left font-bold text-primary">

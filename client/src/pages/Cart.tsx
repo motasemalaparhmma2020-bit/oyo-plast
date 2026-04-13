@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Trash2, Plus, Minus, ShoppingBag, Loader2, Printer, Paperclip, StickyNote } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingBag, Loader2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useEffect, useMemo, useState } from "react";
 import type { Product } from "@shared/schema";
@@ -12,53 +12,23 @@ import {
   getGuestCart,
   setGuestCart,
 } from "@/lib/cartUtils";
-
-/* ─── خريطة الألوان العربية ─── */
-const colorMap: Record<string, string> = {
-  أبيض: "#FFFFFF", أسود: "#000000", أحمر: "#EF4444",
-  أزرق: "#3B82F6", أخضر: "#22C55E", أصفر: "#EAB308",
-  برتقالي: "#F97316", وردي: "#EC4899", بنفسجي: "#8B5CF6",
-  رمادي: "#6B7280", بني: "#92400E", ذهبي: "#D97706",
-  فضي: "#9CA3AF", شفاف: "transparent", سماوي: "#06B6D4",
-  زهري: "#F472B6", كحلي: "#1E3A8A", بيج: "#D4A574",
-  أخضرك: "#16A34A",
-};
-
-function getColorCode(name: string): string {
-  return colorMap[name?.trim()] ?? "#E5E7EB";
-}
+import { useDisplaySettings } from "@/hooks/use-display-settings";
+import { OrderItemCompactMeta, OrderItemCollapsibleMeta } from "@/components/OrderItemDetails";
+import type { ItemDisplayConfig } from "@/hooks/use-display-settings";
 
 function formatPrice(n: number) {
   return n.toLocaleString("ar-YE");
 }
 
-/* ─── دائرة اللون ─── */
-function ColorDot({ color }: { color: string }) {
-  const isTransparent = color === "شفاف";
-  return (
-    <span
-      className="inline-block w-3.5 h-3.5 rounded-full border border-gray-300 shadow-sm shrink-0"
-      style={{
-        backgroundColor: getColorCode(color),
-        backgroundImage: isTransparent
-          ? "linear-gradient(45deg,#ccc 25%,transparent 25%,transparent 75%,#ccc 75%,#ccc),linear-gradient(45deg,#ccc 25%,transparent 25%,transparent 75%,#ccc 75%,#ccc)"
-          : "none",
-        backgroundSize: "5px 5px",
-        backgroundPosition: "0 0, 2.5px 2.5px",
-      }}
-    />
-  );
-}
-
-/* ─── بطاقة العنصر — نمط SHEIN ─── */
+/* ─── بطاقة العنصر — نمط SHEIN مع دعم الإعدادات ─── */
 function CartRow({
-  image, name, price, originalPrice, unit, quantity,
+  image, name, price, unit, quantity,
   selectedSize, selectedColor,
   selectedBagColor, printColor1, printColor2, printColor3, printColorCount,
   customPrinting, designNotes, designFileUrl,
-  onIncrease, onDecrease, onRemove, testPrefix,
+  onIncrease, onDecrease, onRemove, testPrefix, cfg,
 }: {
-  image: string; name: string; price: number; originalPrice?: number;
+  image: string; name: string; price: number;
   unit: string; quantity: number;
   selectedSize?: string | null; selectedColor?: string | null;
   selectedBagColor?: string | null;
@@ -68,12 +38,14 @@ function CartRow({
   designNotes?: string | null; designFileUrl?: string | null;
   onIncrease: () => void; onDecrease: () => void; onRemove: () => void;
   testPrefix: string;
+  cfg: ItemDisplayConfig;
 }) {
   const total = price * quantity;
-  const printColors = [printColor1, printColor2, printColor3].filter(Boolean) as string[];
-  const hasPrinting = customPrinting && (printColors.length > 0 || selectedBagColor);
-  const hasDesign = !!designFileUrl;
-  const hasNotes = !!designNotes;
+  const meta = {
+    selectedColor, selectedSize, selectedBagColor,
+    printColor1, printColor2, printColor3, printColorCount,
+    customPrinting, designNotes, designFileUrl,
+  };
 
   return (
     <div className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm overflow-hidden">
@@ -84,79 +56,18 @@ function CartRow({
         </div>
 
         {/* تفاصيل المنتج */}
-        <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
+        <div className="flex-1 min-w-0 p-3 flex flex-col gap-1">
           {/* الاسم */}
           <p className="text-sm font-semibold leading-snug line-clamp-2 text-foreground">{name}</p>
 
-          {/* اللون والمقاس — نمط SHEIN */}
-          {(selectedColor || selectedSize) && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {selectedColor && (
-                <>
-                  <ColorDot color={selectedColor} />
-                  <span className="text-xs text-muted-foreground">{selectedColor}</span>
-                </>
-              )}
-              {selectedColor && selectedSize && (
-                <span className="text-xs text-muted-foreground">/</span>
-              )}
-              {selectedSize && (
-                <span className="text-xs text-muted-foreground font-medium">{selectedSize}</span>
-              )}
-            </div>
-          )}
+          {/* تفاصيل المنتج حسب الإعدادات */}
+          {cfg.mode === "collapsible"
+            ? <OrderItemCollapsibleMeta item={meta} cfg={cfg} />
+            : <OrderItemCompactMeta item={meta} cfg={cfg} />
+          }
 
-          {/* معلومات الطباعة المخصصة */}
-          {hasPrinting && (
-            <div className="flex flex-col gap-1 bg-cyan-50 dark:bg-cyan-950/30 rounded-lg px-2 py-1.5 border border-cyan-200/60">
-              {/* لون الكيس */}
-              {selectedBagColor && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-cyan-700 font-medium">لون الكيس:</span>
-                  <ColorDot color={selectedBagColor} />
-                  <span className="text-[10px] text-cyan-700">{selectedBagColor}</span>
-                </div>
-              )}
-              {/* ألوان الطباعة */}
-              {printColors.length > 0 && (
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <Printer className="w-3 h-3 text-cyan-600 shrink-0" />
-                  <span className="text-[10px] text-cyan-700 font-medium">{printColors.length} ألوان:</span>
-                  {printColors.map((c, i) => (
-                    <div key={i} className="flex items-center gap-0.5">
-                      <ColorDot color={c} />
-                      <span className="text-[10px] text-cyan-700">{c}</span>
-                      {i < printColors.length - 1 && <span className="text-[10px] text-cyan-400 mx-0.5">+</span>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ملف التصميم والملاحظات */}
-          {(hasDesign || hasNotes) && (
-            <div className="flex flex-col gap-0.5">
-              {hasDesign && (
-                <div className="flex items-center gap-1">
-                  <Paperclip className="w-3 h-3 text-violet-500 shrink-0" />
-                  <span className="text-[10px] text-violet-600 truncate max-w-[160px]">
-                    {designFileUrl!.split("/").pop()}
-                  </span>
-                </div>
-              )}
-              {hasNotes && (
-                <div className="flex items-center gap-1">
-                  <StickyNote className="w-3 h-3 text-amber-500 shrink-0" />
-                  <span className="text-[10px] text-amber-700 truncate max-w-[160px]">{designNotes}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* السعر والكمية في نفس السطر */}
+          {/* السعر والكمية */}
           <div className="flex items-center justify-between mt-auto pt-1">
-            {/* السعر */}
             <div className="flex flex-col">
               <span className="text-sm font-bold text-primary leading-none">
                 {formatPrice(total)} {unit}
@@ -168,9 +79,7 @@ function CartRow({
               )}
             </div>
 
-            {/* أزرار الكمية وحذف */}
             <div className="flex items-center gap-1.5">
-              {/* حذف */}
               <button
                 className="text-red-400 hover:text-red-600 transition-colors p-1"
                 onClick={onRemove}
@@ -178,8 +87,6 @@ function CartRow({
               >
                 <Trash2 className="h-4 w-4" />
               </button>
-
-              {/* عداد الكمية */}
               <div className="flex items-center gap-1 bg-muted rounded-full px-1 py-0.5">
                 <button
                   className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-white transition-colors disabled:opacity-40"
@@ -213,6 +120,8 @@ export default function Cart() {
   const { mutate: updateItem } = useUpdateCartItem();
   const { mutate: removeItem } = useRemoveFromCart();
   const queryClient = useQueryClient();
+  const displaySettings = useDisplaySettings();
+  const cartCfg = displaySettings.cart;
 
   const [currency, setCurrency] = useState<"YER" | "SAR">(
     () => (localStorage.getItem("currency") as "YER" | "SAR") || "YER"
@@ -374,6 +283,7 @@ export default function Cart() {
                   onDecrease={() => updateItem({ id: item.id, quantity: item.quantity - 1 })}
                   onRemove={() => removeItem(item.id)}
                   testPrefix={String(item.id)}
+                  cfg={cartCfg}
                 />
               );
             })
@@ -404,6 +314,7 @@ export default function Cart() {
                   onDecrease={() => updateGuestQty(index, -1)}
                   onRemove={() => removeGuestItem(index)}
                   testPrefix={`guest-${item.productId}-${index}`}
+                  cfg={cartCfg}
                 />
               );
             })}

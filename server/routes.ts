@@ -1654,6 +1654,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         'flashSaleEnabled',
         // ── واتساب ──
         'showWhatsappButton',
+        // ── عرض تفاصيل المنتج — السلة ──
+        'cartShowColor', 'cartShowSize', 'cartShowBagColor',
+        'cartShowPrintColors', 'cartShowDesignFile', 'cartShowDesignNotes',
+        // ── عرض تفاصيل المنتج — الدفع ──
+        'checkoutShowColor', 'checkoutShowSize', 'checkoutShowBagColor',
+        'checkoutShowPrintColors', 'checkoutShowDesignFile', 'checkoutShowDesignNotes',
+        // ── عرض تفاصيل المنتج — تأكيد الطلب ──
+        'orderShowColor', 'orderShowSize', 'orderShowBagColor',
+        'orderShowPrintColors', 'orderShowDesignFile', 'orderShowDesignNotes',
       ];
       // text fields
       const textFields = [
@@ -1668,6 +1677,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         'flashSaleBg', 'flashSaleTag',
         // ── واتساب ──
         'whatsappNumber', 'whatsappMessage',
+        // ── وضع عرض عناصر السلة/الدفع/الطلب ──
+        'cartItemMode', 'checkoutItemMode', 'orderItemMode',
       ];
 
       const body = req.body as Record<string, unknown>;

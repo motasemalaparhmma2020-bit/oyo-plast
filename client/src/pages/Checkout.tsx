@@ -17,6 +17,8 @@ import { useQuery } from "@tanstack/react-query";
 import type { Product } from "@shared/schema";
 import { useDigitalWallets } from "@/hooks/use-digital-wallets";
 import { GuestCartItem, getGuestCart, setGuestCart as saveGuestCart, clearGuestCart } from "@/lib/cartUtils";
+import { useDisplaySettings } from "@/hooks/use-display-settings";
+import { OrderItemCompactMeta, OrderItemCollapsibleMeta } from "@/components/OrderItemDetails";
 
 const YEMENI_CITIES = [
   "صنعاء","عدن","تعز","الحديدة","إب","ذمار","المكلا","سيئون",
@@ -42,6 +44,8 @@ export default function Checkout() {
 
   const cartItems = isAuthenticated ? authCartItems : guestCart;
   const isLoadingCart = !isAuthenticated ? false : isLoading;
+  const itemDisplaySettings = useDisplaySettings();
+  const checkoutCfg = itemDisplaySettings.checkout;
 
   const { data: digitalWallets = [] } = useDigitalWallets();
 
@@ -1479,18 +1483,30 @@ export default function Checkout() {
                   {/* اسم المنتج + تفاصيل */}
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm line-clamp-2 leading-tight">{product.name}</p>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {selectedColor && (
-                        <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground">
-                          اللون: {selectedColor}
-                        </span>
-                      )}
-                      {selectedSize && (
-                        <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground">
-                          المقاس: {selectedSize}
-                        </span>
-                      )}
-                    </div>
+                    {checkoutCfg.mode === "collapsible"
+                      ? <OrderItemCollapsibleMeta item={{
+                          selectedColor, selectedSize,
+                          selectedBagColor: item.selectedBagColor || (item as any).selectedBagColor,
+                          printColor1: item.printColor1 || (item as any).printColor1,
+                          printColor2: item.printColor2 || (item as any).printColor2,
+                          printColor3: item.printColor3 || (item as any).printColor3,
+                          printColorCount: item.printColorCount || (item as any).printColorCount,
+                          customPrinting: item.customPrinting || (item as any).customPrinting,
+                          designNotes: item.designNotes || (item as any).designNotes,
+                          designFileUrl: item.designFileUrl || (item as any).designFileUrl,
+                        }} cfg={checkoutCfg} />
+                      : <OrderItemCompactMeta item={{
+                          selectedColor, selectedSize,
+                          selectedBagColor: item.selectedBagColor || (item as any).selectedBagColor,
+                          printColor1: item.printColor1 || (item as any).printColor1,
+                          printColor2: item.printColor2 || (item as any).printColor2,
+                          printColor3: item.printColor3 || (item as any).printColor3,
+                          printColorCount: item.printColorCount || (item as any).printColorCount,
+                          customPrinting: item.customPrinting || (item as any).customPrinting,
+                          designNotes: item.designNotes || (item as any).designNotes,
+                          designFileUrl: item.designFileUrl || (item as any).designFileUrl,
+                        }} cfg={checkoutCfg} />
+                    }
                   </div>
 
                   {/* الكمية والإجمالي */}
