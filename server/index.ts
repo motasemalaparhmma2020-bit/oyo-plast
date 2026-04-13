@@ -5,6 +5,7 @@ import { serveStatic } from "./static";
 import { runMigrations } from "./migrate";
 import { createServer } from "http";
 import path from "path";
+import fs from "fs";
 import { generalLimiter, sanitizeInputs } from "./security";
 
 const app = express();
@@ -34,6 +35,37 @@ app.use('/products', express.static(path.resolve(rootDir, 'public', 'products'))
 
 // Serve admin-uploaded images (persistent across deploys)
 app.use('/uploads', express.static(path.resolve(rootDir, 'public', 'uploads')));
+
+// ── ضغط تلقائي لصور /assets/ ────────────────────────────────────────────────
+// يعترض طلبات الصور من attached_assets/ ويُرسل نسخة مضغوطة بدلاً من الملف الكامل
+app.get('/assets/:filename(*)', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { filename } = req.params;
+    // قبول فقط صيغ الصور الشائعة
+    if (!/\.(jpe?g|png|webp|gif)$/i.test(filename)) return next();
+
+    const filePath = path.resolve(rootDir, 'attached_assets', filename);
+    if (!fs.existsSync(filePath)) return next();
+
+    // حجم الصورة المطلوبة من query param ?w=N أو افتراضي 400px
+    const w = Math.min(parseInt(String(req.query.w || '400'), 10) || 400, 1200);
+
+    const sharp = (await import('sharp')).default;
+    const buffer = await sharp(filePath)
+      .resize(w, w, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 75, progressive: true })
+      .toBuffer();
+
+    res.set({
+      'Content-Type': 'image/jpeg',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Image-Optimized': 'true',
+    });
+    res.send(buffer);
+  } catch {
+    next();
+  }
+});
 
 declare module "http" {
   interface IncomingMessage {

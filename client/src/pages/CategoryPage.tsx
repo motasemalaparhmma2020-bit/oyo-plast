@@ -62,7 +62,7 @@ export default function CategoryPage() {
       {cat?.imageUrl && (
         <div className="w-full h-32 overflow-hidden relative">
           <img
-            src={cat.imageUrl}
+            src={cat.imageUrl.startsWith("/assets/") ? `${cat.imageUrl}?w=800` : cat.imageUrl}
             alt={cat.name}
             className="w-full h-full object-cover"
             loading="lazy"

@@ -1,10 +1,14 @@
 import { Link } from "wouter";
 
-// تحسين روابط Cloudinary بضغط الصورة إلى حجم الدائرة
+// تحسين رابط الصورة: Cloudinary أو /assets/ المحلية
 function optimizeImageUrl(url: string, size: number): string {
   if (!url) return url;
+  const px = size * 2; // ضعف الحجم لدعم شاشات Retina
   if (url.includes("res.cloudinary.com") && url.includes("/upload/")) {
-    return url.replace("/upload/", `/upload/w_${size * 2},h_${size * 2},c_fill,f_auto,q_auto/`);
+    return url.replace("/upload/", `/upload/w_${px},h_${px},c_fill,f_auto,q_auto/`);
+  }
+  if (url.startsWith("/assets/")) {
+    return `${url}?w=${px}`;
   }
   return url;
 }
