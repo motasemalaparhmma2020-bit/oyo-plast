@@ -21,6 +21,10 @@ export async function setupVite(server: Server, app: Express) {
     customLogger: {
       ...viteLogger,
       error: (msg, options) => {
+        if (msg.includes("Failed to run dependency scan") || msg.includes("Skipping dependency pre-bundling")) {
+          viteLogger.warn(msg, options);
+          return;
+        }
         viteLogger.error(msg, options);
         process.exit(1);
       },
