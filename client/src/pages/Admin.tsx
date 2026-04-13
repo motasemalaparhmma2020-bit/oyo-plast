@@ -69,6 +69,7 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
+import { OrderItemCollapsibleMeta } from "@/components/OrderItemDetails";
 import { DigitalWalletsManager } from "@/components/DigitalWalletsManager";
 import { ImageDimensionsManager } from "@/components/ImageDimensionsManager";
 import { AdminNav } from "@/components/AdminNav";
@@ -5593,31 +5594,12 @@ export default function Admin() {
                                                   )}
                                                   <div className="flex-1 min-w-0">
                                                     <p className="font-semibold text-sm leading-snug line-clamp-2">{item.productName || `منتج #${item.productId}`}</p>
-                                                    <div className="flex flex-wrap gap-1.5 mt-1">
-                                                      {item.selectedSize && (
-                                                        <Badge variant="outline" className="text-xs py-0 h-5 gap-1">
-                                                          📐 {item.selectedSize}
-                                                        </Badge>
-                                                      )}
-                                                      {item.selectedColor && (
-                                                        <Badge variant="outline" className="text-xs py-0 h-5 gap-1">
-                                                          🎨 {item.selectedColor}
-                                                        </Badge>
-                                                      )}
-                                                      {item.customPrinting && (
-                                                        <Badge className="bg-purple-100 text-purple-700 text-xs py-0 h-5 gap-1">
-                                                          <Printer className="h-3 w-3" />طباعة
-                                                        </Badge>
-                                                      )}
-                                                    </div>
-                                                    {item.designNotes && (
-                                                      <p className="text-xs text-muted-foreground mt-1">📝 {item.designNotes}</p>
+                                                    {item.customPrinting && (
+                                                      <Badge className="bg-purple-100 text-purple-700 text-xs py-0 h-5 gap-1 mt-0.5">
+                                                        <Printer className="h-3 w-3" />طباعة مخصصة
+                                                      </Badge>
                                                     )}
-                                                    {item.designFileUrl && (
-                                                      <a href={item.designFileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary mt-1 hover:underline">
-                                                        <ExternalLink className="h-3 w-3" />ملف التصميم
-                                                      </a>
-                                                    )}
+                                                    <OrderItemCollapsibleMeta item={item} defaultOpen={false} />
                                                   </div>
                                                   <div className="text-left flex-shrink-0">
                                                     <p className="text-xs text-muted-foreground">×{item.quantity}</p>

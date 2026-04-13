@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Package, Truck, ArrowRight, Loader2, Phone, MapPin, CreditCard, Clock } from "lucide-react";
+import { OrderItemCollapsibleMeta } from "@/components/OrderItemDetails";
 
 export default function OrderConfirmation() {
   const [_location, navigate] = useLocation();
@@ -147,23 +148,27 @@ export default function OrderConfirmation() {
             <p className="text-sm font-bold">المنتجات</p>
           </div>
           <div className="grid grid-cols-4 bg-muted/50 px-4 py-2 text-xs font-bold text-muted-foreground">
-            <span>المنتج</span>
+            <span className="col-span-2">المنتج</span>
             <span className="text-center">السعر</span>
-            <span className="text-center">الكمية</span>
             <span className="text-left">الإجمالي</span>
           </div>
           {orderItems.map((item: any) => (
             <div
               key={item.id}
-              className="grid grid-cols-4 px-4 py-2.5 text-xs border-t items-center"
+              className="px-4 py-2.5 text-xs border-t"
               data-testid={`order-item-${item.id}`}
             >
-              <span className="font-medium line-clamp-2 leading-tight">{item.productName}</span>
-              <span className="text-center">{Number(item.price).toLocaleString("ar-YE")}</span>
-              <span className="text-center font-bold">{item.quantity}</span>
-              <span className="text-left font-bold text-primary">
-                {(Number(item.price) * item.quantity).toLocaleString("ar-YE")}
-              </span>
+              <div className="grid grid-cols-4 items-start">
+                <div className="col-span-2 pr-1">
+                  <span className="font-medium leading-tight block">{item.productName}</span>
+                  <OrderItemCollapsibleMeta item={item} />
+                </div>
+                <span className="text-center">{Number(item.price).toLocaleString("ar-YE")}</span>
+                <span className="text-left font-bold text-primary">
+                  {(Number(item.price) * item.quantity).toLocaleString("ar-YE")}
+                  <span className="text-muted-foreground font-normal block text-[10px]">×{item.quantity}</span>
+                </span>
+              </div>
             </div>
           ))}
 

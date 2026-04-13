@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Printer, X, MapPin, Phone, User, Package, FileText, Truck, ChevronDown, ChevronUp } from "lucide-react";
 import logoImg from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
+import { OrderItemInlineMeta } from "@/components/OrderItemDetails";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface OrderItem {
@@ -13,6 +14,11 @@ export interface OrderItem {
   productName?: string | null;
   selectedSize?: string | null;
   selectedColor?: string | null;
+  selectedBagColor?: string | null;
+  printColor1?: string | null;
+  printColor2?: string | null;
+  printColor3?: string | null;
+  printColorCount?: number | null;
   customPrinting?: boolean | null;
   designNotes?: string | null;
   designFileUrl?: string | null;
@@ -317,11 +323,9 @@ function CustomerInvoice({ order, orderItems, settings }: {
                       <td className="py-2.5 px-2">
                         <p className="font-semibold text-gray-800 leading-tight">{getItemLabel(item)}</p>
                         {item.customPrinting && (
-                          <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">طباعة مخصصة</span>
+                          <span className="text-[9px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">طباعة مخصصة</span>
                         )}
-                        {item.designNotes && (
-                          <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[120px]">{item.designNotes}</p>
-                        )}
+                        <OrderItemInlineMeta item={item} />
                       </td>
                       {showCols.size && (
                         <td className="text-center py-2.5 px-1">
