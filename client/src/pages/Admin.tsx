@@ -6003,6 +6003,7 @@ export default function Admin() {
                         )}
                         </div>
                       </div>
+                      </div>
 
                       {/* ══ القسم 5: الطباعة والإضافات ══ */}
                       <div className="border rounded-lg overflow-hidden">
