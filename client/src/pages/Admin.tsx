@@ -2776,6 +2776,188 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
             </div>
           </div>
           </div>
+
+          {/* ─── منتقي الألوان (PDP) ───────────────────────────────────────────── */}
+          <div className="mt-4 border-t pt-4 space-y-4">
+            <p className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide flex items-center gap-2">
+              <span>🎨</span> منتقي الألوان
+            </p>
+
+            {/* عرض وارتفاع الصورة المصغرة */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm">عرض الصورة</Label>
+                <p className="text-xs text-muted-foreground">48=صغير · 72=عادي · 96=كبير</p>
+                <div className="flex items-center gap-1.5">
+                  <Input type="number" min={32} max={160}
+                    value={settings?.pdpColorThumbnailW ?? 72}
+                    onChange={e => setSettings((s: any) => ({ ...s, pdpColorThumbnailW: +e.target.value }))}
+                    onBlur={e => handleUpdate('pdpColorThumbnailW', +e.target.value)}
+                    className="w-20" data-testid="input-pdp-color-w" disabled={updateMutation.isPending}
+                  />
+                  <span className="text-xs text-muted-foreground">بكسل</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">ارتفاع الصورة</Label>
+                <p className="text-xs text-muted-foreground">48=صغير · 72=عادي · 96=كبير</p>
+                <div className="flex items-center gap-1.5">
+                  <Input type="number" min={32} max={160}
+                    value={settings?.pdpColorThumbnailH ?? 72}
+                    onChange={e => setSettings((s: any) => ({ ...s, pdpColorThumbnailH: +e.target.value }))}
+                    onBlur={e => handleUpdate('pdpColorThumbnailH', +e.target.value)}
+                    className="w-20" data-testid="input-pdp-color-h" disabled={updateMutation.isPending}
+                  />
+                  <span className="text-xs text-muted-foreground">بكسل</span>
+                </div>
+              </div>
+            </div>
+
+            {/* تخطيط الألوان */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">تخطيط الألوان</Label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {[
+                  { v: 'scroll', label: '↔ تمرير أفقي', desc: 'شريط قابل للتمرير' },
+                  { v: 'grid2', label: '⊞ شبكة × 2', desc: 'عمودان متوازيان' },
+                  { v: 'grid3', label: '⊟ شبكة × 3', desc: 'ثلاثة أعمدة' },
+                ].map(opt => (
+                  <button key={opt.v}
+                    onClick={() => handleUpdate('pdpColorLayout', opt.v)}
+                    title={opt.desc}
+                    className={`text-xs py-1.5 px-3 rounded-lg border-2 transition-all ${(settings?.pdpColorLayout ?? 'scroll') === opt.v ? 'border-blue-500 bg-blue-50 text-blue-700 font-bold' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                    data-testid={`button-pdp-color-layout-${opt.v}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* قابل للطي */}
+            <div className="flex items-center justify-between py-1">
+              <div>
+                <Label className="text-sm">قابل للطي</Label>
+                <p className="text-xs text-muted-foreground">يُمكن إخفاء الألوان وإظهارها بالضغط على العنوان</p>
+              </div>
+              <Switch
+                checked={settings?.pdpColorCollapsible ?? false}
+                onCheckedChange={v => handleUpdate('pdpColorCollapsible', v)}
+                disabled={updateMutation.isPending}
+                data-testid="switch-pdp-color-collapsible"
+              />
+            </div>
+          </div>
+
+          {/* ─── منتقي المقاس (PDP) ────────────────────────────────────────────── */}
+          <div className="mt-4 border-t pt-4 space-y-4">
+            <p className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide flex items-center gap-2">
+              <span>📐</span> منتقي المقاس
+            </p>
+
+            {/* أبعاد زر المقاس */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm">عرض الزر</Label>
+                <p className="text-xs text-muted-foreground">0 = تلقائي · أو عدد بكسل محدد</p>
+                <div className="flex items-center gap-1.5">
+                  <Input type="number" min={0} max={240}
+                    value={settings?.pdpSizeButtonW ?? 0}
+                    onChange={e => setSettings((s: any) => ({ ...s, pdpSizeButtonW: +e.target.value }))}
+                    onBlur={e => handleUpdate('pdpSizeButtonW', +e.target.value)}
+                    className="w-20" data-testid="input-pdp-size-w" disabled={updateMutation.isPending}
+                  />
+                  <span className="text-xs text-muted-foreground">بكسل</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">ارتفاع الزر</Label>
+                <p className="text-xs text-muted-foreground">44=عادي · 56=كبير · 68=ضخم</p>
+                <div className="flex items-center gap-1.5">
+                  <Input type="number" min={32} max={100}
+                    value={settings?.pdpSizeButtonH ?? 56}
+                    onChange={e => setSettings((s: any) => ({ ...s, pdpSizeButtonH: +e.target.value }))}
+                    onBlur={e => handleUpdate('pdpSizeButtonH', +e.target.value)}
+                    className="w-20" data-testid="input-pdp-size-h" disabled={updateMutation.isPending}
+                  />
+                  <span className="text-xs text-muted-foreground">بكسل</span>
+                </div>
+              </div>
+            </div>
+
+            {/* تخطيط المقاسات */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">تخطيط المقاسات</Label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {[
+                  { v: 'wrap', label: '⬛ لف تلقائي', desc: 'أزرار تنتقل للسطر التالي عند الامتلاء' },
+                  { v: 'row', label: '↔ صف أفقي', desc: 'شريط أفقي قابل للتمرير' },
+                  { v: 'vertical', label: '↕ عمودي', desc: 'أزرار رأسية كاملة العرض' },
+                  { v: 'grid2', label: '⊞ شبكة × 2', desc: 'عمودان' },
+                ].map(opt => (
+                  <button key={opt.v}
+                    onClick={() => handleUpdate('pdpSizeLayout', opt.v)}
+                    title={opt.desc}
+                    className={`text-xs py-1.5 px-3 rounded-lg border-2 transition-all ${(settings?.pdpSizeLayout ?? 'wrap') === opt.v ? 'border-blue-500 bg-blue-50 text-blue-700 font-bold' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                    data-testid={`button-pdp-size-layout-${opt.v}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* شكل الزر */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">شكل الزر</Label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {[
+                  { v: 'card', label: '🟦 بطاقة', desc: 'زوايا دائرية كبيرة' },
+                  { v: 'pill', label: '💊 حبة', desc: 'حواف دائرية كاملة' },
+                  { v: 'square', label: '⬜ مربع', desc: 'زوايا مستقيمة' },
+                  { v: 'full', label: '🔳 كامل العرض', desc: 'يأخذ كامل عرض الصف' },
+                ].map(opt => (
+                  <button key={opt.v}
+                    onClick={() => handleUpdate('pdpSizeStyle', opt.v)}
+                    title={opt.desc}
+                    className={`text-xs py-1.5 px-3 rounded-lg border-2 transition-all ${(settings?.pdpSizeStyle ?? 'card') === opt.v ? 'border-blue-500 bg-blue-50 text-blue-700 font-bold' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                    data-testid={`button-pdp-size-style-${opt.v}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* إظهار السعر مع المقاس */}
+            <div className="flex items-center justify-between py-1">
+              <div>
+                <Label className="text-sm">إظهار السعر مع كل مقاس</Label>
+                <p className="text-xs text-muted-foreground">يُظهر سعر المقاس داخل الزر عند وجود أسعار متعددة</p>
+              </div>
+              <Switch
+                checked={settings?.pdpSizeShowPrice !== false}
+                onCheckedChange={v => handleUpdate('pdpSizeShowPrice', v)}
+                disabled={updateMutation.isPending}
+                data-testid="switch-pdp-size-show-price"
+              />
+            </div>
+
+            {/* قابل للطي */}
+            <div className="flex items-center justify-between py-1">
+              <div>
+                <Label className="text-sm">قابل للطي</Label>
+                <p className="text-xs text-muted-foreground">يُمكن إخفاء المقاسات وإظهارها بالضغط على العنوان</p>
+              </div>
+              <Switch
+                checked={settings?.pdpSizeCollapsible ?? false}
+                onCheckedChange={v => handleUpdate('pdpSizeCollapsible', v)}
+                disabled={updateMutation.isPending}
+                data-testid="switch-pdp-size-collapsible"
+              />
+            </div>
+          </div>
+
         </CollapsibleSection>
 
         {/* ─── الخطوط وتصميم الواجهة ──────────────────────────────────────── */}

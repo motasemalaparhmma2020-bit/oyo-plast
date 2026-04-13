@@ -20,6 +20,33 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import useEmblaCarousel from "embla-carousel-react";
 
+// ── PdpCollapsible — حاوية قابلة للطي لمنتقي الألوان والمقاس ───────────────
+function PdpCollapsible({
+  label, value, collapsible, children,
+}: {
+  label: string; value?: string; collapsible: boolean; children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div>
+      <div
+        className={`flex items-center gap-1.5 mb-2.5 ${collapsible ? 'cursor-pointer select-none' : ''}`}
+        onClick={collapsible ? () => setOpen(o => !o) : undefined}
+      >
+        <span className="text-sm font-semibold">{label}</span>
+        <span className="text-sm text-muted-foreground">{value}</span>
+        {collapsible && (
+          open
+            ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground mr-auto" />
+            : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground mr-auto" />
+        )}
+        {!collapsible && <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground mr-auto" />}
+      </div>
+      {(!collapsible || open) && children}
+    </div>
+  );
+}
+
 // ── Lazy Image ──────────────────────────────────────────────────────────────
 const LazyImage = ({ src, alt, className, style }: { src: string; alt: string; className: string; style?: React.CSSProperties }) => {
   const [loaded, setLoaded] = useState(false);
@@ -184,6 +211,18 @@ export default function ProductDetail() {
   const promoBarDetails            = displaySettings?.promoBarDetails ?? "";
   const showMarketerCouponToAll    = displaySettings?.showMarketerCouponToAll === true;
   const numberFontClass = displaySettings?.appFontNumbers ? `font-${displaySettings.appFontNumbers}` : "price-num";
+  // ── منتقي الألوان ─────────────────────────────────────────────────────────
+  const pdpColorThumbnailW   = displaySettings?.pdpColorThumbnailW ?? 72;
+  const pdpColorThumbnailH   = displaySettings?.pdpColorThumbnailH ?? 72;
+  const pdpColorLayout       = (displaySettings?.pdpColorLayout ?? "scroll") as "scroll" | "grid2" | "grid3";
+  const pdpColorCollapsible  = displaySettings?.pdpColorCollapsible === true;
+  // ── منتقي المقاس ──────────────────────────────────────────────────────────
+  const pdpSizeLayout        = (displaySettings?.pdpSizeLayout ?? "wrap") as "wrap" | "row" | "vertical" | "grid2";
+  const pdpSizeButtonW       = displaySettings?.pdpSizeButtonW ?? 0;   // 0 = auto
+  const pdpSizeButtonH       = displaySettings?.pdpSizeButtonH ?? 56;
+  const pdpSizeShowPrice     = displaySettings?.pdpSizeShowPrice !== false;
+  const pdpSizeCollapsible   = displaySettings?.pdpSizeCollapsible === true;
+  const pdpSizeStyle         = (displaySettings?.pdpSizeStyle ?? "card") as "card" | "pill" | "square" | "full";
 
   const marketerRef = useMemo(() => {
     const p = new URLSearchParams(window.location.search);
@@ -817,103 +856,162 @@ export default function ProductDetail() {
               </div>
             )}
 
-            {/* ── الألوان من colorImages — صور أفقية SHEIN ── */}
-            {colorImages.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2.5">
-                  <span className="text-sm font-semibold">لون:</span>
-                  <span className="text-sm text-muted-foreground">{selectedColor ?? colorImages[0]?.color}</span>
-                  <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground mr-auto" />
-                </div>
-                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
+            {/* ── الألوان من colorImages — صور مصغرة بأبعاد وتخطيط قابل للتحكم ── */}
+            {colorImages.length > 0 && (() => {
+              const colorGridClass = pdpColorLayout === 'grid2'
+                ? 'grid grid-cols-2 gap-2'
+                : pdpColorLayout === 'grid3'
+                  ? 'grid grid-cols-3 gap-2'
+                  : 'flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1';
+              const colorContent = (
+                <div className={colorGridClass}>
                   {colorImages.map((ci, i) => (
                     <button key={i}
                       onClick={() => { setSelectedColor(ci.color); if (ci.imageUrl) setVariantActiveImg(ci.imageUrl); }}
                       className={`relative shrink-0 rounded-xl overflow-hidden border-2 transition-all ${selectedColor === ci.color ? 'border-primary shadow-md scale-105' : 'border-gray-200 hover:border-gray-400'}`}
-                      style={{ width: 72, height: 72 }}
+                      style={{ width: pdpColorThumbnailW, height: pdpColorThumbnailH }}
                       title={ci.color} data-testid={`button-color-img-${i}`}>
                       {ci.imageUrl
                         ? <img src={ci.imageUrl} alt={ci.color} className="w-full h-full object-cover" />
                         : <div className="w-full h-full" style={{ background: ci.hex || '#ccc' }} />
                       }
+                      <span className="absolute bottom-0 inset-x-0 bg-black/40 text-white text-[9px] text-center py-0.5 leading-tight">{ci.color}</span>
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
+              );
+              return (
+                <PdpCollapsible
+                  label="لون:" value={selectedColor ?? colorImages[0]?.color}
+                  collapsible={pdpColorCollapsible}
+                >
+                  {colorContent}
+                </PdpCollapsible>
+              );
+            })()}
 
-            {/* ── الألوان العادية (hex) — دوائر SHEIN ── */}
-            {colorImages.length === 0 && availableColors.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2.5">
-                  <span className="text-sm font-semibold">لون:</span>
-                  <span className="text-sm text-muted-foreground">{selectedColor ?? availableColors[0]}</span>
-                  <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground mr-auto" />
-                </div>
-                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
+            {/* ── الألوان العادية (hex/dot) — دوائر بأبعاد وتخطيط قابل للتحكم ── */}
+            {colorImages.length === 0 && availableColors.length > 0 && (() => {
+              const dotGrid = pdpColorLayout === 'grid2'
+                ? 'grid grid-cols-4 gap-2'
+                : pdpColorLayout === 'grid3'
+                  ? 'grid grid-cols-5 gap-2'
+                  : 'flex gap-3 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1';
+              const colorContent = (
+                <div className={dotGrid}>
                   {availableColors.map(c => (
                     <button key={c}
                       onClick={() => setSelectedColor(c)}
                       className="flex flex-col items-center gap-1 shrink-0 transition-all"
                       data-testid={`button-color-${c}`}>
                       <div
-                        className={`w-12 h-12 rounded-xl border-2 transition-all ${selectedColor === c ? 'border-primary shadow-md scale-105' : 'border-gray-200 hover:border-gray-400'}`}
-                        style={{ backgroundColor: getColorCode(c) }}
+                        className={`rounded-xl border-2 transition-all ${selectedColor === c ? 'border-primary shadow-md scale-105' : 'border-gray-200 hover:border-gray-400'}`}
+                        style={{
+                          backgroundColor: getColorCode(c),
+                          width: pdpColorThumbnailW,
+                          height: pdpColorThumbnailH,
+                        }}
                       />
-                      <span className="text-[10px] font-medium text-muted-foreground">{c}</span>
+                      <span className="text-[10px] font-medium text-muted-foreground leading-tight text-center max-w-[56px] truncate">{c}</span>
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
+              );
+              return (
+                <PdpCollapsible
+                  label="لون:" value={selectedColor ?? availableColors[0]}
+                  collapsible={pdpColorCollapsible}
+                >
+                  {colorContent}
+                </PdpCollapsible>
+              );
+            })()}
 
-            {/* ── المقاسات مع سعر — pill كبير SHEIN ── */}
-            {sizePricing.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2.5">
-                  <span className="text-sm font-semibold">مقاس:</span>
-                  <span className="text-sm font-bold text-foreground">{selectedSize ?? 'اختر مقاساً'}</span>
-                  <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground mr-auto" />
-                </div>
-                <div className="flex flex-wrap gap-2">
+            {/* ── المقاسات مع سعر — أبعاد وتخطيط وشكل قابل للتحكم ── */}
+            {sizePricing.length > 0 && (() => {
+              const sizeGridClass =
+                pdpSizeLayout === 'vertical' ? 'flex flex-col gap-2' :
+                pdpSizeLayout === 'row'      ? 'flex flex-row gap-2 overflow-x-auto pb-1 scrollbar-hide' :
+                pdpSizeLayout === 'grid2'    ? 'grid grid-cols-2 gap-2' :
+                'flex flex-wrap gap-2';
+              const radius =
+                pdpSizeStyle === 'pill'   ? 'rounded-full' :
+                pdpSizeStyle === 'square' ? 'rounded-md' :
+                'rounded-xl';
+              const sizeContent = (
+                <div className={sizeGridClass}>
                   {sizePricing.map(sp => {
                     const isSelected = selectedSize === sp.size;
+                    const btnStyle: React.CSSProperties = {
+                      height: pdpSizeButtonH,
+                      ...(pdpSizeButtonW > 0 ? { width: pdpSizeButtonW } : { minWidth: 64 }),
+                      ...(pdpSizeLayout === 'vertical' ? { width: '100%' } : {}),
+                    };
                     return (
                       <button key={sp.size} onClick={() => setSelectedSize(sp.size)}
-                        className={`flex flex-col items-center justify-center px-5 py-3 rounded-xl border-2 font-bold transition-all min-w-[64px] ${isSelected ? 'border-primary bg-primary text-white shadow' : 'border-gray-300 bg-white dark:bg-gray-800 text-foreground hover:border-gray-400'}`}
+                        style={btnStyle}
+                        className={`flex flex-col items-center justify-center px-3 border-2 font-bold transition-all ${radius} ${isSelected ? 'border-primary bg-primary text-white shadow' : 'border-gray-300 bg-white dark:bg-gray-800 text-foreground hover:border-gray-400'}`}
                         data-testid={`button-size-${sp.size}`}>
                         <span className="text-sm leading-tight">{sp.size}</span>
-                        <span className={`text-[10px] font-normal mt-0.5 ${isSelected ? 'text-white/80' : 'text-muted-foreground'}`}>
-                          {formatPrice(currency === 'SAR' && sp.priceSar ? sp.priceSar : sp.price)}
-                        </span>
+                        {pdpSizeShowPrice && (
+                          <span className={`text-[10px] font-normal mt-0.5 ${isSelected ? 'text-white/80' : 'text-muted-foreground'}`}>
+                            {formatPrice(currency === 'SAR' && sp.priceSar ? sp.priceSar : sp.price)} {currLabel}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
                 </div>
-              </div>
-            )}
+              );
+              return (
+                <PdpCollapsible
+                  label="مقاس:" value={selectedSize ?? 'اختر مقاساً'}
+                  collapsible={pdpSizeCollapsible}
+                >
+                  {sizeContent}
+                </PdpCollapsible>
+              );
+            })()}
 
-            {/* ── مقاسات بدون سعر — pill كبير SHEIN ── */}
-            {sizes.length > 0 && sizePricing.length === 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2.5">
-                  <span className="text-sm font-semibold">مقاس:</span>
-                  <span className="text-sm font-bold text-foreground">{selectedSize ?? 'الافتراضي'}</span>
-                  <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground mr-auto" />
-                </div>
-                <div className="flex flex-wrap gap-2">
+            {/* ── مقاسات بدون سعر — أبعاد وتخطيط وشكل قابل للتحكم ── */}
+            {sizes.length > 0 && sizePricing.length === 0 && (() => {
+              const sizeGridClass =
+                pdpSizeLayout === 'vertical' ? 'flex flex-col gap-2' :
+                pdpSizeLayout === 'row'      ? 'flex flex-row gap-2 overflow-x-auto pb-1 scrollbar-hide' :
+                pdpSizeLayout === 'grid2'    ? 'grid grid-cols-2 gap-2' :
+                'flex flex-wrap gap-2';
+              const radius =
+                pdpSizeStyle === 'pill'   ? 'rounded-full' :
+                pdpSizeStyle === 'square' ? 'rounded-md' :
+                'rounded-xl';
+              const sizeContent = (
+                <div className={sizeGridClass}>
                   {sizes.map(sz => {
                     const isSelected = selectedSize === sz;
+                    const btnStyle: React.CSSProperties = {
+                      height: pdpSizeButtonH,
+                      ...(pdpSizeButtonW > 0 ? { width: pdpSizeButtonW } : { minWidth: 64 }),
+                      ...(pdpSizeLayout === 'vertical' ? { width: '100%' } : {}),
+                    };
                     return (
                       <button key={sz} onClick={() => setSelectedSize(sz)}
-                        className={`px-6 py-3 rounded-xl border-2 text-sm font-bold transition-all ${isSelected ? 'border-primary bg-primary text-white shadow' : 'border-gray-300 bg-white dark:bg-gray-800 text-foreground hover:border-gray-400'}`}
+                        style={btnStyle}
+                        className={`flex items-center justify-center px-4 border-2 text-sm font-bold transition-all ${radius} ${isSelected ? 'border-primary bg-primary text-white shadow' : 'border-gray-300 bg-white dark:bg-gray-800 text-foreground hover:border-gray-400'}`}
                         data-testid={`button-size-${sz}`}>{sz}
                       </button>
                     );
                   })}
                 </div>
-              </div>
-            )}
+              );
+              return (
+                <PdpCollapsible
+                  label="مقاس:" value={selectedSize ?? 'الافتراضي'}
+                  collapsible={pdpSizeCollapsible}
+                >
+                  {sizeContent}
+                </PdpCollapsible>
+              );
+            })()}
           </div>
         );
       }

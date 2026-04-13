@@ -596,6 +596,18 @@ export const displaySettings = pgTable("display_settings", {
   whatsappNumber: text("whatsapp_number").default(""),                            // رقم واتساب خدمة العملاء
   showWhatsappButton: boolean("show_whatsapp_button").default(false),             // إظهار زر واتساب العائم
   whatsappMessage: text("whatsapp_message").default("مرحباً، أحتاج مساعدة"), // الرسالة الافتراضية
+  // ── منتقي الألوان في صفحة المنتج (PDP) ─────────────────────────────────────
+  pdpColorThumbnailW: integer("pdp_color_thumbnail_w").default(72).notNull(),   // عرض الصورة المصغرة للون (بكسل)
+  pdpColorThumbnailH: integer("pdp_color_thumbnail_h").default(72).notNull(),   // ارتفاع الصورة المصغرة للون (بكسل)
+  pdpColorLayout: text("pdp_color_layout").default("scroll").notNull(),          // scroll | grid2 | grid3
+  pdpColorCollapsible: boolean("pdp_color_collapsible").default(false).notNull(), // قابل للطي
+  // ── منتقي المقاس في صفحة المنتج (PDP) ──────────────────────────────────────
+  pdpSizeLayout: text("pdp_size_layout").default("wrap").notNull(),              // wrap | row | vertical | grid2
+  pdpSizeButtonW: integer("pdp_size_button_w").default(0).notNull(),             // 0 = auto، أو عدد بكسل
+  pdpSizeButtonH: integer("pdp_size_button_h").default(56).notNull(),            // ارتفاع زر المقاس (بكسل)
+  pdpSizeShowPrice: boolean("pdp_size_show_price").default(true).notNull(),      // إظهار السعر مع المقاس
+  pdpSizeCollapsible: boolean("pdp_size_collapsible").default(false).notNull(),   // قابل للطي
+  pdpSizeStyle: text("pdp_size_style").default("card").notNull(),                // card | pill | square | full
   // ── إعدادات عرض تفاصيل المنتج — السلة ──────────────────────────────────────
   cartShowColor: boolean("cart_show_color").default(true).notNull(),          // إظهار اللون في السلة
   cartShowSize: boolean("cart_show_size").default(true).notNull(),            // إظهار المقاس في السلة

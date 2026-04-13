@@ -1679,7 +1679,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         'whatsappNumber', 'whatsappMessage',
         // ── وضع عرض عناصر السلة/الدفع/الطلب ──
         'cartItemMode', 'checkoutItemMode', 'orderItemMode',
+        // ── منتقي الألوان والمقاس في صفحة المنتج ──
+        'pdpColorLayout', 'pdpSizeLayout', 'pdpSizeStyle',
       ];
+      // add new int fields
+      intFields.push('pdpColorThumbnailW', 'pdpColorThumbnailH', 'pdpSizeButtonW', 'pdpSizeButtonH');
+      // add new bool fields
+      boolFields.push('pdpColorCollapsible', 'pdpSizeShowPrice', 'pdpSizeCollapsible');
 
       const body = req.body as Record<string, unknown>;
       const patch: Record<string, any> = {
