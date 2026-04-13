@@ -269,7 +269,8 @@ export class DatabaseStorage implements IStorage {
 
   async getPrintingProducts(): Promise<Product[]> {
     return await db.select().from(products).where(
-      sql`(${products.showInPrinting} = true OR ${products.categoryId} = 14) AND (product_status IS NULL OR product_status = 'approved')`
+      sql`${products.showInPrinting} = true
+          OR (${products.categoryId} = 14 AND (product_status IS NULL OR product_status = 'approved'))`
     ).orderBy(products.id);
   }
 
