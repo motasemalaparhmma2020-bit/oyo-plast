@@ -1828,6 +1828,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           customerLat ? Number(customerLat) : undefined,
           customerLng ? Number(customerLng) : undefined
         ),
+        // ── حماية فورية للطلب في سجل الأحداث (T4) ──────────────────────
+        (async () => {
+          try {
+            const { logOrderEvent } = await import("./backup-service");
+            await logOrderEvent(order.id, "created", {
+              ...req.body,
+              orderId: order.id,
+              createdAt: new Date().toISOString(),
+            });
+          } catch { /* non-fatal */ }
+        })(),
       ]);
 
       res.json(order);
@@ -3591,49 +3602,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ════════════════════════════════════════════════════════════════
 
   // تصدير النسخة الاحتياطية (admin only) — JSON كامل لكل الجداول
-  app.get("/api/admin/backup/export", requireAdmin, async (req, res) => {
+  app.get("/api/admin/backup/export", requireAdmin, async (_req, res) => {
     try {
+      // نستخدم خدمة النسخ الجديدة لإنشاء النسخة وحفظها في DB
+      const { createBackupSnapshot } = await import("./backup-service");
       const { pool: dbPool } = await import("./db");
-      const tables = [
-        "users","products","categories","subcategories","orders","order_items",
-        "reviews","suppliers","team_members","banners","offers","settings",
-        "display_settings","navigation_settings","home_sections","home_page_settings",
-        "reward_points","points_transactions","wallets","wallet_transactions",
-        "notifications","user_addresses","wishlist","cart_items",
-        "marketer_profiles","marketer_commissions","coupons","attendance",
-        "payroll_periods","staff_rate_config","contract_texts","contract_acceptances",
-        "installment_plans","supplier_payments"
-      ];
-      const backup: Record<string, any[]> = {};
-      let totalRows = 0;
-      for (const table of tables) {
-        try {
-          const r = await dbPool.query(`SELECT * FROM ${table}`);
-          backup[table] = r.rows;
-          totalRows += r.rows.length;
-        } catch { backup[table] = []; }
-      }
-      const exportObj = {
-        exportedAt: new Date().toISOString(),
-        version: "OyoPlast-v1",
-        tablesCount: tables.length,
-        totalRows,
-        data: backup,
-      };
-      const json = JSON.stringify(exportObj, null, 2);
-      const sizeBytes = Buffer.byteLength(json, "utf8");
-      // سجل في backup_logs
-      await dbPool.query(`
-        INSERT INTO backup_logs (triggered_by, size_bytes, tables_count, status)
-        VALUES ('admin', $1, $2, 'success')
-      `, [sizeBytes, tables.length]);
-      const filename = `oyoplast-backup-${new Date().toISOString().slice(0,10)}.json`;
+
+      // جلب النسخة المحفوظة مؤخراً (أو إنشاء واحدة)
+      await createBackupSnapshot("admin", "hourly");
+
+      // جلب آخر نسخة لإرسالها
+      const snap = await dbPool.query(
+        `SELECT snapshot_json, created_at FROM backup_snapshots ORDER BY created_at DESC LIMIT 1`
+      );
+      if (!snap.rows[0]) throw new Error("لم يتم إنشاء النسخة");
+
+      const json = snap.rows[0].snapshot_json;
+      // تجميل JSON للقراءة
+      const prettyJson = JSON.stringify(JSON.parse(json), null, 2);
+      const filename = `oyoplast-backup-${new Date().toISOString().slice(0, 10)}.json`;
       res.setHeader("Content-Type", "application/json");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.send(json);
+      res.send(prettyJson);
     } catch (e: any) {
-      const { pool: dbPool } = await import("./db");
-      await dbPool.query(`INSERT INTO backup_logs (triggered_by, status, notes) VALUES ('admin','failed',$1)`, [e.message]);
+      try {
+        const { pool: dbPool } = await import("./db");
+        await dbPool.query(
+          `INSERT INTO backup_logs (triggered_by, status, notes) VALUES ('admin','failed',$1)`,
+          [e.message]
+        );
+      } catch {}
       res.status(500).json({ message: "فشل تصدير النسخة الاحتياطية", details: e.message });
     }
   });
@@ -3642,8 +3640,123 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/admin/backup/logs", requireAdmin, async (_req, res) => {
     try {
       const { pool: dbPool } = await import("./db");
-      const r = await dbPool.query(`SELECT * FROM backup_logs ORDER BY created_at DESC LIMIT 50`);
+      const r = await dbPool.query(`SELECT id, triggered_by, size_bytes, tables_count, total_rows, status, notes, created_at, retention_type FROM backup_logs ORDER BY created_at DESC LIMIT 100`);
       res.json(r.rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // نسخة احتياطية تلقائية فورية (يدوي أو من الـ cron)
+  app.post("/api/admin/backup/run", requireAdmin, async (_req, res) => {
+    try {
+      const { createBackupSnapshot, getBackupStatus } = await import("./backup-service");
+      const result = await createBackupSnapshot("admin", "hourly");
+      const status = getBackupStatus();
+      res.json({ ...result, ...status });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // حالة الـ Cron (T2)
+  app.get("/api/admin/backup/status", requireAdmin, async (_req, res) => {
+    try {
+      const { getBackupStatus } = await import("./backup-service");
+      const { pool: dbPool } = await import("./db");
+      const status = getBackupStatus();
+      const snapshotsRes = await dbPool.query(`
+        SELECT retention_type, COUNT(*) as count FROM backup_snapshots GROUP BY retention_type
+      `);
+      const orderEventsRes = await dbPool.query(`SELECT COUNT(*) as count FROM order_events`);
+      const settingsRes = await dbPool.query(`SELECT * FROM backup_settings WHERE id = 1`);
+      res.json({
+        ...status,
+        snapshots: snapshotsRes.rows,
+        orderEventsCount: parseInt(orderEventsRes.rows[0]?.count || "0"),
+        settings: settingsRes.rows[0] || null,
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // قائمة النسخ المحفوظة في قاعدة البيانات (T3)
+  app.get("/api/admin/backup/snapshots", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`
+        SELECT id, triggered_by, size_bytes, tables_count, total_rows, retention_type, created_at
+        FROM backup_snapshots ORDER BY created_at DESC LIMIT 100
+      `);
+      res.json(r.rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // تحميل نسخة محفوظة من قاعدة البيانات (T3)
+  app.get("/api/admin/backup/snapshots/:id/download", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`SELECT * FROM backup_snapshots WHERE id = $1`, [req.params.id]);
+      if (!r.rows[0]) return res.status(404).json({ message: "النسخة غير موجودة" });
+      const snap = r.rows[0];
+      const date = new Date(snap.created_at).toISOString().slice(0, 10);
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Content-Disposition", `attachment; filename="oyoplast-backup-${date}-#${snap.id}.json"`);
+      res.send(snap.snapshot_json);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // حذف نسخة محفوظة
+  app.delete("/api/admin/backup/snapshots/:id", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query(`DELETE FROM backup_snapshots WHERE id = $1`, [req.params.id]);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // إعدادات النسخ (T5 — تحديث سياسة الاحتفاظ)
+  app.get("/api/admin/backup/settings", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`SELECT * FROM backup_settings WHERE id = 1`);
+      res.json(r.rows[0] || {});
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/backup/settings", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { auto_backup_enabled, backup_interval_hours, webhook_url, retention_hourly, retention_daily, retention_monthly } = req.body;
+      await dbPool.query(`
+        UPDATE backup_settings SET
+          auto_backup_enabled = COALESCE($1, auto_backup_enabled),
+          backup_interval_hours = COALESCE($2, backup_interval_hours),
+          webhook_url = COALESCE($3, webhook_url),
+          retention_hourly = COALESCE($4, retention_hourly),
+          retention_daily = COALESCE($5, retention_daily),
+          retention_monthly = COALESCE($6, retention_monthly),
+          updated_at = NOW()
+        WHERE id = 1
+      `, [auto_backup_enabled ?? null, backup_interval_hours ?? null, webhook_url ?? null,
+          retention_hourly ?? null, retention_daily ?? null, retention_monthly ?? null]);
+
+      // إعادة تشغيل الـ cron إذا تغير الإعداد
+      if (auto_backup_enabled !== undefined) {
+        const { startAutoCron, stopAutoCron } = await import("./backup-service");
+        if (auto_backup_enabled) startAutoCron(); else stopAutoCron();
+      }
+
+      const r = await dbPool.query(`SELECT * FROM backup_settings WHERE id = 1`);
+      res.json(r.rows[0]);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // إحصاءات أحداث الطلبات (T4)
+  app.get("/api/admin/backup/order-events", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`
+        SELECT id, order_id, event_type, created_at
+        FROM order_events ORDER BY created_at DESC LIMIT 50
+      `);
+      const countRes = await dbPool.query(`SELECT COUNT(*) as total FROM order_events`);
+      res.json({ events: r.rows, total: parseInt(countRes.rows[0]?.total || "0") });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

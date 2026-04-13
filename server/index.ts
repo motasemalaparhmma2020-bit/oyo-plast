@@ -175,6 +175,15 @@ async function startServer() {
     await registerRoutes(httpServer, app);
     console.log("[SUCCESS] Routes registered");
 
+    // ── بدء خدمة النسخ الاحتياطي التلقائي ──────────────────────────────
+    try {
+      const { startAutoCron } = await import("./backup-service");
+      startAutoCron();
+      console.log("[SUCCESS] Auto backup cron service started");
+    } catch (err: any) {
+      console.warn("[WARN] Could not start backup cron:", err.message);
+    }
+
     // ── أطلق الحارس المؤقت: المسارات جاهزة ──
     serverReady = true;
 
