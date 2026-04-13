@@ -207,6 +207,7 @@ export default function ProductDetail() {
   const [activeTab, setActiveTab]         = useState<"description" | "reviews">("description");
   const [wishlist, setWishlist]           = useState(false);
   const [variantsExpanded, setVariantsExpanded] = useState(true);
+  const [searchQuery, setSearchQuery]     = useState("");
 
   const [currency, setCurrency] = useState<'YER' | 'SAR'>(() =>
     (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER'
@@ -595,46 +596,52 @@ export default function ProductDetail() {
         );
       }
 
-      // ── TITLE ────────────────────────────────────────────────────────────
+      // ── TITLE (مدمج مع التقييم — أسلوب SHEIN) ──────────────────────────
       case "title": {
         if (!sec["title"]?.visible) return null;
-        return (
-          <div key="title" className="px-4 pt-1" data-testid="section-title">
-            <h1 className="text-lg font-extrabold leading-snug text-foreground" data-testid="text-product-name">
-              {product.name}
-            </h1>
-          </div>
-        );
-      }
-
-      // ── RATING ──────────────────────────────────────────────────────────
-      case "rating": {
-        if (!sec["rating"]?.visible) return null;
-        if (!sadeemShowRating && !sadeemShowSoldCount) return null;
+        const titleFontSize = s.fontSize ?? 15;
         const ratingVal = Number(product.rating || 5).toFixed(1);
-        const soldCount = (product as any).soldCount || 0;
         const reviewCount = product.reviewCount || 0;
+        const soldCount = (product as any).soldCount || 0;
+        const showRating = sec["rating"]?.visible !== false && sadeemShowRating;
+        const showSold   = sec["rating"]?.visible !== false && sadeemShowSoldCount && soldCount > 0;
         return (
-          <div key="rating" className="px-4 flex items-center justify-between" data-testid="section-rating">
-            {/* يسار: نجمة + تقييم + (مبيعات) */}
-            <div className="flex items-center gap-1.5">
-              {sadeemShowRating && (
-                <>
-                  <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-                  <span className="text-sm font-bold text-foreground">{ratingVal}</span>
-                  <span className="text-sm text-muted-foreground">
-                    ({reviewCount > 0 ? `${reviewCount} تقييم` : '0 تقييم'})
+          <div key="title" className="px-4 pt-2" data-testid="section-title">
+            <div className="flex items-start gap-3">
+              {/* الاسم — يمين، حد سطرين */}
+              <h1
+                className="flex-1 font-bold leading-snug text-foreground line-clamp-2"
+                style={{ fontSize: titleFontSize }}
+                data-testid="text-product-name"
+              >
+                {product.name}
+              </h1>
+              {/* التقييم — يسار (أسلوب SHEIN) */}
+              {showRating && (
+                <div className="flex flex-col items-end shrink-0 gap-0.5 min-w-[76px]">
+                  <div className="flex items-center gap-1">
+                    <Star className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" />
+                    <span className="text-sm font-bold">{ratingVal}</span>
+                    <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">
+                    ({reviewCount > 0 ? `+${reviewCount}` : '0'})
                   </span>
-                </>
-              )}
-              {sadeemShowSoldCount && soldCount > 0 && (
-                <span className="text-xs text-muted-foreground mr-2 border-r pr-2">
-                  {soldCount.toLocaleString('en-US')} مبيع
-                </span>
+                  {showSold && (
+                    <span className="text-[10px] text-muted-foreground">
+                      {soldCount.toLocaleString('en-US')} مبيع
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </div>
         );
+      }
+
+      // ── RATING — مدمج في قسم الاسم أعلاه، لا يعرض شيئاً هنا ───────────
+      case "rating": {
+        return null;
       }
 
       // ── TRUST BADGES ─────────────────────────────────────────────────────
@@ -659,137 +666,180 @@ export default function ProductDetail() {
         );
       }
 
-      // ── VARIANTS ─────────────────────────────────────────────────────────
+      // ── VARIANTS — أسلوب SHEIN ────────────────────────────────────────────
       case "variants": {
         if (!sec["variants"]?.visible) return null;
         const hasVariants = sizePricing.length > 0 || sizes.length > 0 || colorImages.length > 0 || availableColors.length > 0 || showSmartVariants;
         if (!hasVariants) return null;
         return (
-          <div key="variants" className="px-4" data-testid="section-variants">
-            {/* رأس قابل للطي */}
-            <button
-              className="w-full flex items-center justify-between py-2 border-b mb-2"
-              onClick={() => setVariantsExpanded(e => !e)}
-              data-testid="button-toggle-variants"
-            >
-              <span className="font-semibold text-sm">الخيارات (المقاسات / الألوان)</span>
-              {variantsExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            </button>
-            {variantsExpanded && <div className="space-y-3">
-            {/* Smart Variants */}
+          <div key="variants" className="px-4 space-y-4" data-testid="section-variants">
+
+            {/* ── Smart Variants (SHEIN style) ── */}
             {showSmartVariants && smartVariantsData && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {smartVariantsData.activeTypes.map(type => {
                   const typeVariants = smartVariantsData.variants.filter(v => v.type === type && v.label);
                   if (!typeVariants.length) return null;
                   const selectedId = selectedSmartVariant[type];
+                  const selectedLabel = selectedId ? typeVariants.find(v => v.id === selectedId)?.label : null;
+                  const isColorOrImage = type === 'color' || type === 'image';
                   return (
                     <div key={type}>
-                      <Label className="font-semibold text-sm mb-2 block">
-                        {SMART_V_LABELS[type]}
-                        {selectedId && (() => { const sv = typeVariants.find(v => v.id === selectedId); return sv ? <span className="mr-2 font-normal text-muted-foreground">— {sv.label}</span> : null; })()}
-                      </Label>
-                      <div className="flex flex-wrap gap-2">
-                        {typeVariants.map(v => {
-                          const isSelected = selectedSmartVariant[type] === v.id;
-                          const priceNum = Number(currency === 'SAR' && v.priceSar ? v.priceSar : v.price || 0);
-                          return (
-                            <button key={v.id}
-                              onClick={() => { setSelectedSmartVariant(p => ({ ...p, [type]: v.id })); if (v.imageUrl) setVariantActiveImg(v.imageUrl); }}
-                              className={`px-2 py-1.5 rounded-lg border-2 transition-all flex flex-col items-center min-w-[52px] text-center text-xs ${isSelected ? 'border-primary bg-primary/10 text-primary shadow-sm' : 'border-gray-200 hover:border-gray-400'}`}
-                              data-testid={`button-smart-variant-${type}-${v.id}`}>
-                              {type === 'color' && v.hex && <span className="w-5 h-5 rounded-full border-2 border-white shadow mb-1 block mx-auto" style={{ background: v.hex }} />}
-                              {type === 'image' && v.imageUrl && <img src={v.imageUrl} alt={v.label} className="w-10 h-10 object-cover rounded mb-1 mx-auto" />}
-                              <span className="font-bold leading-tight">{v.label}</span>
-                              {priceNum > 0 && <span className="text-xs text-muted-foreground mt-0.5">{formatPrice(priceNum)} {currLabel}</span>}
-                              {Number(v.discount || 0) > 0 && <span className="text-[10px] text-red-500 font-bold mt-0.5">-{v.discount}%</span>}
-                            </button>
-                          );
-                        })}
+                      {/* Label SHEIN-style */}
+                      <div className="flex items-center gap-1.5 mb-2.5">
+                        <span className="text-sm font-semibold">{SMART_V_LABELS[type]}:</span>
+                        {selectedLabel && <span className="text-sm text-muted-foreground">{selectedLabel}</span>}
+                        <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground mr-auto" />
                       </div>
+                      {/* Color/Image → thumbnails scroll */}
+                      {isColorOrImage ? (
+                        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
+                          {typeVariants.map(v => {
+                            const isSelected = selectedSmartVariant[type] === v.id;
+                            return (
+                              <button key={v.id}
+                                onClick={() => { setSelectedSmartVariant(p => ({ ...p, [type]: v.id })); if (v.imageUrl) setVariantActiveImg(v.imageUrl); }}
+                                className={`relative shrink-0 rounded-xl overflow-hidden border-2 transition-all ${isSelected ? 'border-primary shadow-md scale-105' : 'border-gray-200 hover:border-gray-400'}`}
+                                style={{ width: 72, height: 72 }}
+                                data-testid={`button-smart-variant-${type}-${v.id}`}>
+                                {v.imageUrl
+                                  ? <img src={v.imageUrl} alt={v.label} className="w-full h-full object-cover" />
+                                  : v.hex
+                                    ? <div className="w-full h-full" style={{ background: v.hex }} />
+                                    : <div className="w-full h-full bg-gray-200 flex items-center justify-center text-[10px] font-bold">{v.label}</div>
+                                }
+                                {Number(v.discount || 0) > 0 && (
+                                  <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] font-bold px-1 rounded">-{v.discount}%</span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        /* Size/Weight → pill buttons */
+                        <div className="flex flex-wrap gap-2">
+                          {typeVariants.map(v => {
+                            const isSelected = selectedSmartVariant[type] === v.id;
+                            const priceNum = Number(currency === 'SAR' && v.priceSar ? v.priceSar : v.price || 0);
+                            return (
+                              <button key={v.id}
+                                onClick={() => { setSelectedSmartVariant(p => ({ ...p, [type]: v.id })); }}
+                                className={`flex flex-col items-center justify-center px-5 py-3 rounded-xl border-2 font-bold transition-all min-w-[64px] ${isSelected ? 'border-primary bg-primary text-white shadow' : 'border-gray-300 bg-white dark:bg-gray-800 text-foreground hover:border-gray-400'}`}
+                                data-testid={`button-smart-variant-${type}-${v.id}`}>
+                                <span className="text-sm">{v.label}</span>
+                                {priceNum > 0 && (
+                                  <span className={`text-[10px] font-normal mt-0.5 ${isSelected ? 'text-white/80' : 'text-muted-foreground'}`}>
+                                    {formatPrice(priceNum)} {currLabel}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
             )}
 
-            {/* Colors from colorImages */}
+            {/* ── الألوان من colorImages — صور أفقية SHEIN ── */}
             {colorImages.length > 0 && (
               <div>
-                <Label className="font-semibold text-sm mb-2 block">
-                  اللون {selectedColor && <span className="font-normal text-muted-foreground mr-2">— {selectedColor}</span>}
-                </Label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <span className="text-sm font-semibold">لون:</span>
+                  <span className="text-sm text-muted-foreground">{selectedColor ?? colorImages[0]?.color}</span>
+                  <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground mr-auto" />
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
                   {colorImages.map((ci, i) => (
                     <button key={i}
                       onClick={() => { setSelectedColor(ci.color); if (ci.imageUrl) setVariantActiveImg(ci.imageUrl); }}
-                      className={`relative w-12 h-12 rounded-xl border-2 overflow-hidden transition-all ${selectedColor === ci.color ? 'border-primary ring-2 ring-primary/40 scale-105' : 'border-gray-200 hover:border-gray-400'}`}
+                      className={`relative shrink-0 rounded-xl overflow-hidden border-2 transition-all ${selectedColor === ci.color ? 'border-primary shadow-md scale-105' : 'border-gray-200 hover:border-gray-400'}`}
+                      style={{ width: 72, height: 72 }}
                       title={ci.color} data-testid={`button-color-img-${i}`}>
-                      {ci.imageUrl ? <img src={ci.imageUrl} alt={ci.color} className="w-full h-full object-cover" /> :
-                        <div className="w-full h-full" style={{ background: ci.hex || '#ccc' }} />}
-                      {selectedColor === ci.color && <div className="absolute inset-0 flex items-center justify-center bg-black/10"><Check className="h-4 w-4 text-white drop-shadow" /></div>}
+                      {ci.imageUrl
+                        ? <img src={ci.imageUrl} alt={ci.color} className="w-full h-full object-cover" />
+                        : <div className="w-full h-full" style={{ background: ci.hex || '#ccc' }} />
+                      }
                     </button>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Legacy colors */}
+            {/* ── الألوان العادية (hex) — دوائر SHEIN ── */}
             {colorImages.length === 0 && availableColors.length > 0 && (
               <div>
-                <Label className="font-semibold text-sm mb-2 block">
-                  اللون {selectedColor && <span className="font-normal text-muted-foreground mr-2">— {selectedColor}</span>}
-                </Label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <span className="text-sm font-semibold">لون:</span>
+                  <span className="text-sm text-muted-foreground">{selectedColor ?? availableColors[0]}</span>
+                  <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground mr-auto" />
+                </div>
+                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
                   {availableColors.map(c => (
                     <button key={c}
                       onClick={() => setSelectedColor(c)}
-                      className={`flex flex-col items-center gap-1 p-1.5 rounded-xl transition-all ${selectedColor === c ? 'bg-primary/10 ring-2 ring-primary' : 'hover:bg-muted'}`}
+                      className="flex flex-col items-center gap-1 shrink-0 transition-all"
                       data-testid={`button-color-${c}`}>
-                      <div className="w-9 h-9 rounded-full border-2 flex items-center justify-center"
-                        style={{ backgroundColor: getColorCode(c), borderColor: selectedColor === c ? 'var(--primary)' : '#d1d5db' }}>
-                        {selectedColor === c && <Check className={`h-4 w-4 drop-shadow ${c === 'أبيض' ? 'text-gray-700' : 'text-white'}`} />}
-                      </div>
-                      <span className="text-[10px] font-medium">{c}</span>
+                      <div
+                        className={`w-12 h-12 rounded-xl border-2 transition-all ${selectedColor === c ? 'border-primary shadow-md scale-105' : 'border-gray-200 hover:border-gray-400'}`}
+                        style={{ backgroundColor: getColorCode(c) }}
+                      />
+                      <span className="text-[10px] font-medium text-muted-foreground">{c}</span>
                     </button>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Size Pricing */}
+            {/* ── المقاسات مع سعر — pill كبير SHEIN ── */}
             {sizePricing.length > 0 && (
               <div>
-                <p className="text-xs text-muted-foreground mb-1.5">
-                  الحجم {selectedSize && <span className="font-semibold text-foreground mr-1">— {selectedSize}</span>}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {sizePricing.map(sp => (
-                    <button key={sp.size} onClick={() => setSelectedSize(sp.size)}
-                      className={`px-2.5 py-1.5 rounded-lg border-2 transition-all flex flex-col items-center min-w-[56px] text-xs font-medium ${selectedSize === sp.size ? 'border-primary bg-primary/10 text-primary shadow-sm' : 'border-gray-200 hover:border-gray-400'}`}
-                      data-testid={`button-size-${sp.size}`}>
-                      <span className="font-bold text-xs leading-tight">{sp.size}</span>
-                      <span className="text-[10px] text-muted-foreground">{formatPrice(currency==='SAR'&&sp.priceSar?sp.priceSar:sp.price)}</span>
-                    </button>
-                  ))}
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <span className="text-sm font-semibold">مقاس:</span>
+                  <span className="text-sm font-bold text-foreground">{selectedSize ?? 'اختر مقاساً'}</span>
+                  <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground mr-auto" />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {sizePricing.map(sp => {
+                    const isSelected = selectedSize === sp.size;
+                    return (
+                      <button key={sp.size} onClick={() => setSelectedSize(sp.size)}
+                        className={`flex flex-col items-center justify-center px-5 py-3 rounded-xl border-2 font-bold transition-all min-w-[64px] ${isSelected ? 'border-primary bg-primary text-white shadow' : 'border-gray-300 bg-white dark:bg-gray-800 text-foreground hover:border-gray-400'}`}
+                        data-testid={`button-size-${sp.size}`}>
+                        <span className="text-sm leading-tight">{sp.size}</span>
+                        <span className={`text-[10px] font-normal mt-0.5 ${isSelected ? 'text-white/80' : 'text-muted-foreground'}`}>
+                          {formatPrice(currency === 'SAR' && sp.priceSar ? sp.priceSar : sp.price)}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {/* Plain sizes */}
+            {/* ── مقاسات بدون سعر — pill كبير SHEIN ── */}
             {sizes.length > 0 && sizePricing.length === 0 && (
               <div>
-                <p className="text-xs text-muted-foreground mb-1.5">المقاس</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {sizes.map(sz => (
-                    <button key={sz} onClick={() => setSelectedSize(sz)}
-                      className={`px-3 py-1.5 rounded-lg border-2 transition-all text-xs font-medium ${selectedSize === sz ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 hover:border-gray-400'}`}
-                      data-testid={`button-size-${sz}`}>{sz}</button>
-                  ))}
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <span className="text-sm font-semibold">مقاس:</span>
+                  <span className="text-sm font-bold text-foreground">{selectedSize ?? 'الافتراضي'}</span>
+                  <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground mr-auto" />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {sizes.map(sz => {
+                    const isSelected = selectedSize === sz;
+                    return (
+                      <button key={sz} onClick={() => setSelectedSize(sz)}
+                        className={`px-6 py-3 rounded-xl border-2 text-sm font-bold transition-all ${isSelected ? 'border-primary bg-primary text-white shadow' : 'border-gray-300 bg-white dark:bg-gray-800 text-foreground hover:border-gray-400'}`}
+                        data-testid={`button-size-${sz}`}>{sz}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
-            </div>}
           </div>
         );
       }
@@ -1212,40 +1262,58 @@ export default function ProductDetail() {
     <div className="relative min-h-screen bg-background" dir="rtl" style={{ paddingBottom: pdp.stickyBar.visible ? 84 : 24 }}>
       {/* هيدر شفاف متراكب فوق الصورة — أسلوب SHEIN */}
       <div
-        className="absolute top-0 left-0 right-0 z-40 px-2 py-2 flex items-center gap-1"
-        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.38) 0%, transparent 100%)' }}
+        className="absolute top-0 left-0 right-0 z-40 px-3 pt-2 pb-3"
+        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.1) 80%, transparent 100%)' }}
         data-testid="product-nav"
       >
-        {/* زر الرجوع — يمين */}
-        <Link href="/products">
-          <button className="p-2 rounded-full bg-black/20 hover:bg-black/30 backdrop-blur-sm transition-colors" data-testid="button-back">
-            <ArrowRight className="h-5 w-5 text-white" />
+        <div className="flex items-center gap-2">
+          {/* زر الرجوع */}
+          <Link href="/products">
+            <button className="p-2 rounded-full bg-black/25 hover:bg-black/40 backdrop-blur-sm transition-colors shrink-0" data-testid="button-back">
+              <ArrowRight className="h-5 w-5 text-white" />
+            </button>
+          </Link>
+
+          {/* شريط بحث كامل */}
+          <form
+            className="flex-1"
+            onSubmit={e => {
+              e.preventDefault();
+              const q = searchQuery.trim();
+              setLocation(q ? `/products?search=${encodeURIComponent(q)}` : '/products');
+            }}
+          >
+            <div className="relative">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="ابحث عن منتج..."
+                className="w-full bg-white/92 backdrop-blur-sm rounded-full pr-9 pl-4 py-2 text-sm text-gray-800 placeholder-gray-400 border-0 outline-none focus:ring-2 focus:ring-primary/70 shadow-sm"
+                data-testid="input-search-top"
+              />
+            </div>
+          </form>
+
+          {/* سلة + قلب */}
+          <Link href="/cart">
+            <button className="relative p-2 rounded-full bg-black/25 hover:bg-black/40 backdrop-blur-sm transition-colors shrink-0" data-testid="button-cart-top">
+              <ShoppingCart className="h-5 w-5 text-white" />
+              {cartCount > 0 && (
+                <span className="absolute -top-0.5 -left-0.5 bg-red-500 text-white rounded-full w-4 h-4 text-[10px] font-bold flex items-center justify-center leading-none">
+                  {cartCount > 9 ? '9+' : cartCount}
+                </span>
+              )}
+            </button>
+          </Link>
+          <button
+            onClick={() => setWishlist(w => !w)}
+            className="p-2 rounded-full bg-black/25 hover:bg-black/40 backdrop-blur-sm transition-colors shrink-0"
+            data-testid="button-wishlist-top">
+            <Heart className={`h-5 w-5 ${wishlist ? 'text-red-400 fill-red-400' : 'text-white'}`} />
           </button>
-        </Link>
-        <span className="flex-1" />
-        {/* أيقونات اليسار: بحث + سلة + قلب */}
-        <button
-          onClick={() => setLocation('/products')}
-          className="p-2 rounded-full bg-black/20 hover:bg-black/30 backdrop-blur-sm transition-colors"
-          data-testid="button-search-top">
-          <Search className="h-5 w-5 text-white" />
-        </button>
-        <Link href="/cart">
-          <button className="relative p-2 rounded-full bg-black/20 hover:bg-black/30 backdrop-blur-sm transition-colors" data-testid="button-cart-top">
-            <ShoppingCart className="h-5 w-5 text-white" />
-            {cartCount > 0 && (
-              <span className="absolute -top-0.5 -left-0.5 bg-red-500 text-white rounded-full w-4 h-4 text-[10px] font-bold flex items-center justify-center leading-none">
-                {cartCount > 9 ? '9+' : cartCount}
-              </span>
-            )}
-          </button>
-        </Link>
-        <button
-          onClick={() => setWishlist(w => !w)}
-          className="p-2 rounded-full bg-black/20 hover:bg-black/30 backdrop-blur-sm transition-colors"
-          data-testid="button-wishlist-top">
-          <Heart className={`h-5 w-5 ${wishlist ? 'text-red-400 fill-red-400' : 'text-white'}`} />
-        </button>
+        </div>
       </div>
 
       {/* Sections in order — بدون فراغ علوي، الصورة تبدأ من الأعلى */}

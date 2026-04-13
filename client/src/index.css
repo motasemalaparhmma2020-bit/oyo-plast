@@ -119,3 +119,12 @@
 .rtl-flip {
   transform: scaleX(-1);
 }
+
+/* إخفاء شريط التمرير مع الإبقاء على وظيفة السحب */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
