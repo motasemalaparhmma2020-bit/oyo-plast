@@ -201,6 +201,7 @@ interface ProductFormData {
   printingCategoryId: string;
   tags: string;
   showReviews: boolean;
+  showInPrinting: boolean;
   enableVariantUI: boolean;
   colorImages: ColorImageEntry[];
   enableSmartVariants: boolean;
@@ -232,6 +233,7 @@ const emptyProductForm: ProductFormData = {
   printingCategoryId: "",
   tags: "",
   showReviews: true,
+  showInPrinting: false,
   enableVariantUI: false,
   colorImages: [],
   enableSmartVariants: false,
@@ -1565,6 +1567,7 @@ function PrintingProductsSection({ adminToken }: { adminToken: string | null }) 
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/admin/printing-products'] });
           queryClient.invalidateQueries({ queryKey: ['/api/products'] });
           queryClient.invalidateQueries({ queryKey: ['/api/printing-products'] });
           toast({ title: "تم تحديث المنتج بنجاح" });
@@ -1583,39 +1586,49 @@ function PrintingProductsSection({ adminToken }: { adminToken: string | null }) 
         <CardDescription>اختر المنتجات التي تظهر في قسم الطباعة</CardDescription>
       </CardHeader>
       <CardContent>
+        {/* ملاحظة توجيهية */}
+        <div className="mb-3 p-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-lg text-sm text-teal-700 dark:text-teal-300 flex items-start gap-2">
+          <span className="text-lg leading-none mt-0.5">💡</span>
+          <div>
+            <p className="font-semibold">يمكنك الآن التحكم من نموذج المنتج مباشرة</p>
+            <p className="text-xs mt-0.5 opacity-80">عند إضافة أو تعديل أي منتج، ستجد خياراً "ظهور في قسم الطباعة والتصميم" بجانب خيار التقييمات. يمكنك أيضاً تغيير الحالة من هنا.</p>
+          </div>
+        </div>
+
         {isLoading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : products.length > 0 ? (
-          <div className="space-y-3 max-h-96 overflow-y-auto">
+          <div className="space-y-2 max-h-96 overflow-y-auto">
             {products.map((product) => (
               <div
                 key={product.id}
-                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
+                className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${product.showInPrinting ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800' : 'bg-gray-50 dark:bg-gray-900 border-transparent'}`}
               >
                 <input
                   type="checkbox"
                   checked={product.showInPrinting || false}
                   onChange={() => handleToggleProduct(product.id, product.showInPrinting || false)}
                   disabled={updatePrintingStatusMutation.isPending}
-                  className="w-5 h-5 cursor-pointer"
+                  className="w-5 h-5 cursor-pointer accent-teal-600"
                   data-testid={`checkbox-printing-${product.id}`}
                 />
                 {product.imageUrl && (
                   <img
                     src={product.imageUrl}
                     alt={product.name}
-                    className="w-12 h-12 rounded object-cover"
+                    className="w-10 h-10 rounded-lg object-cover"
                   />
                 )}
-                <div className="flex-1">
-                  <p className="font-semibold">{product.name}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm truncate">{product.name}</p>
                   <p className="text-xs text-gray-500">{product.price} ر.ي</p>
                 </div>
-                {product.showInPrinting && (
-                  <Badge className="bg-green-100 text-green-800">مفعل</Badge>
-                )}
+                {product.showInPrinting
+                  ? <Badge className="bg-teal-600 text-white shrink-0">🖨️ مفعّل</Badge>
+                  : <span className="text-xs text-gray-400 shrink-0">غير مفعّل</span>
+                }
               </div>
             ))}
           </div>
@@ -5205,6 +5218,7 @@ export default function Admin() {
           printingCategoryId: data.printingCategoryId ? Number(data.printingCategoryId) : null,
           tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
           showReviews: data.showReviews,
+          showInPrinting: data.showInPrinting,
           enableVariantUI: data.enableVariantUI,
           colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
           enableSmartVariants: data.enableSmartVariants,
@@ -5267,6 +5281,7 @@ export default function Admin() {
         printingCategoryId: data.printingCategoryId ? Number(data.printingCategoryId) : null,
         tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
         showReviews: data.showReviews,
+        showInPrinting: data.showInPrinting,
         enableVariantUI: data.enableVariantUI,
         colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
         enableSmartVariants: data.enableSmartVariants,
@@ -5471,6 +5486,7 @@ export default function Admin() {
       printingPricePerUnit: product.printingPricePerUnit != null ? String(product.printingPricePerUnit) : "",
       hasPrintingOptions: product.hasPrintingOptions ?? false,
       showReviews: product.showReviews ?? true,
+      showInPrinting: (product as any).showInPrinting ?? false,
       baseBagPrice: product.baseBagPrice != null ? String(product.baseBagPrice) : "",
       singleColorPrintPrice: product.singleColorPrintPrice != null ? String(product.singleColorPrintPrice) : "",
       availableBagColors: product.availableBagColors ? product.availableBagColors.join(', ') : "",
@@ -6361,6 +6377,25 @@ export default function Admin() {
                               إظهار التقييمات والمراجعات
                             </Label>
                           </div>
+
+                          {/* ── ظهور في قسم الطباعة والتصميم ── */}
+                          <div className="flex items-center gap-2 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-lg px-3 py-2">
+                            <input
+                              type="checkbox"
+                              id="product-show-in-printing"
+                              checked={productForm.showInPrinting}
+                              onChange={(e) => setProductForm({...productForm, showInPrinting: e.target.checked})}
+                              className="rounded border-gray-300 accent-teal-600"
+                              data-testid="checkbox-show-in-printing"
+                            />
+                            <Label htmlFor="product-show-in-printing" className="font-medium flex items-center gap-2 text-teal-700 dark:text-teal-300 cursor-pointer">
+                              🖨️ ظهور في قسم الطباعة والتصميم
+                            </Label>
+                            {productForm.showInPrinting && (
+                              <span className="mr-auto text-xs bg-teal-600 text-white px-2 py-0.5 rounded-full">مفعّل</span>
+                            )}
+                          </div>
+
                         </div>
                         </div>
                         )}

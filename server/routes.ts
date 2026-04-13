@@ -1294,7 +1294,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "imageUrl", "imageUrls", "stock", "colors", "sizes",
         "allowDesignUpload", "printingPricePerUnit", "hasPrintingOptions",
         "baseBagPrice", "singleColorPrintPrice", "availableBagColors", "tags",
-        "bulkPricing", "sizePricing", "showReviews", "enableVariantUI", "colorImages",
+        "bulkPricing", "sizePricing", "showReviews", "showInPrinting",
+        "printingCategoryId", "supplierId",
+        "enableVariantUI", "colorImages",
         "originalPrice", "originalPriceSar", "discountPercent", "promotionalTags",
         "hasFreeShipping", "enableSmartVariants", "smartVariants"
       ];
