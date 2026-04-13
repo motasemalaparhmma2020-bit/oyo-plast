@@ -13,7 +13,7 @@ import { useAddToCart } from "@/hooks/use-cart";
 import {
   ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star,
   Camera, X, Zap, Package, ChevronLeft, ChevronRight, Printer, Truck,
-  RefreshCcw, Heart, CreditCard, Award, Lock, CheckCircle2
+  RefreshCcw, Heart, CreditCard, Award, Lock, CheckCircle2, Search, ChevronDown, ChevronUp
 } from "lucide-react";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -101,6 +101,8 @@ export default function ProductDetail() {
   const { data: pdpRaw } = useQuery<PdpLayout>({ queryKey: ["/api/pdp-layout"], staleTime: 60000 });
   const { data: reviews = [] } = useQuery<Review[]>({ queryKey: ['/api/products', id, 'reviews'], enabled: !!id, staleTime: 2 * 60000 });
   const { data: allProducts = [] } = useQuery<Product[]>({ queryKey: ['/api/products'], staleTime: 3 * 60000, gcTime: 10 * 60000 });
+  const { data: cartItems = [] } = useQuery<any[]>({ queryKey: ['/api/cart'], staleTime: 30000 });
+  const cartCount = cartItems.length;
 
   // ── Check if user has a delivered order containing this product ──────────
   const { data: userOrders = [] } = useQuery<any[]>({
@@ -204,6 +206,7 @@ export default function ProductDetail() {
   const [isUploadingReviewImage, setIsUploadingReviewImage] = useState(false);
   const [activeTab, setActiveTab]         = useState<"description" | "reviews">("description");
   const [wishlist, setWishlist]           = useState(false);
+  const [variantsExpanded, setVariantsExpanded] = useState(true);
 
   const [currency, setCurrency] = useState<'YER' | 'SAR'>(() =>
     (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER'
@@ -505,45 +508,43 @@ export default function ProductDetail() {
       // ── PRICE ────────────────────────────────────────────────────────────
       case "price": {
         if (!sec["price"]?.visible) return null;
-        const priceFontSize = s.fontSize ?? 22;
+        const priceFontSize = s.fontSize ?? 24;
         const couponPrice = sadeemMarketerDiscount > 0
           ? Math.round(Number(currentPrice) * (1 - sadeemMarketerDiscount / 100))
           : null;
         const showCoupon = couponPrice && (isMarketerLink || showMarketerCouponToAll);
+        const hasDiscount = (sadeemShowOldPrice && effectiveDiscount > 0) || isMarketerLink;
         return (
           <div key="price" className="px-4 pt-3" data-testid="section-price">
-            {/* Row 1: old price + discount badges */}
-            <div className="flex items-center gap-2 flex-wrap mb-1">
-              {(sadeemShowOldPrice && effectiveDiscount > 0) || isMarketerLink ? (
-                <span className="text-muted-foreground line-through text-sm" data-testid="text-original-price">
-                  {formatPrice(currentPrice)} {currLabel}
-                </span>
-              ) : null}
-              {sadeemShowDiscountBadge && effectiveDiscount > 0 && (
-                <Badge className="text-xs px-2 py-0.5 font-bold" style={{ background: 'var(--discount-badge-bg,#ef4444)', color:'white' }}
-                  data-testid="badge-discount">
-                  -{effectiveDiscount}%
-                </Badge>
-              )}
-              {isMarketerLink && (
-                <Badge className="text-xs px-2 py-0.5 bg-purple-600 text-white">مسوق -{sadeemMarketerDiscount}%</Badge>
-              )}
-            </div>
-            {/* Row 2: main price */}
-            <div className="flex items-baseline gap-2">
+            {/* سطر واحد: السعر الجديد + شارة الخصم + السعر القديم مشطوب */}
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-extrabold text-primary leading-none price-num"
                 style={{ fontSize: priceFontSize, fontFamily: 'var(--font-numbers)' }}
                 data-testid="text-product-price" data-price="true">
                 {formatPrice(displayedPrice)}
               </span>
-              <span className="text-base text-muted-foreground">{currLabel}</span>
+              <span className="text-base text-muted-foreground font-medium">{currLabel}</span>
+              {sadeemShowDiscountBadge && effectiveDiscount > 0 && (
+                <Badge className="text-xs px-2 py-0.5 font-bold rounded-md" style={{ background: 'var(--discount-badge-bg,#ef4444)', color:'white' }}
+                  data-testid="badge-discount">
+                  -{effectiveDiscount}%
+                </Badge>
+              )}
+              {isMarketerLink && (
+                <Badge className="text-xs px-2 py-0.5 bg-purple-600 text-white rounded-md">-{sadeemMarketerDiscount}%</Badge>
+              )}
+              {hasDiscount && (
+                <span className="text-muted-foreground line-through text-sm" data-testid="text-original-price">
+                  {formatPrice(currentPrice)} {currLabel}
+                </span>
+              )}
               {selectedSmartV && Number(selectedSmartV.discount || 0) > 0 && sadeemShowOldPrice && (
                 <span className="text-sm line-through text-muted-foreground">
-                  {formatPrice(Math.round(Number(currentPrice) / (1 - Number(selectedSmartV.discount) / 100)))}
+                  {formatPrice(Math.round(Number(currentPrice) / (1 - Number(selectedSmartV.discount) / 100)))} {currLabel}
                 </span>
               )}
             </div>
-            {/* Row 3: كوبون SHEIN-style */}
+            {/* كوبون */}
             {showCoupon && (
               <div className="flex items-center gap-2 mt-1.5">
                 <span className="bg-purple-600 text-white text-xs px-2 py-0.5 rounded-md font-bold">مع كوبون</span>
@@ -553,7 +554,7 @@ export default function ProductDetail() {
                 </span>
               </div>
             )}
-            {/* Row 4: الإجمالي */}
+            {/* الإجمالي */}
             {quantity > 1 && (
               <p className="text-sm text-muted-foreground mt-1">
                 الإجمالي: <strong className="text-foreground" data-testid="text-total-price">{formatPrice(totalPrice)} {currLabel}</strong>
@@ -610,25 +611,28 @@ export default function ProductDetail() {
       case "rating": {
         if (!sec["rating"]?.visible) return null;
         if (!sadeemShowRating && !sadeemShowSoldCount) return null;
+        const ratingVal = Number(product.rating || 5).toFixed(1);
+        const soldCount = (product as any).soldCount || 0;
+        const reviewCount = product.reviewCount || 0;
         return (
-          <div key="rating" className="px-4 flex items-center gap-3 flex-wrap" data-testid="section-rating">
-            {sadeemShowRating && (
-              <div className="flex items-center gap-1.5">
-                <div className="flex">
-                  {[1,2,3,4,5].map(star => (
-                    <Star key={star} className={`h-4 w-4 ${star <= Math.floor(Number(product.rating || 5)) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
-                  ))}
-                </div>
-                <span className="text-sm font-bold">{product.rating || "5"}</span>
-                <span className="text-xs text-muted-foreground">({product.reviewCount || 0} تقييم)</span>
-              </div>
-            )}
-            {sadeemShowSoldCount && (
-              <Badge variant="secondary" className="text-xs gap-1">
-                <ShoppingCart className="h-3 w-3" />
-                تم بيع {(product as any).soldCount || 0} قطعة
-              </Badge>
-            )}
+          <div key="rating" className="px-4 flex items-center justify-between" data-testid="section-rating">
+            {/* يسار: نجمة + تقييم + (مبيعات) */}
+            <div className="flex items-center gap-1.5">
+              {sadeemShowRating && (
+                <>
+                  <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                  <span className="text-sm font-bold text-foreground">{ratingVal}</span>
+                  <span className="text-sm text-muted-foreground">
+                    ({reviewCount > 0 ? `${reviewCount} تقييم` : '0 تقييم'})
+                  </span>
+                </>
+              )}
+              {sadeemShowSoldCount && soldCount > 0 && (
+                <span className="text-xs text-muted-foreground mr-2 border-r pr-2">
+                  {soldCount.toLocaleString('en-US')} مبيع
+                </span>
+              )}
+            </div>
           </div>
         );
       }
@@ -661,7 +665,17 @@ export default function ProductDetail() {
         const hasVariants = sizePricing.length > 0 || sizes.length > 0 || colorImages.length > 0 || availableColors.length > 0 || showSmartVariants;
         if (!hasVariants) return null;
         return (
-          <div key="variants" className="px-4 space-y-4" data-testid="section-variants">
+          <div key="variants" className="px-4" data-testid="section-variants">
+            {/* رأس قابل للطي */}
+            <button
+              className="w-full flex items-center justify-between py-2 border-b mb-2"
+              onClick={() => setVariantsExpanded(e => !e)}
+              data-testid="button-toggle-variants"
+            >
+              <span className="font-semibold text-sm">الخيارات (المقاسات / الألوان)</span>
+              {variantsExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+            {variantsExpanded && <div className="space-y-3">
             {/* Smart Variants */}
             {showSmartVariants && smartVariantsData && (
               <div className="space-y-3">
@@ -682,7 +696,7 @@ export default function ProductDetail() {
                           return (
                             <button key={v.id}
                               onClick={() => { setSelectedSmartVariant(p => ({ ...p, [type]: v.id })); if (v.imageUrl) setVariantActiveImg(v.imageUrl); }}
-                              className={`px-3 py-2 rounded-xl border-2 transition-all flex flex-col items-center min-w-[72px] text-center text-sm ${isSelected ? 'border-primary bg-primary/10 text-primary shadow-md' : 'border-gray-200 hover:border-gray-400'}`}
+                              className={`px-2 py-1.5 rounded-lg border-2 transition-all flex flex-col items-center min-w-[52px] text-center text-xs ${isSelected ? 'border-primary bg-primary/10 text-primary shadow-sm' : 'border-gray-200 hover:border-gray-400'}`}
                               data-testid={`button-smart-variant-${type}-${v.id}`}>
                               {type === 'color' && v.hex && <span className="w-5 h-5 rounded-full border-2 border-white shadow mb-1 block mx-auto" style={{ background: v.hex }} />}
                               {type === 'image' && v.imageUrl && <img src={v.imageUrl} alt={v.label} className="w-10 h-10 object-cover rounded mb-1 mx-auto" />}
@@ -746,16 +760,16 @@ export default function ProductDetail() {
             {/* Size Pricing */}
             {sizePricing.length > 0 && (
               <div>
-                <Label className="font-semibold text-sm mb-2 block">
-                  الحجم {selectedSize && <span className="font-normal text-muted-foreground mr-2">— {selectedSize}</span>}
-                </Label>
-                <div className="flex flex-wrap gap-2">
+                <p className="text-xs text-muted-foreground mb-1.5">
+                  الحجم {selectedSize && <span className="font-semibold text-foreground mr-1">— {selectedSize}</span>}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
                   {sizePricing.map(sp => (
                     <button key={sp.size} onClick={() => setSelectedSize(sp.size)}
-                      className={`px-4 py-2.5 rounded-xl border-2 transition-all flex flex-col items-center min-w-[72px] text-sm font-medium ${selectedSize === sp.size ? 'border-primary bg-primary/10 text-primary shadow' : 'border-gray-200 hover:border-gray-400'}`}
+                      className={`px-2.5 py-1.5 rounded-lg border-2 transition-all flex flex-col items-center min-w-[56px] text-xs font-medium ${selectedSize === sp.size ? 'border-primary bg-primary/10 text-primary shadow-sm' : 'border-gray-200 hover:border-gray-400'}`}
                       data-testid={`button-size-${sp.size}`}>
-                      <span className="font-bold">{sp.size}</span>
-                      <span className="text-xs text-muted-foreground mt-0.5">{formatPrice(currency==='SAR'&&sp.priceSar?sp.priceSar:sp.price)} {currLabel}</span>
+                      <span className="font-bold text-xs leading-tight">{sp.size}</span>
+                      <span className="text-[10px] text-muted-foreground">{formatPrice(currency==='SAR'&&sp.priceSar?sp.priceSar:sp.price)}</span>
                     </button>
                   ))}
                 </div>
@@ -765,16 +779,17 @@ export default function ProductDetail() {
             {/* Plain sizes */}
             {sizes.length > 0 && sizePricing.length === 0 && (
               <div>
-                <Label className="font-semibold text-sm mb-2 block">المقاس</Label>
-                <div className="flex flex-wrap gap-2">
+                <p className="text-xs text-muted-foreground mb-1.5">المقاس</p>
+                <div className="flex flex-wrap gap-1.5">
                   {sizes.map(sz => (
                     <button key={sz} onClick={() => setSelectedSize(sz)}
-                      className={`px-4 py-2 rounded-xl border-2 transition-all text-sm font-medium ${selectedSize === sz ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 hover:border-gray-400'}`}
+                      className={`px-3 py-1.5 rounded-lg border-2 transition-all text-xs font-medium ${selectedSize === sz ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 hover:border-gray-400'}`}
                       data-testid={`button-size-${sz}`}>{sz}</button>
                   ))}
                 </div>
               </div>
             )}
+            </div>}
           </div>
         );
       }
@@ -1194,36 +1209,46 @@ export default function ProductDetail() {
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background pb-28" dir="rtl" style={{ paddingBottom: pdp.stickyBar.visible ? 84 : 24 }}>
-      {/* Back button — when hiding name the bar becomes transparent overlay on the image */}
+    <div className="relative min-h-screen bg-background" dir="rtl" style={{ paddingBottom: pdp.stickyBar.visible ? 84 : 24 }}>
+      {/* هيدر شفاف متراكب فوق الصورة — أسلوب SHEIN */}
       <div
-        className={`sticky top-0 z-40 px-3 py-2 flex items-center gap-2 ${
-          detailHideHeaderName
-            ? 'bg-transparent absolute top-0 left-0 right-0'
-            : 'bg-background/95 backdrop-blur border-b'
-        }`}
+        className="absolute top-0 left-0 right-0 z-40 px-2 py-2 flex items-center gap-1"
+        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.38) 0%, transparent 100%)' }}
         data-testid="product-nav"
       >
+        {/* زر الرجوع — يمين */}
         <Link href="/products">
-          <button
-            className={`p-2 rounded-full transition-colors ${detailHideHeaderName ? 'bg-white/80 shadow' : 'hover:bg-muted'}`}
-            data-testid="button-back">
-            <ArrowRight className="h-5 w-5" />
+          <button className="p-2 rounded-full bg-black/20 hover:bg-black/30 backdrop-blur-sm transition-colors" data-testid="button-back">
+            <ArrowRight className="h-5 w-5 text-white" />
           </button>
         </Link>
-        {!detailHideHeaderName && (
-          <span className="font-semibold text-sm flex-1 truncate">{product.name}</span>
-        )}
-        {detailHideHeaderName && <span className="flex-1" />}
+        <span className="flex-1" />
+        {/* أيقونات اليسار: بحث + سلة + قلب */}
+        <button
+          onClick={() => setLocation('/products')}
+          className="p-2 rounded-full bg-black/20 hover:bg-black/30 backdrop-blur-sm transition-colors"
+          data-testid="button-search-top">
+          <Search className="h-5 w-5 text-white" />
+        </button>
+        <Link href="/cart">
+          <button className="relative p-2 rounded-full bg-black/20 hover:bg-black/30 backdrop-blur-sm transition-colors" data-testid="button-cart-top">
+            <ShoppingCart className="h-5 w-5 text-white" />
+            {cartCount > 0 && (
+              <span className="absolute -top-0.5 -left-0.5 bg-red-500 text-white rounded-full w-4 h-4 text-[10px] font-bold flex items-center justify-center leading-none">
+                {cartCount > 9 ? '9+' : cartCount}
+              </span>
+            )}
+          </button>
+        </Link>
         <button
           onClick={() => setWishlist(w => !w)}
-          className={`p-2 rounded-full transition-colors ${detailHideHeaderName ? 'bg-white/80 shadow' : 'hover:bg-muted'}`}
+          className="p-2 rounded-full bg-black/20 hover:bg-black/30 backdrop-blur-sm transition-colors"
           data-testid="button-wishlist-top">
-          <Heart className={`h-5 w-5 ${wishlist ? 'text-red-500 fill-red-500' : 'text-gray-400'}`} />
+          <Heart className={`h-5 w-5 ${wishlist ? 'text-red-400 fill-red-400' : 'text-white'}`} />
         </button>
       </div>
 
-      {/* Sections in order */}
+      {/* Sections in order — بدون فراغ علوي، الصورة تبدأ من الأعلى */}
       <div style={{ gap: pdp.margins.gap, display: 'flex', flexDirection: 'column' }}>
         {imagesSection}
         {infoSections}
