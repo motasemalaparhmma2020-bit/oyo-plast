@@ -1458,6 +1458,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── فئات الطباعة الاحترافية (Public + Admin) ─────────────────────
+  app.get("/api/printing-categories", async (_req, res) => {
+    try {
+      const cats = await storage.getPrintingCategories();
+      res.json(cats);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب فئات الطباعة" });
+    }
+  });
+
+  app.post("/api/admin/printing-categories", requireAdmin, async (req, res) => {
+    try {
+      const cat = await storage.createPrintingCategory(req.body);
+      res.json(cat);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إنشاء فئة الطباعة" });
+    }
+  });
+
+  app.patch("/api/admin/printing-categories/:id", requireAdmin, async (req, res) => {
+    try {
+      const cat = await storage.updatePrintingCategory(Number(req.params.id), req.body);
+      res.json(cat);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث فئة الطباعة" });
+    }
+  });
+
+  app.delete("/api/admin/printing-categories/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deletePrintingCategory(Number(req.params.id));
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حذف فئة الطباعة" });
+    }
+  });
+
   // ─── Visitor Tracking (Public) ────────────────────────────────────
   app.post("/api/track-visit", async (req, res) => {
     try {
@@ -3618,7 +3655,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { cartItems: cartTable } = await import("@shared/schema");
       const { eq: eqFn } = await import("drizzle-orm");
       
-      const { productId, quantity, selectedSize, selectedColor, customPrinting, designNotes, designFileUrl } = req.body;
+      const {
+        productId, quantity, selectedSize, selectedColor, customPrinting, designNotes, designFileUrl,
+        // ── حقول طباعة الأكياس ──
+        selectedBagColor, printColorCount, printColor1, printColor2, printColor3,
+        // ── حقول الطباعة الاحترافية ──
+        printingCategoryId, printWidth, printHeight, printFinish, printColorSeparation, printingUnitPrice,
+        unitPrice,
+      } = req.body;
+
+      // هل هذه طباعة مخصصة (لا نجمع الكميات مع عناصر أخرى)
+      const hasPrinting = customPrinting || printColorCount > 0 || printingCategoryId;
       
       // Check if item exists
       const existing = await dbInstance.select().from(cartTable)
@@ -3628,10 +3675,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         item.productId === productId &&
         item.selectedSize === selectedSize &&
         item.selectedColor === selectedColor &&
-        !item.customPrinting
+        !item.customPrinting && !item.printColorCount && !item.printingCategoryId
       );
       
-      if (existingItem && !customPrinting) {
+      if (existingItem && !hasPrinting) {
         // Update quantity
         const [updated] = await dbInstance
           .update(cartTable)
@@ -3653,6 +3700,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           customPrinting: customPrinting || false,
           designNotes: designNotes || null,
           designFileUrl: designFileUrl || null,
+          selectedBagColor: selectedBagColor || null,
+          printColorCount: printColorCount || 0,
+          printColor1: printColor1 || null,
+          printColor2: printColor2 || null,
+          printColor3: printColor3 || null,
+          printingCategoryId: printingCategoryId || null,
+          printWidth: printWidth || null,
+          printHeight: printHeight || null,
+          printFinish: printFinish || null,
+          printColorSeparation: printColorSeparation || false,
+          printingUnitPrice: printingUnitPrice || null,
+          unitPrice: unitPrice || null,
         })
         .returning();
       

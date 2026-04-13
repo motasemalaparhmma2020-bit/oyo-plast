@@ -393,7 +393,9 @@ function CustomerInvoice({ order, orderItems, settings }: {
                   <span className="line-through text-gray-400">{formatPrice(subtotalBefore)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">خصم الكوبون:</span>
+                  <span className="text-gray-500">
+                    خصم الكوبون{order.couponCode ? ` (${order.couponCode})` : ''}:
+                  </span>
                   <span className="text-green-600 font-semibold">- {formatPrice(discountAmount)}</span>
                 </div>
               </>

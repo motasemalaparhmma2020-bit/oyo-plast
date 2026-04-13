@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Order, Product } from "@shared/schema";
+import { Order, Product, type PrintingCategory } from "@shared/schema";
 import FinancialReports from "@/components/FinancialReports";
 import AdminInstallments from "@/components/AdminInstallments";
 import AdminPaymentVerification from "@/components/AdminPaymentVerification";
@@ -64,7 +64,8 @@ import {
   Sparkles,
   Banknote,
   FileText,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp,
+  PrinterCheck
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
@@ -196,6 +197,7 @@ interface ProductFormData {
   baseBagPrice: string;
   singleColorPrintPrice: string;
   availableBagColors: string;
+  printingCategoryId: string;
   tags: string;
   showReviews: boolean;
   enableVariantUI: boolean;
@@ -226,6 +228,7 @@ const emptyProductForm: ProductFormData = {
   baseBagPrice: "",
   singleColorPrintPrice: "",
   availableBagColors: "",
+  printingCategoryId: "",
   tags: "",
   showReviews: true,
   enableVariantUI: false,
@@ -4354,6 +4357,186 @@ function InventorySection({ productsList, productsLoading, productsError, refetc
   );
 }
 
+// ── إدارة فئات الطباعة الاحترافية ─────────────────────────────────────────
+function AdminPrintingCategories({ adminToken }: { adminToken: string | null }) {
+  const qc = useQueryClient();
+  const [editCat, setEditCat] = useState<PrintingCategory | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({
+    name: "", pricePerSqMeter: "", pricePerSqCm: "", finishOptionsRaw: "",
+    colorSeparationPrice: "", minWidthCm: "", minHeightCm: "", isActive: true,
+  });
+
+  const { data: cats = [], isLoading } = useQuery<PrintingCategory[]>({
+    queryKey: ["/api/printing-categories"],
+  });
+
+  const headers = { "Content-Type": "application/json", "x-admin-token": adminToken || "" };
+
+  const saveMut = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        name: form.name,
+        pricePerSqMeter: form.pricePerSqMeter || null,
+        pricePerSqCm: form.pricePerSqCm || null,
+        finishOptions: form.finishOptionsRaw ? form.finishOptionsRaw.split("،").map(s => s.trim()).filter(Boolean) : [],
+        colorSeparationPrice: form.colorSeparationPrice || null,
+        minWidthCm: form.minWidthCm || null,
+        minHeightCm: form.minHeightCm || null,
+        isActive: form.isActive,
+      };
+      if (editCat) {
+        await fetch(`/api/admin/printing-categories/${editCat.id}`, { method: "PATCH", headers, body: JSON.stringify(payload) });
+      } else {
+        await fetch("/api/admin/printing-categories", { method: "POST", headers, body: JSON.stringify(payload) });
+      }
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/printing-categories"] }); setShowForm(false); setEditCat(null); },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (id: number) => {
+      await fetch(`/api/admin/printing-categories/${id}`, { method: "DELETE", headers });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/printing-categories"] }),
+  });
+
+  function openNew() {
+    setEditCat(null);
+    setForm({ name: "", pricePerSqMeter: "", pricePerSqCm: "", finishOptionsRaw: "", colorSeparationPrice: "", minWidthCm: "", minHeightCm: "", isActive: true });
+    setShowForm(true);
+  }
+
+  function openEdit(cat: PrintingCategory) {
+    setEditCat(cat);
+    setForm({
+      name: cat.name,
+      pricePerSqMeter: cat.pricePerSqMeter || "",
+      pricePerSqCm: cat.pricePerSqCm || "",
+      finishOptionsRaw: (cat.finishOptions || []).join("، "),
+      colorSeparationPrice: cat.colorSeparationPrice || "",
+      minWidthCm: cat.minWidthCm || "",
+      minHeightCm: cat.minHeightCm || "",
+      isActive: cat.isActive,
+    });
+    setShowForm(true);
+  }
+
+  return (
+    <div className="space-y-4" dir="rtl">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="h-6 w-1 rounded bg-primary" />
+          <h2 className="text-lg font-bold">فئات الطباعة الاحترافية</h2>
+          <span className="text-xs text-muted-foreground">(لوحات، كروت، أوصق، فواتير...)</span>
+        </div>
+        <button onClick={openNew} className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary/90 transition">
+          <Plus className="h-4 w-4" /> إضافة فئة جديدة
+        </button>
+      </div>
+
+      {/* نموذج الإضافة/التعديل */}
+      {showForm && (
+        <div className="bg-muted/30 border rounded-xl p-4 space-y-3">
+          <h3 className="font-bold text-sm">{editCat ? "تعديل الفئة" : "إضافة فئة جديدة"}</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">اسم الفئة *</label>
+              <input className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
+                value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="مثال: لوحات إعلانية" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">سعر المتر المربع (ر.ي)</label>
+              <input type="number" className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
+                value={form.pricePerSqMeter} onChange={e => setForm(p => ({ ...p, pricePerSqMeter: e.target.value }))} placeholder="0" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">سعر السم المربع (ر.ي)</label>
+              <input type="number" className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
+                value={form.pricePerSqCm} onChange={e => setForm(p => ({ ...p, pricePerSqCm: e.target.value }))} placeholder="0" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">سعر فرز الألوان (ر.ي)</label>
+              <input type="number" className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
+                value={form.colorSeparationPrice} onChange={e => setForm(p => ({ ...p, colorSeparationPrice: e.target.value }))} placeholder="0" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">الحد الأدنى للعرض (سم)</label>
+              <input type="number" className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
+                value={form.minWidthCm} onChange={e => setForm(p => ({ ...p, minWidthCm: e.target.value }))} placeholder="0" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">الحد الأدنى للارتفاع (سم)</label>
+              <input type="number" className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
+                value={form.minHeightCm} onChange={e => setForm(p => ({ ...p, minHeightCm: e.target.value }))} placeholder="0" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="text-xs text-muted-foreground mb-1 block">خيارات التشطيب (افصل بـ ،)</label>
+              <input className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
+                value={form.finishOptionsRaw}
+                onChange={e => setForm(p => ({ ...p, finishOptionsRaw: e.target.value }))}
+                placeholder="فلكس ضد الماء، فلكس عادي، مسلف، ورق" />
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="cat-active" checked={form.isActive}
+                onChange={e => setForm(p => ({ ...p, isActive: e.target.checked }))} className="w-4 h-4 rounded" />
+              <label htmlFor="cat-active" className="text-sm cursor-pointer">فئة نشطة</label>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => { setShowForm(false); setEditCat(null); }}
+              className="px-4 py-2 text-sm border rounded-lg hover:bg-muted transition">إلغاء</button>
+            <button onClick={() => saveMut.mutate()} disabled={!form.name || saveMut.isPending}
+              className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition disabled:opacity-50">
+              {saveMut.isPending ? "جاري الحفظ..." : editCat ? "حفظ التعديل" : "إضافة"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* قائمة الفئات */}
+      {isLoading ? (
+        <div className="text-center py-8 text-muted-foreground">جاري التحميل...</div>
+      ) : cats.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-xl">
+          <PrinterCheck className="h-10 w-10 mx-auto mb-2 opacity-30" />
+          <p>لا توجد فئات طباعة بعد. أضف أولى الفئات!</p>
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {cats.map((cat) => (
+            <div key={cat.id} className="border rounded-xl p-4 bg-card flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-bold text-base">{cat.name}</h3>
+                  {!cat.isActive && <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">غير نشط</span>}
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
+                  {cat.pricePerSqMeter && <span>المتر²: <strong className="text-foreground">{Number(cat.pricePerSqMeter).toLocaleString("ar-YE")} ر.ي</strong></span>}
+                  {cat.pricePerSqCm && <span>السم²: <strong className="text-foreground">{Number(cat.pricePerSqCm).toLocaleString("ar-YE")} ر.ي</strong></span>}
+                  {cat.colorSeparationPrice && <span>فرز الألوان: <strong className="text-foreground">+{Number(cat.colorSeparationPrice).toLocaleString("ar-YE")} ر.ي</strong></span>}
+                </div>
+                {(cat.finishOptions || []).length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {(cat.finishOptions || []).map((opt, i) => (
+                      <span key={i} className="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">{opt}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button onClick={() => openEdit(cat)} className="px-3 py-1.5 text-xs border rounded-lg hover:bg-muted transition">تعديل</button>
+                <button onClick={() => { if (confirm("حذف هذه الفئة؟")) deleteMut.mutate(cat.id); }}
+                  className="px-3 py-1.5 text-xs border border-destructive/30 text-destructive rounded-lg hover:bg-destructive/10 transition">حذف</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── مكونات مساعدة لتفاصيل الطلب ──────────────────────────────────────────
 function OrderDetailSection({
   title, icon, children, defaultOpen = false
@@ -4422,6 +4605,11 @@ export default function Admin() {
       return res.ok ? res.json() : [];
     },
     enabled: !!adminToken,
+    staleTime: 60000,
+  });
+
+  const { data: printingCategoriesAdmin = [] } = useQuery<any[]>({
+    queryKey: ["/api/printing-categories"],
     staleTime: 60000,
   });
 
@@ -4733,6 +4921,7 @@ export default function Admin() {
           baseBagPrice: numOrNull(data.baseBagPrice),
           singleColorPrintPrice: numOrNull(data.singleColorPrintPrice),
           availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()).filter(c => c) : null,
+          printingCategoryId: data.printingCategoryId ? Number(data.printingCategoryId) : null,
           tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
           showReviews: data.showReviews,
           enableVariantUI: data.enableVariantUI,
@@ -4794,6 +4983,7 @@ export default function Admin() {
         colors: data.colors ? data.colors.split(',').map(c => c.trim()).filter(c => c) : null,
         sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()).filter(s => s) : null,
         availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()).filter(c => c) : null,
+        printingCategoryId: data.printingCategoryId ? Number(data.printingCategoryId) : null,
         tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
         showReviews: data.showReviews,
         enableVariantUI: data.enableVariantUI,
@@ -5003,6 +5193,7 @@ export default function Admin() {
       baseBagPrice: product.baseBagPrice != null ? String(product.baseBagPrice) : "",
       singleColorPrintPrice: product.singleColorPrintPrice != null ? String(product.singleColorPrintPrice) : "",
       availableBagColors: product.availableBagColors ? product.availableBagColors.join(', ') : "",
+      printingCategoryId: (product as any).printingCategoryId != null ? String((product as any).printingCategoryId) : "",
       tags: product.tags ? product.tags.join(', ') : "",
       enableVariantUI: (product as any).enableVariantUI ?? false,
       colorImages: [],
@@ -6407,6 +6598,35 @@ export default function Admin() {
                               </div>
                             )}
                           </div>
+
+                          {/* ── فئة الطباعة الاحترافية ── */}
+                          <div>
+                            <Label htmlFor="printing-category" className="font-bold flex items-center gap-2 mb-2">
+                              <Printer className="h-4 w-4" />
+                              فئة الطباعة الاحترافية (اختياري)
+                            </Label>
+                            <p className="text-xs text-muted-foreground mb-2">
+                              للمنتجات ذات الطباعة الاحترافية (لوحات، كروت، ملصقات...) — تفعّل حاسبة السعر بالمساحة
+                            </p>
+                            <select
+                              id="printing-category"
+                              value={productForm.printingCategoryId}
+                              onChange={e => setProductForm({ ...productForm, printingCategoryId: e.target.value })}
+                              className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
+                              data-testid="select-printing-category"
+                            >
+                              <option value="">— بدون فئة طباعة احترافية —</option>
+                              {printingCategoriesAdmin.map((cat: any) => (
+                                <option key={cat.id} value={String(cat.id)}>{cat.name}</option>
+                              ))}
+                            </select>
+                            {productForm.printingCategoryId && (
+                              <p className="text-xs text-green-600 mt-1">
+                                ✓ الطباعة الاحترافية مُفعّلة — سيظهر حاسبة المساحة للعميل
+                              </p>
+                            )}
+                          </div>
+
                         </div>
                         )}
                       </div>
@@ -7112,6 +7332,11 @@ export default function Admin() {
           {/* ─── Backup System Tab ─────────────────────────────────────── */}
           <TabsContent value="backup">
             <AdminBackup adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── Printing Categories Tab ────────────────────────────────── */}
+          <TabsContent value="printing-categories">
+            <AdminPrintingCategories adminToken={adminToken} />
           </TabsContent>
 
         </Tabs>

@@ -104,6 +104,18 @@ export default function ProductDetail() {
   const { data: cartItems = [] } = useQuery<any[]>({ queryKey: ['/api/cart'], staleTime: 30000 });
   const cartCount = cartItems.length;
 
+  // ── فئات الطباعة الاحترافية ─────────────────────────────────────────────
+  const { data: printingCategoriesData = [] } = useQuery<any[]>({
+    queryKey: ["/api/printing-categories"],
+    staleTime: 5 * 60000,
+  });
+  const productPrintingCat = useMemo(() =>
+    product?.printingCategoryId
+      ? printingCategoriesData.find((c: any) => c.id === product.printingCategoryId) ?? null
+      : null,
+    [product?.printingCategoryId, printingCategoriesData]
+  );
+
   // ── Check if user has a delivered order containing this product ──────────
   const { data: userOrders = [] } = useQuery<any[]>({
     queryKey: ["/api/orders"],
@@ -209,6 +221,17 @@ export default function ProductDetail() {
   const [variantsExpanded, setVariantsExpanded] = useState(true);
   const [searchQuery, setSearchQuery]     = useState("");
 
+  // ── حقول الطباعة المخصصة (أكياس) ─────────────────────────────────────────
+  const [selectedBagColor, setSelectedBagColor] = useState<string | null>(null);
+  const [printColors, setPrintColors]           = useState<string[]>([""]);
+  const [enableBagPrinting, setEnableBagPrinting] = useState(false);
+
+  // ── حقول الطباعة الاحترافية ────────────────────────────────────────────────
+  const [printFinish, setPrintFinish]           = useState("");
+  const [printWidth, setPrintWidth]             = useState("");
+  const [printHeight, setPrintHeight]           = useState("");
+  const [printColorSeparation, setPrintColorSeparation] = useState(false);
+
   const [currency, setCurrency] = useState<'YER' | 'SAR'>(() =>
     (localStorage.getItem('currency') as 'YER' | 'SAR') || 'YER'
   );
@@ -305,11 +328,37 @@ export default function ProductDetail() {
     return base;
   }, [product, quantity, currency, bulkPricing, currentSizeData, selectedSmartV]);
 
+  // ── حساب تكلفة الطباعة ─────────────────────────────────────────────────────
+  const bagPrintingCost = useMemo(() => {
+    if (!enableBagPrinting || !product?.singleColorPrintPrice) return 0;
+    const numColors = printColors.filter(c => c.trim()).length;
+    if (numColors === 0) return 0;
+    return numColors * Number(product.singleColorPrintPrice) * quantity;
+  }, [enableBagPrinting, product?.singleColorPrintPrice, printColors, quantity]);
+
+  const professionalPrintingUnitPrice = useMemo(() => {
+    if (!productPrintingCat || !printWidth || !printHeight) return 0;
+    const w = Number(printWidth), h = Number(printHeight);
+    if (!w || !h) return 0;
+    let price = 0;
+    if (productPrintingCat.pricePerSqMeter) {
+      price = (w * h / 10000) * Number(productPrintingCat.pricePerSqMeter);
+    } else if (productPrintingCat.pricePerSqCm) {
+      price = w * h * Number(productPrintingCat.pricePerSqCm);
+    }
+    if (printColorSeparation && productPrintingCat.colorSeparationPrice) {
+      price += Number(productPrintingCat.colorSeparationPrice);
+    }
+    return Math.round(price);
+  }, [productPrintingCat, printWidth, printHeight, printColorSeparation]);
+
   const printingCost = useMemo(() =>
     enableCustomPrinting && product?.printingPricePerUnit ? Number(product.printingPricePerUnit) * quantity : 0,
     [enableCustomPrinting, product?.printingPricePerUnit, quantity]);
 
-  const totalPrice = useMemo(() => (Number(currentPrice) * quantity) + printingCost, [currentPrice, quantity, printingCost]);
+  const totalPrice = useMemo(() =>
+    (Number(currentPrice) * quantity) + printingCost + bagPrintingCost + (professionalPrintingUnitPrice * quantity),
+    [currentPrice, quantity, printingCost, bagPrintingCost, professionalPrintingUnitPrice]);
 
   const currentStock = useMemo(() =>
     currentSizeData?.stock !== undefined ? currentSizeData.stock : (product?.stock || 0),
@@ -326,15 +375,40 @@ export default function ProductDetail() {
   const addToCartMutation = useAddToCart();
   const { isPending } = addToCartMutation;
 
-  const cartPayload = useMemo(() => ({
-    productId: product?.id ?? 0,
-    quantity,
-    selectedSize: selectedSize || undefined,
-    selectedColor: selectedColor || undefined,
-    customPrinting: enableCustomPrinting,
-    designNotes: designNotes || undefined,
-    designFileUrl: uploadedDesignUrl || undefined,
-  }), [product?.id, quantity, selectedSize, selectedColor, enableCustomPrinting, designNotes, uploadedDesignUrl]);
+  const cartPayload = useMemo(() => {
+    const filledColors = printColors.filter(c => c.trim());
+    return {
+      productId: product?.id ?? 0,
+      quantity,
+      selectedSize: selectedSize || undefined,
+      selectedColor: selectedColor || undefined,
+      customPrinting: enableCustomPrinting,
+      designNotes: designNotes || undefined,
+      designFileUrl: uploadedDesignUrl || undefined,
+      // ── حقول طباعة الأكياس ──
+      ...(enableBagPrinting && filledColors.length > 0 ? {
+        selectedBagColor: selectedBagColor || undefined,
+        printColorCount: filledColors.length,
+        printColor1: filledColors[0] || undefined,
+        printColor2: filledColors[1] || undefined,
+        printColor3: filledColors[2] || undefined,
+      } : {}),
+      // ── حقول الطباعة الاحترافية ──
+      ...(productPrintingCat && printWidth && printHeight ? {
+        printingCategoryId: productPrintingCat.id,
+        printWidth: Number(printWidth) || undefined,
+        printHeight: Number(printHeight) || undefined,
+        printFinish: printFinish || undefined,
+        printColorSeparation,
+        printingUnitPrice: professionalPrintingUnitPrice || undefined,
+      } : {}),
+      // السعر الوحدوي المحسوب
+      unitPrice: totalPrice / quantity || undefined,
+    };
+  }, [product?.id, quantity, selectedSize, selectedColor, enableCustomPrinting, designNotes, uploadedDesignUrl,
+      enableBagPrinting, selectedBagColor, printColors,
+      productPrintingCat, printWidth, printHeight, printFinish, printColorSeparation, professionalPrintingUnitPrice,
+      totalPrice]);
 
   const handleAddToCart = () => {
     if (!product) return;
@@ -963,47 +1037,234 @@ export default function ProductDetail() {
       // ── PRINTING ──────────────────────────────────────────────────────────
       case "printing": {
         if (!sec["printing"]?.visible) return null;
-        if (!product.allowDesignUpload && !product.hasPrintingOptions) return null;
+        const hasBagPrinting = product.hasPrintingOptions;
+        const hasProfPrinting = !!(product as any).printingCategoryId && productPrintingCat;
+        const hasDesignUpload = product.allowDesignUpload;
+        if (!hasBagPrinting && !hasProfPrinting && !hasDesignUpload) return null;
+
         return (
-          <div key="printing" className="px-4" data-testid="section-printing">
-            <div className="rounded-xl border border-blue-300/50 bg-blue-50/40 dark:bg-blue-950/20 p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <Printer className="h-5 w-5 text-blue-600" />
-                <span className="font-bold text-sm">طباعة مخصصة</span>
-                {product.printingPricePerUnit && (
-                  <Badge variant="secondary" className="text-xs">+{formatPrice(product.printingPricePerUnit)} {currLabel}/قطعة</Badge>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                <input type="checkbox" id="enable-printing" checked={enableCustomPrinting}
-                  onChange={e => setEnableCustomPrinting(e.target.checked)}
-                  className="w-4 h-4 rounded text-primary" />
-                <Label htmlFor="enable-printing" className="cursor-pointer text-sm">أريد طباعة شعاري على المنتج</Label>
-              </div>
-              {enableCustomPrinting && (
-                <div className="space-y-2">
-                  <div
-                    className="border-2 border-dashed border-blue-400/50 rounded-lg p-3 text-center cursor-pointer hover:border-blue-500 transition-colors"
-                    onClick={() => fileInputRef.current?.click()}>
-                    <input ref={fileInputRef} type="file" accept="image/*,.pdf,.ai,.psd"
-                      onChange={handleDesignUpload} className="hidden" data-testid="input-design-upload" />
-                    {uploadedFile ? (
-                      <div className="flex items-center justify-center gap-2 text-blue-600 text-sm">
-                        <Check className="h-4 w-4" /><span className="truncate">{uploadedFile.name}</span>
+          <div key="printing" className="px-4 space-y-3" data-testid="section-printing">
+
+            {/* ════════════ طباعة الأكياس المخصصة ════════════ */}
+            {hasBagPrinting && (
+              <div className="rounded-xl border border-cyan-300/60 bg-cyan-50/40 dark:bg-cyan-950/20 overflow-hidden">
+                <button
+                  className="w-full flex items-center gap-2 px-4 py-3 text-right"
+                  onClick={() => setEnableBagPrinting(!enableBagPrinting)}
+                  data-testid="toggle-bag-printing"
+                >
+                  <Printer className="h-5 w-5 text-cyan-600 shrink-0" />
+                  <span className="font-bold text-sm flex-1">طباعة مخصصة على الكيس</span>
+                  {product.singleColorPrintPrice && (
+                    <Badge variant="secondary" className="text-xs shrink-0">
+                      {formatPrice(Number(product.singleColorPrintPrice))} {currLabel}/لون/قطعة
+                    </Badge>
+                  )}
+                  {enableBagPrinting ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                </button>
+
+                {enableBagPrinting && (
+                  <div className="px-4 pb-4 space-y-4 border-t border-cyan-200/50">
+
+                    {/* لون الكيس */}
+                    {(product.availableBagColors || []).length > 0 && (
+                      <div className="pt-3">
+                        <p className="text-xs font-bold text-muted-foreground mb-2">🎨 لون الكيس</p>
+                        <div className="flex flex-wrap gap-2">
+                          {(product.availableBagColors || []).map((color: string) => {
+                            const isSelected = selectedBagColor === color;
+                            const hex = ({ أبيض:"#FFF",أسود:"#111",بيج:"#D4A574",أزرق:"#3B82F6",أحمر:"#EF4444",أخضر:"#22C55E" } as Record<string, string>)[color] || "#9CA3AF";
+                            return (
+                              <button key={color} onClick={() => setSelectedBagColor(isSelected ? null : color)}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-all ${isSelected ? "border-primary shadow-md scale-105" : "border-border hover:border-primary/50"}`}
+                                data-testid={`bag-color-${color}`}>
+                                <span className="w-4 h-4 rounded-full border border-black/10" style={{ backgroundColor: hex }} />
+                                {color}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    ) : (
-                      <div className="text-muted-foreground text-sm">
-                        <Upload className="h-5 w-5 mx-auto mb-1 text-blue-500" />
-                        <p>ارفع التصميم (PDF, PNG, JPG)</p>
+                    )}
+
+                    {/* ألوان التصميم */}
+                    <div>
+                      <p className="text-xs font-bold text-muted-foreground mb-2">🖨️ ألوان التصميم</p>
+                      <div className="space-y-2">
+                        {printColors.map((color, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <input
+                              className="flex-1 border rounded-lg px-3 py-2 text-sm bg-background"
+                              value={color}
+                              onChange={e => setPrintColors(prev => { const n = [...prev]; n[i] = e.target.value; return n; })}
+                              placeholder={`اسم اللون ${i + 1} (مثال: أسود، ذهبي)`}
+                              data-testid={`input-print-color-${i}`}
+                            />
+                            {product.singleColorPrintPrice && color.trim() && (
+                              <span className="text-xs text-primary font-bold whitespace-nowrap shrink-0">
+                                +{formatPrice(Number(product.singleColorPrintPrice) * quantity)} {currLabel}
+                              </span>
+                            )}
+                            {i > 0 && (
+                              <button onClick={() => setPrintColors(prev => prev.filter((_, j) => j !== i))}
+                                className="text-destructive hover:text-destructive/70 text-lg font-bold shrink-0">×</button>
+                            )}
+                          </div>
+                        ))}
+                        {printColors.length < 3 && (
+                          <button onClick={() => setPrintColors(prev => [...prev, ""])}
+                            className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-semibold transition"
+                            data-testid="add-print-color">
+                            <Plus className="h-3.5 w-3.5" /> إضافة لون آخر
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ملخص تكلفة الطباعة */}
+                    {bagPrintingCost > 0 && (
+                      <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">
+                          تكلفة الطباعة ({printColors.filter(c=>c.trim()).length} لون × {quantity} قطعة):
+                        </span>
+                        <span className="font-bold text-primary text-sm">
+                          {formatPrice(bagPrintingCost)} {currLabel}
+                        </span>
                       </div>
                     )}
                   </div>
-                  <Textarea value={designNotes} onChange={e => setDesignNotes(e.target.value)}
-                    placeholder="ملاحظات التصميم..." className="resize-none text-sm" rows={2}
-                    data-testid="input-design-notes" />
+                )}
+              </div>
+            )}
+
+            {/* ════════════ الطباعة الاحترافية (لوحات / كروت...) ════════════ */}
+            {hasProfPrinting && productPrintingCat && (
+              <div className="rounded-xl border border-violet-300/60 bg-violet-50/40 dark:bg-violet-950/20 overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3">
+                  <Printer className="h-5 w-5 text-violet-600 shrink-0" />
+                  <span className="font-bold text-sm">طباعة احترافية — {productPrintingCat.name}</span>
                 </div>
-              )}
-            </div>
+
+                <div className="px-4 pb-4 space-y-4 border-t border-violet-200/50 pt-3">
+
+                  {/* نوع التشطيب */}
+                  {(productPrintingCat.finishOptions || []).length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold text-muted-foreground mb-2">✨ نوع التشطيب</p>
+                      <div className="flex flex-wrap gap-2">
+                        {(productPrintingCat.finishOptions || []).map((opt: string) => (
+                          <button key={opt} onClick={() => setPrintFinish(printFinish === opt ? "" : opt)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-all ${printFinish === opt ? "border-violet-500 bg-violet-500 text-white" : "border-border hover:border-violet-400"}`}
+                            data-testid={`finish-${opt}`}>
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* المقاسات */}
+                  <div>
+                    <p className="text-xs font-bold text-muted-foreground mb-2">📐 المقاسات (سنتيمتر)</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">العرض (سم)</label>
+                        <input type="number" min="1"
+                          className="w-full border rounded-lg px-3 py-2 text-sm bg-background mt-0.5"
+                          value={printWidth} onChange={e => setPrintWidth(e.target.value)}
+                          placeholder={productPrintingCat.minWidthCm ? `الحد الأدنى ${productPrintingCat.minWidthCm}` : "مثال: 100"}
+                          data-testid="input-print-width" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">الارتفاع (سم)</label>
+                        <input type="number" min="1"
+                          className="w-full border rounded-lg px-3 py-2 text-sm bg-background mt-0.5"
+                          value={printHeight} onChange={e => setPrintHeight(e.target.value)}
+                          placeholder={productPrintingCat.minHeightCm ? `الحد الأدنى ${productPrintingCat.minHeightCm}` : "مثال: 200"}
+                          data-testid="input-print-height" />
+                      </div>
+                    </div>
+                    {printWidth && printHeight && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        المساحة: {((Number(printWidth) * Number(printHeight)) / 10000).toFixed(3)} م²
+                      </p>
+                    )}
+                  </div>
+
+                  {/* فرز الألوان */}
+                  {productPrintingCat.colorSeparationPrice && (
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" id="color-sep" checked={printColorSeparation}
+                        onChange={e => setPrintColorSeparation(e.target.checked)}
+                        className="w-4 h-4 rounded" data-testid="checkbox-color-separation" />
+                      <label htmlFor="color-sep" className="text-sm cursor-pointer">
+                        فرز الألوان
+                        <span className="text-xs text-muted-foreground mr-1">
+                          (+{formatPrice(Number(productPrintingCat.colorSeparationPrice))} {currLabel})
+                        </span>
+                      </label>
+                    </div>
+                  )}
+
+                  {/* سعر اللوحة */}
+                  {professionalPrintingUnitPrice > 0 && (
+                    <div className="bg-violet-50 dark:bg-violet-950/30 border border-violet-200 rounded-lg px-3 py-2 space-y-1">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>سعر القطعة الواحدة:</span>
+                        <span className="font-bold text-violet-700">{formatPrice(professionalPrintingUnitPrice)} {currLabel}</span>
+                      </div>
+                      {quantity > 1 && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">الإجمالي ({quantity} قطعة):</span>
+                          <span className="font-bold text-violet-700">{formatPrice(professionalPrintingUnitPrice * quantity)} {currLabel}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ════════════ رفع ملف التصميم ════════════ */}
+            {hasDesignUpload && (
+              <div className="rounded-xl border border-blue-300/50 bg-blue-50/40 dark:bg-blue-950/20 p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Upload className="h-4 w-4 text-blue-600" />
+                  <span className="font-bold text-sm">ارفع ملف التصميم</span>
+                  {product.printingPricePerUnit && (
+                    <Badge variant="secondary" className="text-xs">+{formatPrice(product.printingPricePerUnit)} {currLabel}/قطعة</Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="enable-printing" checked={enableCustomPrinting}
+                    onChange={e => setEnableCustomPrinting(e.target.checked)}
+                    className="w-4 h-4 rounded text-primary" />
+                  <Label htmlFor="enable-printing" className="cursor-pointer text-sm">أريد طباعة شعاري على المنتج</Label>
+                </div>
+                {enableCustomPrinting && (
+                  <div className="space-y-2">
+                    <div className="border-2 border-dashed border-blue-400/50 rounded-lg p-3 text-center cursor-pointer hover:border-blue-500 transition-colors"
+                      onClick={() => fileInputRef.current?.click()}>
+                      <input ref={fileInputRef} type="file" accept="image/*,.pdf,.ai,.psd"
+                        onChange={handleDesignUpload} className="hidden" data-testid="input-design-upload" />
+                      {uploadedFile ? (
+                        <div className="flex items-center justify-center gap-2 text-blue-600 text-sm">
+                          <Check className="h-4 w-4" /><span className="truncate">{uploadedFile.name}</span>
+                        </div>
+                      ) : (
+                        <div className="text-muted-foreground text-sm">
+                          <Upload className="h-5 w-5 mx-auto mb-1 text-blue-500" />
+                          <p>ارفع التصميم (PDF, PNG, JPG)</p>
+                        </div>
+                      )}
+                    </div>
+                    <Textarea value={designNotes} onChange={e => setDesignNotes(e.target.value)}
+                      placeholder="ملاحظات التصميم..." className="resize-none text-sm" rows={2}
+                      data-testid="input-design-notes" />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         );
       }

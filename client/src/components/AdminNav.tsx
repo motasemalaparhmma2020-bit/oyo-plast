@@ -3,7 +3,7 @@ import {
   Settings, Printer, Wallet, LayoutDashboard, UserCog, MessageSquareWarning,
   Users, Receipt, Handshake, SplitSquareVertical, TrendingUp, ShieldAlert,
   Star, Layers, BadgeCheck, ClipboardCheck, ChevronDown, ChevronUp,
-  FileText, HardDrive
+  FileText, HardDrive, PrinterCheck
 } from "lucide-react";
 import { useState } from "react";
 
@@ -64,6 +64,7 @@ const navGroups: AdminNavGroup[] = [
       { id: "subcategories", label: "الأقسام الفرعية", icon: <Layers className="h-6 w-6" />, color: "from-fuchsia-400 to-purple-600" },
       { id: "inventory", label: "المخزون", icon: <ShoppingCart className="h-6 w-6" />, color: "from-orange-400 to-orange-600" },
       { id: "supplier-products", label: "منتجات الموردين", icon: <ClipboardCheck className="h-6 w-6" />, color: "from-lime-500 to-green-600" },
+      { id: "printing-categories", label: "فئات الطباعة", icon: <PrinterCheck className="h-6 w-6" />, color: "from-cyan-500 to-blue-600", badge: "جديد" },
     ],
   },
   {

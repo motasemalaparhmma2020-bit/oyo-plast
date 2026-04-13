@@ -79,16 +79,18 @@ function CartRow({
       <div className="min-w-0 flex-1">
         <p className="font-semibold text-sm leading-tight truncate">{name}</p>
         {(selectedSize || selectedColor) && (
-          <div className="flex flex-wrap gap-1 mt-0.5">
+          <div className="flex flex-wrap gap-1.5 mt-1">
             {selectedSize && (
-              <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+              <span className="inline-flex items-center gap-1 text-xs border border-border rounded-md px-2 py-0.5 bg-background text-foreground font-medium">
+                <span className="text-muted-foreground text-[10px]">المقاس:</span>
                 {selectedSize}
               </span>
             )}
             {selectedColor && (
-              <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground flex items-center gap-1">
+              <span className="inline-flex items-center gap-1.5 text-xs border border-border rounded-md px-2 py-0.5 bg-background text-foreground font-medium">
+                <span className="text-muted-foreground text-[10px]">اللون:</span>
                 <span
-                  className="w-3 h-3 rounded-full border inline-block shrink-0"
+                  className="w-4 h-4 rounded-full border border-border/60 inline-block shrink-0 shadow-sm"
                   style={{
                     backgroundColor: getColorCode(selectedColor),
                     backgroundImage:

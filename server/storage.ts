@@ -1,6 +1,6 @@
 import {
   users, products, categories, subcategories, banners, offers, orders, orderItems, navigationSettings, homePageSettings, displaySettings,
-  homeSections,
+  homeSections, printingCategories,
   type User,
   type Product,
   type Category,
@@ -12,7 +12,9 @@ import {
   type HomePageSettings,
   type DisplaySettings,
   type HomeSection,
-  insertProductSchema, insertCategorySchema
+  type PrintingCategory,
+  type InsertPrintingCategory,
+  insertProductSchema, insertCategorySchema, insertPrintingCategorySchema
 } from "@shared/schema";
 import { z } from "zod";
 import { db } from "./db";
@@ -63,6 +65,12 @@ export interface IStorage {
   getNavigationSettings(): Promise<NavigationSettings>;
   updateNavigationSettings(data: any): Promise<NavigationSettings>;
   getPrintingProducts(): Promise<Product[]>;
+
+  getPrintingCategories(): Promise<PrintingCategory[]>;
+  getPrintingCategory(id: number): Promise<PrintingCategory | undefined>;
+  createPrintingCategory(data: InsertPrintingCategory): Promise<PrintingCategory>;
+  updatePrintingCategory(id: number, data: Partial<InsertPrintingCategory>): Promise<PrintingCategory>;
+  deletePrintingCategory(id: number): Promise<void>;
 
   getHomePageSettings(): Promise<HomePageSettings>;
   updateHomePageSettings(data: any): Promise<HomePageSettings>;
@@ -260,10 +268,33 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPrintingProducts(): Promise<Product[]> {
-    // إرجاع جميع منتجات قسم الطباعة والتصميم (category_id=14) أو المحددة خصيصاً
     return await db.select().from(products).where(
       sql`(${products.showInPrinting} = true OR ${products.categoryId} = 14) AND ${products.stock} > 0`
     ).orderBy(products.id);
+  }
+
+  // ── فئات الطباعة الاحترافية ──────────────────────────────────────────────────
+  async getPrintingCategories(): Promise<PrintingCategory[]> {
+    return await db.select().from(printingCategories).orderBy(printingCategories.id);
+  }
+
+  async getPrintingCategory(id: number): Promise<PrintingCategory | undefined> {
+    const [cat] = await db.select().from(printingCategories).where(eq(printingCategories.id, id));
+    return cat;
+  }
+
+  async createPrintingCategory(data: InsertPrintingCategory): Promise<PrintingCategory> {
+    const [cat] = await db.insert(printingCategories).values(data).returning();
+    return cat;
+  }
+
+  async updatePrintingCategory(id: number, data: Partial<InsertPrintingCategory>): Promise<PrintingCategory> {
+    const [cat] = await db.update(printingCategories).set(data).where(eq(printingCategories.id, id)).returning();
+    return cat;
+  }
+
+  async deletePrintingCategory(id: number): Promise<void> {
+    await db.delete(printingCategories).where(eq(printingCategories.id, id));
   }
 
   async getHomePageSettings(): Promise<HomePageSettings> {

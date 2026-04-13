@@ -74,6 +74,21 @@ export const products = pgTable("products", {
   // ── المورد المسؤول عن هذا المنتج ──────────────────────────────────────────
   supplierId: integer("supplier_id"),           // المورد الافتراضي لهذا المنتج
   productCommissionRate: numeric("product_commission_rate"), // عمولة خاصة تتغلب على العمولة العامة
+  // ── الطباعة الاحترافية ──────────────────────────────────────────────────────
+  printingCategoryId: integer("printing_category_id"), // FK → printingCategories (طباعة احترافية)
+});
+
+// ── فئات الطباعة الاحترافية (لوحات / كروت / أوصق / فواتير...) ───────────────
+export const printingCategories = pgTable("printing_categories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // "لوحات إعلانية" / "كروت شخصية" / "أوصق"
+  pricePerSqMeter: numeric("price_per_sq_meter"), // سعر المتر المربع
+  pricePerSqCm: numeric("price_per_sq_cm"),       // سعر السنتيمتر المربع (للطباعة الصغيرة)
+  finishOptions: text("finish_options").array(),   // ["فلكس ضد الماء","فلكس عادي","مسلف","ورق"]
+  colorSeparationPrice: numeric("color_separation_price"), // تكلفة فرز الألوان
+  minWidthCm: numeric("min_width_cm"),   // الحد الأدنى للعرض
+  minHeightCm: numeric("min_height_cm"), // الحد الأدنى للارتفاع
+  isActive: boolean("is_active").default(true).notNull(),
 });
 
 export const settings = pgTable("settings", {
@@ -99,6 +114,13 @@ export const cartItems = pgTable("cart_items", {
   designNotes: text("design_notes"), // ملاحظات خاصة بالتصميم
   designFileUrl: text("design_file_url"), // رابط ملف التصميم المرفوع
   unitPrice: numeric("unit_price"), // السعر المحسوب للوحدة
+  // ── الطباعة الاحترافية (لوحات / كروت / أوصق) ──────────────────────────────
+  printingCategoryId: integer("printing_category_id"), // FK → printingCategories
+  printWidth: numeric("print_width"),       // عرض اللوحة بالسنتيمتر
+  printHeight: numeric("print_height"),     // ارتفاع اللوحة بالسنتيمتر
+  printFinish: text("print_finish"),        // نوع التشطيب المختار
+  printColorSeparation: boolean("print_color_separation").default(false), // فرز الألوان
+  printingUnitPrice: numeric("printing_unit_price"), // سعر الطباعة الاحترافية لهذا العنصر
 });
 
 export const orders = pgTable("orders", {
@@ -194,6 +216,15 @@ export const orderItems = pgTable("order_items", {
   customPrinting: boolean("custom_printing").default(false), // طباعة مخصصة
   designNotes: text("design_notes"), // ملاحظات خاصة بالتصميم
   designFileUrl: text("design_file_url"), // رابط ملف التصميم المرفوع
+  // ── الطباعة الاحترافية ──────────────────────────────────────────────────────
+  printingCategoryId: integer("printing_category_id"),
+  printWidth: numeric("print_width"),
+  printHeight: numeric("print_height"),
+  printFinish: text("print_finish"),
+  printColorSeparation: boolean("print_color_separation").default(false),
+  printingUnitPrice: numeric("printing_unit_price"),
+  productName: text("product_name"), // اسم المنتج وقت الطلب
+  productImage: text("product_image"), // صورة المنتج وقت الطلب
 });
 
 // Product Reviews
@@ -873,3 +904,8 @@ export type NavigationSettings = typeof navigationSettings.$inferSelect;
 export type HomePageSettings = typeof homePageSettings.$inferSelect;
 export type DisplaySettings = typeof displaySettings.$inferSelect;
 export const insertDisplaySettingsSchema = createInsertSchema(displaySettings).omit({ id: true, updatedAt: true });
+
+// ── فئات الطباعة الاحترافية ──────────────────────────────────────────────────
+export type PrintingCategory = typeof printingCategories.$inferSelect;
+export const insertPrintingCategorySchema = createInsertSchema(printingCategories).omit({ id: true });
+export type InsertPrintingCategory = z.infer<typeof insertPrintingCategorySchema>;
