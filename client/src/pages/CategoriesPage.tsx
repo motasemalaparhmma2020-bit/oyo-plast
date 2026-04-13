@@ -40,7 +40,7 @@ export default function CategoriesPage() {
         ) : (
           <div className="grid grid-cols-4 gap-4">
             {active.map((category: any) => (
-              <Link key={category.id} href={`/category/${category.slug}`}>
+              <Link key={category.id} href={`/category/${encodeURIComponent((category.slug || "").trim())}`}>
                 <div
                   className="flex flex-col items-center gap-1.5 cursor-pointer group"
                   data-testid={`cat-all-${category.id}`}

@@ -735,6 +735,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Category image (Base64 → HTTP image) ──────────────────────
+  app.get("/api/categories/image/:id", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const id = parseInt(req.params.id);
+      if (Number.isNaN(id)) return res.status(400).send("Invalid ID");
+      const result = await dbPool.query("SELECT image_url FROM categories WHERE id = $1", [id]);
+      if (!result.rows.length) return res.status(404).send("Not found");
+      const imageUrl = result.rows[0].image_url;
+      if (!imageUrl) return res.status(404).send("No image");
+      if (!imageUrl.startsWith("data:")) return res.redirect(imageUrl);
+      const matches = imageUrl.match(new RegExp("^data:([^;]+);base64,(.+)$", "s"));
+      if (!matches) return res.status(400).send("Invalid image data");
+      const mimeType = matches[1];
+      const imageData = Buffer.from(matches[2], "base64");
+      res.set("Content-Type", mimeType);
+      res.set("Cache-Control", "public, max-age=604800");
+      res.send(imageData);
+    } catch (err: any) {
+      res.status(500).send("Error");
+    }
+  });
+
   // ─── Categories (Public) ─────────────────────────────────────────
   app.get("/api/categories", async (_req, res) => {
     const { pool: dbPool } = await import("./db");
@@ -745,7 +768,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     );
     const countMap: Record<number, number> = {};
     for (const row of countResult.rows) { countMap[row.category_id] = parseInt(row.count); }
-    res.json(cats.map((c: any) => ({ ...c, productCount: countMap[c.id] || 0 })));
+    res.set("Cache-Control", "public, max-age=300"); // كاش 5 دقائق
+    res.json(cats.map((c: any) => ({
+      ...c,
+      // استبدال base64 بـ URL مستقل لتخفيف حجم الاستجابة
+      imageUrl: c.imageUrl?.startsWith("data:") ? `/api/categories/image/${c.id}` : (c.imageUrl || null),
+      productCount: countMap[c.id] || 0,
+    })));
   });
 
   // ─── Subcategories (Public) ──────────────────────────────────────
@@ -953,6 +982,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         );
       }
 
+      res.set("Cache-Control", "public, max-age=60"); // كاش دقيقة للمنتجات
       res.json(rows);
     } catch (error: any) {
       console.error("خطأ في جلب المنتجات:", error);
@@ -1128,7 +1158,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ─── Admin Categories ────────────────────────────────────────────
   app.get("/api/admin/categories", requireAdmin, async (_req, res) => {
     const cats = await storage.getCategories();
-    res.json(cats);
+    // استبدال base64 بـ URL مستقل حتى في لوحة الأدمن
+    res.json(cats.map((c: any) => ({
+      ...c,
+      imageUrl: c.imageUrl?.startsWith("data:") ? `/api/categories/image/${c.id}` : (c.imageUrl || null),
+    })));
   });
 
   app.post("/api/admin/categories", requireAdmin, async (req, res) => {

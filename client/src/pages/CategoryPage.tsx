@@ -11,9 +11,14 @@ export default function CategoryPage() {
   // يستخدم نفس مفتاح كاش الصفحة الرئيسية — بيانات فورية بدون انتظار
   const { data: allCategories = [], isLoading: catLoading } = useCategories();
 
-  // البحث عن القسم المطلوب — يدعم الـ slug العربي والمُشفَّر
-  const decodedSlug = (() => { try { return decodeURIComponent(slug || ""); } catch { return slug || ""; } })();
-  const cat = allCategories.find((c: any) => c.slug === decodedSlug || c.slug === slug);
+  // البحث عن القسم المطلوب — يدعم الـ slug العربي والمُشفَّر والمسافات الزائدة
+  const decodedSlug = (() => { try { return decodeURIComponent(slug || "").trim(); } catch { return (slug || "").trim(); } })();
+  const cat = allCategories.find((c: any) =>
+    c.slug === decodedSlug ||
+    c.slug === slug ||
+    (c.slug || "").trim() === decodedSlug ||
+    String(c.id) === decodedSlug
+  );
 
   const { data: subcategories = [], isLoading: subLoading } = useQuery<any[]>({
     queryKey: ["/api/subcategories", cat?.id],

@@ -50,7 +50,7 @@ export function CategoryCircles({
 
   // ─── مكوّن القسم الواحد ─────────────────────────────────────────
   const CategoryItem = ({ category }: { category: Category }) => (
-    <Link href={`/category/${category.slug}`}>
+    <Link href={`/category/${encodeURIComponent((category.slug || "").trim())}`}>
       <div
         className="flex flex-col items-center gap-1.5 cursor-pointer group"
         data-testid={`category-circle-${category.id}`}

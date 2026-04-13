@@ -261,7 +261,7 @@ function SideDrawer({
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">أقسام المتجر</p>
             <div className="space-y-1">
               {categories.map((cat: any, idx: number) => (
-                <Link key={cat.id} href={`/category/${cat.slug}`} onClick={close}>
+                <Link key={cat.id} href={`/category/${encodeURIComponent((cat.slug || "").trim())}`} onClick={close}>
                   <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer group" data-testid={`drawer-category-${cat.id}`}>
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${CAT_COLORS[idx % CAT_COLORS.length]}`}>
                       {getCategoryIcon(cat.name)}
