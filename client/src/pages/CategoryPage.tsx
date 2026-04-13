@@ -3,19 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/components/ProductCard";
+import { useCategories } from "@/hooks/use-products";
 
 export default function CategoryPage() {
   const { slug } = useParams<{ slug: string }>();
 
-  // استعلام واحد فقط لجلب جميع الأقسام — مفتاح مختلف لتجنّب تعارض الكاش
-  const { data: allCategories = [] } = useQuery<any[]>({
-    queryKey: ["/api/categories", "all-list"],
-    queryFn: async () => {
-      const res = await fetch("/api/categories");
-      if (!res.ok) return [];
-      return res.json();
-    },
-  });
+  // يستخدم نفس مفتاح كاش الصفحة الرئيسية — بيانات فورية بدون انتظار
+  const { data: allCategories = [], isLoading: catLoading } = useCategories();
 
   // البحث عن القسم المطلوب — يدعم الـ slug العربي والمُشفَّر
   const decodedSlug = (() => { try { return decodeURIComponent(slug || ""); } catch { return slug || ""; } })();
@@ -46,6 +40,7 @@ export default function CategoryPage() {
   });
 
   const circleSize = 72;
+  const isPageLoading = catLoading || (!!cat?.id && prodLoading);
 
   return (
     <div className="pb-24 min-h-screen bg-white dark:bg-background" dir="rtl">
@@ -57,7 +52,9 @@ export default function CategoryPage() {
           </Button>
         </Link>
         <h1 className="text-lg font-bold flex-1 text-center pr-9" data-testid="category-title">
-          {cat?.name || "القسم"}
+          {catLoading ? (
+            <span className="inline-block h-5 w-28 bg-gray-200 rounded animate-pulse" />
+          ) : (cat?.name || "القسم")}
         </h1>
       </div>
 
@@ -68,6 +65,8 @@ export default function CategoryPage() {
             src={cat.imageUrl}
             alt={cat.name}
             className="w-full h-full object-cover"
+            loading="lazy"
+            decoding="async"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/40" />
           <div className="absolute bottom-3 right-4">
@@ -113,6 +112,7 @@ export default function CategoryPage() {
                           alt={sub.name}
                           className="w-full h-full object-cover"
                           loading="lazy"
+                          decoding="async"
                         />
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
@@ -166,9 +166,9 @@ export default function CategoryPage() {
           </h3>
         </div>
 
-        {prodLoading ? (
+        {isPageLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {[...Array(4)].map((_, i) => (
+            {[...Array(6)].map((_, i) => (
               <div key={i} className="h-64 bg-gray-100 rounded-xl animate-pulse" />
             ))}
           </div>
@@ -178,7 +178,7 @@ export default function CategoryPage() {
               <ProductCard key={product.id} product={product} />
             ))}
           </div>
-        ) : (
+        ) : cat ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Package className="h-12 w-12 text-gray-300 mb-3" />
             <p className="text-gray-500 font-medium">لا توجد منتجات في هذا القسم</p>
@@ -186,7 +186,7 @@ export default function CategoryPage() {
               <Button variant="outline" className="mt-3" size="sm">تصفّح جميع المنتجات</Button>
             </Link>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

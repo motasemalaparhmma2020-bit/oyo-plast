@@ -1,5 +1,14 @@
 import { Link } from "wouter";
 
+// تحسين روابط Cloudinary بضغط الصورة إلى حجم الدائرة
+function optimizeImageUrl(url: string, size: number): string {
+  if (!url) return url;
+  if (url.includes("res.cloudinary.com") && url.includes("/upload/")) {
+    return url.replace("/upload/", `/upload/w_${size * 2},h_${size * 2},c_fill,f_auto,q_auto/`);
+  }
+  return url;
+}
+
 interface Category {
   id: number;
   name: string;
@@ -50,7 +59,7 @@ export function CategoryCircles({
           >
             {category.imageUrl ? (
               <img
-                src={category.imageUrl}
+                src={optimizeImageUrl(category.imageUrl, circleSize)}
                 alt={category.name}
                 className="w-full h-full object-cover"
                 loading="lazy"

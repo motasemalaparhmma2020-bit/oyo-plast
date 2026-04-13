@@ -62,7 +62,7 @@ export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSiz
     >
       <Link href={`/product/${product.id}`}>
         <div
-          className="relative overflow-hidden bg-white dark:from-gray-800 dark:to-gray-900 cursor-pointer flex items-center justify-center"
+          className="relative overflow-hidden bg-white dark:from-gray-800 dark:to-gray-900 cursor-pointer flex items-center justify-center flex-shrink-0"
           style={{
             aspectRatio: '1 / 1',
             padding: 'var(--card-margin, 8px)',
@@ -110,7 +110,7 @@ export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSiz
       </Link>
 
       <CardContent
-        className="flex-grow"
+        className="flex-grow relative z-10 bg-white dark:bg-gray-900"
         style={{ padding: 'var(--card-padding-v, 8px) 8px' }}
       >
         <Link href={`/product/${product.id}`}>
@@ -183,7 +183,7 @@ export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSiz
         </div>
       </CardContent>
 
-      <CardFooter className="p-2 pt-0 flex gap-1.5">
+      <CardFooter className="p-2 pt-0 flex gap-1.5 relative z-10 bg-white dark:bg-gray-900">
         <Button
           className="flex-1 gap-1.5 font-bold shadow-md shadow-primary/20 text-xs rounded-lg"
           style={{ height: 'var(--qty-btn-height, 40px)' }}
