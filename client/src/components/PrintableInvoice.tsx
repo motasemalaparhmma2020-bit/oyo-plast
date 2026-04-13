@@ -165,10 +165,19 @@ function CustomerInvoice({ order, orderItems, settings }: {
   const trackingNumber = order.trackingNumber;
   const receiptImageUrl = order.receiptImageUrl;
 
+  const hasAnySize = orderItems.some(i => i.selectedSize);
+  const hasAnyColor = orderItems.some(i => i.selectedColor);
+
   const showCols = {
     images: settings.showProductImages,
-    size: settings.showSize,
-    color: settings.showColor,
+    size: settings.showSize && hasAnySize,
+    color: settings.showColor && hasAnyColor,
+  };
+
+  const getItemLabel = (item: OrderItem) => {
+    if (item.productName && item.productName !== "null") return item.productName;
+    if (item.productId) return `منتج #${item.productId}`;
+    return "منتج محذوف";
   };
 
   return (
@@ -306,7 +315,7 @@ function CustomerInvoice({ order, orderItems, settings }: {
                         </td>
                       )}
                       <td className="py-2.5 px-2">
-                        <p className="font-semibold text-gray-800 leading-tight">{item.productName || `منتج #${item.productId}`}</p>
+                        <p className="font-semibold text-gray-800 leading-tight">{getItemLabel(item)}</p>
                         {item.customPrinting && (
                           <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">طباعة مخصصة</span>
                         )}

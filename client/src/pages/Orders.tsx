@@ -60,6 +60,10 @@ interface OrderItemWithName {
   quantity: number;
   price: string;
   productName: string;
+  selectedSize?: string | null;
+  selectedColor?: string | null;
+  customPrinting?: boolean;
+  designNotes?: string | null;
 }
 
 export default function Orders() {
