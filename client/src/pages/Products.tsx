@@ -1,4 +1,4 @@
-import { useCategoriesAndProducts } from "@/hooks/use-products";
+import { useCategoriesAndProducts, useCategories } from "@/hooks/use-products";
 import { ProductCard } from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
 import { Search, ShoppingBag, Package, Truck, Zap, ArrowRight } from "lucide-react";
@@ -6,12 +6,24 @@ import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { useSEO } from "@/hooks/use-seo";
 import { useSearch, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+
+// تحسين رابط الصورة: local /assets/ أو Cloudinary
+function optimizeBannerUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith("/assets/")) return `${url}?w=800`;
+  if (url.includes("res.cloudinary.com") && url.includes("/upload/")) {
+    return url.replace("/upload/", "/upload/w_800,h_320,c_fill,f_auto,q_auto/");
+  }
+  return url;
+}
 
 export default function Products() {
   const rawSearch = useSearch();
   const [, navigate] = useLocation();
   const searchParams = new URLSearchParams(rawSearch);
   const urlCategory = searchParams.get("category") || "";
+  const urlSubcategory = searchParams.get("subcategory") || "";
   const urlSearch = searchParams.get("search") || "";
   const urlFilter = searchParams.get("filter") || "";
 
@@ -43,8 +55,31 @@ export default function Products() {
   const { products, categories, isLoading } = useCategoriesAndProducts(
     selectedCategory || undefined,
     searchTerm,
-    urlFilter || undefined
+    urlFilter || undefined,
+    urlSubcategory || undefined
   );
+
+  // جلب بيانات القسم الحالي (للبنر)
+  const { data: allCategories = [] } = useCategories();
+  const activeCategoryObj = (allCategories as any[]).find(
+    (c: any) => c.slug === selectedCategory || c.slug === urlCategory
+  );
+
+  // جلب بيانات القسم الفرعي (للبنر)
+  const { data: subcategoryObj } = useQuery<any>({
+    queryKey: ["/api/subcategories/by-slug", urlSubcategory],
+    queryFn: async () => {
+      if (!urlSubcategory) return null;
+      const res = await fetch(`/api/subcategories/by-slug/${encodeURIComponent(urlSubcategory)}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!urlSubcategory,
+  });
+
+  // البنر: قسم فرعي يُقدَّم على القسم الرئيسي
+  const bannerItem = subcategoryObj || activeCategoryObj || null;
+  const showImageBanner = !isBannerFilter && bannerItem?.imageUrl;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,6 +196,31 @@ export default function Products() {
             })}
           </div>
         </header>
+      )}
+
+      {/* ── بنر صورة القسم / القسم الفرعي ─────────────────────────────── */}
+      {showImageBanner && (
+        <div className="w-full h-40 overflow-hidden relative">
+          <img
+            src={optimizeBannerUrl(bannerItem.imageUrl)}
+            alt={bannerItem.name}
+            className="w-full h-full object-cover"
+            loading="eager"
+            decoding="async"
+            data-testid="banner-category-image"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/60" />
+          <div className="absolute bottom-0 right-0 left-0 px-4 pb-3 flex items-end justify-between">
+            <button
+              onClick={() => window.history.back()}
+              className="rounded-full bg-white/20 backdrop-blur-sm p-1.5 text-white hover:bg-white/30 transition"
+              data-testid="banner-back-btn"
+            >
+              <ArrowRight className="h-4 w-4" />
+            </button>
+            <h2 className="text-white font-black text-xl drop-shadow-md">{bannerItem.name}</h2>
+          </div>
+        </div>
       )}
 
       {!isBannerFilter && (

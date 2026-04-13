@@ -3,14 +3,15 @@ import { api, buildUrl } from "@shared/routes";
 import { useMemo } from "react";
 
 // GET /api/products
-export function useProducts(categorySlug?: string, search?: string, filter?: string) {
+export function useProducts(categorySlug?: string, search?: string, filter?: string, subcategorySlug?: string) {
   return useQuery({
-    queryKey: [api.products.list.path, categorySlug, search, filter],
+    queryKey: [api.products.list.path, categorySlug, search, filter, subcategorySlug],
     queryFn: async () => {
       const url = new URL(api.products.list.path, window.location.origin);
       if (categorySlug) url.searchParams.append("category", categorySlug);
       if (search) url.searchParams.append("search", search);
       if (filter) url.searchParams.append("filter", filter);
+      if (subcategorySlug) url.searchParams.append("subcategory", subcategorySlug);
       
       const res = await fetch(url.toString(), { credentials: "include" });
       if (!res.ok) throw new Error(`Failed to fetch products: ${res.status}`);
@@ -35,8 +36,8 @@ export function useCategories() {
   });
 }
 
-export function useCategoriesAndProducts(categorySlug?: string, search?: string, filter?: string) {
-  const productsQuery = useProducts(categorySlug, search, filter);
+export function useCategoriesAndProducts(categorySlug?: string, search?: string, filter?: string, subcategorySlug?: string) {
+  const productsQuery = useProducts(categorySlug, search, filter, subcategorySlug);
   const categoriesQuery = useCategories();
   return useMemo(() => ({
     products: productsQuery.data ?? [],
