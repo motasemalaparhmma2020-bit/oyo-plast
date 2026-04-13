@@ -4354,6 +4354,35 @@ function InventorySection({ productsList, productsLoading, productsError, refetc
   );
 }
 
+// ── مكونات مساعدة لتفاصيل الطلب ──────────────────────────────────────────
+function OrderDetailSection({
+  title, icon, children, defaultOpen = false
+}: { title: string; icon: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border rounded-xl overflow-hidden">
+      <button
+        className="w-full flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800/60 transition-colors text-right"
+        onClick={() => setOpen(!open)}
+      >
+        <span className="text-primary">{icon}</span>
+        <span className="font-bold text-sm flex-1">{title}</span>
+        {open ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+      </button>
+      {open && <div className="px-4 py-3">{children}</div>}
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="font-medium text-sm">{value}</p>
+    </div>
+  );
+}
+
 export default function Admin() {
   const [activeSection, setActiveSection] = useState("orders");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -4663,6 +4692,20 @@ export default function Admin() {
   });
 
   const categoriesList = Array.isArray(categories) ? categories : [];
+
+  // ── جلب عناصر الطلب للديالوج ──────────────────────────────────────
+  const { data: dialogOrderItems = [], isLoading: dialogItemsLoading } = useQuery<any[]>({
+    queryKey: ['/api/admin/orders', selectedOrder?.id, 'items'],
+    enabled: !!selectedOrder?.id && !!adminToken,
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/orders/${selectedOrder!.id}/items`, {
+        headers: { 'x-admin-token': adminToken || '' },
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 0,
+  });
 
   const createProductMutation = useMutation({
     mutationFn: async (data: ProductFormData) => {
@@ -5222,83 +5265,214 @@ export default function Admin() {
                                       <Truck className="h-4 w-4" />
                                     )}
                                   </Button>
-                                  <Dialog>
+                                  <Dialog onOpenChange={(open) => { if (!open) setSelectedOrder(null); }}>
                                     <DialogTrigger asChild>
-                                      <Button size="icon" variant="ghost" onClick={() => setSelectedOrder(order)}>
+                                      <Button size="icon" variant="ghost" onClick={() => setSelectedOrder(order)} data-testid={`button-order-detail-${order.id}`}>
                                         <Eye className="h-4 w-4" />
                                       </Button>
                                     </DialogTrigger>
-                                    <DialogContent className="max-w-lg">
-                                      <DialogHeader>
-                                        <DialogTitle>تفاصيل الطلب #{order.id}</DialogTitle>
+                                    <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto" dir="rtl">
+                                      <DialogHeader className="border-b pb-3">
+                                        <DialogTitle className="flex items-center gap-2 text-lg">
+                                          <FileText className="h-5 w-5 text-primary" />
+                                          تفاصيل الطلب
+                                          <Badge variant="outline" className="font-mono text-base">#{order.id}</Badge>
+                                          <Badge className={`${statusMap[order.status]?.color || ''} mr-auto`}>
+                                            {statusMap[order.status]?.label || order.status}
+                                          </Badge>
+                                        </DialogTitle>
                                       </DialogHeader>
-                                      <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-4 text-sm">
-                                          <div>
-                                            <p className="text-muted-foreground">الهاتف</p>
-                                            <p className="font-medium">{order.customerPhone || '-'}</p>
-                                          </div>
-                                          <div>
-                                            <p className="text-muted-foreground">المدينة</p>
-                                            <p className="font-medium">{order.shippingCity || '-'}</p>
-                                          </div>
-                                          <div className="col-span-2">
-                                            <p className="text-muted-foreground">العنوان</p>
-                                            <p className="font-medium">{order.shippingAddress || '-'}</p>
-                                          </div>
-                                          {order.notes && (
-                                            <div className="col-span-2">
-                                              <p className="text-muted-foreground">ملاحظات</p>
-                                              <p className="font-medium">{order.notes}</p>
-                                            </div>
-                                          )}
-                                          <div>
-                                            <p className="text-muted-foreground">الإجمالي</p>
-                                            <p className="font-bold text-primary">{formatPrice(order.total)} ر.ي</p>
-                                          </div>
-                                          {order.depositAmount && (
-                                            <div>
-                                              <p className="text-muted-foreground">العربون</p>
-                                              <p className="font-medium">{formatPrice(order.depositAmount)} ر.ي</p>
-                                            </div>
-                                          )}
-                                        </div>
 
-                                        {order.receiptImageUrl && (
-                                          <div>
-                                            <p className="text-muted-foreground mb-2">صورة الإشعار</p>
-                                            <p className="text-sm bg-gray-100 p-2 rounded">{order.receiptImageUrl}</p>
+                                      <div className="space-y-3 py-2">
+
+                                        {/* ── بيانات العميل ── */}
+                                        <OrderDetailSection title="بيانات العميل" icon={<Users className="h-4 w-4" />} defaultOpen>
+                                          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                                            <Row label="الاسم" value={order.customerName || '-'} />
+                                            <Row label="الجوال" value={order.customerPhone || '-'} />
+                                            <Row label="المدينة" value={order.shippingCity || '-'} />
+                                            <Row label="الشحن" value={order.shippingOption === 'express' ? 'سريع' : 'عادي'} />
+                                            <div className="col-span-2">
+                                              <Row label="العنوان" value={order.shippingAddress || '-'} />
+                                            </div>
                                           </div>
+                                        </OrderDetailSection>
+
+                                        {/* ── الدفع والإيصال ── */}
+                                        <OrderDetailSection title="الدفع والإيصال" icon={<Banknote className="h-4 w-4" />} defaultOpen>
+                                          <div className="space-y-2 text-sm">
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-muted-foreground">طريقة الدفع</span>
+                                              <Badge variant="secondary" className="font-medium">
+                                                {order.paymentMethod === 'cash_on_delivery' ? '💵 عند الاستلام'
+                                                  : order.paymentMethod === 'bank_transfer' ? '🏦 تحويل بنكي'
+                                                  : order.paymentMethod === 'digital_wallet' ? '📱 محفظة إلكترونية'
+                                                  : order.paymentMethod === 'karimi' ? '🏦 بنك الكريمي'
+                                                  : order.paymentMethod === 'najm' ? '🏦 بنك النجم'
+                                                  : order.paymentMethod === 'jawal' ? '📱 جوالي'
+                                                  : order.paymentMethod === 'installment_deposit_cod' ? '💳 دفع جزئي'
+                                                  : order.paymentMethod || '-'}
+                                              </Badge>
+                                            </div>
+                                            {(order as any).paymentStatus && (
+                                              <div className="flex items-center justify-between">
+                                                <span className="text-muted-foreground">حالة الدفع</span>
+                                                <Badge className={(order as any).paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}>
+                                                  {(order as any).paymentStatus === 'paid' ? '✅ مدفوع' : (order as any).paymentStatus === 'pending_verification' ? '⏳ قيد التحقق' : (order as any).paymentStatus}
+                                                </Badge>
+                                              </div>
+                                            )}
+                                            {order.receiptImageUrl && (
+                                              <div>
+                                                <p className="text-muted-foreground mb-1.5">سند الدفع</p>
+                                                <a href={order.receiptImageUrl} target="_blank" rel="noopener noreferrer" className="block">
+                                                  <div className="relative inline-block group">
+                                                    <img
+                                                      src={order.receiptImageUrl}
+                                                      alt="سند الدفع"
+                                                      className="h-20 w-20 object-cover rounded-lg border-2 border-gray-200 group-hover:border-primary transition-colors cursor-zoom-in"
+                                                      onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }}
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors flex items-center justify-center">
+                                                      <ExternalLink className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                    </div>
+                                                  </div>
+                                                  <p className="text-xs text-primary mt-1">اضغط لعرض كامل</p>
+                                                </a>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </OrderDetailSection>
+
+                                        {/* ── الأسعار والخصم ── */}
+                                        <OrderDetailSection title="ملخص المبالغ" icon={<DollarSign className="h-4 w-4" />} defaultOpen>
+                                          <div className="space-y-1.5 text-sm">
+                                            {(order as any).subtotalBeforeDiscount && (
+                                              <div className="flex justify-between">
+                                                <span className="text-muted-foreground">المجموع قبل الخصم</span>
+                                                <span>{formatPrice((order as any).subtotalBeforeDiscount)} ر.ي</span>
+                                              </div>
+                                            )}
+                                            {(order as any).couponCode && (
+                                              <div className="flex justify-between text-green-700">
+                                                <span className="flex items-center gap-1">
+                                                  <Percent className="h-3.5 w-3.5" />
+                                                  كوبون: <code className="bg-green-50 px-1 rounded font-mono text-xs">{(order as any).couponCode}</code>
+                                                </span>
+                                                <span className="font-bold">- {formatPrice((order as any).discountAmount || 0)} ر.ي</span>
+                                              </div>
+                                            )}
+                                            {(order as any).shippingCost > 0 ? (
+                                              <div className="flex justify-between">
+                                                <span className="text-muted-foreground">الشحن</span>
+                                                <span>{formatPrice((order as any).shippingCost)} ر.ي</span>
+                                              </div>
+                                            ) : (
+                                              <div className="flex justify-between text-green-600">
+                                                <span>الشحن</span>
+                                                <span className="font-bold">مجاني 🎁</span>
+                                              </div>
+                                            )}
+                                            {order.depositAmount && (
+                                              <div className="flex justify-between text-blue-600">
+                                                <span>العربون المدفوع</span>
+                                                <span className="font-bold">{formatPrice(order.depositAmount)} ر.ي</span>
+                                              </div>
+                                            )}
+                                            <Separator />
+                                            <div className="flex justify-between font-bold text-base text-primary">
+                                              <span>الإجمالي النهائي</span>
+                                              <span>{formatPrice(order.total)} ر.ي</span>
+                                            </div>
+                                          </div>
+                                        </OrderDetailSection>
+
+                                        {/* ── عناصر الطلب ── */}
+                                        <OrderDetailSection title={`عناصر الطلب (${dialogOrderItems.length})`} icon={<Package className="h-4 w-4" />} defaultOpen>
+                                          {dialogItemsLoading ? (
+                                            <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+                                          ) : dialogOrderItems.length === 0 ? (
+                                            <p className="text-sm text-muted-foreground text-center py-2">لا توجد عناصر</p>
+                                          ) : (
+                                            <div className="divide-y">
+                                              {dialogOrderItems.map((item: any, idx: number) => (
+                                                <div key={item.id || idx} className="py-2.5 flex gap-3">
+                                                  {item.productImage && (
+                                                    <img src={item.productImage} alt={item.productName} className="w-12 h-12 object-cover rounded-lg flex-shrink-0 border" />
+                                                  )}
+                                                  <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-sm leading-snug line-clamp-2">{item.productName || `منتج #${item.productId}`}</p>
+                                                    <div className="flex flex-wrap gap-1.5 mt-1">
+                                                      {item.selectedSize && (
+                                                        <Badge variant="outline" className="text-xs py-0 h-5 gap-1">
+                                                          📐 {item.selectedSize}
+                                                        </Badge>
+                                                      )}
+                                                      {item.selectedColor && (
+                                                        <Badge variant="outline" className="text-xs py-0 h-5 gap-1">
+                                                          🎨 {item.selectedColor}
+                                                        </Badge>
+                                                      )}
+                                                      {item.customPrinting && (
+                                                        <Badge className="bg-purple-100 text-purple-700 text-xs py-0 h-5 gap-1">
+                                                          <Printer className="h-3 w-3" />طباعة
+                                                        </Badge>
+                                                      )}
+                                                    </div>
+                                                    {item.designNotes && (
+                                                      <p className="text-xs text-muted-foreground mt-1">📝 {item.designNotes}</p>
+                                                    )}
+                                                    {item.designFileUrl && (
+                                                      <a href={item.designFileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary mt-1 hover:underline">
+                                                        <ExternalLink className="h-3 w-3" />ملف التصميم
+                                                      </a>
+                                                    )}
+                                                  </div>
+                                                  <div className="text-left flex-shrink-0">
+                                                    <p className="text-xs text-muted-foreground">×{item.quantity}</p>
+                                                    <p className="font-bold text-sm text-primary">{formatPrice(Number(item.price) * item.quantity)} ر.ي</p>
+                                                    <p className="text-xs text-gray-400">{formatPrice(item.price)}/وحدة</p>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </OrderDetailSection>
+
+                                        {/* ── ملاحظات العميل ── */}
+                                        {order.notes && (
+                                          <OrderDetailSection title="ملاحظات العميل" icon={<FileText className="h-4 w-4" />}>
+                                            <p className="text-sm bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 rounded-lg p-3 text-yellow-800 dark:text-yellow-200">
+                                              💬 {order.notes}
+                                            </p>
+                                          </OrderDetailSection>
                                         )}
 
-                                        <Separator />
-
-                                        <div>
-                                          <Label>تغيير الحالة</Label>
-                                          <Select
-                                            value={order.status}
-                                            onValueChange={(value) => updateOrderStatus.mutate({ orderId: order.id, status: value })}
-                                          >
-                                            <SelectTrigger className="mt-1">
-                                              <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="pending">قيد الانتظار</SelectItem>
-                                              <SelectItem value="deposit_paid">تم دفع العربون</SelectItem>
-                                              <SelectItem value="processing">قيد التجهيز</SelectItem>
-                                              <SelectItem value="shipped">تم الشحن</SelectItem>
-                                              <SelectItem value="delivered">تم التوصيل</SelectItem>
-                                              <SelectItem value="completed">مكتمل</SelectItem>
-                                              <SelectItem value="cancelled">ملغي</SelectItem>
-                                            </SelectContent>
-                                          </Select>
+                                        {/* ── تغيير الحالة ── */}
+                                        <div className="border rounded-xl p-3 bg-gray-50 dark:bg-gray-900/40 space-y-3">
+                                          <div>
+                                            <Label className="text-sm font-bold">تغيير حالة الطلب</Label>
+                                            <Select
+                                              value={order.status}
+                                              onValueChange={(value) => updateOrderStatus.mutate({ orderId: order.id, status: value })}
+                                            >
+                                              <SelectTrigger className="mt-1">
+                                                <SelectValue />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="pending">⏳ قيد الانتظار</SelectItem>
+                                                <SelectItem value="deposit_paid">💳 تم دفع العربون</SelectItem>
+                                                <SelectItem value="processing">🔧 قيد التجهيز</SelectItem>
+                                                <SelectItem value="shipped">🚚 تم الشحن</SelectItem>
+                                                <SelectItem value="delivered">✅ تم التوصيل</SelectItem>
+                                                <SelectItem value="completed">🎉 مكتمل</SelectItem>
+                                                <SelectItem value="cancelled">❌ ملغي</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                          <OrderSupplierAssign order={order} adminToken={adminToken} />
                                         </div>
 
-                                        {/* ─── تعيين المورد يدوياً ─── */}
-                                        <OrderSupplierAssign
-                                          order={order}
-                                          adminToken={adminToken}
-                                        />
                                       </div>
                                     </DialogContent>
                                   </Dialog>

@@ -245,6 +245,17 @@ export default function PrintingAndDesign() {
   const [selectedSubcategory, setSelectedSubcategory] = useState<PrintingSubcategory | null>(null);
   const [currency, setCurrency] = useState<'YER' | 'SAR'>('YER');
 
+  // جلب منتجات قسم الطباعة من قاعدة البيانات (للشاشة الرئيسية)
+  const { data: printingProducts = [], isLoading: printingLoading } = useQuery<Product[]>({
+    queryKey: ['/api/printing-products'],
+    queryFn: async () => {
+      const res = await fetch('/api/printing-products');
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+
   // جلب المنتجات الحقيقية من قاعدة البيانات بناءً على كلمات التصنيف الدلالية
   const { data: relatedProducts = [], isLoading: relatedLoading } = useQuery<Product[]>({
     queryKey: ['/api/products/search/tags', selectedCategory?.tags],
@@ -450,26 +461,96 @@ export default function PrintingAndDesign() {
 
       <div className="container mx-auto px-4">
         {!selectedCategory && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {printingCategories.map((category) => {
-              const Icon = category.icon;
-              return (
-                <Card 
-                  key={category.id}
-                  className="cursor-pointer hover-elevate transition-all"
-                  onClick={() => setSelectedCategory(category)}
-                  data-testid={`category-${category.id}`}
-                >
-                  <CardContent className="p-4 text-center">
-                    <div className="w-16 h-16 mx-auto mb-3 bg-primary/10 rounded-full flex items-center justify-center">
-                      <Icon className="h-8 w-8 text-primary" />
-                    </div>
-                    <h3 className="font-bold text-sm mb-1">{category.name}</h3>
-                    <p className="text-xs text-muted-foreground line-clamp-2">{category.description}</p>
-                  </CardContent>
-                </Card>
-              );
-            })}
+          <div>
+            {/* ── منتجات الطباعة الحقيقية من قاعدة البيانات ── */}
+            {(printingLoading || printingProducts.length > 0) && (
+              <div className="mb-8">
+                <div className="flex items-center gap-2 mb-4">
+                  <Badge className="bg-primary/10 text-primary border-primary/20">متاح للطلب الآن</Badge>
+                  <h2 className="text-base font-bold text-gray-800 dark:text-white">منتجات الطباعة والتصميم</h2>
+                </div>
+                {printingLoading ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="h-48 bg-gray-100 rounded-xl animate-pulse" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {printingProducts.map((product) => {
+                      const mainImage = (product.imageUrls && product.imageUrls.length > 0)
+                        ? product.imageUrls[0]
+                        : product.imageUrl;
+                      return (
+                        <Link key={product.id} href={`/products/${product.id}`}>
+                          <Card className="cursor-pointer hover-elevate overflow-hidden" data-testid={`printing-product-${product.id}`}>
+                            <div className="aspect-square relative overflow-hidden">
+                              <img
+                                src={mainImage}
+                                alt={product.name}
+                                className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                                loading="lazy"
+                              />
+                              {product.allowDesignUpload && (
+                                <div className="absolute top-2 right-2">
+                                  <Badge className="bg-primary text-white text-xs py-0.5 px-1.5">
+                                    <Upload className="h-2.5 w-2.5 mr-1" />
+                                    طباعة
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
+                            <CardContent className="p-3">
+                              <h4 className="font-bold text-sm line-clamp-2 mb-1">{product.name}</h4>
+                              <div className="flex items-center justify-between">
+                                <span className="text-primary font-bold text-sm">
+                                  {currency === 'SAR' && product.priceSar
+                                    ? `${formatPrice(Number(product.priceSar))} ر.س`
+                                    : `${formatPrice(Number(product.price))} ر.ي`}
+                                </span>
+                                {product.rating && (
+                                  <div className="flex items-center gap-0.5 text-xs text-amber-500">
+                                    <Star className="h-3 w-3 fill-current" />
+                                    <span>{Number(product.rating).toFixed(1)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="border-t my-6" />
+              </div>
+            )}
+
+            {/* ── أنواع الطباعة (ثابتة) ── */}
+            <div className="mb-3">
+              <h2 className="text-base font-bold text-gray-800 dark:text-white mb-4">طلب بالتصميم الخاص</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                {printingCategories.map((category) => {
+                  const Icon = category.icon;
+                  return (
+                    <Card
+                      key={category.id}
+                      className="cursor-pointer hover-elevate transition-all"
+                      onClick={() => setSelectedCategory(category)}
+                      data-testid={`category-${category.id}`}
+                    >
+                      <CardContent className="p-4 text-center">
+                        <div className="w-16 h-16 mx-auto mb-3 bg-primary/10 rounded-full flex items-center justify-center">
+                          <Icon className="h-8 w-8 text-primary" />
+                        </div>
+                        <h3 className="font-bold text-sm mb-1">{category.name}</h3>
+                        <p className="text-xs text-muted-foreground line-clamp-2">{category.description}</p>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
 

@@ -260,7 +260,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPrintingProducts(): Promise<Product[]> {
-    return await db.select().from(products).where(eq(products.showInPrinting, true));
+    // إرجاع جميع منتجات قسم الطباعة والتصميم (category_id=14) أو المحددة خصيصاً
+    return await db.select().from(products).where(
+      sql`(${products.showInPrinting} = true OR ${products.categoryId} = 14) AND ${products.stock} > 0`
+    ).orderBy(products.id);
   }
 
   async getHomePageSettings(): Promise<HomePageSettings> {
@@ -418,6 +421,9 @@ export class DatabaseStorage implements IStorage {
         notes: data.notes,
         total: data.total,
         paymentMethod: data.paymentMethod || "cash_on_delivery",
+        couponCode: data.couponCode || null,
+        discountAmount: data.discountAmount ? String(data.discountAmount) : null,
+        subtotalBeforeDiscount: data.subtotalBeforeDiscount ? String(data.subtotalBeforeDiscount) : null,
         status: "pending",
       }).returning();
 

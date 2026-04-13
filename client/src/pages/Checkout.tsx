@@ -374,6 +374,7 @@ export default function Checkout() {
           items: cartItems,
           couponCode: couponData?.code || null,
           discountAmount: discountAmount > 0 ? discountAmount : null,
+          subtotalBeforeDiscount: discountAmount > 0 ? subtotal : null,
           // ── GPS Coordinates ──
           customerLat: locationLat ?? undefined,
           customerLng: locationLng ?? undefined,

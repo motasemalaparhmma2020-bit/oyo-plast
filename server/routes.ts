@@ -1686,6 +1686,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const {
         customerName, customerEmail, customerPhone, shippingCity, shippingAddress,
         shippingOption, shippingCost, notes, total, items, paymentMethod = "cash_on_delivery",
+        couponCode, discountAmount, subtotalBeforeDiscount,
         customerLat, customerLng, locationAccuracy, locationMethod,
       } = req.body;
       const user = (req as any).user;
@@ -1702,6 +1703,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         total,
         items,
         paymentMethod,
+        couponCode: couponCode || null,
+        discountAmount: discountAmount || null,
+        subtotalBeforeDiscount: subtotalBeforeDiscount || null,
         userId: getUserId(user),
       });
 
@@ -2387,12 +2391,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           id: orderItemsTable.id,
           productId: orderItemsTable.productId,
           productName: productsTable.name,
+          productImage: productsTable.imageUrl,
           quantity: orderItemsTable.quantity,
           price: orderItemsTable.price,
           selectedSize: orderItemsTable.selectedSize,
           selectedColor: orderItemsTable.selectedColor,
           customPrinting: orderItemsTable.customPrinting,
           designNotes: orderItemsTable.designNotes,
+          designFileUrl: orderItemsTable.designFileUrl,
         })
         .from(orderItemsTable)
         .leftJoin(productsTable, eqFn(orderItemsTable.productId, productsTable.id))
