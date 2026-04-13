@@ -6,6 +6,9 @@
 **الشعار الجديد**: أويو بلاست - لطباعة ومستلزمات البلاستيك
 
 ## Recent Changes (April 2026 — Latest)
+- **أقسام الأدمن القابلة للطي**: مكوّن `CollapsibleSection` مع حفظ الحالة في localStorage — يطبّق على 6 أقسام في DisplaySettingsSection: إعدادات صفحة المنتج (أزرق)، الخطوط وتصميم الواجهة (بنفسجي)، تحكم البنرات والعروض (أزرق/سماوي)، سديم الذكية (بنفسجي/نيلي)، زر واتساب العائم (أخضر)، إعدادات الدفع والشحن (أخضر/زمرد) — مطوية افتراضياً عند الدخول، تتذكر الحالة بين الجلسات
+
+## Recent Changes (April 2026 — Previous Latest)
 - **بنرات قابلة للنقر**: بنر "شحن مجاني" → /products?filter=free-shipping | بنر "عروض سريعة" → /products?filter=flash-deals
 - **hasFreeShipping**: حقل جديد في جدول products — toggle في فورم تعديل المنتج بالأدمن
 - **فلتر المنتجات**: /api/products?filter=free-shipping|flash-deals — دعم مباشر في الـ API

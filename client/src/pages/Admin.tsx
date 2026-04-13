@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Order, Product } from "@shared/schema";
 import FinancialReports from "@/components/FinancialReports";
@@ -64,7 +64,7 @@ import {
   Sparkles,
   Banknote,
   FileText,
-  ChevronDown
+  ChevronDown, ChevronUp
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
@@ -1913,6 +1913,55 @@ function HomeSectionsSection({ adminToken }: { adminToken: string | null }) {
   );
 }
 
+function CollapsibleSection({
+  id, title, subtitle, icon, gradient, border, children, defaultOpen = false
+}: {
+  id: string;
+  title: string;
+  subtitle?: string;
+  icon: ReactNode;
+  gradient: string;
+  border: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const storageKey = `admin-cs-${id}`;
+  const [open, setOpen] = useState(() => {
+    try {
+      const v = localStorage.getItem(storageKey);
+      if (v !== null) return v === 'true';
+    } catch {}
+    return defaultOpen;
+  });
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    try { localStorage.setItem(storageKey, String(next)); } catch {}
+  };
+  return (
+    <div className={`border-2 ${border} rounded-xl overflow-hidden`}>
+      <button
+        type="button"
+        onClick={toggle}
+        className={`w-full ${gradient} px-5 py-4 flex items-center justify-between gap-3 cursor-pointer`}
+        dir="rtl"
+      >
+        <div className="flex items-center gap-3">
+          {icon}
+          <div className="text-right">
+            <h3 className="font-bold text-white text-base">{title}</h3>
+            {subtitle && <p className="text-white/80 text-xs">{subtitle}</p>}
+          </div>
+        </div>
+        {open
+          ? <ChevronUp className="h-5 w-5 text-white/70 shrink-0" />
+          : <ChevronDown className="h-5 w-5 text-white/70 shrink-0" />}
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
 function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
   const { toast } = useToast();
   const [settings, setSettings] = useState<any>(null);
@@ -2460,11 +2509,14 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
         </div>
 
         {/* ═══ إعدادات صفحة المنتج ═══ */}
-        <div className="border-2 border-blue-200 rounded-lg p-4 space-y-4 bg-blue-50/30">
-          <h3 className="font-semibold text-base flex items-center gap-2 text-blue-700">
-            <Package className="h-4 w-4" />
-            إعدادات صفحة المنتج
-          </h3>
+        <CollapsibleSection
+          id="product-page-settings"
+          title="إعدادات صفحة المنتج"
+          icon={<Package className="h-5 w-5 text-white flex-shrink-0" />}
+          gradient="bg-gradient-to-l from-blue-500 to-sky-500"
+          border="border-blue-200 dark:border-blue-800"
+        >
+          <div className="p-4 space-y-4 bg-blue-50/30">
           <div className="grid grid-cols-2 gap-4">
             {/* ارتفاع الصورة الرئيسية */}
             <div className="space-y-1.5">
@@ -2715,17 +2767,18 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
               </div>
             </div>
           </div>
-        </div>
+          </div>
+        </CollapsibleSection>
 
         {/* ─── الخطوط وتصميم الواجهة ──────────────────────────────────────── */}
-        <div className="border-2 border-purple-200 dark:border-purple-800 rounded-xl overflow-hidden">
-          <div className="bg-gradient-to-l from-purple-600 to-violet-600 px-5 py-4 flex items-center gap-3">
-            <span className="text-xl">🔤</span>
-            <div>
-              <h3 className="font-bold text-white text-base">الخطوط وتصميم الواجهة</h3>
-              <p className="text-purple-100 text-xs">اختر خط النصوص العربية وخط الأرقام لمطابقة هوية متجرك</p>
-            </div>
-          </div>
+        <CollapsibleSection
+          id="fonts-ui"
+          title="الخطوط وتصميم الواجهة"
+          subtitle="اختر خط النصوص العربية وخط الأرقام لمطابقة هوية متجرك"
+          icon={<span className="text-xl">🔤</span>}
+          gradient="bg-gradient-to-l from-purple-600 to-violet-600"
+          border="border-purple-200 dark:border-purple-800"
+        >
           <div className="p-4 space-y-4 bg-white dark:bg-gray-900">
             {/* خط العربية */}
             <div className="space-y-2">
@@ -2791,18 +2844,17 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
               </div>
             </div>
           </div>
-        </div>
+        </CollapsibleSection>
 
         {/* ─── تحكم البنرات والعروض ─────────────────────────────────────── */}
-        <div className="border-2 border-blue-200 dark:border-blue-800 rounded-xl overflow-hidden">
-          <div className="bg-gradient-to-l from-blue-600 to-cyan-600 px-5 py-4 flex items-center gap-3">
-            <Zap className="h-5 w-5 text-white flex-shrink-0" />
-            <div>
-              <h3 className="font-bold text-white text-base">تحكم البنرات والعروض</h3>
-              <p className="text-blue-100 text-xs">ضبط الأبعاد (عرض + ارتفاع) للسلايدر وبنرات العروض</p>
-            </div>
-          </div>
-
+        <CollapsibleSection
+          id="banners-offers"
+          title="تحكم البنرات والعروض"
+          subtitle="ضبط الأبعاد (عرض + ارتفاع) للسلايدر وبنرات العروض"
+          icon={<Zap className="h-5 w-5 text-white flex-shrink-0" />}
+          gradient="bg-gradient-to-l from-blue-600 to-cyan-600"
+          border="border-blue-200 dark:border-blue-800"
+        >
           <div className="p-5 space-y-6 bg-blue-50/30 dark:bg-blue-950/20">
 
             {/* ── البنرات الرئيسية (Slider) ── */}
@@ -3060,21 +3112,19 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
             </div>
 
           </div>
-        </div>
+        </CollapsibleSection>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
         {/* 🌌 سديم الذكية — لوحة التحكم المتقدمة لصفحة المنتج          */}
         {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="border-2 border-purple-200 dark:border-purple-800 rounded-xl overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-l from-purple-600 to-indigo-600 px-5 py-4 flex items-center gap-3">
-            <Sparkles className="h-5 w-5 text-white flex-shrink-0" />
-            <div>
-              <h3 className="font-bold text-white text-base">سديم الذكية</h3>
-              <p className="text-purple-100 text-xs">تحكم ديناميكي كامل بعناصر صفحة المنتج</p>
-            </div>
-          </div>
-
+        <CollapsibleSection
+          id="sadeem-smart"
+          title="سديم الذكية"
+          subtitle="تحكم ديناميكي كامل بعناصر صفحة المنتج"
+          icon={<Sparkles className="h-5 w-5 text-white flex-shrink-0" />}
+          gradient="bg-gradient-to-l from-purple-600 to-indigo-600"
+          border="border-purple-200 dark:border-purple-800"
+        >
           <div className="p-5 space-y-6 bg-purple-50/30 dark:bg-purple-950/20">
 
             {/* ─── 1. قسم السعر والخصم ─────────────────────────────────── */}
@@ -3333,20 +3383,18 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
               </div>
             </div>
           </div>
-        </div>
+        </CollapsibleSection>
         {/* ═══════════════════════════════════════════════════════════════ */}
 
         {/* 💬 زر واتساب العائم */}
-        <div className="border-2 border-green-200 dark:border-green-800 rounded-xl overflow-hidden">
-          <div className="bg-gradient-to-l from-green-500 to-teal-600 px-5 py-4 flex items-center gap-3">
-            <svg viewBox="0 0 24 24" fill="white" className="h-5 w-5 flex-shrink-0">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-            </svg>
-            <div>
-              <h3 className="font-bold text-white text-base">زر واتساب العائم</h3>
-              <p className="text-green-100 text-xs">خدمة عملاء مباشرة — أيقونة واتساب تظهر في الموقع</p>
-            </div>
-          </div>
+        <CollapsibleSection
+          id="whatsapp-float"
+          title="زر واتساب العائم"
+          subtitle="خدمة عملاء مباشرة — أيقونة واتساب تظهر في الموقع"
+          icon={<svg viewBox="0 0 24 24" fill="white" className="h-5 w-5 flex-shrink-0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>}
+          gradient="bg-gradient-to-l from-green-500 to-teal-600"
+          border="border-green-200 dark:border-green-800"
+        >
           <div className="p-5 space-y-4 bg-green-50/30 dark:bg-green-950/20">
             {/* تفعيل/إيقاف */}
             <div className="flex items-center justify-between rounded-lg border px-4 py-3 bg-white dark:bg-background">
@@ -3400,19 +3448,18 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
               </div>
             )}
           </div>
-        </div>
+        </CollapsibleSection>
         {/* ═══════════════════════════════════════════════════════════════ */}
 
         {/* 💳 إعدادات الدفع والشحن */}
-        <div className="border-2 border-green-200 dark:border-green-800 rounded-xl overflow-hidden">
-          <div className="bg-gradient-to-l from-green-600 to-emerald-600 px-5 py-4 flex items-center gap-3">
-            <Banknote className="h-5 w-5 text-white flex-shrink-0" />
-            <div>
-              <h3 className="font-bold text-white text-base">إعدادات الدفع والشحن</h3>
-              <p className="text-green-100 text-xs">تحكم في رسوم الشحن وطرق الدفع المتاحة</p>
-            </div>
-          </div>
-
+        <CollapsibleSection
+          id="payment-shipping"
+          title="إعدادات الدفع والشحن"
+          subtitle="تحكم في رسوم الشحن وطرق الدفع المتاحة"
+          icon={<Banknote className="h-5 w-5 text-white flex-shrink-0" />}
+          gradient="bg-gradient-to-l from-green-600 to-emerald-600"
+          border="border-green-200 dark:border-green-800"
+        >
           <div className="p-5 space-y-5 bg-green-50/30 dark:bg-green-950/20">
             {/* رسوم الشحن */}
             <div className="space-y-3">
@@ -3544,7 +3591,7 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
               </div>
             </div>
           </div>
-        </div>
+        </CollapsibleSection>
         {/* ═══════════════════════════════════════════════════════════════ */}
 
         {updateMutation.isPending && (
