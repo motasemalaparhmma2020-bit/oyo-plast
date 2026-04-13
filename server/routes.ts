@@ -3654,7 +3654,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       
       const result = await dbPool.query(
         `SELECT
-           ci.*,
+           ci.id,
+           ci.user_id          AS "userId",
+           ci.product_id       AS "productId",
+           ci.quantity,
+           ci.selected_size    AS "selectedSize",
+           ci.selected_color   AS "selectedColor",
+           ci.selected_bag_color  AS "selectedBagColor",
+           ci.print_color_count   AS "printColorCount",
+           ci.print_color_1       AS "printColor1",
+           ci.print_color_2       AS "printColor2",
+           ci.print_color_3       AS "printColor3",
+           ci.custom_printing     AS "customPrinting",
+           ci.design_notes        AS "designNotes",
+           ci.design_file_url     AS "designFileUrl",
+           ci.unit_price          AS "unitPrice",
+           ci.printing_category_id AS "printingCategoryId",
+           ci.print_width         AS "printWidth",
+           ci.print_height        AS "printHeight",
+           ci.print_finish        AS "printFinish",
+           ci.print_color_separation AS "printColorSeparation",
+           ci.printing_unit_price AS "printingUnitPrice",
            json_build_object(
              'id', p.id,
              'name', p.name,

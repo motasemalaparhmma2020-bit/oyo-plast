@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Trash2, Plus, Minus, ShoppingBag, Loader2, LogIn } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingBag, Loader2, Printer, Paperclip, StickyNote } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useEffect, useMemo, useState } from "react";
 import type { Product } from "@shared/schema";
@@ -13,139 +13,195 @@ import {
   setGuestCart,
 } from "@/lib/cartUtils";
 
+/* ─── خريطة الألوان العربية ─── */
 const colorMap: Record<string, string> = {
-  أبيض: "#FFFFFF",
-  أسود: "#000000",
-  أحمر: "#EF4444",
-  أزرق: "#3B82F6",
-  أخضر: "#22C55E",
-  أصفر: "#EAB308",
-  برتقالي: "#F97316",
-  وردي: "#EC4899",
-  بنفسجي: "#8B5CF6",
-  رمادي: "#6B7280",
-  بني: "#92400E",
-  ذهبي: "#D97706",
-  فضي: "#9CA3AF",
-  شفاف: "transparent",
-  سماوي: "#06B6D4",
-  زهري: "#F472B6",
-  كحلي: "#1E3A8A",
-  بيج: "#D4A574",
+  أبيض: "#FFFFFF", أسود: "#000000", أحمر: "#EF4444",
+  أزرق: "#3B82F6", أخضر: "#22C55E", أصفر: "#EAB308",
+  برتقالي: "#F97316", وردي: "#EC4899", بنفسجي: "#8B5CF6",
+  رمادي: "#6B7280", بني: "#92400E", ذهبي: "#D97706",
+  فضي: "#9CA3AF", شفاف: "transparent", سماوي: "#06B6D4",
+  زهري: "#F472B6", كحلي: "#1E3A8A", بيج: "#D4A574",
+  أخضرك: "#16A34A",
 };
 
 function getColorCode(name: string): string {
-  return colorMap[name.trim()] ?? name.trim();
+  return colorMap[name?.trim()] ?? "#E5E7EB";
 }
 
 function formatPrice(n: number) {
   return n.toLocaleString("ar-YE");
 }
 
-/* ─── بطاقة منتج مدمجة ─── */
+/* ─── دائرة اللون ─── */
+function ColorDot({ color }: { color: string }) {
+  const isTransparent = color === "شفاف";
+  return (
+    <span
+      className="inline-block w-3.5 h-3.5 rounded-full border border-gray-300 shadow-sm shrink-0"
+      style={{
+        backgroundColor: getColorCode(color),
+        backgroundImage: isTransparent
+          ? "linear-gradient(45deg,#ccc 25%,transparent 25%,transparent 75%,#ccc 75%,#ccc),linear-gradient(45deg,#ccc 25%,transparent 25%,transparent 75%,#ccc 75%,#ccc)"
+          : "none",
+        backgroundSize: "5px 5px",
+        backgroundPosition: "0 0, 2.5px 2.5px",
+      }}
+    />
+  );
+}
+
+/* ─── بطاقة العنصر — نمط SHEIN ─── */
 function CartRow({
-  image,
-  name,
-  price,
-  unit,
-  quantity,
-  selectedSize,
-  selectedColor,
-  onIncrease,
-  onDecrease,
-  onRemove,
-  testPrefix,
+  image, name, price, originalPrice, unit, quantity,
+  selectedSize, selectedColor,
+  selectedBagColor, printColor1, printColor2, printColor3, printColorCount,
+  customPrinting, designNotes, designFileUrl,
+  onIncrease, onDecrease, onRemove, testPrefix,
 }: {
-  image: string;
-  name: string;
-  price: number;
-  unit: string;
-  quantity: number;
-  selectedSize?: string | null;
-  selectedColor?: string | null;
-  onIncrease: () => void;
-  onDecrease: () => void;
-  onRemove: () => void;
+  image: string; name: string; price: number; originalPrice?: number;
+  unit: string; quantity: number;
+  selectedSize?: string | null; selectedColor?: string | null;
+  selectedBagColor?: string | null;
+  printColor1?: string | null; printColor2?: string | null; printColor3?: string | null;
+  printColorCount?: number | null;
+  customPrinting?: boolean | null;
+  designNotes?: string | null; designFileUrl?: string | null;
+  onIncrease: () => void; onDecrease: () => void; onRemove: () => void;
   testPrefix: string;
 }) {
+  const total = price * quantity;
+  const printColors = [printColor1, printColor2, printColor3].filter(Boolean) as string[];
+  const hasPrinting = customPrinting && (printColors.length > 0 || selectedBagColor);
+  const hasDesign = !!designFileUrl;
+  const hasNotes = !!designNotes;
+
   return (
-    <div className="flex items-center gap-3 bg-white dark:bg-card rounded-xl border shadow-sm p-3">
-      {/* صورة المنتج */}
-      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted">
-        <img src={image} alt={name} className="h-full w-full object-contain" />
-      </div>
+    <div className="bg-white dark:bg-card rounded-2xl border border-border/60 shadow-sm overflow-hidden">
+      <div className="flex gap-0">
+        {/* صورة المنتج */}
+        <div className="relative w-24 h-28 shrink-0 bg-muted">
+          <img src={image} alt={name} className="h-full w-full object-cover" />
+        </div>
 
-      {/* الاسم والتفاصيل */}
-      <div className="min-w-0 flex-1">
-        <p className="font-semibold text-sm leading-tight truncate">{name}</p>
-        {(selectedSize || selectedColor) && (
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            {selectedSize && (
-              <span className="inline-flex items-center gap-1 text-xs border border-border rounded-md px-2 py-0.5 bg-background text-foreground font-medium">
-                <span className="text-muted-foreground text-[10px]">المقاس:</span>
-                {selectedSize}
+        {/* تفاصيل المنتج */}
+        <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
+          {/* الاسم */}
+          <p className="text-sm font-semibold leading-snug line-clamp-2 text-foreground">{name}</p>
+
+          {/* اللون والمقاس — نمط SHEIN */}
+          {(selectedColor || selectedSize) && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {selectedColor && (
+                <>
+                  <ColorDot color={selectedColor} />
+                  <span className="text-xs text-muted-foreground">{selectedColor}</span>
+                </>
+              )}
+              {selectedColor && selectedSize && (
+                <span className="text-xs text-muted-foreground">/</span>
+              )}
+              {selectedSize && (
+                <span className="text-xs text-muted-foreground font-medium">{selectedSize}</span>
+              )}
+            </div>
+          )}
+
+          {/* معلومات الطباعة المخصصة */}
+          {hasPrinting && (
+            <div className="flex flex-col gap-1 bg-cyan-50 dark:bg-cyan-950/30 rounded-lg px-2 py-1.5 border border-cyan-200/60">
+              {/* لون الكيس */}
+              {selectedBagColor && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-cyan-700 font-medium">لون الكيس:</span>
+                  <ColorDot color={selectedBagColor} />
+                  <span className="text-[10px] text-cyan-700">{selectedBagColor}</span>
+                </div>
+              )}
+              {/* ألوان الطباعة */}
+              {printColors.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <Printer className="w-3 h-3 text-cyan-600 shrink-0" />
+                  <span className="text-[10px] text-cyan-700 font-medium">{printColors.length} ألوان:</span>
+                  {printColors.map((c, i) => (
+                    <div key={i} className="flex items-center gap-0.5">
+                      <ColorDot color={c} />
+                      <span className="text-[10px] text-cyan-700">{c}</span>
+                      {i < printColors.length - 1 && <span className="text-[10px] text-cyan-400 mx-0.5">+</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ملف التصميم والملاحظات */}
+          {(hasDesign || hasNotes) && (
+            <div className="flex flex-col gap-0.5">
+              {hasDesign && (
+                <div className="flex items-center gap-1">
+                  <Paperclip className="w-3 h-3 text-violet-500 shrink-0" />
+                  <span className="text-[10px] text-violet-600 truncate max-w-[160px]">
+                    {designFileUrl!.split("/").pop()}
+                  </span>
+                </div>
+              )}
+              {hasNotes && (
+                <div className="flex items-center gap-1">
+                  <StickyNote className="w-3 h-3 text-amber-500 shrink-0" />
+                  <span className="text-[10px] text-amber-700 truncate max-w-[160px]">{designNotes}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* السعر والكمية في نفس السطر */}
+          <div className="flex items-center justify-between mt-auto pt-1">
+            {/* السعر */}
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-primary leading-none">
+                {formatPrice(total)} {unit}
               </span>
-            )}
-            {selectedColor && (
-              <span className="inline-flex items-center gap-1.5 text-xs border border-border rounded-md px-2 py-0.5 bg-background text-foreground font-medium">
-                <span className="text-muted-foreground text-[10px]">اللون:</span>
-                <span
-                  className="w-4 h-4 rounded-full border border-border/60 inline-block shrink-0 shadow-sm"
-                  style={{
-                    backgroundColor: getColorCode(selectedColor),
-                    backgroundImage:
-                      selectedColor === "شفاف"
-                        ? "linear-gradient(45deg,#ccc 25%,transparent 25%,transparent 75%,#ccc 75%,#ccc),linear-gradient(45deg,#ccc 25%,transparent 25%,transparent 75%,#ccc 75%,#ccc)"
-                        : "none",
-                    backgroundSize: "6px 6px",
-                    backgroundPosition: "0 0,3px 3px",
-                  }}
-                />
-                {selectedColor}
-              </span>
-            )}
+              {quantity > 1 && (
+                <span className="text-[10px] text-muted-foreground mt-0.5">
+                  {formatPrice(price)} × {quantity}
+                </span>
+              )}
+            </div>
+
+            {/* أزرار الكمية وحذف */}
+            <div className="flex items-center gap-1.5">
+              {/* حذف */}
+              <button
+                className="text-red-400 hover:text-red-600 transition-colors p-1"
+                onClick={onRemove}
+                data-testid={`button-remove-${testPrefix}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+
+              {/* عداد الكمية */}
+              <div className="flex items-center gap-1 bg-muted rounded-full px-1 py-0.5">
+                <button
+                  className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-white transition-colors disabled:opacity-40"
+                  disabled={quantity <= 1}
+                  onClick={onDecrease}
+                  data-testid={`button-decrease-${testPrefix}`}
+                >
+                  <Minus className="h-3 w-3" />
+                </button>
+                <span className="w-6 text-center text-xs font-bold tabular-nums">{quantity}</span>
+                <button
+                  className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-white transition-colors"
+                  onClick={onIncrease}
+                  data-testid={`button-increase-${testPrefix}`}
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
           </div>
-        )}
-        {/* السعر */}
-        <p className="text-primary font-bold text-sm mt-1">
-          {formatPrice(price * quantity)} {unit}
-        </p>
+        </div>
       </div>
-
-      {/* التحكم في الكمية */}
-      <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 shrink-0">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 rounded-md"
-          disabled={quantity <= 1}
-          onClick={onDecrease}
-          data-testid={`button-decrease-${testPrefix}`}
-        >
-          <Minus className="h-3 w-3" />
-        </Button>
-        <span className="w-6 text-center text-sm font-bold tabular-nums">{quantity}</span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 rounded-md"
-          onClick={onIncrease}
-          data-testid={`button-increase-${testPrefix}`}
-        >
-          <Plus className="h-3 w-3" />
-        </Button>
-      </div>
-
-      {/* حذف */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
-        onClick={onRemove}
-        data-testid={`button-remove-${testPrefix}`}
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
     </div>
   );
 }
@@ -255,19 +311,20 @@ export default function Cart() {
   let subtotal = 0;
   if (isAuthenticated && cartItems) {
     subtotal = cartItems.reduce((acc, item) => {
-      const price =
+      const unitPrice = item.unitPrice ? Number(item.unitPrice) : null;
+      const base =
         currency === "SAR" && item.product.priceSar
           ? Number(item.product.priceSar)
           : Number(item.product.price);
-      return acc + price * item.quantity;
+      return acc + (unitPrice ?? base) * item.quantity;
     }, 0);
   } else {
     subtotal = guestCartWithProducts.reduce((acc, item) => {
-      const price =
+      const base =
         currency === "SAR" && item.product?.priceSar
           ? Number(item.product.priceSar)
           : Number(item.product?.price || 0);
-      return acc + price * item.quantity;
+      return acc + base * item.quantity;
     }, 0);
   }
 
@@ -275,12 +332,10 @@ export default function Cart() {
     ? (cartItems?.length ?? 0)
     : guestCart.length;
 
-  /* ─── وجهة زر "إتمام الطلب" — guest-checkout يدعم الجميع ─── */
   const checkoutHref = "/guest-checkout";
-  const checkoutLabel = "إتمام الطلب";
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-5 pb-24">
+    <div className="max-w-lg mx-auto px-4 py-5 pb-28">
       {/* رأس الصفحة */}
       <div className="flex justify-between items-center mb-4">
         <span className="text-sm text-muted-foreground">{itemCount} منتجات</span>
@@ -291,20 +346,30 @@ export default function Cart() {
       <div className="space-y-3 mb-5">
         {isAuthenticated && cartItems
           ? cartItems.map((item) => {
-              const price =
+              const unitP = item.unitPrice ? Number(item.unitPrice) : null;
+              const basePrice =
                 currency === "SAR" && item.product.priceSar
                   ? Number(item.product.priceSar)
                   : Number(item.product.price);
+              const displayPrice = unitP ?? basePrice;
               return (
                 <CartRow
                   key={item.id}
                   image={item.product.imageUrl}
                   name={item.product.name}
-                  price={price}
+                  price={displayPrice}
                   unit={unit}
                   quantity={item.quantity}
                   selectedSize={item.selectedSize}
                   selectedColor={item.selectedColor}
+                  selectedBagColor={item.selectedBagColor}
+                  printColor1={item.printColor1}
+                  printColor2={item.printColor2}
+                  printColor3={item.printColor3}
+                  printColorCount={item.printColorCount}
+                  customPrinting={item.customPrinting}
+                  designNotes={item.designNotes}
+                  designFileUrl={item.designFileUrl}
                   onIncrease={() => updateItem({ id: item.id, quantity: item.quantity + 1 })}
                   onDecrease={() => updateItem({ id: item.id, quantity: item.quantity - 1 })}
                   onRemove={() => removeItem(item.id)}
@@ -327,6 +392,14 @@ export default function Cart() {
                   quantity={item.quantity}
                   selectedSize={item.selectedSize}
                   selectedColor={item.selectedColor}
+                  selectedBagColor={(item as any).selectedBagColor}
+                  printColor1={(item as any).printColor1}
+                  printColor2={(item as any).printColor2}
+                  printColor3={(item as any).printColor3}
+                  printColorCount={(item as any).printColorCount}
+                  customPrinting={(item as any).customPrinting}
+                  designNotes={(item as any).designNotes}
+                  designFileUrl={(item as any).designFileUrl}
                   onIncrease={() => updateGuestQty(index, 1)}
                   onDecrease={() => updateGuestQty(index, -1)}
                   onRemove={() => removeGuestItem(index)}
@@ -336,7 +409,7 @@ export default function Cart() {
             })}
       </div>
 
-      {/* ملخص الطلب والزر */}
+      {/* ملخص الطلب — ثابت في الأسفل */}
       <div className="bg-white dark:bg-card rounded-2xl border shadow-md p-5">
         <h2 className="text-base font-bold mb-4 text-right">ملخص الطلب</h2>
 
@@ -360,13 +433,12 @@ export default function Cart() {
           </div>
         </div>
 
-        {/* زر إتمام الطلب */}
         <Link href={checkoutHref}>
           <Button
             className="w-full h-12 text-base font-bold rounded-xl bg-teal-500 hover:bg-teal-600 shadow-md"
             data-testid="button-checkout"
           >
-            {checkoutLabel}
+            إتمام الطلب
           </Button>
         </Link>
       </div>

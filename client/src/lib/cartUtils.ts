@@ -11,6 +11,12 @@ export interface GuestCartItem {
   customPrinting?: boolean;
   designNotes?: string;
   designFileUrl?: string;
+  selectedBagColor?: string;
+  printColor1?: string;
+  printColor2?: string;
+  printColor3?: string;
+  printColorCount?: number;
+  unitPrice?: number;
 }
 
 const GUEST_CART_KEY = 'guestCart';

@@ -51,7 +51,13 @@ export function useAddToCart() {
           selectedColor: data.selectedColor,
           customPrinting: data.customPrinting,
           designNotes: data.designNotes,
-          designFileUrl: data.designFileUrl
+          designFileUrl: data.designFileUrl,
+          selectedBagColor: data.selectedBagColor,
+          printColor1: data.printColor1,
+          printColor2: data.printColor2,
+          printColor3: data.printColor3,
+          printColorCount: data.printColorCount,
+          unitPrice: data.unitPrice,
         });
         return { success: true, guest: true };
       }
@@ -105,7 +111,13 @@ export function useAddToCart() {
         selectedColor: data.selectedColor,
         customPrinting: data.customPrinting,
         designNotes: data.designNotes,
-        designFileUrl: data.designFileUrl
+        designFileUrl: data.designFileUrl,
+        selectedBagColor: data.selectedBagColor,
+        printColor1: data.printColor1,
+        printColor2: data.printColor2,
+        printColor3: data.printColor3,
+        printColorCount: data.printColorCount,
+        unitPrice: data.unitPrice,
       });
       return { success: true, guest: true, fallback: true };
     },
