@@ -561,6 +561,10 @@ export const displaySettings = pgTable("display_settings", {
   showMarketerCouponToAll: boolean("show_marketer_coupon_to_all").default(false), // إظهار سعر الكوبون لجميع العملاء
   // ── نمط رأس صفحة المنتج ────────────────────────────────────────────────────
   detailHideHeaderName: boolean("detail_hide_header_name").default(false),        // إخفاء اسم المنتج في الشريط العلوي
+  // ── زر واتساب العائم (خدمة العملاء) ────────────────────────────────────────
+  whatsappNumber: text("whatsapp_number").default(""),                            // رقم واتساب خدمة العملاء
+  showWhatsappButton: boolean("show_whatsapp_button").default(false),             // إظهار زر واتساب العائم
+  whatsappMessage: text("whatsapp_message").default("مرحباً، أحتاج مساعدة"), // الرسالة الافتراضية
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

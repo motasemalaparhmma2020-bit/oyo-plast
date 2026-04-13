@@ -5,7 +5,7 @@ import { Link } from "wouter";
 import { 
   ShoppingBag, Wallet, Award, ChevronLeft, Package, Clock, 
   CheckCircle2, Truck, XCircle, Loader2, Eye, ArrowUpRight, ArrowDownLeft,
-  UserPlus, LogIn
+  UserPlus, LogIn, ChevronDown, ChevronUp
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -26,9 +26,76 @@ const statusConfig: Record<string, { label: string; icon: any; color: string }> 
   cancelled: { label: "ملغي", icon: XCircle, color: "bg-red-500/10 text-red-600 dark:text-red-400" },
 };
 
+const COLOR_MAP: Record<string, string> = {
+  أبيض: "#FFFFFF", أسود: "#000000", أحمر: "#EF4444", أزرق: "#3B82F6",
+  أخضر: "#22C55E", أصفر: "#EAB308", برتقالي: "#F97316", وردي: "#EC4899",
+  بنفسجي: "#8B5CF6", رمادي: "#6B7280", بني: "#92400E", ذهبي: "#D97706",
+  فضي: "#9CA3AF", شفاف: "transparent", سماوي: "#06B6D4", زهري: "#F472B6",
+  كحلي: "#1E3A8A", بيج: "#D4A574",
+};
+function getColorHex(c: string | null | undefined) {
+  if (!c) return "transparent";
+  if (c.startsWith("#")) return c;
+  return COLOR_MAP[c] || "#888888";
+}
+
+function OrderItemsRow({ orderId }: { orderId: number }) {
+  const { data: items = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/orders", orderId, "items"],
+    queryFn: async () => {
+      const res = await fetch(`/api/orders/${orderId}/items`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+  if (isLoading) return <div className="flex justify-center py-3"><Loader2 className="h-4 w-4 animate-spin" /></div>;
+  if (!items.length) return <p className="text-xs text-center text-muted-foreground py-2">لا توجد تفاصيل</p>;
+  return (
+    <div className="mt-3 border-t pt-3 space-y-2">
+      <p className="text-xs font-bold text-muted-foreground flex items-center gap-1">
+        <Package className="h-3.5 w-3.5" /> المنتجات
+      </p>
+      {items.map((item: any) => (
+        <div key={item.id} className="flex items-center gap-2 bg-muted/30 rounded-lg p-2">
+          {item.productId && (
+            <img
+              src={`/api/products/image/${item.productId}`}
+              alt=""
+              className="w-9 h-9 rounded-md object-cover border shrink-0"
+              onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold truncate">
+              {(item.productName && item.productName !== "null") ? item.productName : item.productId ? `منتج #${item.productId}` : "منتج محذوف"}
+            </p>
+            <div className="flex flex-wrap items-center gap-1 mt-0.5">
+              {item.selectedSize && (
+                <span className="bg-blue-100 text-blue-700 text-xs px-1.5 py-0.5 rounded-full">📐 {item.selectedSize}</span>
+              )}
+              {item.selectedColor && (
+                <span className="flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-1.5 py-0.5 rounded-full">
+                  <span className="w-2.5 h-2.5 rounded-full border border-gray-300 shrink-0" style={{ backgroundColor: getColorHex(item.selectedColor) }} />
+                  {!item.selectedColor.startsWith("#") && item.selectedColor}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="text-left shrink-0">
+            <p className="text-xs font-bold">×{item.quantity}</p>
+            <p className="text-xs text-muted-foreground">{(Number(item.price) * item.quantity).toLocaleString()} ر.ي</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function MyAccount() {
   const { isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState("orders");
+  const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
 
   const { data: accountSummary, isLoading: summaryLoading } = useQuery<{
     wallet: { balanceYer: string; balanceSar: string };
@@ -244,34 +311,56 @@ export default function MyAccount() {
             orders.map((order) => {
               const status = statusConfig[order.status] || statusConfig.pending;
               const StatusIcon = status.icon;
+              const isExpanded = expandedOrder === order.id;
               return (
-                <Card key={order.id} data-testid={`order-card-${order.id}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between gap-4 mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold">طلب #{order.id}</span>
-                        <Badge className={status.color}>
-                          <StatusIcon className="h-3 w-3 ml-1" />
-                          {status.label}
-                        </Badge>
+                <Card key={order.id} data-testid={`order-card-${order.id}`} className="overflow-hidden">
+                  <CardContent className="p-0">
+                    {/* رأس الطلب */}
+                    <button
+                      type="button"
+                      className="w-full text-right p-4 hover:bg-muted/30 transition-colors"
+                      onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
+                      data-testid={`button-expand-order-${order.id}`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-base">طلب #{order.id}</span>
+                          <Badge className={status.color}>
+                            <StatusIcon className="h-3 w-3 ml-1" />
+                            {status.label}
+                          </Badge>
+                        </div>
+                        {isExpanded
+                          ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+                          : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                        }
                       </div>
-                      <Link href={`/orders`}>
-                        <Button variant="ghost" size="sm" className="gap-1" data-testid={`button-view-order-${order.id}`}>
-                          <Eye className="h-4 w-4" />
-                          عرض
-                        </Button>
-                      </Link>
-                    </div>
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>{formatDate(order.createdAt)}</span>
-                      <span className="font-medium text-foreground">
-                        {formatCurrency(order.total, order.currency)}
-                      </span>
-                    </div>
-                    {order.trackingNumber && (
-                      <p className="text-xs text-muted-foreground mt-2">
-                        رقم التتبع: {order.trackingNumber}
-                      </p>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">{formatDate(order.createdAt)}</span>
+                        <span className="font-bold text-primary text-base">
+                          {formatCurrency(order.total, order.currency)}
+                        </span>
+                      </div>
+                      {order.trackingNumber && (
+                        <p className="text-xs text-muted-foreground mt-1 text-right">
+                          📦 رقم التتبع: {order.trackingNumber}
+                        </p>
+                      )}
+                    </button>
+
+                    {/* تفاصيل المنتجات عند التوسع */}
+                    {isExpanded && (
+                      <div className="px-4 pb-4 border-t bg-muted/10">
+                        <OrderItemsRow orderId={order.id} />
+                        <div className="mt-3 flex gap-2">
+                          <Link href="/orders" className="flex-1">
+                            <Button variant="outline" size="sm" className="w-full gap-1" data-testid={`button-view-order-${order.id}`}>
+                              <Eye className="h-3.5 w-3.5" />
+                              عرض الطلب كاملاً
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
                     )}
                   </CardContent>
                 </Card>

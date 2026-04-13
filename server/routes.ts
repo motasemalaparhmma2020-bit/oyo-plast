@@ -1581,6 +1581,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // ── إعدادات جديدة ──
         'promoBarEnabled', 'showMarketerCouponToAll', 'detailHideHeaderName',
         'flashSaleEnabled',
+        // ── واتساب ──
+        'showWhatsappButton',
       ];
       // text fields
       const textFields = [
@@ -1593,6 +1595,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // ── إعدادات جديدة ──
         'promoBarText', 'promoBarColor', 'promoBarDetails',
         'flashSaleBg', 'flashSaleTag',
+        // ── واتساب ──
+        'whatsappNumber', 'whatsappMessage',
       ];
 
       const body = req.body as Record<string, unknown>;
