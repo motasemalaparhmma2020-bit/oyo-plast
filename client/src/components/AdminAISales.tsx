@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,7 +54,17 @@ export default function AdminAISales({ adminToken }: AdminAISalesProps) {
         const camel = k.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
         payload[camel] = v;
       }
-      return apiRequest('PATCH', '/api/admin/ai-settings', payload);
+      const token = adminToken || localStorage.getItem('admin_token') || '';
+      const res = await fetch('/api/admin/ai-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': token },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(res.status === 401 ? 'يرجى تسجيل الدخول كمسؤول أولاً' : `${res.status}: ${txt}`);
+      }
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/ai-settings'] });
