@@ -11,6 +11,10 @@ import { generalLimiter, sanitizeInputs } from "./security";
 const app = express();
 const httpServer = createServer(app);
 
+// ══ Trust Proxy (مطلوب خلف proxy مثل Replit Deploy / Cloudflare) ═══════
+// لازم قبل أي rate-limiter ليتمكن من قراءة IP الحقيقي من X-Forwarded-For
+app.set("trust proxy", 1);
+
 // ══ Security Headers (Helmet) ══════════════════════════════════════════
 app.use(helmet({
   contentSecurityPolicy: false, // نعطّله لأن Vite يحتاج مرونة في dev
