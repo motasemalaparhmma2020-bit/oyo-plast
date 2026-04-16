@@ -1257,6 +1257,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         originalPriceSar: data.originalPriceSar ? String(data.originalPriceSar) : null,
         discountPercent: data.discountPercent ? Number(data.discountPercent) : null,
         promotionalTags: data.promotionalTags || null,
+        // ── حقول الطباعة والتصميم ──────────────────────────────────────
+        showInPrinting: data.showInPrinting ?? false,
+        printingCategoryId: data.printingCategoryId ? Number(data.printingCategoryId) : null,
+        supplierId: data.supplierId ? Number(data.supplierId) : null,
+        showReviews: data.showReviews ?? true,
+        hasFreeShipping: data.hasFreeShipping ?? false,
       } as any);
       res.status(201).json(product);
     } catch (e: any) {

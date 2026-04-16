@@ -5241,8 +5241,10 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/printing-products'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/categories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/printing-products'] });
       queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       toast({ title: "تم إضافة المنتج بنجاح" });
       setShowProductForm(false);
@@ -5325,8 +5327,10 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/printing-products'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/categories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/printing-products'] });
       queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       toast({ title: "تم تحديث المنتج بنجاح" });
       setShowProductForm(false);

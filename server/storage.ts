@@ -268,11 +268,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPrintingProducts(): Promise<Product[]> {
+    // جلب المنتجات التي فعّلها الأدمن للظهور في قسم الطباعة والتصميم
     return await db.select().from(products).where(
-      sql`${products.showInPrinting} = true
-          OR (${products.printingCategoryId} IS NOT NULL
-              AND (${products.categoryId} = 14 OR ${products.showInPrinting} = true)
-              AND (product_status IS NULL OR product_status = 'approved'))`
+      eq(products.showInPrinting, true)
     ).orderBy(products.id);
   }
 
