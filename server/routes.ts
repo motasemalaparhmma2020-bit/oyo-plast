@@ -1511,7 +1511,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ─── 🤖 موظف المبيعات الذكي (Gemini Sales Agent) ────────────────
   app.post("/api/ai/chat", async (req, res) => {
     try {
-      const { message, history, productId } = req.body || {};
+      const { message, history, productId, uploadedLogoUrl } = req.body || {};
       if (!message || typeof message !== "string" || message.trim().length === 0) {
         return res.status(400).json({ message: "الرسالة مطلوبة" });
       }
@@ -1525,12 +1525,159 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         message: message.trim(),
         productId: productId ? Number(productId) : undefined,
         userId,
+        uploadedLogoUrl: typeof uploadedLogoUrl === "string" ? uploadedLogoUrl : null,
       });
       res.json(result);
     } catch (e: any) {
       console.error("[/api/ai/chat] خطأ:", e?.message);
       res.status(500).json({ reply: "عذراً، حصل خلل تقني. حاول مرة أخرى.", error: e?.message });
     }
+  });
+
+  // ─── إعدادات الموظف الذكي (أدمن) ────────────────────────────────
+  app.get("/api/admin/ai-settings", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`SELECT * FROM ai_sales_settings WHERE id = 1`);
+      res.json(r.rows[0] || {});
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.patch("/api/admin/ai-settings", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const b = req.body || {};
+      await dbPool.query(`
+        UPDATE ai_sales_settings SET
+          is_enabled = COALESCE($1, is_enabled),
+          personality_prompt = COALESCE($2, personality_prompt),
+          strict_rules = COALESCE($3, strict_rules),
+          discount_tier_1_qty = COALESCE($4, discount_tier_1_qty),
+          discount_tier_1_percent = COALESCE($5, discount_tier_1_percent),
+          discount_tier_2_qty = COALESCE($6, discount_tier_2_qty),
+          discount_tier_2_percent = COALESCE($7, discount_tier_2_percent),
+          discount_tier_3_qty = COALESCE($8, discount_tier_3_qty),
+          discount_tier_3_percent = COALESCE($9, discount_tier_3_percent),
+          discount_tier_4_percent = COALESCE($10, discount_tier_4_percent),
+          max_discount_override = COALESCE($11, max_discount_override),
+          manufacturing_days_default = COALESCE($12, manufacturing_days_default),
+          shipping_normal_days = COALESCE($13, shipping_normal_days),
+          shipping_fast_days = COALESCE($14, shipping_fast_days),
+          shipping_normal_cost = COALESCE($15, shipping_normal_cost),
+          shipping_fast_cost = COALESCE($16, shipping_fast_cost),
+          free_shipping_threshold = COALESCE($17, free_shipping_threshold),
+          temperature = COALESCE($18, temperature),
+          max_products_in_context = COALESCE($19, max_products_in_context),
+          allow_mockup_generation = COALESCE($20, allow_mockup_generation),
+          updated_at = NOW()
+        WHERE id = 1
+      `, [
+        b.isEnabled ?? null, b.personalityPrompt ?? null, b.strictRules ?? null,
+        b.discountTier1Qty ?? null, b.discountTier1Percent ?? null,
+        b.discountTier2Qty ?? null, b.discountTier2Percent ?? null,
+        b.discountTier3Qty ?? null, b.discountTier3Percent ?? null,
+        b.discountTier4Percent ?? null, b.maxDiscountOverride ?? null,
+        b.manufacturingDaysDefault ?? null,
+        b.shippingNormalDays ?? null, b.shippingFastDays ?? null,
+        b.shippingNormalCost ?? null, b.shippingFastCost ?? null,
+        b.freeShippingThreshold ?? null,
+        b.temperature ?? null, b.maxProductsInContext ?? null,
+        b.allowMockupGeneration ?? null,
+      ]);
+      const r = await dbPool.query(`SELECT * FROM ai_sales_settings WHERE id = 1`);
+      res.json(r.rows[0]);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // سجل محادثات الموظف الذكي (أدمن)
+  app.get("/api/admin/ai-conversations", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`
+        SELECT id, user_id, product_id, order_id, created_at, messages
+        FROM ai_conversations ORDER BY created_at DESC LIMIT 50
+      `);
+      res.json(r.rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── نموذج مبدئي (Mockup) — شعار العميل على صورة المنتج ─────────
+  app.get("/api/ai/mockup/render", async (req, res) => {
+    const esc = (s: string) => String(s).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as any)[c]);
+    const isSafeUrl = (u: string) => /^https?:\/\//i.test(u) || u.startsWith("/");
+    const product = String(req.query.product || "");
+    const logo = String(req.query.logo || "");
+    const name = String(req.query.name || "المنتج");
+    if (!product || !logo || !isSafeUrl(product) || !isSafeUrl(logo)) {
+      return res.status(400).send("invalid or missing image url");
+    }
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; img-src * data:; style-src 'unsafe-inline'");
+    res.send(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>نموذج مبدئي - ${esc(name)}</title>
+<style>
+body{margin:0;font-family:system-ui,Arial;background:#f5f5f5;display:flex;flex-direction:column;align-items:center;padding:20px;gap:12px;}
+.stage{position:relative;width:min(90vw,500px);aspect-ratio:1/1;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.1);}
+.stage img.bg{width:100%;height:100%;object-fit:cover;}
+.stage img.logo{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);max-width:40%;max-height:40%;filter:drop-shadow(0 4px 8px rgba(0,0,0,.3));background:transparent;}
+h1{font-size:18px;color:#222;margin:4px 0;}
+.note{font-size:13px;color:#666;text-align:center;max-width:500px;}
+</style></head><body>
+<h1>نموذج مبدئي — ${esc(name)}</h1>
+<div class="stage"><img class="bg" src="${esc(product)}"/><img class="logo" src="${esc(logo)}"/></div>
+<p class="note">هذا نموذج تقريبي لعرض الشعار على المنتج. التصميم النهائي سيتم تجهيزه بعد تأكيد الطلب.</p>
+</body></html>`);
+  });
+
+  // رفع شعار العميل من المحادثة (Cloudinary)
+  app.post("/api/ai/upload-logo", async (req, res) => {
+    try {
+      const { imageBase64 } = req.body || {};
+      if (!imageBase64 || typeof imageBase64 !== "string") {
+        return res.status(400).json({ message: "الصورة مطلوبة" });
+      }
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+      const apiKey = process.env.CLOUDINARY_API_KEY;
+      const apiSecret = process.env.CLOUDINARY_API_SECRET;
+      if (!cloudName || !apiKey || !apiSecret) {
+        return res.status(500).json({ message: "خدمة رفع الصور غير مُعدّة" });
+      }
+      const timestamp = Math.floor(Date.now() / 1000);
+      const folder = "oyoplast/ai-chat-logos";
+      const crypto = await import("crypto");
+      const signStr = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
+      const signature = crypto.createHash("sha1").update(signStr).digest("hex");
+      const form = new URLSearchParams();
+      form.append("file", imageBase64);
+      form.append("api_key", apiKey);
+      form.append("timestamp", String(timestamp));
+      form.append("folder", folder);
+      form.append("signature", signature);
+      const up = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+        method: "POST",
+        body: form,
+      });
+      const data: any = await up.json();
+      if (!up.ok || !data.secure_url) {
+        return res.status(500).json({ message: "فشل الرفع", details: data });
+      }
+      res.json({ url: data.secure_url });
+    } catch (e: any) {
+      console.error("[/api/ai/upload-logo]", e?.message);
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // توليد رابط Mockup
+  app.post("/api/ai/mockup", async (req, res) => {
+    try {
+      const { productId, logoUrl, selectedColor } = req.body || {};
+      if (!productId || !logoUrl) return res.status(400).json({ message: "productId و logoUrl مطلوبان" });
+      const { generateMockup } = await import("./ai-agents");
+      const result = await generateMockup({ productId: Number(productId), logoUrl, selectedColor });
+      if (!result) return res.status(404).json({ message: "المنتج غير موجود" });
+      res.json(result);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
   // ─── فئات الطباعة الاحترافية (Public + Admin) ─────────────────────

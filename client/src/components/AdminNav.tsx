@@ -115,8 +115,9 @@ const navGroups: AdminNavGroup[] = [
     groupIcon: "🔒",
     groupColor: "border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800",
     items: [
-      { id: "contracts", label: "العقود الرقمية", icon: <FileText className="h-6 w-6" />, color: "from-blue-500 to-indigo-600", badge: "جديد" },
+      { id: "contracts", label: "العقود الرقمية", icon: <FileText className="h-6 w-6" />, color: "from-blue-500 to-indigo-600" },
       { id: "backup", label: "النسخ الاحتياطية", icon: <HardDrive className="h-6 w-6" />, color: "from-green-500 to-emerald-600" },
+      { id: "ai-sales", label: "الموظف الذكي", icon: <MessageSquareWarning className="h-6 w-6" />, color: "from-violet-500 to-fuchsia-600", badge: "جديد" },
     ],
   },
   {

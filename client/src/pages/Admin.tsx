@@ -12,6 +12,7 @@ import { AdminReviews } from "@/components/AdminReviews";
 import AdminPayroll from "@/components/AdminPayroll";
 import AdminContracts from "@/components/AdminContracts";
 import AdminBackup from "@/components/AdminBackup";
+import AdminAISales from "@/components/AdminAISales";
 import AdminSectionSettings from "@/components/AdminSectionSettings";
 import AdminPDPLayout from "@/components/AdminPDPLayout";
 import { AdminSubcategories } from "@/components/AdminSubcategories";
@@ -7777,6 +7778,11 @@ export default function Admin() {
           {/* ─── Printing Categories Tab ────────────────────────────────── */}
           <TabsContent value="printing-categories">
             <AdminPrintingCategories adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── AI Sales Agent Tab ─────────────────────────────────────── */}
+          <TabsContent value="ai-sales">
+            <AdminAISales adminToken={adminToken} />
           </TabsContent>
 
         </Tabs>

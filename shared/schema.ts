@@ -78,6 +78,8 @@ export const products = pgTable("products", {
   productCommissionRate: numeric("product_commission_rate"), // عمولة خاصة تتغلب على العمولة العامة
   // ── الطباعة الاحترافية ──────────────────────────────────────────────────────
   printingCategoryId: integer("printing_category_id"), // FK → printingCategories (طباعة احترافية)
+  // ── مدة التصنيع بالأيام ─────────────────────────────────────────────────────
+  manufacturingDays: integer("manufacturing_days").default(0).notNull(), // 0 = جاهز فوراً
 });
 
 // ── فئات الطباعة الاحترافية (لوحات / كروت / أوصق / فواتير...) ───────────────
@@ -749,6 +751,43 @@ export const contractAcceptances = pgTable("contract_acceptances", {
   userAgent: text("user_agent"),
   acceptedAt: timestamp("accepted_at").defaultNow(),
   notes: text("notes"),
+});
+
+// ─── إعدادات الموظف الذكي (Sales AI) ──────────────────────────────────────────
+export const aiSalesSettings = pgTable("ai_sales_settings", {
+  id: serial("id").primaryKey(),
+  isEnabled: boolean("is_enabled").default(true).notNull(),
+  personalityPrompt: text("personality_prompt").notNull(),
+  strictRules: text("strict_rules").notNull(),
+  discountTier1Qty: integer("discount_tier_1_qty").default(49).notNull(),
+  discountTier1Percent: integer("discount_tier_1_percent").default(0).notNull(),
+  discountTier2Qty: integer("discount_tier_2_qty").default(99).notNull(),
+  discountTier2Percent: integer("discount_tier_2_percent").default(5).notNull(),
+  discountTier3Qty: integer("discount_tier_3_qty").default(499).notNull(),
+  discountTier3Percent: integer("discount_tier_3_percent").default(15).notNull(),
+  discountTier4Percent: integer("discount_tier_4_percent").default(25).notNull(),
+  maxDiscountOverride: integer("max_discount_override").default(30).notNull(),
+  manufacturingDaysDefault: integer("manufacturing_days_default").default(3).notNull(),
+  shippingNormalDays: integer("shipping_normal_days").default(4).notNull(),
+  shippingFastDays: integer("shipping_fast_days").default(2).notNull(),
+  shippingNormalCost: numeric("shipping_normal_cost").default("1500").notNull(),
+  shippingFastCost: numeric("shipping_fast_cost").default("3000").notNull(),
+  freeShippingThreshold: numeric("free_shipping_threshold").default("0").notNull(),
+  temperature: numeric("temperature").default("0.6").notNull(),
+  maxProductsInContext: integer("max_products_in_context").default(60).notNull(),
+  allowMockupGeneration: boolean("allow_mockup_generation").default(true).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type AiSalesSettings = typeof aiSalesSettings.$inferSelect;
+
+// ─── سجل محادثات الموظف الذكي ─────────────────────────────────────────────────
+export const aiConversations = pgTable("ai_conversations", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id"),
+  productId: integer("product_id"),
+  messages: text("messages").notNull(),
+  orderId: integer("order_id"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── جدول النسخ الاحتياطية ────────────────────────────────────────────────────
