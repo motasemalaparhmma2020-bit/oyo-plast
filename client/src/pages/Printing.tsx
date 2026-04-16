@@ -3,7 +3,6 @@ import { Link } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { ProductCard } from "@/components/ProductCard";
-import { SalesChat } from "@/components/SalesChat";
 import { useSEO } from "@/hooks/use-seo";
 
 export default function Printing() {
@@ -64,9 +63,6 @@ export default function Printing() {
           </div>
         )}
       </section>
-
-      {/* 🤖 موظف المبيعات الذكي */}
-      <SalesChat />
     </div>
   );
 }

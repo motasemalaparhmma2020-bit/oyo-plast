@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Product, Review } from "@shared/schema";
 import { Button } from "@/components/ui/button";
+import { ContactSalesButton } from "@/components/SalesChat";
 import { useSEO } from "@/hooks/use-seo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -675,6 +676,8 @@ export default function ProductDetail() {
                 {printingCost > 0 && <span className="mr-1">(يشمل {formatPrice(printingCost)} طباعة)</span>}
               </p>
             )}
+            {/* 🤖 زر التواصل مع موظف المبيعات الذكي */}
+            <ContactSalesButton productId={product.id} productName={product.name} />
             {/* شريط العروض الترويجية (SHEIN-style) */}
             {promoBarEnabled && (
               <>

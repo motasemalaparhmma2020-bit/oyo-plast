@@ -73,6 +73,7 @@ import NotFound from "@/pages/not-found";
 
 import { Footer, MobileFooter } from "@/components/Footer";
 import { GlobalBottomNav } from "@/components/GlobalBottomNav";
+import { SalesChatProvider } from "@/components/SalesChat";
 import { SplashScreen } from "@/components/SplashScreen";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { CompareBar } from "@/components/CompareBar";
@@ -530,8 +531,10 @@ function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <Toaster />
-          <Router />
+          <SalesChatProvider>
+            <Toaster />
+            <Router />
+          </SalesChatProvider>
         </TooltipProvider>
       </QueryClientProvider>
     </ErrorBoundary>
