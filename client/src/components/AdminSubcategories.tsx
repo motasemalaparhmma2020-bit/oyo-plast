@@ -383,6 +383,13 @@ export function AdminSubcategories({ adminToken }: { adminToken?: string | null 
                 </div>
 
                 <div className="flex flex-col gap-1 shrink-0">
+                  <div className="flex items-center gap-1" title={sub.isActive ? "ظاهر في المتجر" : "مخفي عن المتجر"}>
+                    <Switch
+                      checked={!!sub.isActive}
+                      onCheckedChange={(v) => updateMut.mutate({ id: sub.id, data: { isActive: v } })}
+                      data-testid={`switch-subcategory-visibility-${sub.id}`}
+                    />
+                  </div>
                   <Button
                     size="icon"
                     variant="ghost"

@@ -71,6 +71,9 @@ export async function createBackupSnapshot(
     // تنظيف النسخ القديمة (سياسة الاحتفاظ)
     await applyRetentionPolicy();
 
+    // إطلاق webhook خارجي (Google Sheets / Zapier / N8N...)
+    await fireWebhook({ triggeredBy, retentionType, sizeBytes, totalRows, tablesCount: successfulTables });
+
     console.log(`[Backup] ✅ ${retentionType} backup by ${triggeredBy} — ${totalRows} rows, ${(sizeBytes / 1024 / 1024).toFixed(2)} MB`);
     return { success: true, sizeBytes, totalRows, tablesCount: successfulTables };
 
@@ -83,6 +86,39 @@ export async function createBackupSnapshot(
       );
     } catch {}
     return { success: false, sizeBytes: 0, totalRows: 0, tablesCount: 0 };
+  }
+}
+
+// ── إطلاق Webhook خارجي (T3) ────────────────────────────────────────────────
+async function fireWebhook(summary: {
+  triggeredBy: string; retentionType: string;
+  sizeBytes: number; totalRows: number; tablesCount: number;
+}): Promise<void> {
+  try {
+    const r = await dbPool.query(`SELECT webhook_url FROM backup_settings WHERE id = 1`);
+    const url = r.rows[0]?.webhook_url?.trim();
+    if (!url || !/^https?:\/\//i.test(url)) return;
+
+    const payload = {
+      event: "backup_completed",
+      site: "OyoPlast",
+      timestamp: new Date().toISOString(),
+      ...summary,
+      sizeMB: Number((summary.sizeBytes / 1024 / 1024).toFixed(2)),
+    };
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: ctrl.signal,
+      });
+      console.log(`[Backup] 🔔 Webhook fired → ${url.slice(0, 60)}...`);
+    } finally { clearTimeout(t); }
+  } catch (err: any) {
+    console.error("[Backup] Webhook error:", err.message);
   }
 }
 
