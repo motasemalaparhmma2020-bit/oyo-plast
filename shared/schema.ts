@@ -33,6 +33,8 @@ export const products = pgTable("products", {
   price: numeric("price").notNull(), // Default currency price (YER)
   priceSar: numeric("price_sar"), // Price in SAR
   categoryId: integer("category_id").references(() => categories.id).notNull(),
+  subcategoryId: integer("subcategory_id").references(() => subcategories.id), // ربط اختياري بقسم فرعي
+  isActive: boolean("is_active").default(true).notNull(), // إظهار/إخفاء المنتج من المتجر
   imageUrl: text("image_url").notNull(),
   imageUrls: text("image_urls").array(), // Multiple product images (gallery)
   stock: integer("stock").default(100).notNull(),

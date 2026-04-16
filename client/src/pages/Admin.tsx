@@ -32,6 +32,7 @@ import {
   ShoppingBag, 
   Package, 
   Eye, 
+  EyeOff,
   Loader2, 
   Lock, 
   CheckCircle, 
@@ -187,6 +188,8 @@ interface ProductFormData {
   price: string;
   priceSar: string;
   categoryId: number;
+  subcategoryId: number;
+  isActive: boolean;
   imageUrl: string;
   imageUrls: string[];
   stock: number;
@@ -219,6 +222,8 @@ const emptyProductForm: ProductFormData = {
   price: "",
   priceSar: "",
   categoryId: 0,
+  subcategoryId: 0,
+  isActive: true,
   imageUrl: "",
   imageUrls: [],
   stock: 100,
@@ -249,12 +254,14 @@ interface CategoryFormData {
   name: string;
   slug: string;
   imageUrl: string;
+  isActive: boolean;
 }
 
 const emptyCategoryForm: CategoryFormData = {
   name: "",
   slug: "",
-  imageUrl: ""
+  imageUrl: "",
+  isActive: true,
 };
 
 interface OrderItemWithName {
@@ -5156,6 +5163,17 @@ export default function Admin() {
     }
   });
 
+  // الأقسام الفرعية لاستخدامها في نموذج المنتج (تشمل المخفية للأدمن)
+  const { data: subcategories } = useQuery<any[]>({
+    queryKey: ['/api/subcategories', 'admin-all'],
+    enabled: isAuthenticated && !!adminToken,
+    queryFn: async () => {
+      const res = await fetch('/api/subcategories?includeHidden=1');
+      if (!res.ok) throw new Error('Failed to fetch subcategories');
+      return res.json();
+    },
+  });
+
   const { data: categories, isLoading: categoriesLoading, isError: categoriesError, refetch: refetchCategories } = useQuery<Category[]>({
     queryKey: ['/api/admin/categories'],
     enabled: isAuthenticated && !!adminToken,
@@ -5204,6 +5222,8 @@ export default function Admin() {
           price: data.price,
           priceSar: numOrNull(data.priceSar),
           categoryId: data.categoryId,
+          subcategoryId: data.subcategoryId || null,
+          isActive: data.isActive,
           stock: data.stock,
           imageUrl: data.imageUrls[0] || data.imageUrl,
           imageUrls: data.imageUrls.length > 0 ? data.imageUrls : null,
@@ -5271,6 +5291,8 @@ export default function Admin() {
         price: data.price,
         priceSar: numOrNull(data.priceSar),
         categoryId: data.categoryId,
+        subcategoryId: data.subcategoryId || null,
+        isActive: data.isActive,
         stock: data.stock,
         allowDesignUpload: data.allowDesignUpload,
         printingPricePerUnit: numOrNull(data.printingPricePerUnit),
@@ -5465,10 +5487,48 @@ export default function Admin() {
     setCategoryForm({
       name: category.name,
       slug: category.slug,
-      imageUrl: category.imageUrl
+      imageUrl: category.imageUrl,
+      isActive: (category as any).isActive !== false,
     });
     setShowCategoryForm(true);
   };
+
+  // ─── Toggle Visibility Mutations ──────────────────────────────────
+  const toggleProductVisibility = useMutation({
+    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
+      const res = await fetch(`/api/admin/products/${id}/visibility`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+        body: JSON.stringify({ isActive }),
+      });
+      if (!res.ok) throw new Error('فشل التبديل');
+      return res.json();
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      toast({ title: vars.isActive ? "تم إظهار المنتج" : "تم إخفاء المنتج" });
+    },
+    onError: () => toast({ title: "فشل تحديث الحالة", variant: "destructive" }),
+  });
+
+  const toggleCategoryVisibility = useMutation({
+    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
+      const res = await fetch(`/api/admin/categories/${id}/visibility`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+        body: JSON.stringify({ isActive }),
+      });
+      if (!res.ok) throw new Error('فشل التبديل');
+      return res.json();
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/categories'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+      toast({ title: vars.isActive ? "تم إظهار القسم" : "تم إخفاء القسم" });
+    },
+    onError: () => toast({ title: "فشل تحديث الحالة", variant: "destructive" }),
+  });
 
   const openEditProduct = (product: Product) => {
     setEditingProduct(product);
@@ -5481,6 +5541,8 @@ export default function Admin() {
       price: product.price,
       priceSar: product.priceSar ?? "",
       categoryId: product.categoryId,
+      subcategoryId: (product as any).subcategoryId ?? 0,
+      isActive: (product as any).isActive !== false,
       imageUrl: product.imageUrl,
       imageUrls: existingImageUrls,
       stock: product.stock,
@@ -6038,7 +6100,7 @@ export default function Admin() {
                                 <Label htmlFor="product-category">القسم *</Label>
                                 <Select
                                   value={productForm.categoryId.toString()}
-                                  onValueChange={(value) => setProductForm({...productForm, categoryId: parseInt(value)})}
+                                  onValueChange={(value) => setProductForm({...productForm, categoryId: parseInt(value), subcategoryId: 0})}
                                 >
                                   <SelectTrigger data-testid="select-product-category">
                                     <SelectValue placeholder="اختر القسم" />
@@ -6051,6 +6113,45 @@ export default function Admin() {
                                     ))}
                                   </SelectContent>
                                 </Select>
+                              </div>
+                            </div>
+
+                            {/* القسم الفرعي + حالة الظهور */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div>
+                                <Label htmlFor="product-subcategory">القسم الفرعي (اختياري)</Label>
+                                <Select
+                                  value={productForm.subcategoryId ? productForm.subcategoryId.toString() : "0"}
+                                  onValueChange={(value) => setProductForm({...productForm, subcategoryId: parseInt(value)})}
+                                  disabled={!productForm.categoryId}
+                                >
+                                  <SelectTrigger data-testid="select-product-subcategory">
+                                    <SelectValue placeholder={productForm.categoryId ? "اختر قسماً فرعياً (اختياري)" : "اختر القسم الرئيسي أولاً"} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="0">— بدون قسم فرعي —</SelectItem>
+                                    {(subcategories ?? [])
+                                      .filter((s: any) => s.categoryId === productForm.categoryId)
+                                      .map((sub: any) => (
+                                        <SelectItem key={sub.id} value={sub.id.toString()}>
+                                          {sub.name}
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="flex items-end">
+                                <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border hover:bg-accent w-full" data-testid="toggle-product-active-form">
+                                  <input
+                                    type="checkbox"
+                                    checked={productForm.isActive}
+                                    onChange={(e) => setProductForm({...productForm, isActive: e.target.checked})}
+                                    className="w-4 h-4"
+                                  />
+                                  <span className="text-sm font-medium">
+                                    {productForm.isActive ? "👁️ ظاهر في المتجر" : "🚫 مخفي عن المتجر"}
+                                  </span>
+                                </label>
                               </div>
                             </div>
                             <div>
@@ -7133,6 +7234,17 @@ export default function Admin() {
                             <Button
                               size="sm"
                               variant="outline"
+                              className={`h-7 px-2 gap-1 text-xs ${(product as any).isActive === false ? 'text-orange-600 border-orange-300' : 'text-green-600 border-green-300'}`}
+                              onClick={() => toggleProductVisibility.mutate({ id: product.id, isActive: (product as any).isActive === false })}
+                              disabled={toggleProductVisibility.isPending}
+                              data-testid={`button-toggle-visibility-product-${product.id}`}
+                              title={(product as any).isActive === false ? "إظهار في المتجر" : "إخفاء من المتجر"}
+                            >
+                              {(product as any).isActive === false ? '🚫 مخفي' : '👁️ ظاهر'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
                               className="h-7 px-2 gap-1 text-xs text-destructive hover:text-destructive border-destructive/30 hover:border-destructive"
                               onClick={() => {
                                 if (confirm('هل أنت متأكد من حذف هذا المنتج؟')) {
@@ -7248,6 +7360,17 @@ export default function Admin() {
                           </div>
                         )}
                       </div>
+                      <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border hover:bg-accent" data-testid="toggle-category-active-form">
+                        <input
+                          type="checkbox"
+                          checked={categoryForm.isActive}
+                          onChange={(e) => setCategoryForm({ ...categoryForm, isActive: e.target.checked })}
+                          className="w-4 h-4"
+                        />
+                        <span className="text-sm font-medium">
+                          {categoryForm.isActive ? "👁️ القسم ظاهر للزوار" : "🚫 القسم مخفي عن الزوار"}
+                        </span>
+                      </label>
                       <div className="flex gap-2 pt-4">
                         <Button 
                           type="submit" 
@@ -7341,7 +7464,12 @@ export default function Admin() {
 
                         {/* بيانات القسم */}
                         <div className="min-w-0 flex-1">
-                          <p className="font-semibold truncate">{category.name}</p>
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-semibold truncate">{category.name}</p>
+                            {(category as any).isActive === false && (
+                              <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">🚫 مخفي</Badge>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground truncate mb-1">{category.slug}</p>
                           <Badge variant="secondary" className="text-xs">
                             {productsList.filter(p => p.categoryId === category.id).length} منتج
@@ -7350,6 +7478,17 @@ export default function Admin() {
 
                         {/* أزرار الإجراءات */}
                         <div className="flex flex-col gap-1 shrink-0">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className={`h-8 w-8 ${(category as any).isActive === false ? 'text-orange-600' : 'text-green-600'}`}
+                            onClick={() => toggleCategoryVisibility.mutate({ id: category.id, isActive: (category as any).isActive === false })}
+                            disabled={toggleCategoryVisibility.isPending}
+                            data-testid={`button-toggle-visibility-category-${category.id}`}
+                            title={(category as any).isActive === false ? "إظهار القسم" : "إخفاء القسم"}
+                          >
+                            {(category as any).isActive === false ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                          </Button>
                           <Button
                             size="icon"
                             variant="ghost"

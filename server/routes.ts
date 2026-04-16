@@ -764,12 +764,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const cats = await storage.getCategories();
     // إضافة عدد المنتجات لكل قسم
     const countResult = await dbPool.query(
-      `SELECT category_id, COUNT(*) as count FROM products WHERE (product_status IS NULL OR product_status = 'approved') GROUP BY category_id`
+      `SELECT category_id, COUNT(*) as count FROM products WHERE (product_status IS NULL OR product_status = 'approved') AND is_active IS NOT FALSE GROUP BY category_id`
     );
     const countMap: Record<number, number> = {};
     for (const row of countResult.rows) { countMap[row.category_id] = parseInt(row.count); }
     res.set("Cache-Control", "public, max-age=300"); // كاش 5 دقائق
-    res.json(cats.map((c: any) => ({
+    res.json(cats.filter((c: any) => c.isActive !== false).map((c: any) => ({
       ...c,
       // استبدال base64 بـ URL مستقل لتخفيف حجم الاستجابة
       imageUrl: c.imageUrl?.startsWith("data:") ? `/api/categories/image/${c.id}` : (c.imageUrl || null),
@@ -781,7 +781,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/subcategories", async (req, res) => {
     const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
     const subs = await storage.getSubcategories(categoryId);
-    res.json(subs);
+    // الواجهة العامة تُخفي الأقسام الفرعية المُعطّلة، الأدمن يستخدم /api/admin/subcategories إن لزم
+    const includeHidden = req.query.includeHidden === '1';
+    res.json(includeHidden ? subs : subs.filter((s: any) => s.isActive !== false));
   });
 
   app.get("/api/subcategories/by-slug/:slug", async (req, res) => {
@@ -860,7 +862,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  const LITE_COLS = `id, name, description, price, price_sar, category_id, image_url,
+  const LITE_COLS = `id, name, description, price, price_sar, category_id, subcategory_id, is_active, image_url,
     stock, reorder_point, colors, sizes, allow_design_upload, bulk_pricing, size_pricing,
     printing_price_per_unit, rating, review_count, sold_count, commission_hold_days,
     marketer_commission_rate, has_printing_options, base_bag_price, single_color_print_price,
@@ -888,6 +890,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       price: r.price,
       priceSar: r.price_sar,
       categoryId: r.category_id,
+      subcategoryId: r.subcategory_id ?? null,
+      isActive: r.is_active !== false,
       imageUrl: rawImg.startsWith("data:") ? `/api/products/image/${r.id}` : (rawImg || null),
       imageUrls: [],
       stock: r.stock,
@@ -951,6 +955,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // إخفاء منتجات الموردين غير المعتمدة من المتجر العام
       conditions.push(`(product_status IS NULL OR product_status = 'approved')`);
+      // إخفاء المنتجات المُعطّلة من قبل الأدمن
+      conditions.push(`is_active IS NOT FALSE`);
 
       // فلترة البنرات الخاصة
       if (filter === 'free-shipping') {
@@ -995,7 +1001,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { pool: dbPool } = await import("./db");
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 8;
       const result = await dbPool.query(
-        `SELECT ${LITE_COLS} FROM products WHERE (product_status IS NULL OR product_status = 'approved') ORDER BY sold_count DESC NULLS LAST LIMIT $1`,
+        `SELECT ${LITE_COLS} FROM products WHERE (product_status IS NULL OR product_status = 'approved') AND is_active IS NOT FALSE ORDER BY sold_count DESC NULLS LAST LIMIT $1`,
         [limit]
       );
       res.json(result.rows.map(mapProductRow));
@@ -1239,6 +1245,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         price: String(data.price),
         priceSar: data.priceSar ? String(data.priceSar) : null,
         categoryId: Number(data.categoryId),
+        subcategoryId: data.subcategoryId ? Number(data.subcategoryId) : null,
+        isActive: data.isActive !== false,
         imageUrl: data.imageUrl,
         imageUrls: data.imageUrls || null,
         stock: Number(data.stock ?? 100),
@@ -1296,7 +1304,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // ─────────────────────────────────────────────────────────────────
 
       const fields = [
-        "name", "description", "price", "priceSar", "categoryId",
+        "name", "description", "price", "priceSar", "categoryId", "subcategoryId", "isActive",
         "imageUrl", "imageUrls", "stock", "colors", "sizes",
         "allowDesignUpload", "printingPricePerUnit", "hasPrintingOptions",
         "baseBagPrice", "singleColorPrintPrice", "availableBagColors", "tags",
@@ -1761,6 +1769,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json(product);
     } catch (e: any) {
       res.status(500).json({ message: "فشل تحديث حالة الطباعة", details: e.message });
+    }
+  });
+
+  // ─── Admin Products - Toggle Visibility ───────────────────────────
+  app.patch("/api/admin/products/:id/visibility", requireAdmin, async (req, res) => {
+    try {
+      const product = await storage.updateProduct(parseInt(req.params.id), {
+        isActive: req.body.isActive !== false,
+      } as any);
+      res.json(product);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث ظهور المنتج", details: e.message });
+    }
+  });
+
+  // ─── Admin Categories - Toggle Visibility ─────────────────────────
+  app.patch("/api/admin/categories/:id/visibility", requireAdmin, async (req, res) => {
+    try {
+      const cat = await storage.updateCategory(parseInt(req.params.id), {
+        isActive: req.body.isActive !== false,
+      } as any);
+      res.json(cat);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث ظهور القسم", details: e.message });
     }
   });
 
