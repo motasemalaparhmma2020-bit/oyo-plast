@@ -282,10 +282,32 @@ export default function ProductDetail() {
   }, []);
 
   // ── Derived Data ─────────────────────────────────────────────────────────
+  // ── دمج كل الصور: المنتج + متغيرات ذكية + صور الألوان ──
   const allImages = useMemo(() => {
     if (!product) return [];
-    const imgs = [product.imageUrl];
-    if (product.imageUrls?.length) imgs.push(...product.imageUrls);
+    const imgs: string[] = [];
+    if (product.imageUrl) imgs.push(product.imageUrl);
+    if (product.imageUrls?.length) product.imageUrls.forEach(u => { if (u && !imgs.includes(u)) imgs.push(u); });
+    // صور المتغيرات الذكية (SHEIN-style)
+    try {
+      const sv = (product as any).smartVariants;
+      if (sv) {
+        const parsed = typeof sv === 'string' ? JSON.parse(sv) : sv;
+        parsed?.variants?.forEach((v: any) => {
+          if (v?.imageUrl && !imgs.includes(v.imageUrl)) imgs.push(v.imageUrl);
+        });
+      }
+    } catch {}
+    // صور الألوان (قديم)
+    try {
+      const ci = (product as any).colorImages;
+      if (ci) {
+        const parsed = typeof ci === 'string' ? JSON.parse(ci) : ci;
+        parsed?.forEach?.((e: any) => {
+          if (e?.imageUrl && !imgs.includes(e.imageUrl)) imgs.push(e.imageUrl);
+        });
+      }
+    } catch {}
     return imgs;
   }, [product]);
 
@@ -350,6 +372,30 @@ export default function ProductDetail() {
       setSelectedColor(availableColors[0]);
     }
   }, [selectedSize, availableColors, selectedColor]);
+
+  // ── تحديد افتراضي للمتغيرات الذكية (أول متغير من كل نوع) ──
+  useEffect(() => {
+    if (!smartVariantsData || !showSmartVariants) return;
+    smartVariantsData.activeTypes.forEach(type => {
+      if (!selectedSmartVariant[type]) {
+        const first = smartVariantsData.variants.find(v => v.type === type && v.label);
+        if (first) {
+          setSelectedSmartVariant(p => ({ ...p, [type]: first.id }));
+          if (first.imageUrl) setVariantActiveImg(first.imageUrl);
+        }
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [smartVariantsData, showSmartVariants]);
+
+  // ── مزامنة الـ carousel مع صورة المتغير النشط ──
+  useEffect(() => {
+    if (!variantActiveImg || !emblaApi) return;
+    const idx = allImages.indexOf(variantActiveImg);
+    if (idx >= 0 && idx !== currentImageIndex) {
+      emblaApi.scrollTo(idx);
+    }
+  }, [variantActiveImg, emblaApi, allImages, currentImageIndex]);
 
   // ── Price Calculation ────────────────────────────────────────────────────
   const currentPrice = useMemo(() => {
@@ -450,13 +496,50 @@ export default function ProductDetail() {
       productPrintingCat, printWidth, printHeight, printFinish, printColorSeparation, professionalPrintingUnitPrice,
       totalPrice]);
 
+  // ── التحقق من اختيار المقاس قبل الإضافة للسلة ──
+  const validateSelection = (): string | null => {
+    // 1) sizePricing يلزم اختيار مقاس
+    if (sizePricing.length > 0 && !selectedSize) {
+      return "⚠️ يرجى اختيار المقاس المناسب أولاً";
+    }
+    // 2) sizes بدون سعر يلزم اختيار مقاس
+    if (sizes.length > 0 && sizePricing.length === 0 && !selectedSize) {
+      return "⚠️ يرجى اختيار المقاس أولاً";
+    }
+    // 3) smartVariants — يجب اختيار متغير من كل نوع نشط
+    if (showSmartVariants && smartVariantsData) {
+      const LABELS: Record<string, string> = { color: "اللون", size: "المقاس", weight: "الوزن", image: "الخيار" };
+      for (const type of smartVariantsData.activeTypes) {
+        const typeVariants = smartVariantsData.variants.filter(v => v.type === type && v.label);
+        if (typeVariants.length > 0 && !selectedSmartVariant[type]) {
+          return `⚠️ يرجى اختيار ${LABELS[type] || type} أولاً`;
+        }
+      }
+    }
+    return null;
+  };
+
   const handleAddToCart = () => {
     if (!product) return;
+    const err = validateSelection();
+    if (err) {
+      toast({ title: err, variant: "destructive" });
+      document.querySelector('[data-testid^="button-size-"], [data-testid^="button-smart-variant-"]')
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     addToCartMutation.mutate(cartPayload);
   };
 
   const handleBuyNow = async () => {
     if (!product) return;
+    const err = validateSelection();
+    if (err) {
+      toast({ title: err, variant: "destructive" });
+      document.querySelector('[data-testid^="button-size-"], [data-testid^="button-smart-variant-"]')
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     try { await addToCartMutation.mutateAsync(cartPayload); setLocation('/checkout'); } catch {}
   };
 
