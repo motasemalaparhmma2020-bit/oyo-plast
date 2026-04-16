@@ -1500,6 +1500,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── 🤖 موظف المبيعات الذكي (Gemini Sales Agent) ────────────────
+  app.post("/api/ai/chat", async (req, res) => {
+    try {
+      const { message, history, productId } = req.body || {};
+      if (!message || typeof message !== "string" || message.trim().length === 0) {
+        return res.status(400).json({ message: "الرسالة مطلوبة" });
+      }
+      if (message.length > 1000) {
+        return res.status(400).json({ message: "الرسالة طويلة جداً (الحد الأقصى 1000 حرف)" });
+      }
+      const { handleSalesChat } = await import("./ai-agents");
+      const userId = (req as any).user?.id || (req.session as any)?.userId || null;
+      const result = await handleSalesChat({
+        history: Array.isArray(history) ? history.slice(-12) : [],
+        message: message.trim(),
+        productId: productId ? Number(productId) : undefined,
+        userId,
+      });
+      res.json(result);
+    } catch (e: any) {
+      console.error("[/api/ai/chat] خطأ:", e?.message);
+      res.status(500).json({ reply: "عذراً، حصل خلل تقني. حاول مرة أخرى.", error: e?.message });
+    }
+  });
+
   // ─── فئات الطباعة الاحترافية (Public + Admin) ─────────────────────
   app.get("/api/printing-categories", async (_req, res) => {
     try {
