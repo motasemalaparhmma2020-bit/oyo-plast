@@ -63,9 +63,9 @@ export async function createBackupSnapshot(
 
     // تسجيل في backup_logs
     await dbPool.query(
-      `INSERT INTO backup_logs (triggered_by, size_bytes, tables_count, status)
-       VALUES ($1, $2, $3, 'success')`,
-      [triggeredBy, sizeBytes, successfulTables]
+      `INSERT INTO backup_logs (triggered_by, size_bytes, tables_count, total_rows, retention_type, status)
+       VALUES ($1, $2, $3, $4, $5, 'success')`,
+      [triggeredBy, sizeBytes, successfulTables, totalRows, retentionType]
     );
 
     // تنظيف النسخ القديمة (سياسة الاحتفاظ)

@@ -133,42 +133,41 @@ export function OrderItemCompactMeta({ item, cfg = ALL_ON }: { item: OrderItemMe
   const hasDesignInfo = (cfg.showDesignFile && item.designFileUrl) || (cfg.showDesignNotes && item.designNotes);
 
   return (
-    <div className="flex flex-col gap-0.5 mt-0.5">
-      {/* سطر اللون / المقاس — SHEIN style */}
+    <div className="flex flex-col gap-1.5 mt-1.5" data-testid="item-meta-compact">
+      {/* سطر اللون / المقاس — أوضح وأبرز */}
       {hasBaseInfo && (
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 flex-wrap">
           {cfg.showColor && item.selectedColor && (
-            <>
-              <ColorDot color={item.selectedColor} size="xs" />
-              <span>{item.selectedColor}</span>
-            </>
-          )}
-          {cfg.showColor && item.selectedColor && cfg.showSize && item.selectedSize && (
-            <span className="text-muted-foreground/50">/</span>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-md px-2 py-0.5 border border-gray-200 dark:border-gray-700">
+              <ColorDot color={item.selectedColor} />
+              <span>اللون: {item.selectedColor}</span>
+            </span>
           )}
           {cfg.showSize && item.selectedSize && (
-            <span>{item.selectedSize}</span>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-md px-2 py-0.5 border border-gray-200 dark:border-gray-700">
+              <span>📐 المقاس: {item.selectedSize}</span>
+            </span>
           )}
         </div>
       )}
 
       {/* طباعة: لون الكيس + ألوان الطباعة */}
       {hasPrinting && (
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {cfg.showBagColor && item.selectedBagColor && (
-            <span className="inline-flex items-center gap-1 text-[10px] text-cyan-700 bg-cyan-50 rounded-full px-1.5 py-0.5 border border-cyan-200">
-              <ColorDot color={item.selectedBagColor} size="xs" />
-              {item.selectedBagColor}
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-800 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-950/40 rounded-md px-2 py-0.5 border border-cyan-300 dark:border-cyan-800">
+              <ColorDot color={item.selectedBagColor} />
+              لون الكيس: {item.selectedBagColor}
             </span>
           )}
           {cfg.showPrintColors && printColors.length > 0 && (
-            <span className="inline-flex items-center gap-1 text-[10px] text-violet-700 bg-violet-50 rounded-full px-1.5 py-0.5 border border-violet-200">
-              <Printer className="w-2.5 h-2.5" />
-              {printColors.length} ألوان:
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-violet-800 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40 rounded-md px-2 py-0.5 border border-violet-300 dark:border-violet-800">
+              <Printer className="w-3 h-3" />
+              <span>طباعة:</span>
               {printColors.map((c, i) => (
                 <span key={i} className="inline-flex items-center gap-0.5">
-                  <ColorDot color={c} size="xs" />
-                  {c}{i < printColors.length - 1 && <span className="text-violet-300">+</span>}
+                  <ColorDot color={c} />
+                  {c}{i < printColors.length - 1 && <span className="text-violet-400 mx-0.5">+</span>}
                 </span>
               ))}
             </span>
@@ -178,17 +177,17 @@ export function OrderItemCompactMeta({ item, cfg = ALL_ON }: { item: OrderItemMe
 
       {/* ملف + ملاحظات */}
       {hasDesignInfo && (
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {cfg.showDesignFile && item.designFileUrl && (
-            <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-600">
-              <Paperclip className="w-2.5 h-2.5" />
-              مرفق
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 rounded-md px-2 py-0.5 border border-blue-300 dark:border-blue-800">
+              <Paperclip className="w-3 h-3" />
+              ملف تصميم مرفق
             </span>
           )}
           {cfg.showDesignNotes && item.designNotes && (
-            <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-700 truncate max-w-[140px]">
-              <StickyNote className="w-2.5 h-2.5 shrink-0" />
-              {item.designNotes}
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 rounded-md px-2 py-0.5 border border-amber-300 dark:border-amber-800 max-w-full">
+              <StickyNote className="w-3 h-3 shrink-0" />
+              <span className="truncate">ملاحظة: {item.designNotes}</span>
             </span>
           )}
         </div>
