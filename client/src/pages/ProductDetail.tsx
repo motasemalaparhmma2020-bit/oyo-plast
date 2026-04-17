@@ -716,7 +716,10 @@ export default function ProductDetail() {
           <div key="price" className="px-4 pt-3" data-testid="section-price">
             {/* سطر واحد: السعر الجديد + شارة الخصم + السعر القديم مشطوب */}
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-extrabold text-primary leading-none price-num"
+              <span
+                className={`font-extrabold leading-none price-num ${
+                  hasDiscount ? 'text-red-600 dark:text-red-500' : 'text-gray-900 dark:text-white'
+                }`}
                 style={{ fontSize: priceFontSize, fontFamily: 'var(--font-numbers)' }}
                 data-testid="text-product-price" data-price="true">
                 {formatPrice(displayedPrice)}
@@ -1612,7 +1615,18 @@ export default function ProductDetail() {
                     </div>
                     <div className="p-2">
                       <p className="font-medium text-xs line-clamp-2 mb-1">{p.name}</p>
-                      <p className="text-primary font-bold text-sm">{formatPrice(currency==='SAR'&&p.priceSar?p.priceSar:p.price)} {currLabel}</p>
+                      {(() => {
+                        const op = (p as any).originalPrice;
+                        const opSar = (p as any).originalPriceSar;
+                        const hasDisc = currency === 'SAR'
+                          ? (opSar && Number(opSar) > Number(p.priceSar || 0))
+                          : (op && Number(op) > Number(p.price || 0));
+                        return (
+                          <p className={`font-bold text-sm ${hasDisc ? 'text-red-600 dark:text-red-500' : 'text-gray-900 dark:text-white'}`}>
+                            {formatPrice(currency==='SAR'&&p.priceSar?p.priceSar:p.price)} {currLabel}
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
                 </Link>

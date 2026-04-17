@@ -146,7 +146,11 @@ export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSiz
         <div className="space-y-0.5">
           <div className="flex items-baseline gap-1 flex-wrap">
             <span
-              className="font-extrabold text-red-600 dark:text-red-500 price-num"
+              className={`font-extrabold price-num ${
+                (currency === 'YER' && showOriginalPrice) || (currency === 'SAR' && showOriginalPriceSar)
+                  ? 'text-red-600 dark:text-red-500'
+                  : 'text-gray-900 dark:text-white'
+              }`}
               style={{ fontSize: bannerPriceFontSize ? `${bannerPriceFontSize}px` : 'var(--price-font-size, 16px)', fontFamily: 'var(--font-numbers)' }}
               data-testid={`price-${product.id}`}
               data-price="true"
