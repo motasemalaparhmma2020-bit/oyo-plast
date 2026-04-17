@@ -136,6 +136,7 @@ export const orders = pgTable("orders", {
   paymentStatus: text("payment_status").default("unpaid"), // unpaid, cod_collected, transferred, partial, refunded
   statusHistory: jsonb("status_history"),
   trackingNumber: text("tracking_number"), // For shipping tracking
+  expectedShippingDate: text("expected_shipping_date"), // Promised shipping date sent to customer on confirm/approve
   total: numeric("total").notNull(),
   currency: text("currency").default("YER").notNull(), // YER or SAR
   depositAmount: numeric("deposit_amount"), // Deposit amount paid

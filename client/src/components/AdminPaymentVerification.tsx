@@ -57,6 +57,7 @@ function ReceiptCard({
   const { toast } = useToast();
   const qc = useQueryClient();
   const [note, setNote] = useState("");
+  const [shipDate, setShipDate] = useState("");
   const [imgOpen, setImgOpen] = useState(false);
 
   const method = methodLabel(payment.payment_method);
@@ -67,7 +68,11 @@ function ReceiptCard({
       const res = await fetch(`/api/admin/payment-verifications/${payment.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "x-admin-token": adminToken || "" },
-        body: JSON.stringify({ action, note: note.trim() || undefined }),
+        body: JSON.stringify({
+          action,
+          note: note.trim() || undefined,
+          expectedShippingDate: action === "approve" && shipDate ? shipDate : undefined,
+        }),
       });
       if (!res.ok) throw new Error("فشل التحديث");
       return res.json();
@@ -128,6 +133,20 @@ function ReceiptCard({
             <ImageIcon className="h-4 w-4" />
             عرض إيصال الدفع
           </button>
+
+          {/* Expected shipping date (only used on approve) */}
+          <div>
+            <label className="text-xs font-bold text-muted-foreground mb-1 block">
+              📅 موعد الشحن المتوقع (يُرسَل للعميل عند القبول)
+            </label>
+            <input
+              type="date"
+              value={shipDate}
+              onChange={e => setShipDate(e.target.value)}
+              className="w-full text-sm border rounded-md px-3 py-2 bg-background"
+              data-testid={`input-ship-date-${payment.id}`}
+            />
+          </div>
 
           {/* Admin note / rejection reason */}
           <Textarea

@@ -38,6 +38,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLogoSettings } from "@/hooks/use-logo-settings";
 import { useCategories } from "@/hooks/use-products";
 import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
+import { NotificationBell } from "@/components/NotificationBell";
 
 // ─── Search Bar Component ────────────────────────────────────────
 function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: () => void; glassy?: boolean }) {
@@ -442,17 +443,8 @@ export function Navbar() {
             {currency === 'YER' ? 'SAR' : 'YER'}
           </Button>
 
-          {/* الإشعارات */}
-          {isAuthenticated && (
-            <Link href="/notifications">
-              <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
-                <Bell className={`h-5 w-5 transition-colors ${transparent ? "text-white drop-shadow" : "text-[#2196F3]"}`} />
-                {unreadCount && unreadCount.count > 0 && (
-                  <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-500 text-white rounded-full text-xs">{unreadCount.count}</Badge>
-                )}
-              </Button>
-            </Link>
-          )}
+          {/* الإشعارات (مع جرس + صوت) */}
+          {isAuthenticated && <NotificationBell />}
 
           {/* السلة */}
           <Link href="/cart">

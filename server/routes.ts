@@ -316,7 +316,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // دالة إشعار واتساب/SMS للمورد
   // ─── إشعار العميل عبر واتساب عند تغيير حالة الطلب ────────────────────────────
-  async function notifyCustomerStatus(customerPhone: string, orderId: number, newStatus: string, extra?: { trackingNumber?: string }) {
+  async function notifyCustomerStatus(customerPhone: string, orderId: number, newStatus: string, extra?: { trackingNumber?: string; expectedShippingDate?: string }) {
     try {
       const phone = customerPhone.replace(/\s+/g, "").replace(/^00/, "+");
       if (!phone.startsWith("+")) return;
@@ -329,7 +329,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const trackLink = `https://oyoplast.com/track`;
 
       const messages: Record<string, string> = {
-        confirmed: `✅ تم تأكيد طلبك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\nسنبدأ تجهيز طلبك قريباً.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
+        confirmed: `✅ تم تأكيد طلبك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\n${extra?.expectedShippingDate ? `📅 موعد الشحن المتوقع: ${extra.expectedShippingDate}\n` : ""}سنبدأ تجهيز طلبك قريباً.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
         preparing:  `⚙️ جاري تجهيز طلبك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\nطلبك قيد التجهيز والتعبئة الآن.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
         shipped:    `🚚 تم شحن طلبك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\n${extra?.trackingNumber ? `📦 رقم التتبع: ${extra.trackingNumber}\n` : ""}طلبك في الطريق إليك.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
         delivered:  `🎉 تم تسليم طلبك بنجاح!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\nنتمنى أن ينال طلبك إعجابك.\nشكراً لثقتك بأويو بلاست! 💙\n\n⭐ شاركنا رأيك وقيّم منتجاتك:\n🔗 https://oyoplast.replit.app/orders\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
@@ -2050,6 +2050,20 @@ h1{font-size:18px;color:#222;margin:4px 0;}
             });
           } catch { /* non-fatal */ }
         })(),
+        // ── إشعار داخلي للموظفين (DB + Telegram) ─────────────────────
+        (async () => {
+          try {
+            const { notifyStaff } = await import("./lib/staff-notify");
+            await notifyStaff({
+              roles: ["order_manager", "owner"],
+              type: "order",
+              orderId: order.id,
+              title: `📦 طلب جديد #${order.id}`,
+              message: `${customerName} · ${customerPhone} · ${shippingCity || "—"} · ${Number(total).toLocaleString()} ${req.body.currency || "ر.ي"}`,
+              telegramText: `📦 <b>طلب جديد #${order.id}</b>\n👤 ${customerName}\n📱 ${customerPhone}\n📍 ${shippingCity || "—"}\n💰 ${Number(total).toLocaleString()} ${req.body.currency || "ر.ي"}\n🛒 ${items.length} منتج`,
+            });
+          } catch { /* non-fatal */ }
+        })(),
       ]);
 
       res.json(order);
@@ -2154,6 +2168,26 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         }
       } catch { /* non-fatal */ }
 
+      // إشعار داخلي للمالي + الأدمن
+      try {
+        const o2 = await dbPool.query(
+          `SELECT customer_name, customer_phone, total, payment_method FROM orders WHERE id=$1`,
+          [orderId]
+        );
+        if (o2.rows.length) {
+          const o = o2.rows[0];
+          const { notifyStaff } = await import("./lib/staff-notify");
+          await notifyStaff({
+            roles: ["finance", "owner"],
+            type: "payment",
+            orderId,
+            title: `📥 إيصال دفع جديد #${orderId}`,
+            message: `${o.customer_name} · ${Number(o.total).toLocaleString()} ر.ي · ${o.payment_method === "bank_transfer" ? "تحويل بنكي" : "محفظة"}`,
+            telegramText: `📥 <b>إيصال جديد بانتظار التحقق</b>\n🆔 طلب #${orderId}\n👤 ${o.customer_name}\n📱 ${o.customer_phone}\n💰 ${Number(o.total).toLocaleString()} ر.ي`,
+          });
+        }
+      } catch { /* non-fatal */ }
+
       res.json({ message: "تم رفع الإيصال بنجاح", receiptUrl: dataUrl });
     } catch (e: any) {
       res.status(500).json({ message: "فشل رفع الإيصال", error: e.message });
@@ -2183,7 +2217,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   app.patch("/api/admin/payment-verifications/:id", requireAdmin, async (req, res) => {
     try {
       const { pool: dbPool } = await import("./db");
-      const { action, note } = req.body; // action: 'approve' | 'reject'
+      const { action, note, expectedShippingDate } = req.body; // action: 'approve' | 'reject'
       const orderId = parseInt(req.params.id);
 
       // جلب بيانات الطلب قبل التحديث (لإرسال الإشعار)
@@ -2194,10 +2228,17 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const orderData = orderRow.rows[0];
 
       if (action === "approve") {
-        await dbPool.query(
-          `UPDATE orders SET payment_status='transferred' WHERE id=$1`,
-          [orderId]
-        );
+        if (expectedShippingDate) {
+          await dbPool.query(
+            `UPDATE orders SET payment_status='transferred', expected_shipping_date=$2 WHERE id=$1`,
+            [orderId, expectedShippingDate]
+          );
+        } else {
+          await dbPool.query(
+            `UPDATE orders SET payment_status='transferred' WHERE id=$1`,
+            [orderId]
+          );
+        }
       } else if (action === "reject") {
         await dbPool.query(
           `UPDATE orders SET payment_status='unpaid', receipt_image_url=NULL WHERE id=$1`,
@@ -2222,7 +2263,8 @@ h1{font-size:18px;color:#222;margin:4px 0;}
             const trackLink = `https://oyoplast.com/track`;
             let msg = "";
             if (action === "approve") {
-              msg = `✅ تم التحقق من دفعك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\n💰 المبلغ: ${Number(orderData.total).toLocaleString()} ر.ي\nتم استلام دفعك وتأكيده. سيتم تجهيز طلبك الآن.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`;
+              const shipLine = expectedShippingDate ? `📅 موعد الشحن المتوقع: ${expectedShippingDate}\n` : "";
+              msg = `✅ تم التحقق من دفعك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\n💰 المبلغ: ${Number(orderData.total).toLocaleString()} ر.ي\n${shipLine}تم استلام دفعك وتأكيده. سيتم تجهيز طلبك الآن.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`;
             } else if (action === "reject") {
               msg = `❌ تعذّر التحقق من دفعك\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\n${note ? `📝 السبب: ${note}\n` : ""}يرجى إعادة رفع صورة الإيصال أو التواصل معنا.\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`;
             }
@@ -2243,8 +2285,95 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         } catch { /* non-fatal */ }
       }
 
+      // إشعار داخلي للمالي والأدمن (مع تنبيه الصراف لسحب الحوالة)
+      try {
+        const { notifyStaff } = await import("./lib/staff-notify");
+        if (action === "approve") {
+          await notifyStaff({
+            roles: ["finance", "owner"],
+            type: "payment",
+            orderId,
+            title: `✅ قبول دفع الطلب #${orderId}`,
+            message: `${orderData?.customer_name || ""} · ${Number(orderData?.total || 0).toLocaleString()} ر.ي${expectedShippingDate ? ` · شحن: ${expectedShippingDate}` : ""}`,
+            telegramText: `✅ <b>قبول دفع الطلب #${orderId}</b>\n👤 ${orderData?.customer_name || ""}\n💰 ${Number(orderData?.total || 0).toLocaleString()} ر.ي${expectedShippingDate ? `\n📅 شحن: ${expectedShippingDate}` : ""}\n💵 جاهز للصراف لسحب الحوالة وإيداعها`,
+          });
+        } else if (action === "reject") {
+          await notifyStaff({
+            roles: ["finance", "owner"],
+            type: "payment",
+            orderId,
+            title: `❌ رفض دفع الطلب #${orderId}`,
+            message: `${orderData?.customer_name || ""}${note ? ` · ${note}` : ""}`,
+            telegramText: `❌ <b>رفض دفع الطلب #${orderId}</b>\n👤 ${orderData?.customer_name || ""}${note ? `\n📝 ${note}` : ""}`,
+          });
+        }
+      } catch { /* non-fatal */ }
+
       res.json({ message: "تم تحديث حالة الدفع" });
     } catch (e: any) {
+      res.status(500).json({ message: "فشل التحديث" });
+    }
+  });
+
+  // ─── Internal Notifications API (staff + customers) ─────────────────────────
+  app.get("/api/notifications", async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user) || req.session?.userId;
+      if (!userId) return res.json([]);
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(
+        `SELECT id, user_id as "userId", title, message, type, is_read as "isRead",
+                order_id as "orderId", created_at as "createdAt"
+         FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100`,
+        [userId]
+      );
+      res.json(r.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الإشعارات" });
+    }
+  });
+
+  app.get("/api/notifications/unread-count", async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user) || req.session?.userId;
+      if (!userId) return res.json({ count: 0 });
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(
+        `SELECT COUNT(*)::int AS c FROM notifications WHERE user_id=$1 AND is_read=false`,
+        [userId]
+      );
+      res.json({ count: r.rows[0]?.c || 0 });
+    } catch {
+      res.json({ count: 0 });
+    }
+  });
+
+  app.patch("/api/notifications/:id/read", async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user) || req.session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query(
+        `UPDATE notifications SET is_read=true WHERE id=$1 AND user_id=$2`,
+        [parseInt(req.params.id), userId]
+      );
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ message: "فشل التحديث" });
+    }
+  });
+
+  app.patch("/api/notifications/read-all", async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user) || req.session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query(
+        `UPDATE notifications SET is_read=true WHERE user_id=$1 AND is_read=false`,
+        [userId]
+      );
+      res.json({ ok: true });
+    } catch {
       res.status(500).json({ message: "فشل التحديث" });
     }
   });
@@ -2744,6 +2873,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const newStatus = req.body.status;
       const updateData: any = { status: newStatus };
       if (req.body.trackingNumber !== undefined) updateData.trackingNumber = req.body.trackingNumber;
+      if (req.body.expectedShippingDate !== undefined) updateData.expectedShippingDate = req.body.expectedShippingDate;
       const [order] = await dbInstance
         .update(ordersTable)
         .set(updateData)
@@ -2752,7 +2882,10 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       res.json(order);
       // إشعار العميل بتغيير الحالة (لا ننتظر)
       if (order?.customerPhone && newStatus) {
-        notifyCustomerStatus(order.customerPhone, order.id, newStatus, { trackingNumber: order.trackingNumber || undefined });
+        notifyCustomerStatus(order.customerPhone, order.id, newStatus, {
+          trackingNumber: order.trackingNumber || undefined,
+          expectedShippingDate: (order as any).expectedShippingDate || undefined,
+        });
       }
       // منح نقاط الولاء عند تسليم الطلب
       if (newStatus === "delivered" && order?.userId && order?.total) {
