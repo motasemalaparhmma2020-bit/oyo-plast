@@ -124,7 +124,9 @@ export function AdminSubcategories({ adminToken }: { adminToken?: string | null 
       });
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
-      setForm((f) => ({ ...f, imageUrl: data.url }));
+      const url = data.imageUrl || data.url || data.secure_url;
+      if (!url) throw new Error("لم يتم استلام رابط الصورة");
+      setForm((f) => ({ ...f, imageUrl: url }));
       toast({ title: "✅ تم رفع الصورة" });
     } catch {
       toast({ title: "فشل رفع الصورة", variant: "destructive" });
