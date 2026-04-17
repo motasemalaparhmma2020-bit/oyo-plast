@@ -2179,7 +2179,48 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
               </div>
             </div>
           </div>
-          <div className="flex items-center justify-between">
+          {/* إعدادات صفحة الأقسام الفرعية (CategoryPage) */}
+          <div className="border-t pt-3 space-y-3">
+            <h4 className="font-medium text-sm text-muted-foreground">صفحة الفئة الفرعية (شريط الدوائر)</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>حجم الدائرة (بكسل)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={48}
+                    max={150}
+                    value={settings?.subcategoryCircleSize ?? 72}
+                    onChange={e => setSettings((s: any) => ({ ...s, subcategoryCircleSize: +e.target.value }))}
+                    onBlur={e => handleUpdate('subcategoryCircleSize', +e.target.value)}
+                    className="w-24"
+                    data-testid="input-subcategory-circle-size"
+                    disabled={updateMutation.isPending}
+                  />
+                  <span className="text-sm text-muted-foreground">بكسل</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>ارتفاع شريط الدوائر</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={80}
+                    max={300}
+                    value={settings?.subcategoryStripHeight ?? 110}
+                    onChange={e => setSettings((s: any) => ({ ...s, subcategoryStripHeight: +e.target.value }))}
+                    onBlur={e => handleUpdate('subcategoryStripHeight', +e.target.value)}
+                    className="w-24"
+                    data-testid="input-subcategory-strip-height"
+                    disabled={updateMutation.isPending}
+                  />
+                  <span className="text-sm text-muted-foreground">بكسل</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between border-t pt-3">
             <Label>إظهار الأقسام</Label>
             <Switch
               checked={settings?.showCategories ?? true}

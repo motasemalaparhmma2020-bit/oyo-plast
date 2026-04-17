@@ -505,6 +505,9 @@ export const displaySettings = pgTable("display_settings", {
   categorySize: integer("category_size").default(72).notNull(),       // حجم صورة القسم (بكسل)
   categoriesPerRow: integer("categories_per_row").default(4).notNull(), // عدد الأقسام بالصف
   showCategories: boolean("show_categories").default(true).notNull(),
+  // إعدادات صفحة الأقسام الفرعية (CategoryPage)
+  subcategoryCircleSize: integer("subcategory_circle_size").default(72).notNull(),    // حجم دائرة الفئة الفرعية
+  subcategoryStripHeight: integer("subcategory_strip_height").default(110).notNull(), // ارتفاع شريط الدوائر
   // إعدادات المنتجات
   productCardWidth: integer("product_card_width").default(160).notNull(),  // عرض بطاقة المنتج
   productCardHeight: integer("product_card_height").default(200).notNull(), // ارتفاع صورة المنتج

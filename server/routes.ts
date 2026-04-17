@@ -1810,6 +1810,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       // حقول صحيحة معروفة — integer fields
       const intFields = [
         'categorySize', 'categoriesPerRow',
+        'subcategoryCircleSize', 'subcategoryStripHeight',
         'productCardWidth', 'productCardHeight',
         'offerBannerHeight',
         'productCardMargin', 'productCardPaddingV', 'priceFontSize',
