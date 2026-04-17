@@ -33,11 +33,16 @@ export default function CategoryPage() {
     queryKey: ["/api/subcategories", cat?.id],
     queryFn: async () => {
       if (!cat?.id) return [];
-      const res = await fetch(`/api/subcategories?categoryId=${cat.id}`);
+      // إضافة timestamp لمنع التخزين المؤقت في المتصفح بعد رفع صور جديدة
+      const res = await fetch(`/api/subcategories?categoryId=${cat.id}&_=${Date.now()}`, {
+        cache: "no-store",
+      });
       if (!res.ok) return [];
       return res.json();
     },
     enabled: !!cat?.id,
+    staleTime: 5_000, // إعادة جلب سريعة لظهور التحديثات الإدارية
+    refetchOnWindowFocus: true,
   });
 
   const activeSubcategories = subcategories.filter((s: any) => s.isActive);
