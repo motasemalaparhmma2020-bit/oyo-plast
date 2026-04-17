@@ -9,12 +9,22 @@ if (!apiKey) {
 
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
-// ─── جلب إعدادات الموظف الذكي ─────────────────────────────────────────────────
+// ─── جلب إعدادات الموظف الذكي (مع إنشاء تلقائي إن لم تكن موجودة) ──────────────
 async function getAgentSettings() {
   try {
-    const r = await dbPool.query(`SELECT * FROM ai_sales_settings WHERE id = 1`);
+    let r = await dbPool.query(`SELECT * FROM ai_sales_settings WHERE id = 1`);
+    if (!r.rows[0]) {
+      // إنشاء سجل افتراضي تلقائياً (يستخدم defaults من schema)
+      await dbPool.query(`
+        INSERT INTO ai_sales_settings (id) VALUES (1)
+        ON CONFLICT (id) DO NOTHING
+      `);
+      r = await dbPool.query(`SELECT * FROM ai_sales_settings WHERE id = 1`);
+      console.log("[AI Agents] ✅ تم إنشاء سجل إعدادات افتراضي تلقائياً");
+    }
     return r.rows[0] || null;
-  } catch {
+  } catch (e: any) {
+    console.error("[AI Agents] فشل جلب الإعدادات:", e?.message);
     return null;
   }
 }
