@@ -27,9 +27,31 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [bottomOffset, setBottomOffset] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ y: number; mode: ChatMode } | null>(null);
   const { toast } = useToast();
+
+  // ── قياس ارتفاع الشريط السفلي الثابت ديناميكياً (لا يحجب الدردشة) ──
+  useEffect(() => {
+    const measure = () => {
+      const bars = document.querySelectorAll<HTMLElement>('.app-fixed-bar');
+      let maxH = 0;
+      bars.forEach((b) => {
+        if (b.dataset.salesChat === 'true') return; // تجاهل عناصر الدردشة نفسها
+        const r = b.getBoundingClientRect();
+        // فقط الأشرطة الفعلية في أسفل الشاشة
+        if (r.height > 0 && r.bottom >= window.innerHeight - 8) {
+          if (r.height > maxH) maxH = r.height;
+        }
+      });
+      setBottomOffset(maxH);
+    };
+    measure();
+    const t = setInterval(measure, 600);
+    window.addEventListener('resize', measure);
+    return () => { clearInterval(t); window.removeEventListener('resize', measure); };
+  }, []);
 
   const setMode = useCallback((m: ChatMode) => {
     setModeState(m);
@@ -153,7 +175,8 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
       {mode === "closed" && (
         <button
           onClick={() => open()}
-          className="fixed bottom-24 left-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 text-white shadow-lg shadow-teal-500/30 transition-transform hover:scale-110 active:scale-95"
+          style={{ bottom: `calc(${bottomOffset + 16}px + env(safe-area-inset-bottom))` }}
+          className="fixed left-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 text-white shadow-lg shadow-teal-500/30 transition-transform hover:scale-110 active:scale-95"
           data-testid="button-open-sales-chat-floating"
           aria-label="فتح محادثة المبيعات"
         >
@@ -169,7 +192,8 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
       {mode === "bubble" && (
         <button
           onClick={() => setMode("compact")}
-          className="fixed bottom-24 left-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 text-white shadow-xl shadow-teal-500/40 transition-transform hover:scale-110 active:scale-95"
+          style={{ bottom: `calc(${bottomOffset + 16}px + env(safe-area-inset-bottom))` }}
+          className="fixed left-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 text-white shadow-xl shadow-teal-500/40 transition-transform hover:scale-110 active:scale-95"
           data-testid="button-restore-sales-chat"
           aria-label="استعادة المحادثة"
         >
@@ -192,8 +216,12 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
             />
           )}
           <div
-            className={`fixed bottom-0 left-0 right-0 z-50 mx-auto flex w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-teal-200 bg-white shadow-2xl transition-[height] duration-300 dark:border-teal-800 dark:bg-gray-900 sm:bottom-4 sm:left-6 sm:right-auto sm:w-[26rem] sm:rounded-3xl ${heightClass}`}
-            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+            data-sales-chat="true"
+            className={`fixed left-0 right-0 z-50 mx-auto flex w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-teal-200 bg-white shadow-2xl transition-[height] duration-300 dark:border-teal-800 dark:bg-gray-900 sm:left-6 sm:right-auto sm:w-[26rem] sm:rounded-3xl ${heightClass}`}
+            style={{
+              bottom: `calc(${bottomOffset}px + env(safe-area-inset-bottom))`,
+              paddingBottom: "env(safe-area-inset-bottom)",
+            }}
             dir="rtl"
             data-testid="dialog-sales-chat"
           >

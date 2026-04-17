@@ -439,7 +439,7 @@ function Router() {
     location === '/guest-checkout' ||
     location === '/cart' ||
     location.startsWith('/order-confirmation') ||
-    (isProductDetail && displaySettingsForNav?.showStickyCartBar === true);
+    isProductDetail; // إخفاء دائم في صفحة المنتج لتجنب تراكم الأشرطة
 
   return (
     <>
