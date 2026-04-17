@@ -417,6 +417,12 @@ export async function runMigrations(): Promise<void> {
       );
     }
 
+    // ── أعمدة بيانات إكمال التسجيل (Onboarding) ─────────────────────
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS business_name varchar`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS gps_latitude varchar`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS gps_longitude varchar`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed varchar DEFAULT 'false'`);
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));
