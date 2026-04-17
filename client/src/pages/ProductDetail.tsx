@@ -100,7 +100,7 @@ const DEFAULT_PDP: PdpLayout = {
     { id: "reviews", visible: true },
     { id: "related", visible: true, count: 4 },
   ],
-  stickyBar: { visible: true, cartHeight: 52 },
+  stickyBar: { visible: false, cartHeight: 52 },
   margins: { h: 16, v: 8, gap: 12 },
 };
 
