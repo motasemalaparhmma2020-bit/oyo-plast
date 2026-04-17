@@ -35,6 +35,10 @@ export const users = pgTable("users", {
   street: varchar("street"), // الشارع
   landmark: varchar("landmark"), // بجوار/أمام/بجانب
   businessType: varchar("business_type"), // نوع النشاط التجاري: مصنع، مطعم، محل تجاري، جهة حكومية، أخرى
+  businessName: varchar("business_name"), // اسم المنشأة (مثلاً: مطعم الأصيل) — منفصل عن اسم العميل
+  gpsLatitude: varchar("gps_latitude"), // خط العرض من GPS
+  gpsLongitude: varchar("gps_longitude"), // خط الطول من GPS
+  onboardingCompleted: varchar("onboarding_completed").default("false"), // هل أكمل العميل خطوات التسجيل التفصيلية
   accountType: varchar("account_type").default("customer"), // customer أو marketer
   role: varchar("role").default("customer"), // owner, product_manager, order_manager, delivery, finance, customer
   permissions: jsonb("permissions"),

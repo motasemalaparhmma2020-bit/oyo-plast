@@ -78,6 +78,7 @@ import { SplashScreen } from "@/components/SplashScreen";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { CompareBar } from "@/components/CompareBar";
 import Compare from "@/pages/Compare";
+import OnboardingFlow from "@/components/OnboardingFlow";
 import { useOfflineSync } from "@/hooks/use-offline-sync";
 
 // Component to redirect users who need to complete registration
@@ -115,6 +116,49 @@ function RequireAccountType({ children }: { children: React.ReactNode }) {
 
 function StaffGate() {
   return <StaffPortal />;
+}
+
+// المسارات التي لا تخضع لإجبار إكمال البيانات
+const ONBOARDING_EXEMPT = ["/auth", "/register", "/admin", "/staff", "/supplier", "/onboarding", "/api"];
+
+function OnboardingGate({ location }: { location: string }) {
+  const { isAuthenticated, user, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+
+  const exempt = ONBOARDING_EXEMPT.some((p) => location === p || location.startsWith(p + "/"));
+  const u = user as any;
+  // فقط العملاء العاديون يخضعون للويزارد. لا الموظفون ولا المسوّقون.
+  const isStaffRole = u && ["owner", "product_manager", "order_manager", "delivery", "finance"].includes(u.role);
+  const isMarketer = u && u.accountType === "marketer";
+  const needsOnboarding =
+    isAuthenticated &&
+    u &&
+    !isStaffRole &&
+    !isMarketer &&
+    u.accountType === "customer" &&
+    String(u.onboardingCompleted || "false") !== "true";
+
+  if (isLoading || exempt || !needsOnboarding) return null;
+
+  return (
+    <div className="fixed inset-0 z-[9999] bg-background overflow-y-auto">
+      <OnboardingFlow
+        initialFullName={(user as any)?.fullName || ""}
+        onComplete={() => setLocation(location)}
+      />
+    </div>
+  );
+}
+
+function OnboardingPage() {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  return (
+    <OnboardingFlow
+      initialFullName={(user as any)?.fullName || ""}
+      onComplete={() => setLocation("/")}
+    />
+  );
 }
 
 // Merges guest cart into server cart when user logs in
@@ -445,6 +489,7 @@ function Router() {
     <>
       <MobilePwaLock />
       <SplashScreen />
+      <OnboardingGate location={location} />
       <CartMerger />
       <DisplaySettingsInjector />
       <VisitorTracker />
@@ -459,6 +504,7 @@ function Router() {
               {isAuthenticated ? (needsAccountType ? <Redirect to="/register" /> : <Redirect to="/" />) : <Auth />}
             </Route>
             <Route path="/register" component={Register} />
+            <Route path="/onboarding" component={OnboardingPage} />
             <Route path="/admin" component={Admin} />
             <Route path="/about" component={About} />
             <Route path="/privacy" component={Privacy} />

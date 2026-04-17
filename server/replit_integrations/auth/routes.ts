@@ -332,6 +332,67 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
+  // ── حفظ بيانات إكمال التسجيل (Onboarding) ─────────────────────────
+  app.post("/api/auth/complete-onboarding", async (req: any, res) => {
+    if (!req.isAuthenticated() || !req.user?.claims?.sub) {
+      return res.status(401).json({ message: "غير مصرح" });
+    }
+    try {
+      const userId = req.user.claims.sub;
+      const {
+        fullName, businessName, businessType,
+        governorate, city, street,
+        gpsLatitude, gpsLongitude,
+      } = req.body || {};
+
+      if (!fullName || String(fullName).trim().length < 2) {
+        return res.status(400).json({ message: "اسم العميل مطلوب" });
+      }
+      if (!businessType) {
+        return res.status(400).json({ message: "نوع النشاط مطلوب" });
+      }
+      if (!governorate || !city || !street) {
+        return res.status(400).json({ message: "المحافظة والمدينة والشارع مطلوبة" });
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query(
+          `UPDATE users SET
+             full_name = $1,
+             business_name = $2,
+             business_type = $3,
+             governorate = $4,
+             city = $5,
+             street = $6,
+             gps_latitude = $7,
+             gps_longitude = $8,
+             onboarding_completed = 'true',
+             updated_at = NOW()
+           WHERE id = $9`,
+          [
+            String(fullName).trim(),
+            businessName ? String(businessName).trim() : null,
+            String(businessType).trim(),
+            String(governorate).trim(),
+            String(city).trim(),
+            String(street).trim(),
+            gpsLatitude != null ? String(gpsLatitude) : null,
+            gpsLongitude != null ? String(gpsLongitude) : null,
+            userId,
+          ]
+        );
+      } finally {
+        client.release();
+      }
+      const user = await authStorage.getUser(userId);
+      res.json({ message: "اكتمل التسجيل بنجاح", user });
+    } catch (error: any) {
+      console.error("Onboarding error:", error?.message || error);
+      res.status(500).json({ message: "حدث خطأ أثناء حفظ البيانات" });
+    }
+  });
+
   // Get current user (for email auth)
   app.get("/api/auth/me", async (req: any, res) => {
     if (!req.isAuthenticated() || !req.user?.claims?.sub) {
