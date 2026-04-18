@@ -11,8 +11,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
   Wallet, TrendingUp, ShoppingBag, Clock, Copy, ExternalLink, LogOut,
-  ChevronDown, ChevronUp, DollarSign, CheckCircle, XCircle, AlertCircle,
+  ChevronDown, ChevronUp, DollarSign, CheckCircle, XCircle, AlertCircle, FileText, Shield,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const API_BASE = "";
 
@@ -45,6 +46,8 @@ export default function MarketerDashboard() {
   const [showOrders, setShowOrders] = useState(true);
   const [showWithdrawal, setShowWithdrawal] = useState(false);
   const [wForm, setWForm] = useState({ amount: "", paymentMethod: "", paymentDetails: "" });
+  const [showContractDialog, setShowContractDialog] = useState(false);
+  const [contractRead, setContractRead] = useState(false);
 
   // حماية المسار
   useEffect(() => {
@@ -52,6 +55,28 @@ export default function MarketerDashboard() {
   }, []);
 
   const token = localStorage.getItem("marketerToken") || "";
+
+  const { data: myInfo } = useQuery<any>({
+    queryKey: ["/api/marketer/me", token],
+    queryFn: () => marketerFetch("/api/marketer/me"),
+    enabled: !!token,
+  });
+
+  useEffect(() => {
+    if (myInfo && !myInfo.contractAcceptedAt) {
+      setShowContractDialog(true);
+    }
+  }, [myInfo]);
+
+  const acceptContractMutation = useMutation({
+    mutationFn: () => marketerFetch("/api/marketer/accept-contract", { method: "POST" }),
+    onSuccess: () => {
+      toast({ title: "✅ تم قبول العقد بنجاح", description: "يمكنك الآن استخدام لوحة التحكم كاملاً" });
+      setShowContractDialog(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/marketer/me"] });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
 
   const { data: stats, isLoading: statsLoading } = useQuery<any>({
     queryKey: ["/api/marketer/stats", token],
@@ -113,6 +138,60 @@ export default function MarketerDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50" dir="rtl">
+
+      {/* ── ديالوغ قبول العقد — يظهر تلقائياً عند أول دخول ── */}
+      <Dialog open={showContractDialog} onOpenChange={() => {}}>
+        <DialogContent dir="rtl" className="max-w-lg max-h-[90vh] overflow-y-auto [&>button.absolute]:hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-800">
+              <FileText className="h-5 w-5" />
+              عقد شراكة تسويقية — أويو بلاست
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              يجب قراءة وقبول بنود الشراكة قبل استخدام لوحة التحكم
+            </div>
+            <div
+              className="bg-gray-50 border rounded-lg p-4 text-sm leading-loose max-h-64 overflow-y-auto"
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                if (el.scrollTop + el.clientHeight >= el.scrollHeight - 10) setContractRead(true);
+              }}
+            >
+              <pre className="whitespace-pre-wrap font-sans text-gray-700">
+                {myInfo?.contractText || "جارٍ التحميل..."}
+              </pre>
+            </div>
+            {!contractRead && (
+              <p className="text-xs text-center text-muted-foreground">اقرأ العقد كاملاً بالتمرير للأسفل لتفعيل زر القبول</p>
+            )}
+            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+              <Shield className="w-4 h-4 text-emerald-600 shrink-0" />
+              <p className="text-xs text-emerald-800">بالضغط على "أوافق وأقبل"، يُعتبر هذا توقيعاً رقمياً ملزماً قانونياً</p>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={handleLogout}
+              >
+                إلغاء وتسجيل الخروج
+              </Button>
+              <Button
+                data-testid="button-accept-contract"
+                disabled={!contractRead || acceptContractMutation.isPending}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                onClick={() => acceptContractMutation.mutate()}
+              >
+                {acceptContractMutation.isPending ? "جارٍ الحفظ..." : "✅ أوافق وأقبل العقد"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Header */}
       <header className="bg-gradient-to-l from-emerald-700 to-teal-600 text-white">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">

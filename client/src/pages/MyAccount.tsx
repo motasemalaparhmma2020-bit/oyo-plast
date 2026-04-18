@@ -5,7 +5,7 @@ import { Link } from "wouter";
 import { 
   ShoppingBag, Wallet, Award, ChevronLeft, Package, Clock, 
   CheckCircle2, Truck, XCircle, Loader2, Eye, ArrowUpRight, ArrowDownLeft,
-  UserPlus, LogIn, ChevronDown, ChevronUp
+  UserPlus, LogIn, ChevronDown, ChevronUp, Megaphone, TrendingUp, Tag, ExternalLink
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -96,6 +96,12 @@ export default function MyAccount() {
   const { isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState("orders");
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
+
+  const { data: marketerAccount } = useQuery<any>({
+    queryKey: ["/api/marketer/linked-account"],
+    enabled: isAuthenticated,
+    retry: false,
+  });
 
   const { data: accountSummary, isLoading: summaryLoading } = useQuery<{
     wallet: { balanceYer: string; balanceSar: string };
@@ -282,6 +288,57 @@ export default function MyAccount() {
           </CardContent>
         </Card>
       </div>
+
+      {/* بطاقة حساب المسوق — تظهر إذا كان المستخدم مسوقاً مرتبطاً */}
+      {marketerAccount && (
+        <Card className="mb-6 border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 dark:border-emerald-800" data-testid="card-marketer-account">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-full bg-emerald-600 flex items-center justify-center">
+                  <Megaphone className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <p className="font-bold text-emerald-800 dark:text-emerald-300 text-sm">حسابي التسويقي</p>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400">مسوّق معتمد</p>
+                </div>
+              </div>
+              <Link href="/marketer/dashboard">
+                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1" data-testid="button-go-marketer-dashboard">
+                  لوحة التحكم
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-white dark:bg-card rounded-lg p-2 text-center border border-emerald-100 dark:border-emerald-800">
+                <Tag className="h-4 w-4 mx-auto mb-1 text-emerald-600" />
+                <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">{marketerAccount.couponCode}</p>
+                <p className="text-[10px] text-muted-foreground">كوبونك</p>
+              </div>
+              <div className="bg-white dark:bg-card rounded-lg p-2 text-center border border-emerald-100 dark:border-emerald-800">
+                <Wallet className="h-4 w-4 mx-auto mb-1 text-emerald-600" />
+                <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">{parseFloat(marketerAccount.walletBalance || '0').toLocaleString()} ر.ي</p>
+                <p className="text-[10px] text-muted-foreground">رصيدك</p>
+              </div>
+              <div className="bg-white dark:bg-card rounded-lg p-2 text-center border border-emerald-100 dark:border-emerald-800">
+                <TrendingUp className="h-4 w-4 mx-auto mb-1 text-emerald-600" />
+                <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">{marketerAccount.totalOrders || 0}</p>
+                <p className="text-[10px] text-muted-foreground">طلباتك</p>
+              </div>
+            </div>
+            {!marketerAccount.contractAcceptedAt && (
+              <div className="mt-3 flex items-center gap-2 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-2">
+                <span className="text-yellow-600 text-lg">⚠️</span>
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-yellow-800 dark:text-yellow-300">لم تقبل عقد الشراكة بعد</p>
+                  <p className="text-[10px] text-yellow-600">سجّل دخولك للوحة المسوّق لقبول العقد</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tabs Content */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

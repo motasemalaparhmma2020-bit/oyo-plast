@@ -751,6 +751,7 @@ export const standaloneMarketers = pgTable("standalone_marketers", {
   totalOrders: integer("total_orders").default(0),
   isActive: boolean("is_active").default(true).notNull(),
   notes: text("notes"),
+  contractAcceptedAt: timestamp("contract_accepted_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -1133,3 +1134,24 @@ export const insertConversationSchema = createInsertSchema(conversations).omit({
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, createdAt: true });
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+
+// ─── جدول العقود الرقمية (مسوقين، موردين، موظفين) ──────────────────────────
+export const digitalContracts = pgTable("digital_contracts", {
+  id: serial("id").primaryKey(),
+  contractType: text("contract_type").notNull(), // marketer | supplier | staff | other
+  partyId: text("party_id").notNull(),           // ID المسوق/المورد/الموظف
+  partyName: text("party_name").notNull(),
+  partyPhone: text("party_phone"),
+  contractTitle: text("contract_title").notNull(),
+  contractText: text("contract_text").notNull(),
+  status: text("status").default("pending").notNull(), // pending | accepted | rejected | expired
+  acceptedAt: timestamp("accepted_at"),
+  acceptedIp: text("accepted_ip"),
+  adminSignedAt: timestamp("admin_signed_at"),
+  adminNotes: text("admin_notes"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type DigitalContract = typeof digitalContracts.$inferSelect;
+export const insertDigitalContractSchema = createInsertSchema(digitalContracts).omit({ id: true, createdAt: true, acceptedAt: true, adminSignedAt: true });

@@ -3350,6 +3350,21 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   // منظومة المسوقين المستقلين — تسجيل + لوحة + إدارة
   // ═══════════════════════════════════════════════════════════════════
 
+  const MARKETER_CONTRACT_TEXT = `عقد شراكة تسويقية — أويو بلاست
+
+الأطراف: شركة أويو بلاست (الطرف الأول) والمسوق (الطرف الثاني).
+
+البنود:
+1. يلتزم المسوق بالترويج لمنتجات أويو بلاست عبر قنواته الرسمية المسجلة فقط.
+2. يحصل المسوق على عمولة محددة عن كل طلب مكتمل باستخدام كوبونه الخاص.
+3. يُصرف الرصيد بناءً على طلب السحب بعد التحقق من اكتمال الطلبات.
+4. يحق للشركة تعليق الحساب عند مخالفة سياسة الاستخدام أو الترويج المضلل.
+5. يتعهد المسوق بعدم الإفصاح عن تفاصيل العمولة لأطراف ثالثة.
+6. تُحسب العمولة على القيمة الإجمالية للطلب بعد خصم التوصيل.
+7. هذا العقد ساري ويُجدَّد تلقائياً ما لم يُوقَف الحساب.
+
+بالموافقة الرقمية، يُقرّ المسوق بقراءة هذه البنود والالتزام بها كاملاً.`;
+
   // ── middleware مصادقة المسوق ──────────────────────────────────────
   async function requireMarketer(req: Request, res: Response, next: NextFunction) {
     const { pool: dbPool } = await import("./db");
@@ -3408,8 +3423,60 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       couponCode: m.coupon_code, commissionRate: m.commission_rate,
       discountRate: m.discount_rate, walletBalance: m.wallet_balance,
       totalEarnings: m.total_earnings, totalOrders: m.total_orders,
-      isActive: m.is_active,
+      isActive: m.is_active, contractAcceptedAt: m.contract_accepted_at,
+      contractText: MARKETER_CONTRACT_TEXT,
     });
+  });
+
+  // ── حساب المسوق المرتبط بالمستخدم الحالي (بالهاتف) ──────────────
+  app.get("/api/marketer/linked-account", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const userId = (req as any).user?.claims?.sub;
+      if (!userId) return res.json(null);
+      const userRow = await dbPool.query("SELECT phone FROM users WHERE id=$1", [userId]);
+      if (!userRow.rows.length || !userRow.rows[0].phone) return res.json(null);
+      const phone = userRow.rows[0].phone;
+      const r = await dbPool.query(
+        `SELECT id, name, phone, coupon_code, commission_rate, discount_rate,
+                wallet_balance, total_earnings, total_orders, is_active, contract_accepted_at
+         FROM standalone_marketers WHERE phone=$1 AND is_active=true`,
+        [phone]
+      );
+      if (!r.rows.length) return res.json(null);
+      const m = r.rows[0];
+      res.json({
+        id: m.id, name: m.name, phone: m.phone,
+        couponCode: m.coupon_code, commissionRate: m.commission_rate,
+        discountRate: m.discount_rate, walletBalance: m.wallet_balance,
+        totalEarnings: m.total_earnings, totalOrders: m.total_orders,
+        contractAcceptedAt: m.contract_accepted_at,
+      });
+    } catch (e: any) {
+      res.json(null);
+    }
+  });
+
+  // ── قبول عقد المسوق ──────────────────────────────────────────────
+  app.post("/api/marketer/accept-contract", requireMarketer, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const m = (req as any).marketer;
+      const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
+      await dbPool.query(
+        "UPDATE standalone_marketers SET contract_accepted_at=NOW() WHERE id=$1",
+        [m.id]
+      );
+      await dbPool.query(
+        `INSERT INTO digital_contracts (contract_type, party_id, party_name, party_phone, contract_title, contract_text, status, accepted_at, accepted_ip)
+         VALUES ('marketer', $1, $2, $3, 'عقد شراكة تسويقية', $4, 'accepted', NOW(), $5)
+         ON CONFLICT DO NOTHING`,
+        [String(m.id), m.name, m.phone, MARKETER_CONTRACT_TEXT, String(ip)]
+      );
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حفظ قبول العقد" });
+    }
   });
 
   // ── 4. إحصائيات لوحة التحكم ──────────────────────────────────────
@@ -3663,6 +3730,87 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         [status, adminNotes || null, id]
       );
       res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // العقود الرقمية — إدارة + قبول
+  // ═══════════════════════════════════════════════════════════════════
+
+  app.get("/api/admin/digital-contracts", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { type } = req.query;
+      const where = type ? "WHERE contract_type=$1" : "";
+      const params = type ? [type] : [];
+      const r = await dbPool.query(
+        `SELECT * FROM digital_contracts ${where} ORDER BY created_at DESC`,
+        params
+      );
+      res.json(r.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب العقود" });
+    }
+  });
+
+  app.post("/api/admin/digital-contracts", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { contractType, partyId, partyName, partyPhone, contractTitle, contractText, expiresAt } = req.body;
+      if (!contractType || !partyId || !partyName || !contractTitle || !contractText)
+        return res.status(400).json({ message: "البيانات الأساسية مطلوبة" });
+      const r = await dbPool.query(
+        `INSERT INTO digital_contracts (contract_type, party_id, party_name, party_phone, contract_title, contract_text, status, admin_signed_at, expires_at)
+         VALUES ($1,$2,$3,$4,$5,$6,'pending', NOW(), $7) RETURNING *`,
+        [contractType, String(partyId), partyName, partyPhone || null, contractTitle, contractText, expiresAt || null]
+      );
+      res.json(r.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إنشاء العقد" });
+    }
+  });
+
+  app.patch("/api/admin/digital-contracts/:id", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { status, adminNotes } = req.body;
+      const id = parseInt(req.params.id);
+      await dbPool.query(
+        "UPDATE digital_contracts SET status=COALESCE($1,status), admin_notes=COALESCE($2,admin_notes) WHERE id=$3",
+        [status || null, adminNotes || null, id]
+      );
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل التحديث" });
+    }
+  });
+
+  // قبول العقد من صفحة الطرف المعني (رابط الكوبون)
+  app.post("/api/digital-contracts/:id/accept", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const id = parseInt(req.params.id);
+      const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
+      const r = await dbPool.query(
+        "UPDATE digital_contracts SET status='accepted', accepted_at=NOW(), accepted_ip=$1 WHERE id=$2 AND status='pending' RETURNING *",
+        [String(ip), id]
+      );
+      if (!r.rows.length) return res.status(404).json({ message: "العقد غير موجود أو مقبول مسبقاً" });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  app.get("/api/digital-contracts/:id", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const id = parseInt(req.params.id);
+      const r = await dbPool.query("SELECT * FROM digital_contracts WHERE id=$1", [id]);
+      if (!r.rows.length) return res.status(404).json({ message: "العقد غير موجود" });
+      res.json(r.rows[0]);
     } catch (e: any) {
       res.status(500).json({ message: "فشل" });
     }

@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import {
   Users, CheckCircle, XCircle, Clock, Wallet, Eye, Plus, Pencil,
-  ChevronDown, ChevronUp, ExternalLink, AlertCircle,
+  ChevronDown, ChevronUp, ExternalLink, AlertCircle, FileText, Copy, UserPlus,
 } from "lucide-react";
 
 function adminFetch(path: string, adminToken: string, options: RequestInit = {}) {
@@ -47,6 +47,21 @@ const CHANNEL_LABELS: Record<string, string> = {
 // ═══════════════════════════════════════════════════════
 // قسم طلبات الانضمام
 // ═══════════════════════════════════════════════════════
+const MARKETER_CONTRACT_TEXT = `عقد شراكة تسويقية — أويو بلاست
+
+الأطراف: شركة أويو بلاست (الطرف الأول) والمسوق (الطرف الثاني).
+
+البنود:
+1. يلتزم المسوق بالترويج لمنتجات أويو بلاست عبر قنواته الرسمية المسجلة فقط.
+2. يحصل المسوق على عمولة محددة عن كل طلب مكتمل باستخدام كوبونه الخاص.
+3. يُصرف الرصيد بناءً على طلب السحب بعد التحقق من اكتمال الطلبات.
+4. يحق للشركة تعليق الحساب عند مخالفة سياسة الاستخدام أو الترويج المضلل.
+5. يتعهد المسوق بعدم الإفصاح عن تفاصيل العمولة لأطراف ثالثة.
+6. تُحسب العمولة على القيمة الإجمالية للطلب بعد خصم التوصيل.
+7. هذا العقد ساري ويُجدَّد تلقائياً ما لم يُوقَف الحساب.
+
+بالموافقة الرقمية، يُقرّ المسوق بقراءة هذه البنود والالتزام بها كاملاً.`;
+
 function ApplicationsTab({ adminToken }: { adminToken: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -54,6 +69,7 @@ function ApplicationsTab({ adminToken }: { adminToken: string }) {
   const [approveForm, setApproveForm] = useState({ pin: "1234", couponCode: "", commissionRate: "5", discountRate: "5" });
   const [rejectDlg, setRejectDlg] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [showContract, setShowContract] = useState(false);
 
   const { data: apps = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/marketer-applications"],
@@ -153,8 +169,8 @@ function ApplicationsTab({ adminToken }: { adminToken: string }) {
       )}
 
       {/* ── Approve Dialog */}
-      <Dialog open={!!approveDlg} onOpenChange={() => setApproveDlg(null)}>
-        <DialogContent dir="rtl" className="max-w-md">
+      <Dialog open={!!approveDlg} onOpenChange={() => { setApproveDlg(null); setShowContract(false); }}>
+        <DialogContent dir="rtl" className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>قبول طلب — {approveDlg?.name}</DialogTitle>
           </DialogHeader>
@@ -199,15 +215,62 @@ function ApplicationsTab({ adminToken }: { adminToken: string }) {
                 />
               </div>
             </div>
+
+            {/* معلومات ترسلها للمسوق */}
+            {approveForm.couponCode && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                <p className="text-xs font-bold text-emerald-800 mb-1 flex items-center gap-1">
+                  <Copy className="w-3 h-3" /> الرسالة التي ترسلها للمسوق (واتساب)
+                </p>
+                <pre className="text-xs text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
+{`مرحباً ${approveDlg?.name}،
+تمت الموافقة على انضمامك كمسوق في أويو بلاست 🎉
+
+رابط لوحتك: oyoplast.com/marketer/login
+📱 هاتفك: ${approveDlg?.phone}
+🔑 رقمك السري: ${approveForm.pin}
+🏷️ كوبونك: ${approveForm.couponCode}
+💰 عمولتك: ${approveForm.commissionRate}%
+🎁 خصم عملائك: ${approveForm.discountRate}%
+
+رابطك التسويقي الخاص:
+oyoplast.com/m/${approveForm.couponCode}`}
+                </pre>
+              </div>
+            )}
+
+            {/* بنود العقد */}
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <button
+                type="button"
+                className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 text-sm font-medium"
+                onClick={() => setShowContract(!showContract)}
+                data-testid="button-toggle-contract"
+              >
+                <span className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-blue-600" />
+                  عرض بنود عقد الشراكة
+                </span>
+                {showContract ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+              {showContract && (
+                <div className="p-3 bg-white border-t">
+                  <pre className="text-xs text-gray-700 whitespace-pre-wrap font-sans leading-relaxed max-h-40 overflow-y-auto">
+                    {MARKETER_CONTRACT_TEXT}
+                  </pre>
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setApproveDlg(null)}>إلغاء</Button>
+              <Button variant="outline" onClick={() => { setApproveDlg(null); setShowContract(false); }}>إلغاء</Button>
               <Button
                 data-testid="button-confirm-approve"
                 disabled={processApp.isPending}
                 className="bg-emerald-600 hover:bg-emerald-700"
                 onClick={() => processApp.mutate({ id: approveDlg.id, status: "approved", ...approveForm })}
               >
-                {processApp.isPending ? "جارٍ القبول..." : "تأكيد القبول"}
+                {processApp.isPending ? "جارٍ القبول..." : "تأكيد القبول وإرسال العقد"}
               </Button>
             </div>
           </div>
@@ -591,10 +654,131 @@ function WithdrawalsTab({ adminToken }: { adminToken: string }) {
 }
 
 // ═══════════════════════════════════════════════════════
+// قسم إضافة مسوق مباشرة
+// ═══════════════════════════════════════════════════════
+function DirectCreateTab({ adminToken }: { adminToken: string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({ name: "", phone: "", city: "", channel: "whatsapp", channelHandle: "", pin: "1234", couponCode: "", commissionRate: "5", discountRate: "5", notes: "" });
+
+  const createMutation = useMutation({
+    mutationFn: (data: typeof form) =>
+      adminFetch("/api/admin/marketers", adminToken, { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: (data: any) => {
+      toast({ title: `✅ تم إنشاء حساب ${form.name} بنجاح` });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/marketers"] });
+      setForm({ name: "", phone: "", city: "", channel: "whatsapp", channelHandle: "", pin: "1234", couponCode: "", commissionRate: "5", discountRate: "5", notes: "" });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+
+  const f = (k: keyof typeof form, v: string) => setForm({ ...form, [k]: v });
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        <UserPlus className="w-5 h-5 text-blue-600 shrink-0" />
+        <p className="text-sm text-blue-800">أضف مسوقاً مباشرة بدون انتظار طلب تسجيل</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label className="text-sm mb-1 block">الاسم الكامل *</Label>
+          <Input value={form.name} onChange={e => f("name", e.target.value)} placeholder="أحمد محمد" data-testid="input-direct-name" />
+        </div>
+        <div>
+          <Label className="text-sm mb-1 block">رقم الهاتف *</Label>
+          <Input value={form.phone} onChange={e => f("phone", e.target.value)} placeholder="07xxxxxxxx" data-testid="input-direct-phone" />
+        </div>
+        <div>
+          <Label className="text-sm mb-1 block">المدينة</Label>
+          <Input value={form.city} onChange={e => f("city", e.target.value)} placeholder="صنعاء" />
+        </div>
+        <div>
+          <Label className="text-sm mb-1 block">القناة التسويقية</Label>
+          <Select value={form.channel} onValueChange={v => f("channel", v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="whatsapp">واتساب</SelectItem>
+              <SelectItem value="instagram">إنستغرام</SelectItem>
+              <SelectItem value="tiktok">تيك توك</SelectItem>
+              <SelectItem value="facebook">فيسبوك</SelectItem>
+              <SelectItem value="youtube">يوتيوب</SelectItem>
+              <SelectItem value="other">أخرى</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-sm mb-1 block">كود الكوبون * (حروف كبيرة)</Label>
+          <Input value={form.couponCode} onChange={e => f("couponCode", e.target.value.toUpperCase())} placeholder="AHMED20" className="uppercase" data-testid="input-direct-coupon" />
+        </div>
+        <div>
+          <Label className="text-sm mb-1 block">الرقم السري (PIN) *</Label>
+          <Input value={form.pin} onChange={e => f("pin", e.target.value)} placeholder="1234" maxLength={8} data-testid="input-direct-pin" />
+        </div>
+        <div>
+          <Label className="text-sm mb-1 block">عمولة المسوق %</Label>
+          <Input type="number" value={form.commissionRate} onChange={e => f("commissionRate", e.target.value)} min="1" max="30" />
+        </div>
+        <div>
+          <Label className="text-sm mb-1 block">خصم العميل %</Label>
+          <Input type="number" value={form.discountRate} onChange={e => f("discountRate", e.target.value)} min="1" max="30" />
+        </div>
+      </div>
+      <div>
+        <Label className="text-sm mb-1 block">ملاحظات (اختياري)</Label>
+        <Textarea value={form.notes} onChange={e => f("notes", e.target.value)} rows={2} placeholder="أي ملاحظات إضافية..." />
+      </div>
+
+      {/* معاينة رسالة واتساب */}
+      {form.name && form.couponCode && form.pin && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+          <p className="text-xs font-bold text-emerald-800 mb-2 flex items-center gap-1">
+            <Copy className="w-3 h-3" /> رسالة واتساب جاهزة للإرسال
+          </p>
+          <pre className="text-xs text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
+{`مرحباً ${form.name}،
+تمت إضافتك كمسوق في أويو بلاست 🎉
+
+رابط لوحتك: oyoplast.com/marketer/login
+📱 هاتفك: ${form.phone}
+🔑 رقمك السري: ${form.pin}
+🏷️ كوبونك: ${form.couponCode}
+💰 عمولتك: ${form.commissionRate}%
+🎁 خصم عملائك: ${form.discountRate}%
+
+رابطك التسويقي:
+oyoplast.com/m/${form.couponCode}`}
+          </pre>
+          <button
+            type="button"
+            className="mt-2 text-xs text-emerald-700 underline"
+            onClick={() => {
+              navigator.clipboard.writeText(`مرحباً ${form.name}،\nتمت إضافتك كمسوق في أويو بلاست 🎉\n\nرابط لوحتك: oyoplast.com/marketer/login\n📱 هاتفك: ${form.phone}\n🔑 رقمك السري: ${form.pin}\n🏷️ كوبونك: ${form.couponCode}\n💰 عمولتك: ${form.commissionRate}%\n🎁 خصم عملائك: ${form.discountRate}%\n\nرابطك التسويقي:\noyoplast.com/m/${form.couponCode}`);
+            }}
+          >
+            📋 نسخ الرسالة
+          </button>
+        </div>
+      )}
+
+      <Button
+        data-testid="button-create-marketer-direct"
+        disabled={createMutation.isPending || !form.name || !form.phone || !form.couponCode || !form.pin}
+        className="w-full bg-emerald-600 hover:bg-emerald-700"
+        onClick={() => createMutation.mutate(form)}
+      >
+        {createMutation.isPending ? "جارٍ الإنشاء..." : "إنشاء حساب المسوق"}
+      </Button>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
 // المكوّن الرئيسي
 // ═══════════════════════════════════════════════════════
 export function AdminMarketers({ adminToken }: { adminToken: string }) {
-  const [activeTab, setActiveTab] = useState<"applications" | "marketers" | "withdrawals">("applications");
+  const [activeTab, setActiveTab] = useState<"applications" | "marketers" | "withdrawals" | "create">("applications");
 
   const { data: apps = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/marketer-applications"],
@@ -612,6 +796,7 @@ export function AdminMarketers({ adminToken }: { adminToken: string }) {
     { id: "applications" as const, label: "طلبات الانضمام", badge: pendingApps },
     { id: "marketers" as const, label: "المسوقون المعتمدون", badge: 0 },
     { id: "withdrawals" as const, label: "طلبات السحب", badge: pendingW },
+    { id: "create" as const, label: "➕ إضافة مسوق", badge: 0 },
   ];
 
   return (
@@ -654,6 +839,7 @@ export function AdminMarketers({ adminToken }: { adminToken: string }) {
         {activeTab === "applications" && <ApplicationsTab adminToken={adminToken} />}
         {activeTab === "marketers" && <MarketersListTab adminToken={adminToken} />}
         {activeTab === "withdrawals" && <WithdrawalsTab adminToken={adminToken} />}
+        {activeTab === "create" && <DirectCreateTab adminToken={adminToken} />}
       </div>
     </div>
   );
