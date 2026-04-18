@@ -477,6 +477,23 @@ export class DatabaseStorage implements IStorage {
           price = prod?.price ?? "0";
         }
 
+        // جلب اسم المنتج وصورته من قاعدة البيانات لحفظها مع الطلب
+        let productName: string | null = item.productName ?? (item as any).product_name ?? item.name ?? null;
+        let productImage: string | null = item.productImage ?? (item as any).product_image ?? null;
+        if (!productName || !productImage) {
+          const [prodInfo] = await tx
+            .select({ name: products.name, imageUrls: products.imageUrls })
+            .from(products)
+            .where(eq(products.id, pid))
+            .limit(1);
+          if (prodInfo) {
+            if (!productName) productName = prodInfo.name;
+            if (!productImage && prodInfo.imageUrls && prodInfo.imageUrls.length > 0) {
+              productImage = prodInfo.imageUrls[0];
+            }
+          }
+        }
+
         await tx.insert(orderItems).values({
           orderId: order.id,
           productId: pid,
@@ -484,9 +501,16 @@ export class DatabaseStorage implements IStorage {
           price,
           selectedSize: item.selectedSize ?? (item as any).selected_size ?? null,
           selectedColor: item.selectedColor ?? (item as any).selected_color ?? null,
+          selectedBagColor: item.selectedBagColor ?? (item as any).selected_bag_color ?? null,
+          printColorCount: item.printColorCount ?? (item as any).print_color_count ?? 0,
+          printColor1: item.printColor1 ?? (item as any).print_color_1 ?? null,
+          printColor2: item.printColor2 ?? (item as any).print_color_2 ?? null,
+          printColor3: item.printColor3 ?? (item as any).print_color_3 ?? null,
           customPrinting: item.customPrinting ?? (item as any).custom_printing ?? false,
           designNotes: item.designNotes ?? (item as any).design_notes ?? null,
           designFileUrl: item.designFileUrl ?? (item as any).design_file_url ?? null,
+          productName,
+          productImage,
         });
       }
 

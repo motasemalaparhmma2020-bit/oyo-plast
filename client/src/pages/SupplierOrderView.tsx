@@ -161,38 +161,101 @@ export default function SupplierOrderView() {
           </CardContent>
         </Card>
 
-        {/* Products */}
+        {/* Products — فاتورة كاملة بالصور والتفاصيل */}
         <Card className="shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <ShoppingBag className="h-4 w-4 text-primary" />
-              المنتجات ({items.length} صنف)
+              الفاتورة التفصيلية ({items.length} صنف)
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-0">
-            {items.map((item: any, i: number) => (
-              <div key={i} className="flex items-start justify-between gap-2 py-2.5 border-b last:border-0">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm leading-snug">{item.product_name}</p>
-                  {item.selected_options && Object.keys(item.selected_options).length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {Object.entries(item.selected_options).map(([k, v]) => `${k}: ${v}`).join(" | ")}
+          <CardContent className="p-0">
+            {items.map((item: any, i: number) => {
+              const imgSrc = item.product_image ||
+                (item.product_id ? `/api/products/image/${item.product_id}/0` : null);
+              const itemTotal = Number(item.price) * Number(item.quantity);
+              const attrs: string[] = [];
+              if (item.selected_color) attrs.push(`اللون: ${item.selected_color}`);
+              if (item.selected_bag_color) attrs.push(`لون الكيس: ${item.selected_bag_color}`);
+              if (item.selected_size) attrs.push(`المقاس: ${item.selected_size}`);
+              if (item.print_color_count > 0) attrs.push(`طباعة ${item.print_color_count} لون`);
+              if (item.print_color_1) attrs.push(item.print_color_1);
+              if (item.design_notes) attrs.push(`ملاحظة التصميم: ${item.design_notes}`);
+              return (
+                <div
+                  key={i}
+                  className="flex gap-3 p-3 border-b last:border-0 hover:bg-gray-50/50 transition-colors"
+                  data-testid={`item-row-${i}`}
+                >
+                  {/* صورة المنتج */}
+                  <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-gray-100 border">
+                    {imgSrc ? (
+                      <img
+                        src={imgSrc}
+                        alt={item.product_name || "منتج"}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='50%25' font-size='24' text-anchor='middle' dy='.3em'%3E📦%3C/text%3E%3C/svg%3E";
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-2xl text-gray-300">
+                        📦
+                      </div>
+                    )}
+                  </div>
+
+                  {/* تفاصيل المنتج */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm leading-snug text-gray-800" data-testid={`item-name-${i}`}>
+                      {item.product_name || "منتج غير محدد"}
                     </p>
-                  )}
-                  {item.custom_text && (
-                    <p className="text-xs text-blue-600 mt-0.5">نص مخصص: {item.custom_text}</p>
-                  )}
+                    {attrs.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {attrs.map((attr, ai) => (
+                          <span key={ai} className="text-xs bg-blue-50 text-blue-700 border border-blue-100 rounded px-1.5 py-0.5">
+                            {attr}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {item.design_file_url && (
+                      <a href={item.design_file_url} target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-primary underline mt-0.5 block">
+                        📎 ملف التصميم
+                      </a>
+                    )}
+                  </div>
+
+                  {/* الكمية والسعر */}
+                  <div className="shrink-0 text-left space-y-1">
+                    <Badge
+                      variant="secondary"
+                      className="text-sm font-bold block text-center min-w-[36px]"
+                      data-testid={`badge-qty-${i}`}
+                    >
+                      ×{item.quantity}
+                    </Badge>
+                    <p className="text-xs text-muted-foreground text-center whitespace-nowrap">
+                      {Number(item.price).toLocaleString("ar")}
+                    </p>
+                    <p className="text-xs font-bold text-primary text-center whitespace-nowrap">
+                      {itemTotal.toLocaleString("ar")} {currency}
+                    </p>
+                  </div>
                 </div>
-                <div className="text-left shrink-0 space-y-0.5">
-                  <Badge variant="secondary" className="text-xs block text-center" data-testid={`badge-qty-${i}`}>
-                    × {item.quantity}
-                  </Badge>
-                  <p className="text-xs text-muted-foreground text-center">
-                    {Number(Number(item.price) * Number(item.quantity)).toLocaleString()} {currency}
-                  </p>
-                </div>
+              );
+            })}
+
+            {/* مجموع الأصناف */}
+            <div className="p-3 bg-gray-50 border-t">
+              <div className="flex justify-between text-sm font-medium">
+                <span className="text-muted-foreground">مجموع المنتجات</span>
+                <span>
+                  {items.reduce((s, it) => s + Number(it.price) * Number(it.quantity), 0).toLocaleString("ar")} {currency}
+                </span>
               </div>
-            ))}
+            </div>
           </CardContent>
         </Card>
 

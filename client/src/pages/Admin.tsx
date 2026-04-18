@@ -4961,6 +4961,7 @@ export default function Admin() {
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
   const [orderItems, setOrderItems] = useState<OrderItemWithName[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
+  const [openStatusGroups, setOpenStatusGroups] = useState<Set<string>>(new Set(["pending", "deposit_paid", "processing"]));
   const [exchangeRate, setExchangeRate] = useState("140");
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -5836,87 +5837,153 @@ export default function Admin() {
           <TabsList style={{ display: "none" }} />
 
           <TabsContent value="orders">
-            <Card>
-              <CardHeader>
-                <CardTitle>إدارة الطلبات</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {ordersLoading ? (
-                  <div className="flex justify-center py-10">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            {ordersLoading ? (
+              <div className="flex justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : !orders || orders.length === 0 ? (
+              <div className="text-center py-16 text-muted-foreground">
+                <ShoppingBag className="h-12 w-12 mx-auto mb-4 opacity-40" />
+                <p>لا توجد طلبات بعد</p>
+              </div>
+            ) : (() => {
+              const payLabel = (pm: string | null | undefined) => {
+                if (!pm) return '—';
+                return pm === 'karimi' ? '🏦 الكريمي'
+                  : pm === 'najm' ? '🏦 النجم'
+                  : pm === 'cash_on_delivery' ? '💵 استلام'
+                  : pm === 'bank_transfer' ? '🏦 تحويل'
+                  : pm === 'digital_wallet' ? '📱 محفظة'
+                  : pm === 'jawal' ? '📱 جوالي'
+                  : pm === 'installment_deposit_cod' ? '💳 تقسيط'
+                  : pm;
+              };
+              const STATUS_GROUPS = [
+                { status: 'pending',      emoji: '⏳', label: 'قيد الانتظار',   bgCls: 'bg-yellow-50', borderCls: 'border-yellow-300', textCls: 'text-yellow-800' },
+                { status: 'deposit_paid', emoji: '💳', label: 'تم دفع العربون', bgCls: 'bg-blue-50',   borderCls: 'border-blue-300',   textCls: 'text-blue-800'   },
+                { status: 'processing',   emoji: '🔧', label: 'قيد التجهيز',    bgCls: 'bg-orange-50', borderCls: 'border-orange-300', textCls: 'text-orange-800' },
+                { status: 'shipped',      emoji: '🚚', label: 'تم الشحن',        bgCls: 'bg-indigo-50', borderCls: 'border-indigo-300', textCls: 'text-indigo-800' },
+                { status: 'delivered',    emoji: '✅', label: 'تم التوصيل',     bgCls: 'bg-teal-50',   borderCls: 'border-teal-300',   textCls: 'text-teal-800'   },
+                { status: 'completed',    emoji: '🎉', label: 'مكتمل',           bgCls: 'bg-green-50',  borderCls: 'border-green-300',  textCls: 'text-green-800'  },
+                { status: 'cancelled',    emoji: '❌', label: 'ملغي',            bgCls: 'bg-red-50',    borderCls: 'border-red-300',    textCls: 'text-red-800'    },
+              ];
+              const toggleGroup = (s: string) => setOpenStatusGroups(prev => {
+                const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n;
+              });
+              return (
+                <div className="space-y-3">
+                  {/* ── شريط الإحصاء السريع ── */}
+                  <div className="grid grid-cols-4 md:grid-cols-7 gap-2">
+                    {STATUS_GROUPS.map(g => {
+                      const cnt = orders.filter(o => o.status === g.status).length;
+                      if (!cnt) return null;
+                      const isOpen = openStatusGroups.has(g.status);
+                      return (
+                        <button
+                          key={g.status}
+                          onClick={() => toggleGroup(g.status)}
+                          className={`rounded-xl border-2 p-2 text-center transition-all hover:opacity-90 ${isOpen ? `${g.bgCls} ${g.borderCls} ${g.textCls}` : 'bg-white border-gray-200 text-gray-400'}`}
+                          data-testid={`btn-status-summary-${g.status}`}
+                        >
+                          <p className="text-xl">{g.emoji}</p>
+                          <p className="font-bold text-lg leading-none">{cnt}</p>
+                          <p className="text-xs leading-tight mt-0.5">{g.label}</p>
+                        </button>
+                      );
+                    })}
                   </div>
-                ) : orders && orders.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-right">رقم الطلب</TableHead>
-                          <TableHead className="text-right">العميل</TableHead>
-                          <TableHead className="text-right">المدينة</TableHead>
-                          <TableHead className="text-right">الإجمالي</TableHead>
-                          <TableHead className="text-right">طريقة الدفع</TableHead>
-                          <TableHead className="text-right">الحالة</TableHead>
-                          <TableHead className="text-right">التاريخ</TableHead>
-                          <TableHead className="text-right">إجراءات</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {orders.map((order) => {
-                          const status = statusMap[order.status] || statusMap.pending;
-                          const StatusIcon = status.icon;
-                          return (
-                            <TableRow key={order.id}>
-                              <TableCell className="font-medium">#{order.id}</TableCell>
-                              <TableCell>{order.customerPhone || '-'}</TableCell>
-                              <TableCell>{order.shippingCity || '-'}</TableCell>
-                              <TableCell className="font-bold">{formatPrice(order.total)} ر.ي</TableCell>
-                              <TableCell>
-                                {order.paymentMethod === 'karimi' && 'الكريمي'}
-                                {order.paymentMethod === 'najm' && 'النجم'}
-                                {order.paymentMethod === 'cash_on_delivery' && 'عند الاستلام'}
-                                {!order.paymentMethod && '-'}
-                              </TableCell>
-                              <TableCell>
-                                <Badge className={`${status.color} gap-1`}>
-                                  <StatusIcon className="h-3 w-3" />
-                                  {status.label}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-sm">{formatDate(order.createdAt)}</TableCell>
-                              <TableCell>
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => handleOpenInvoice(order, "customer")}
-                                    disabled={loadingItems}
-                                    title="فاتورة العميل"
-                                    data-testid={`button-admin-customer-invoice-${order.id}`}
-                                    className="text-primary hover:text-primary"
-                                  >
-                                    {loadingItems ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                                  </Button>
-                                  <Button 
-                                    size="icon" 
-                                    variant="ghost" 
-                                    onClick={() => handleOpenInvoice(order, "delivery")}
-                                    disabled={loadingItems}
-                                    title="بوليصة التوصيل"
-                                    data-testid={`button-admin-print-invoice-${order.id}`}
-                                    className="text-orange-500 hover:text-orange-600"
-                                  >
-                                    {loadingItems ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <Truck className="h-4 w-4" />
-                                    )}
-                                  </Button>
-                                  <Dialog onOpenChange={(open) => { if (!open) setSelectedOrder(null); }}>
-                                    <DialogTrigger asChild>
-                                      <Button size="icon" variant="ghost" onClick={() => setSelectedOrder(order)} data-testid={`button-order-detail-${order.id}`}>
-                                        <Eye className="h-4 w-4" />
+
+                  {/* ── مجموعات الطلبات القابلة للطي ── */}
+                  {STATUS_GROUPS.map(group => {
+                    const groupOrders = orders.filter(o => o.status === group.status);
+                    if (!groupOrders.length) return null;
+                    const isOpen = openStatusGroups.has(group.status);
+                    const groupTotal = groupOrders.reduce((s, o) => s + Number(o.total || 0), 0);
+                    return (
+                      <Card key={group.status} className={`overflow-hidden border-2 ${group.borderCls} shadow-sm`}>
+                        {/* رأس المجموعة */}
+                        <button
+                          className={`w-full flex items-center justify-between px-4 py-3 ${group.bgCls} hover:opacity-90 transition-all`}
+                          onClick={() => toggleGroup(group.status)}
+                          data-testid={`btn-toggle-group-${group.status}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">{group.emoji}</span>
+                            <div className="text-right">
+                              <p className={`font-bold ${group.textCls}`}>{group.label}</p>
+                              <p className="text-xs text-gray-500">{groupOrders.length} طلب · المجموع: {formatPrice(groupTotal)} ر.ي</p>
+                            </div>
+                          </div>
+                          <ChevronDown className={`h-5 w-5 ${group.textCls} transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {/* قائمة الطلبات */}
+                        {isOpen && (
+                          <div className="divide-y">
+                            {groupOrders.map((order) => {
+                              const status = statusMap[order.status] || statusMap.pending;
+                              const StatusIcon = status.icon;
+                              return (
+                                <div key={order.id} className="p-3 hover:bg-gray-50/60 transition-colors">
+                                  <div className="flex items-center gap-2">
+                                    {/* رقم الطلب */}
+                                    <div className="shrink-0 text-center w-10 hidden sm:block">
+                                      <p className="text-[10px] text-gray-400">رقم</p>
+                                      <p className="font-bold text-primary text-sm">#{order.id}</p>
+                                    </div>
+
+                                    {/* بيانات العميل */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="font-bold text-[11px] text-gray-400 sm:hidden">#{order.id}</span>
+                                        <p className="font-semibold text-sm">{order.customerName || '—'}</p>
+                                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 shrink-0">{payLabel(order.paymentMethod)}</Badge>
+                                      </div>
+                                      <div className="flex gap-3 text-xs text-muted-foreground mt-0.5 flex-wrap">
+                                        <span>📱 {order.customerPhone || '—'}</span>
+                                        <span>📍 {order.shippingCity || '—'}</span>
+                                      </div>
+                                      {order.shippingAddress && (
+                                        <p className="text-[11px] text-muted-foreground truncate mt-0.5">🏠 {order.shippingAddress}</p>
+                                      )}
+                                    </div>
+
+                                    {/* المبلغ والتاريخ */}
+                                    <div className="shrink-0 text-left hidden sm:block">
+                                      <p className="font-bold text-sm text-primary">{formatPrice(order.total)} ر.ي</p>
+                                      <p className="text-[11px] text-muted-foreground">{formatDate(order.createdAt)}</p>
+                                    </div>
+
+                                    {/* الإجراءات */}
+                                    <div className="flex gap-0.5 shrink-0">
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => handleOpenInvoice(order, "customer")}
+                                        disabled={loadingItems}
+                                        title="فاتورة العميل"
+                                        data-testid={`button-admin-customer-invoice-${order.id}`}
+                                        className="text-primary hover:text-primary h-8 w-8"
+                                      >
+                                        {loadingItems ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
                                       </Button>
-                                    </DialogTrigger>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => handleOpenInvoice(order, "delivery")}
+                                        disabled={loadingItems}
+                                        title="بوليصة التوصيل"
+                                        data-testid={`button-admin-print-invoice-${order.id}`}
+                                        className="text-orange-500 hover:text-orange-600 h-8 w-8"
+                                      >
+                                        {loadingItems ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Truck className="h-3.5 w-3.5" />}
+                                      </Button>
+                                      <Dialog onOpenChange={(open) => { if (!open) setSelectedOrder(null); }}>
+                                        <DialogTrigger asChild>
+                                          <Button size="icon" variant="ghost" onClick={() => setSelectedOrder(order)} data-testid={`button-order-detail-${order.id}`} className="h-8 w-8">
+                                            <Eye className="h-3.5 w-3.5" />
+                                          </Button>
+                                        </DialogTrigger>
                                     <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto" dir="rtl">
                                       <DialogHeader className="border-b pb-3">
                                         <DialogTitle className="flex items-center gap-2 text-lg">
@@ -6102,23 +6169,25 @@ export default function Admin() {
 
                                       </div>
                                     </DialogContent>
-                                  </Dialog>
+                                      </Dialog>
+                                    </div>
+                                  </div>
+                                  {/* المبلغ والتاريخ على الجوال */}
+                                  <div className="flex items-center justify-between mt-1.5 sm:hidden">
+                                    <span className="text-xs text-muted-foreground">{formatDate(order.createdAt)}</span>
+                                    <span className="font-bold text-sm text-primary">{formatPrice(order.total)} ر.ي</span>
+                                  </div>
                                 </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : (
-                  <div className="text-center py-10 text-muted-foreground">
-                    <ShoppingBag className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>لا توجد طلبات بعد</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </Card>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </TabsContent>
 
           <TabsContent value="products">

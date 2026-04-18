@@ -751,7 +751,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const order = orderRes.rows[0];
 
       const itemsRes = await dbPool.query(
-        `SELECT * FROM order_items WHERE order_id = $1 ORDER BY id ASC`,
+        `SELECT oi.*,
+                COALESCE(oi.product_name, p.name) AS product_name,
+                COALESCE(oi.product_image, p.image_urls[1]) AS product_image
+         FROM order_items oi
+         LEFT JOIN products p ON oi.product_id = p.id
+         WHERE oi.order_id = $1
+         ORDER BY oi.id ASC`,
         [order.id]
       );
       res.json({ order, items: itemsRes.rows });
