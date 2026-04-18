@@ -4209,6 +4209,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
              'categoryId', p.category_id,
              'sizes', p.sizes,
              'colors', p.colors,
+             'sizePricing', p.size_pricing,
              'description', p.description
            ) AS product
          FROM cart_items ci

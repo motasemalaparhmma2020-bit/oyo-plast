@@ -296,7 +296,16 @@ export default function Cart() {
                   unit={unit}
                   quantity={item.quantity}
                   description={(item.product as any)?.description}
-                  selectedSize={item.selectedSize || (item.product as any)?.sizes?.[0] || null}
+                  selectedSize={(() => {
+                    if (item.selectedSize) return item.selectedSize;
+                    const p: any = item.product;
+                    if (p?.sizes?.[0]) return p.sizes[0];
+                    try {
+                      const sp = typeof p?.sizePricing === 'string' ? JSON.parse(p.sizePricing) : p?.sizePricing;
+                      if (Array.isArray(sp) && sp[0]?.size) return sp[0].size;
+                    } catch {}
+                    return null;
+                  })()}
                   selectedColor={item.selectedColor || (item.product as any)?.colors?.[0] || null}
                   selectedBagColor={item.selectedBagColor}
                   printColor1={item.printColor1}
