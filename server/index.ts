@@ -171,25 +171,14 @@ async function startServer() {
       });
     });
 
-    // Run DB migrations at runtime (not build time)
-    await runMigrations();
-
-    // Now initialize routes
+    // ── سجّل المسارات أولاً قبل أي شيء قد يفشل (مثل الترحيلات) ──
     console.log("[INFO] Registering routes...");
-    await registerRoutes(httpServer, app);
-    console.log("[SUCCESS] Routes registered");
-
-    // ── بدء خدمة النسخ الاحتياطي التلقائي ──────────────────────────────
     try {
-      const { startAutoCron } = await import("./backup-service");
-      startAutoCron();
-      console.log("[SUCCESS] Auto backup cron service started");
+      await registerRoutes(httpServer, app);
+      console.log("[SUCCESS] Routes registered");
     } catch (err: any) {
-      console.warn("[WARN] Could not start backup cron:", err.message);
+      console.error("[ERROR] Failed to register routes:", err.message);
     }
-
-    // ── أطلق الحارس المؤقت: المسارات جاهزة ──
-    serverReady = true;
 
     // Error handler
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -199,11 +188,15 @@ async function startServer() {
       res.status(status).json({ message });
     });
 
-    // Setup static files or vite
+    // ── سجّل خدمة الملفات الثابتة فوراً حتى لا تحدث صفحة بيضاء أبداً ──
     if (process.env.NODE_ENV === "production") {
       console.log("[INFO] Setting up production static file serving...");
-      serveStatic(app);
-      console.log("[SUCCESS] Static file serving ready");
+      try {
+        serveStatic(app);
+        console.log("[SUCCESS] Static file serving ready");
+      } catch (err: any) {
+        console.error("[ERROR] Static serving failed:", err.message);
+      }
     } else {
       console.log("[INFO] Setting up Vite development server...");
       const { setupVite } = await import("./vite");
@@ -211,8 +204,27 @@ async function startServer() {
       console.log("[SUCCESS] Vite dev server ready");
     }
 
+    // ── أطلق حارس /api: المسارات جاهزة لاستقبال الطلبات ──
+    serverReady = true;
+
     console.log("[SUCCESS] Application ready to accept requests");
     console.log("[INFO] Oyo Plast server is running!");
+
+    // ── شغّل الترحيلات في الخلفية بعد جاهزية الموقع (لا تعطل البدء) ──
+    runMigrations()
+      .then(() => console.log("[SUCCESS] Background migrations finished"))
+      .catch((err) => console.error("[WARN] Background migrations error:", err?.message || err));
+
+    // ── ابدأ خدمة النسخ الاحتياطي بعد الجاهزية ──
+    setTimeout(async () => {
+      try {
+        const { startAutoCron } = await import("./backup-service");
+        startAutoCron();
+        console.log("[SUCCESS] Auto backup cron service started");
+      } catch (err: any) {
+        console.warn("[WARN] Could not start backup cron:", err.message);
+      }
+    }, 5000);
 
   } catch (error) {
     console.error("[FATAL] Failed to start server:", error instanceof Error ? error.message : String(error));
