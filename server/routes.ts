@@ -425,7 +425,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await dbPool.query("UPDATE orders SET supplier_token=$1, supplier_status='pending' WHERE id=$2", [supplierToken, orderId]);
 
       // جلب تفاصيل المنتجات من الطلب
-      const itemsRes = await dbPool.query("SELECT product_name, quantity, price, unit FROM order_items WHERE order_id=$1 ORDER BY id ASC", [orderId]);
+      const itemsRes = await dbPool.query("SELECT product_name, quantity, price FROM order_items WHERE order_id=$1 ORDER BY id ASC", [orderId]);
       const itemsLines = itemsRes.rows.map((it: any) =>
         `  • ${it.product_name} × ${it.quantity} — ${Number(it.price * it.quantity).toLocaleString()} ${orderData.currency || "ر.ي"}`
       ).join("\n");
