@@ -5,7 +5,19 @@
 
 **الشعار الجديد**: أويو بلاست - لطباعة ومستلزمات البلاستيك
 
-## Recent Changes (April 2026 — Latest)
+## Recent Changes (April 2026 — Latest — منظومة المسوقين)
+- **3 جداول جديدة**: `marketer_applications` + `standalone_marketers` + `marketer_withdrawal_requests` (مصادقة هاتف + PIN مستقلة عن Replit)
+- **حقول جديدة على orders**: `marketer_table_id` + `marketer_commission_amount` + `marketer_commission_paid`
+- **15 API جديد**: apply, login, me, stats, orders, coupons, withdrawals (للمسوق) + admin CRUD (طلبات، مسوقون، سحوبات)
+- **coupon validate محدّث**: يتحقق أولاً من كوبونات `standalone_marketers` قبل جدول coupons
+- **ربط تلقائي بالطلب**: عند إنشاء طلب بكوبون مسوق، يحسب العمولة ويسجلها تلقائياً
+- **صفحة الانضمام** `/join-marketer`: MarketerApply.tsx — فورم انضمام عام مع hero + فوائد + قنوات
+- **صفحة الدخول** `/marketer/login`: MarketerLogin.tsx — هاتف + PIN، token يُحفظ في localStorage
+- **لوحة الأرباح** `/marketer/dashboard`: MarketerDashboard.tsx — 4 إحصائيات + كوبون share card + جدول طلبات + سحب أرباح
+- **تبويب الأدمن الجديد "المسوّقون"**: AdminMarketers.tsx — 3 أقسام (طلبات انضمام، مسوقون، سحوبات)
+- **AdminNav محدّث**: إضافة Megaphone بند "المسوّقون" في مجموعة "الموردون والفريق" مع badge "جديد"
+
+## Recent Changes (April 2026 — Previous Latest)
 - **أقسام الأدمن القابلة للطي**: مكوّن `CollapsibleSection` مع حفظ الحالة في localStorage — يطبّق على 6 أقسام في DisplaySettingsSection: إعدادات صفحة المنتج (أزرق)، الخطوط وتصميم الواجهة (بنفسجي)، تحكم البنرات والعروض (أزرق/سماوي)، سديم الذكية (بنفسجي/نيلي)، زر واتساب العائم (أخضر)، إعدادات الدفع والشحن (أخضر/زمرد) — مطوية افتراضياً عند الدخول، تتذكر الحالة بين الجلسات
 
 ## Recent Changes (April 2026 — Previous Latest)

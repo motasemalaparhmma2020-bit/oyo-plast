@@ -168,6 +168,9 @@ export const orders = pgTable("orders", {
   supplierNotified: boolean("supplier_notified").default(false), // هل أُرسل له إشعار؟
   supplierToken: text("supplier_token"),               // رمز خاص لبوابة المورد (رابط بدون تسجيل دخول)
   supplierStatus: text("supplier_status").default("pending"), // pending|accepted|shipped|delivered|cancelled
+  marketerTableId: integer("marketer_table_id"),       // ID المسوق المستقل الذي جاء عبر كوبونه
+  marketerCommissionAmount: numeric("marketer_commission_amount"), // مبلغ عمولة المسوق
+  marketerCommissionPaid: boolean("marketer_commission_paid").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -711,6 +714,59 @@ export const coupons = pgTable("coupons", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ─── جداول منظومة المسوقين المستقلين ─────────────────────────────────────────
+
+// طلبات الانضمام (العامة — قبل الموافقة)
+export const marketerApplications = pgTable("marketer_applications", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  phone: text("phone").notNull(),
+  city: text("city").notNull(),
+  channel: text("channel").notNull(), // whatsapp | tiktok | instagram | youtube | other
+  channelHandle: text("channel_handle"),   // @username أو رابط
+  audienceSize: text("audience_size"),     // small | medium | large
+  message: text("message"),
+  status: text("status").default("pending").notNull(), // pending | approved | rejected
+  rejectionReason: text("rejection_reason"),
+  createdAt: timestamp("created_at").defaultNow(),
+  processedAt: timestamp("processed_at"),
+});
+
+// حسابات المسوقين المعتمدين (مصادقة هاتف + PIN)
+export const standaloneMarketers = pgTable("standalone_marketers", {
+  id: serial("id").primaryKey(),
+  applicationId: integer("application_id"),
+  name: text("name").notNull(),
+  phone: text("phone").notNull().unique(),
+  city: text("city"),
+  channel: text("channel"),
+  channelHandle: text("channel_handle"),
+  pin: text("pin").notNull().default("1234"),
+  token: text("token").unique(),           // جلسة المصادقة
+  couponCode: text("coupon_code").unique(), // الكوبون الرئيسي
+  commissionRate: numeric("commission_rate").default("5"), // عمولة المسوق %
+  discountRate: numeric("discount_rate").default("5"),     // خصم العميل %
+  walletBalance: numeric("wallet_balance").default("0"),
+  totalEarnings: numeric("total_earnings").default("0"),
+  totalOrders: integer("total_orders").default(0),
+  isActive: boolean("is_active").default(true).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// طلبات سحب الأرباح
+export const marketerWithdrawalRequests = pgTable("marketer_withdrawal_requests", {
+  id: serial("id").primaryKey(),
+  marketerId: integer("marketer_id").notNull(), // references standaloneMarketers.id
+  amount: numeric("amount").notNull(),
+  paymentMethod: text("payment_method").notNull(), // bank | jawal | kash | cash
+  paymentDetails: text("payment_details"),         // رقم الحساب أو تفاصيل الدفع
+  status: text("status").default("pending").notNull(), // pending | approved | paid | rejected
+  adminNotes: text("admin_notes"),
+  requestedAt: timestamp("requested_at").defaultNow(),
+  processedAt: timestamp("processed_at"),
+});
+
 // ─── جداول نظام التقسيط ───────────────────────────────────────────────────────
 export const installmentPlans = pgTable("installment_plans", {
   id: serial("id").primaryKey(),
@@ -840,6 +896,9 @@ export const insertMarketerProfileSchema = createInsertSchema(marketerProfiles).
 export const insertEndCustomerContactSchema = createInsertSchema(endCustomerContacts).omit({ id: true, createdAt: true });
 export const insertMarketerCommissionSchema = createInsertSchema(marketerCommissions).omit({ id: true, createdAt: true });
 export const insertCouponSchema = createInsertSchema(coupons).omit({ id: true, createdAt: true, usageCount: true });
+export const insertMarketerApplicationSchema = createInsertSchema(marketerApplications).omit({ id: true, createdAt: true, processedAt: true, status: true });
+export const insertStandaloneMarketerSchema = createInsertSchema(standaloneMarketers).omit({ id: true, createdAt: true, token: true });
+export const insertMarketerWithdrawalSchema = createInsertSchema(marketerWithdrawalRequests).omit({ id: true, requestedAt: true, processedAt: true, status: true, adminNotes: true });
 export const insertInstallmentPlanSchema = createInsertSchema(installmentPlans).omit({ id: true, createdAt: true });
 export type InstallmentPlan = typeof installmentPlans.$inferSelect;
 
@@ -985,6 +1044,9 @@ export type EndCustomerContact = typeof endCustomerContacts.$inferSelect;
 export type MarketerCommission = typeof marketerCommissions.$inferSelect;
 export type ProductView = typeof productViews.$inferSelect;
 export type Coupon = typeof coupons.$inferSelect;
+export type MarketerApplication = typeof marketerApplications.$inferSelect;
+export type StandaloneMarketer = typeof standaloneMarketers.$inferSelect;
+export type MarketerWithdrawalRequest = typeof marketerWithdrawalRequests.$inferSelect;
 export type NavigationSettings = typeof navigationSettings.$inferSelect;
 export type HomePageSettings = typeof homePageSettings.$inferSelect;
 export type DisplaySettings = typeof displaySettings.$inferSelect;

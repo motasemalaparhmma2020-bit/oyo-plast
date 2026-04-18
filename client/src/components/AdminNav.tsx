@@ -3,7 +3,7 @@ import {
   Settings, Printer, Wallet, LayoutDashboard, UserCog, MessageSquareWarning,
   Users, Receipt, Handshake, SplitSquareVertical, TrendingUp, ShieldAlert,
   Star, Layers, BadgeCheck, ClipboardCheck, ChevronDown, ChevronUp,
-  FileText, HardDrive, PrinterCheck
+  FileText, HardDrive, PrinterCheck, Megaphone
 } from "lucide-react";
 import { useState } from "react";
 
@@ -38,6 +38,7 @@ export const adminNavItems: AdminNavItem[] = [
   { id: "login-management", label: "إدارة الدخول", icon: <UserCog />, color: "from-violet-400 to-violet-600" },
   { id: "sms-test", label: "فحص الرسائل SMS", icon: <MessageSquareWarning />, color: "from-sky-400 to-sky-600" },
   { id: "suppliers", label: "الموردون والموزعون", icon: <Handshake />, color: "from-cyan-400 to-cyan-600" },
+  { id: "marketers", label: "المسوّقون", icon: <Megaphone />, color: "from-emerald-400 to-teal-600" },
   { id: "supplier-products", label: "منتجات الموردين", icon: <ClipboardCheck />, color: "from-lime-500 to-green-600" },
   { id: "installments", label: "التقسيط والمدفوعات", icon: <SplitSquareVertical />, color: "from-amber-400 to-orange-600" },
   { id: "payment-verify", label: "التحقق من الدفع", icon: <BadgeCheck />, color: "from-green-400 to-emerald-600" },
@@ -98,6 +99,7 @@ const navGroups: AdminNavGroup[] = [
     groupColor: "border-cyan-200 bg-cyan-50 dark:bg-cyan-950/30 dark:border-cyan-800",
     items: [
       { id: "suppliers", label: "الموردون والموزعون", icon: <Handshake className="h-6 w-6" />, color: "from-cyan-400 to-cyan-600" },
+      { id: "marketers", label: "المسوّقون", icon: <Megaphone className="h-6 w-6" />, color: "from-emerald-400 to-teal-600", badge: "جديد" },
       { id: "team", label: "إدارة الفريق", icon: <Users className="h-6 w-6" />, color: "from-emerald-400 to-emerald-600" },
       { id: "reviews", label: "تقييمات العملاء", icon: <Star className="h-6 w-6" />, color: "from-yellow-400 to-yellow-600" },
     ],

@@ -67,6 +67,9 @@ import StaffPortal from "@/pages/StaffPortal";
 import SupplierPortal from "@/pages/SupplierPortal";
 import SupplierOrderView from "@/pages/SupplierOrderView";
 import MarketerLanding from "@/pages/MarketerLanding";
+import MarketerApply from "@/pages/MarketerApply";
+import MarketerLogin from "@/pages/MarketerLogin";
+import MarketerDashboard from "@/pages/MarketerDashboard";
 import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
@@ -544,6 +547,9 @@ function Router() {
             <Route path="/supplier" component={SupplierPortal} />
             <Route path="/supplier/order/:token" component={SupplierOrderView} />
             <Route path="/m/:code" component={MarketerLanding} />
+            <Route path="/join-marketer" component={MarketerApply} />
+            <Route path="/marketer/login" component={MarketerLogin} />
+            <Route path="/marketer/dashboard" component={MarketerDashboard} />
             <Route path="/orders">
               <RequireAccountType><Orders /></RequireAccountType>
             </Route>

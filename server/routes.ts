@@ -2200,6 +2200,30 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         } catch { /* non-fatal */ }
       }
 
+      // ربط عمولة المسوق المستقل تلقائياً إذا استُخدم كوبونه
+      if (couponCode) {
+        try {
+          const { pool: mPool } = await import("./db");
+          const smR = await mPool.query(
+            `SELECT id, commission_rate FROM standalone_marketers WHERE coupon_code=$1 AND is_active=true`,
+            [couponCode.toUpperCase()]
+          );
+          if (smR.rows.length) {
+            const sm = smR.rows[0];
+            const commission = (Number(total) * Number(sm.commission_rate)) / 100;
+            await mPool.query(
+              `UPDATE orders SET marketer_table_id=$1, marketer_commission_amount=$2 WHERE id=$3`,
+              [sm.id, commission.toFixed(2), order.id]
+            );
+            // تحديث عداد الطلبات للمسوق
+            await mPool.query(
+              `UPDATE standalone_marketers SET total_orders=total_orders+1 WHERE id=$1`,
+              [sm.id]
+            );
+          }
+        } catch { /* non-fatal */ }
+      }
+
       logOrderCreation(order.id, {
         customerName,
         customerPhone,
@@ -3299,12 +3323,352 @@ h1{font-size:18px;color:#222;margin:4px 0;}
     }
   });
 
+  // ═══════════════════════════════════════════════════════════════════
+  // منظومة المسوقين المستقلين — تسجيل + لوحة + إدارة
+  // ═══════════════════════════════════════════════════════════════════
+
+  // ── middleware مصادقة المسوق ──────────────────────────────────────
+  async function requireMarketer(req: Request, res: Response, next: NextFunction) {
+    const { pool: dbPool } = await import("./db");
+    const token = req.headers["x-marketer-token"] as string;
+    if (!token) return res.status(401).json({ message: "يجب تسجيل الدخول" });
+    const r = await dbPool.query("SELECT * FROM standalone_marketers WHERE token=$1 AND is_active=true", [token]);
+    if (!r.rows.length) return res.status(401).json({ message: "جلسة منتهية أو غير صالحة" });
+    (req as any).marketer = r.rows[0];
+    next();
+  }
+
+  // ── 1. طلب الانضمام (عام، بدون مصادقة) ──────────────────────────
+  app.post("/api/marketer/apply", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { name, phone, city, channel, channelHandle, audienceSize, message } = req.body;
+      if (!name || !phone || !city || !channel) return res.status(400).json({ message: "اسمك، هاتفك، مدينتك، والقناة مطلوبة" });
+      // منع التكرار بالهاتف
+      const dup = await dbPool.query("SELECT id FROM marketer_applications WHERE phone=$1 AND status='pending'", [phone]);
+      if (dup.rows.length) return res.status(409).json({ message: "يوجد طلب مسبق بهذا الهاتف في قيد المراجعة" });
+      const result = await dbPool.query(
+        `INSERT INTO marketer_applications (name, phone, city, channel, channel_handle, audience_size, message)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        [name, phone.trim(), city, channel, channelHandle || null, audienceSize || null, message || null]
+      );
+      res.json({ success: true, id: result.rows[0].id, message: "تم إرسال طلبك بنجاح! سيتواصل معك فريقنا خلال 24-48 ساعة" });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إرسال الطلب" });
+    }
+  });
+
+  // ── 2. تسجيل الدخول (هاتف + PIN) ─────────────────────────────────
+  app.post("/api/marketer/login", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const crypto = await import("crypto");
+      const { phone, pin } = req.body;
+      if (!phone || !pin) return res.status(400).json({ message: "الهاتف والرقم السري مطلوبان" });
+      const r = await dbPool.query("SELECT * FROM standalone_marketers WHERE phone=$1 AND pin=$2 AND is_active=true", [phone.trim(), pin]);
+      if (!r.rows.length) return res.status(401).json({ message: "رقم الهاتف أو الرقم السري غير صحيح" });
+      const token = crypto.randomBytes(32).toString("hex");
+      await dbPool.query("UPDATE standalone_marketers SET token=$1 WHERE id=$2", [token, r.rows[0].id]);
+      const marketer = { ...r.rows[0], token };
+      res.json({ token, marketer: { id: marketer.id, name: marketer.name, phone: marketer.phone, couponCode: marketer.coupon_code } });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تسجيل الدخول" });
+    }
+  });
+
+  // ── 3. بيانات المسوق الحالي ───────────────────────────────────────
+  app.get("/api/marketer/me", requireMarketer, async (req, res) => {
+    const m = (req as any).marketer;
+    res.json({
+      id: m.id, name: m.name, phone: m.phone, city: m.city,
+      channel: m.channel, channelHandle: m.channel_handle,
+      couponCode: m.coupon_code, commissionRate: m.commission_rate,
+      discountRate: m.discount_rate, walletBalance: m.wallet_balance,
+      totalEarnings: m.total_earnings, totalOrders: m.total_orders,
+      isActive: m.is_active,
+    });
+  });
+
+  // ── 4. إحصائيات لوحة التحكم ──────────────────────────────────────
+  app.get("/api/marketer/stats", requireMarketer, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const m = (req as any).marketer;
+      // طلبات شهر الحالي
+      const monthOrders = await dbPool.query(
+        `SELECT COUNT(*) as cnt, COALESCE(SUM(marketer_commission_amount),0) as earned
+         FROM orders WHERE marketer_table_id=$1 AND created_at >= date_trunc('month', NOW())`,
+        [m.id]
+      );
+      // طلبات بانتظار الصرف (غير مدفوع)
+      const pendingPay = await dbPool.query(
+        `SELECT COALESCE(SUM(marketer_commission_amount),0) as pending
+         FROM orders WHERE marketer_table_id=$1 AND marketer_commission_paid=false AND status IN ('delivered','completed')`,
+        [m.id]
+      );
+      res.json({
+        walletBalance: Number(m.wallet_balance),
+        totalEarnings: Number(m.total_earnings),
+        totalOrders: Number(m.total_orders),
+        monthOrders: Number(monthOrders.rows[0].cnt),
+        monthEarnings: Number(monthOrders.rows[0].earned),
+        pendingPayout: Number(pendingPay.rows[0].pending),
+        couponCode: m.coupon_code,
+        commissionRate: Number(m.commission_rate),
+        discountRate: Number(m.discount_rate),
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الإحصائيات" });
+    }
+  });
+
+  // ── 5. طلبات المسوق (عبر كوبونه) ─────────────────────────────────
+  app.get("/api/marketer/orders", requireMarketer, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const m = (req as any).marketer;
+      const result = await dbPool.query(
+        `SELECT id, customer_name, shipping_city, total, status, coupon_code,
+                marketer_commission_amount, marketer_commission_paid, created_at
+         FROM orders WHERE marketer_table_id=$1
+         ORDER BY created_at DESC LIMIT 100`,
+        [m.id]
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الطلبات" });
+    }
+  });
+
+  // ── 6. كوبونات المسوق ─────────────────────────────────────────────
+  app.get("/api/marketer/coupons", requireMarketer, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const m = (req as any).marketer;
+      // الكوبون الرئيسي للمسوق
+      const main = m.coupon_code ? [{
+        id: 0,
+        code: m.coupon_code,
+        discountPercent: Number(m.discount_rate),
+        commissionPercent: Number(m.commission_rate),
+        isMain: true,
+        usageCount: Number(m.total_orders),
+        link: `https://oyoplast.com/m/${m.coupon_code}`,
+      }] : [];
+      res.json(main);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  // ── 7. طلبات السحب ────────────────────────────────────────────────
+  app.get("/api/marketer/withdrawals", requireMarketer, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const m = (req as any).marketer;
+      const result = await dbPool.query(
+        "SELECT * FROM marketer_withdrawal_requests WHERE marketer_id=$1 ORDER BY requested_at DESC",
+        [m.id]
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  // ── 8. إنشاء طلب سحب ─────────────────────────────────────────────
+  app.post("/api/marketer/withdrawals", requireMarketer, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const m = (req as any).marketer;
+      const { amount, paymentMethod, paymentDetails } = req.body;
+      if (!amount || Number(amount) <= 0) return res.status(400).json({ message: "المبلغ غير صالح" });
+      if (Number(amount) > Number(m.wallet_balance)) return res.status(400).json({ message: "المبلغ أكبر من رصيدك" });
+      if (!paymentMethod) return res.status(400).json({ message: "طريقة الدفع مطلوبة" });
+      // تحقق من عدم وجود طلب معلق
+      const pending = await dbPool.query("SELECT id FROM marketer_withdrawal_requests WHERE marketer_id=$1 AND status='pending'", [m.id]);
+      if (pending.rows.length) return res.status(409).json({ message: "لديك طلب سحب في قيد المعالجة" });
+      await dbPool.query(
+        `INSERT INTO marketer_withdrawal_requests (marketer_id, amount, payment_method, payment_details)
+         VALUES ($1,$2,$3,$4)`,
+        [m.id, amount, paymentMethod, paymentDetails || null]
+      );
+      res.json({ success: true, message: "تم إرسال طلب السحب بنجاح" });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إرسال طلب السحب" });
+    }
+  });
+
+  // ── Admin: طلبات الانضمام ─────────────────────────────────────────
+  app.get("/api/admin/marketer-applications", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query("SELECT * FROM marketer_applications ORDER BY created_at DESC");
+      res.json(r.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  app.patch("/api/admin/marketer-applications/:id/status", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { status, pin, couponCode, commissionRate, discountRate, rejectionReason } = req.body;
+      const id = parseInt(req.params.id);
+      if (!["approved", "rejected"].includes(status)) return res.status(400).json({ message: "حالة غير صالحة" });
+
+      const appRes = await dbPool.query("SELECT * FROM marketer_applications WHERE id=$1", [id]);
+      if (!appRes.rows.length) return res.status(404).json({ message: "الطلب غير موجود" });
+      const app_ = appRes.rows[0];
+
+      if (status === "approved") {
+        if (!couponCode || !pin) return res.status(400).json({ message: "كود الكوبون والرقم السري مطلوبان" });
+        // تحقق من تفرد الكوبون والهاتف
+        const dupPhone = await dbPool.query("SELECT id FROM standalone_marketers WHERE phone=$1", [app_.phone]);
+        if (dupPhone.rows.length) return res.status(409).json({ message: "مسوق بهذا الهاتف موجود مسبقاً" });
+        const dupCoupon = await dbPool.query("SELECT id FROM standalone_marketers WHERE coupon_code=$1", [couponCode.toUpperCase()]);
+        if (dupCoupon.rows.length) return res.status(409).json({ message: "كود الكوبون مستخدم مسبقاً" });
+        // إنشاء حساب المسوق
+        await dbPool.query(
+          `INSERT INTO standalone_marketers (application_id, name, phone, city, channel, channel_handle, pin, coupon_code, commission_rate, discount_rate)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+          [id, app_.name, app_.phone, app_.city, app_.channel, app_.channel_handle,
+           pin, couponCode.toUpperCase(), commissionRate || 5, discountRate || 5]
+        );
+      }
+
+      await dbPool.query(
+        "UPDATE marketer_applications SET status=$1, rejection_reason=$2, processed_at=NOW() WHERE id=$3",
+        [status, rejectionReason || null, id]
+      );
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "فشل" });
+    }
+  });
+
+  // ── Admin: المسوقون ───────────────────────────────────────────────
+  app.get("/api/admin/marketers", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(
+        `SELECT m.*, 
+                (SELECT COUNT(*) FROM orders o WHERE o.marketer_table_id=m.id) as actual_orders,
+                (SELECT COALESCE(SUM(o.marketer_commission_amount),0) FROM orders o WHERE o.marketer_table_id=m.id AND o.marketer_commission_paid=false AND o.status IN ('delivered','completed')) as pending_payout
+         FROM standalone_marketers m ORDER BY m.created_at DESC`
+      );
+      res.json(r.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  app.post("/api/admin/marketers", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { name, phone, city, channel, channelHandle, pin, couponCode, commissionRate, discountRate, notes } = req.body;
+      if (!name || !phone || !pin || !couponCode) return res.status(400).json({ message: "الاسم، الهاتف، PIN، وكود الكوبون مطلوبة" });
+      const r = await dbPool.query(
+        `INSERT INTO standalone_marketers (name, phone, city, channel, channel_handle, pin, coupon_code, commission_rate, discount_rate, notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+        [name, phone, city || null, channel || null, channelHandle || null,
+         pin, couponCode.toUpperCase(), commissionRate || 5, discountRate || 5, notes || null]
+      );
+      res.json(r.rows[0]);
+    } catch (e: any) {
+      if (e.code === "23505") return res.status(409).json({ message: "الهاتف أو الكوبون مستخدم مسبقاً" });
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  app.patch("/api/admin/marketers/:id", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { name, phone, pin, couponCode, commissionRate, discountRate, isActive, notes, walletBalance } = req.body;
+      const id = parseInt(req.params.id);
+      await dbPool.query(
+        `UPDATE standalone_marketers SET
+           name=COALESCE($1,name), phone=COALESCE($2,phone), pin=COALESCE($3,pin),
+           coupon_code=COALESCE($4,coupon_code), commission_rate=COALESCE($5,commission_rate),
+           discount_rate=COALESCE($6,discount_rate), is_active=COALESCE($7,is_active),
+           notes=COALESCE($8,notes), wallet_balance=COALESCE($9,wallet_balance)
+         WHERE id=$10`,
+        [name||null, phone||null, pin||null, couponCode?couponCode.toUpperCase():null,
+         commissionRate||null, discountRate||null, isActive!=null?isActive:null,
+         notes||null, walletBalance!=null?walletBalance:null, id]
+      );
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  // ── Admin: طلبات السحب ────────────────────────────────────────────
+  app.get("/api/admin/marketer-withdrawals", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(
+        `SELECT w.*, m.name as marketer_name, m.phone as marketer_phone, m.wallet_balance
+         FROM marketer_withdrawal_requests w
+         JOIN standalone_marketers m ON w.marketer_id=m.id
+         ORDER BY w.requested_at DESC`
+      );
+      res.json(r.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  app.patch("/api/admin/marketer-withdrawals/:id", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { status, adminNotes } = req.body;
+      const id = parseInt(req.params.id);
+      const wRes = await dbPool.query("SELECT * FROM marketer_withdrawal_requests WHERE id=$1", [id]);
+      if (!wRes.rows.length) return res.status(404).json({ message: "الطلب غير موجود" });
+      const w = wRes.rows[0];
+      if (!["approved", "paid", "rejected"].includes(status)) return res.status(400).json({ message: "حالة غير صالحة" });
+      // إذا دُفع → اخصم من المحفظة
+      if (status === "paid" && w.status !== "paid") {
+        await dbPool.query(
+          "UPDATE standalone_marketers SET wallet_balance=GREATEST(0,wallet_balance-$1) WHERE id=$2",
+          [w.amount, w.marketer_id]
+        );
+      }
+      await dbPool.query(
+        "UPDATE marketer_withdrawal_requests SET status=$1, admin_notes=$2, processed_at=NOW() WHERE id=$3",
+        [status, adminNotes || null, id]
+      );
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
   // التحقق من كود الكوبون (للمسوقين وغيرهم)
   app.post("/api/coupons/validate", async (req, res) => {
     try {
       const { code } = req.body;
       if (!code) return res.status(400).json({ message: "الرجاء إدخال كود الكوبون" });
       const { pool: dbPool } = await import("./db");
+
+      // أولاً: تحقق من كوبونات المسوقين المستقلين
+      const smRes = await dbPool.query(
+        `SELECT * FROM standalone_marketers WHERE coupon_code=$1 AND is_active=true`,
+        [code.toUpperCase()]
+      );
+      if (smRes.rows.length) {
+        const sm = smRes.rows[0];
+        return res.json({
+          code: sm.coupon_code,
+          discountPercent: Number(sm.discount_rate),
+          marketerCommission: Number(sm.commission_rate),
+          marketerTableId: sm.id,
+          type: "standalone_marketer",
+        });
+      }
+
+      // ثانياً: كوبونات النظام القديم
       const result = await dbPool.query(
         `SELECT * FROM coupons WHERE code=$1 AND is_active=true AND (expires_at IS NULL OR expires_at > NOW())`,
         [code.toUpperCase()]
@@ -3318,6 +3682,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         discountPercent: coupon.discount_percent,
         marketerCommission: coupon.marketer_commission_percent,
         marketerId: coupon.marketer_id,
+        type: "coupon",
       });
     } catch (e: any) {
       res.status(500).json({ message: "فشل التحقق من الكوبون" });
