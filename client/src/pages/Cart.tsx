@@ -269,8 +269,8 @@ export default function Cart() {
                   price={displayPrice}
                   unit={unit}
                   quantity={item.quantity}
-                  selectedSize={item.selectedSize}
-                  selectedColor={item.selectedColor}
+                  selectedSize={item.selectedSize || (item.product as any)?.sizes?.[0] || null}
+                  selectedColor={item.selectedColor || (item.product as any)?.colors?.[0] || null}
                   selectedBagColor={item.selectedBagColor}
                   printColor1={item.printColor1}
                   printColor2={item.printColor2}

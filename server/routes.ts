@@ -4172,7 +4172,9 @@ h1{font-size:18px;color:#222;margin:4px 0;}
              'priceSar', p.price_sar,
              'imageUrl', CASE WHEN p.image_url LIKE 'data:%' THEN '/api/products/image/' || p.id ELSE p.image_url END,
              'stock', p.stock,
-             'categoryId', p.category_id
+             'categoryId', p.category_id,
+             'sizes', p.sizes,
+             'colors', p.colors
            ) AS product
          FROM cart_items ci
          LEFT JOIN products p ON p.id = ci.product_id
