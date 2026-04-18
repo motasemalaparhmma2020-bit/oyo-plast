@@ -420,7 +420,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const rawPhone = (supplier.phone || "").replace(/\s+/g, "").replace(/^00/, "+");
       if (!rawPhone) return { ok: false, channel: "whatsapp", error: "رقم المورد فارغ" };
 
-      const msg = `📦 *طلب جديد مُوكَّل إليك!*\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: *#${orderId}*\n👤 العميل: ${orderData.customerName || "—"}\n📱 الجوال: ${orderData.customerPhone || "—"}\n📍 المدينة: ${orderData.shippingCity || "—"}\n💰 المبلغ المستحق لك: *${Number(orderData.supplierAmount || 0).toLocaleString()} ${orderData.currency || "ر.ي"}*\n━━━━━━━━━━━━━━━━━━━━━\n_أويو بلاست | oyoplast.com_`;
+      // توليد رمز خاص لبوابة المورد وحفظه
+      const supplierToken = crypto.randomBytes(20).toString("hex");
+      await dbPool.query("UPDATE orders SET supplier_token=$1, supplier_status='pending' WHERE id=$2", [supplierToken, orderId]);
+
+      // جلب تفاصيل المنتجات من الطلب
+      const itemsRes = await dbPool.query("SELECT product_name, quantity, price, unit FROM order_items WHERE order_id=$1 ORDER BY id ASC", [orderId]);
+      const itemsLines = itemsRes.rows.map((it: any) =>
+        `  • ${it.product_name} × ${it.quantity} — ${Number(it.price * it.quantity).toLocaleString()} ${orderData.currency || "ر.ي"}`
+      ).join("\n");
+
+      const portalUrl = `https://oyoplast.com/supplier/order/${supplierToken}`;
+      const totalItems = itemsRes.rows.reduce((s: number, it: any) => s + Number(it.quantity), 0);
+
+      const msg = `📦 *طلب جديد مُوكَّل إليك!*\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: *#${orderId}*\n👤 العميل: ${orderData.customerName || "—"}\n📱 الجوال: ${orderData.customerPhone || "—"}\n📍 المدينة: ${orderData.shippingCity || "—"}\n📦 عدد المنتجات: ${totalItems} وحدة\n${itemsLines ? itemsLines + "\n" : ""}💰 *المبلغ المستحق لك: ${Number(orderData.supplierAmount || 0).toLocaleString()} ${orderData.currency || "ر.ي"}*\n━━━━━━━━━━━━━━━━━━━━━\n🔗 *استعرض الطلب وأكّد استلامه:*\n${portalUrl}\n━━━━━━━━━━━━━━━━━━━━━\n_أويو بلاست_`;
 
       // المحاولة الأولى: UltraMSG (واتساب)
       const ultraResult = await sendUltraMsg(rawPhone, msg);
@@ -716,7 +729,100 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // لوحة أداء المورد
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  بوابة المورد — PUBLIC (بدون تسجيل دخول، مؤمّنة برمز)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // GET /api/supplier/order/:token — تفاصيل الطلب للمورد
+  app.get("/api/supplier/order/:token", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const token = req.params.token;
+      if (!token || token.length < 16) return res.status(400).json({ message: "رمز غير صالح" });
+
+      const orderRes = await dbPool.query(
+        `SELECT o.*, s.name as supplier_name, s.phone as supplier_phone
+         FROM orders o
+         LEFT JOIN suppliers s ON o.supplier_id = s.id
+         WHERE o.supplier_token = $1`,
+        [token]
+      );
+      if (!orderRes.rows.length) return res.status(404).json({ message: "الطلب غير موجود أو الرابط منتهي الصلاحية" });
+      const order = orderRes.rows[0];
+
+      const itemsRes = await dbPool.query(
+        `SELECT * FROM order_items WHERE order_id = $1 ORDER BY id ASC`,
+        [order.id]
+      );
+      res.json({ order, items: itemsRes.rows });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // POST /api/supplier/order/:token/status — المورد يُحدّث حالة الطلب
+  app.post("/api/supplier/order/:token/status", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const token = req.params.token;
+      const { status, note } = req.body as { status: string; note?: string };
+
+      const ALLOWED = ["accepted", "shipped", "delivered", "cancelled"];
+      if (!ALLOWED.includes(status)) return res.status(400).json({ message: "حالة غير صالحة" });
+
+      const orderRes = await dbPool.query(
+        `SELECT o.*, s.name as supplier_name FROM orders o LEFT JOIN suppliers s ON o.supplier_id=s.id WHERE o.supplier_token=$1`,
+        [token]
+      );
+      if (!orderRes.rows.length) return res.status(404).json({ message: "الطلب غير موجود" });
+      const order = orderRes.rows[0];
+
+      // خريطة حالات المورد → حالة الطلب الرئيسية
+      const statusMap: Record<string, string> = {
+        accepted:  "processing",
+        shipped:   "shipped",
+        delivered: "delivered",
+        cancelled: "cancelled",
+      };
+      const newOrderStatus = statusMap[status];
+
+      await dbPool.query(
+        `UPDATE orders SET supplier_status=$1, status=$2, delivery_status=CASE WHEN $1='delivered' THEN 'delivered' WHEN $1='shipped' THEN 'shipped' ELSE delivery_status END WHERE supplier_token=$3`,
+        [status, newOrderStatus, token]
+      );
+
+      // إشعار العميل تلقائياً عند الشحن والتسليم
+      const customerNotifyMap: Record<string, string> = {
+        shipped:   "shipped",
+        delivered: "delivered",
+        cancelled: "cancelled",
+      };
+      if (order.customer_phone && customerNotifyMap[status]) {
+        await notifyCustomerStatus(order.customer_phone, order.id, customerNotifyMap[status]);
+      }
+
+      // إشعار الإدارة عند الإلغاء
+      if (status === "cancelled") {
+        const adminPhone = process.env.ADMIN_WHATSAPP_PHONE;
+        if (adminPhone) {
+          const cancelMsg = `⚠️ *المورد رفض طلباً!*\n🆔 رقم الطلب: *#${order.id}*\n🏪 المورد: ${order.supplier_name || "—"}\n📋 السبب: ${note || "لم يُحدَّد"}\nيرجى إعادة تعيين مورد آخر.`;
+          await sendUltraMsg(adminPhone, cancelMsg);
+        }
+      }
+
+      const arabicStatus: Record<string, string> = {
+        accepted: "تم قبول الطلب",
+        shipped: "تم الشحن",
+        delivered: "تم التوصيل",
+        cancelled: "تم الإلغاء",
+      };
+      res.json({ ok: true, message: arabicStatus[status] || status });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // ─── لوحة أداء المورد
   app.get("/api/admin/suppliers/:id/performance", requireAdmin, async (req, res) => {
     try {
       const supplierId = parseInt(req.params.id);

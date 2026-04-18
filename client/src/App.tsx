@@ -65,6 +65,7 @@ import MarketerCoupons from "@/pages/MarketerCoupons";
 import Printing from "@/pages/Printing";
 import StaffPortal from "@/pages/StaffPortal";
 import SupplierPortal from "@/pages/SupplierPortal";
+import SupplierOrderView from "@/pages/SupplierOrderView";
 import MarketerLanding from "@/pages/MarketerLanding";
 import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
@@ -541,6 +542,7 @@ function Router() {
               <OrderTracking />
             </Route>
             <Route path="/supplier" component={SupplierPortal} />
+            <Route path="/supplier/order/:token" component={SupplierOrderView} />
             <Route path="/m/:code" component={MarketerLanding} />
             <Route path="/orders">
               <RequireAccountType><Orders /></RequireAccountType>

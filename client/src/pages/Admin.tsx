@@ -4378,11 +4378,11 @@ function OrderSupplierAssign({ order, adminToken }: { order: any; adminToken: st
         🤝 تعيين المورد / الموزع
       </p>
       {currentSupplier ? (
-        <div className="mb-3 bg-white border border-cyan-200 rounded-lg p-2.5">
+        <div className="mb-3 bg-white border border-cyan-200 rounded-lg p-2.5 space-y-1.5">
           <p className="text-xs text-gray-500">المورد الحالي</p>
           <p className="font-bold">{currentSupplier.name}</p>
           <p className="text-xs text-gray-500" dir="ltr">{currentSupplier.phone}</p>
-          <div className="flex items-center gap-2 mt-1.5">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-green-700">
               نصيبه: {Number(order.supplierAmount || order.supplier_amount || 0).toLocaleString()} ر.ي
             </span>
@@ -4390,8 +4390,39 @@ function OrderSupplierAssign({ order, adminToken }: { order: any; adminToken: st
               / عمولة المنصة: {Number(order.platformCommission || order.platform_commission || 0).toLocaleString()} ر.ي
             </span>
           </div>
-          {(order.supplierNotified || order.supplier_notified) && (
-            <span className="text-xs text-green-600">✓ تم إشعاره</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {(order.supplierNotified || order.supplier_notified) && (
+              <span className="text-xs text-green-600">✓ تم إشعاره</span>
+            )}
+            {/* حالة المورد من البوابة */}
+            {(order.supplierStatus || order.supplier_status) && (
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                (order.supplierStatus || order.supplier_status) === "delivered" ? "bg-green-100 text-green-700" :
+                (order.supplierStatus || order.supplier_status) === "shipped"   ? "bg-purple-100 text-purple-700" :
+                (order.supplierStatus || order.supplier_status) === "accepted"  ? "bg-blue-100 text-blue-700" :
+                (order.supplierStatus || order.supplier_status) === "cancelled" ? "bg-red-100 text-red-700" :
+                "bg-yellow-100 text-yellow-700"
+              }`}>
+                {{pending:"⏳ في الانتظار", accepted:"✅ قبل الطلب", shipped:"🚚 تم الشحن", delivered:"🎉 تم التوصيل", cancelled:"❌ ألغى الطلب"}[(order.supplierStatus || order.supplier_status) as string] || (order.supplierStatus || order.supplier_status)}
+              </span>
+            )}
+          </div>
+          {/* زر نسخ رابط بوابة المورد */}
+          {(order.supplierToken || order.supplier_token) && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full text-xs gap-1.5 mt-1"
+              data-testid="button-copy-supplier-link"
+              onClick={() => {
+                const link = `https://oyoplast.com/supplier/order/${order.supplierToken || order.supplier_token}`;
+                navigator.clipboard.writeText(link).then(() =>
+                  toast({ title: "✅ تم نسخ رابط بوابة المورد" })
+                );
+              }}
+            >
+              🔗 نسخ رابط بوابة المورد
+            </Button>
           )}
         </div>
       ) : (

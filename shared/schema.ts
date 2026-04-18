@@ -166,6 +166,8 @@ export const orders = pgTable("orders", {
   platformCommission: numeric("platform_commission"), // عمولة المنصة
   supplierPaid: boolean("supplier_paid").default(false), // هل تم دفع المورد؟
   supplierNotified: boolean("supplier_notified").default(false), // هل أُرسل له إشعار؟
+  supplierToken: text("supplier_token"),               // رمز خاص لبوابة المورد (رابط بدون تسجيل دخول)
+  supplierStatus: text("supplier_status").default("pending"), // pending|accepted|shipped|delivered|cancelled
   createdAt: timestamp("created_at").defaultNow(),
 });
 
