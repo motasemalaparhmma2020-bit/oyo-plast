@@ -56,6 +56,9 @@ export function BannerCarousel({ banners, height = 414 }: BannerCarouselProps) {
         data-testid={`banner-image-${currentIndex}`}
       />
 
+      {/* تدرّج سفلي ناعم لعمق بصري أفضل */}
+      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/40 via-black/10 to-transparent pointer-events-none" />
+
       {/* مؤشر عدد الصور */}
       {banners.length > 1 && (
         <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2" data-testid="banner-indicators">

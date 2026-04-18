@@ -84,16 +84,16 @@ export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSiz
             </div>
           )}
 
-          {/* ── فقاعة الخصم ── */}
+          {/* ── فقاعة الخصم — حجم أصغر وأقل تداخلاً مع الصورة ── */}
           {effectiveDiscount > 0 && (
             <div
-              className="absolute top-2 right-2 text-white font-black rounded-full flex items-center justify-center shadow-lg"
+              className="absolute top-1.5 right-1.5 text-white font-bold rounded-xl flex items-center justify-center shadow-sm px-1.5 py-0.5"
               style={{
-                width: 'var(--discount-bubble, 36px)',
-                height: 'var(--discount-bubble, 36px)',
-                fontSize: 'calc(var(--discount-bubble, 36px) * 0.32)',
+                fontSize: '10px',
+                lineHeight: 1,
                 display: 'var(--discount-bubble-display, flex)',
                 backgroundColor: discountBadgeBg || '#ef4444',
+                minWidth: '28px',
               }}
               data-testid={`badge-discount-${product.id}`}
             >

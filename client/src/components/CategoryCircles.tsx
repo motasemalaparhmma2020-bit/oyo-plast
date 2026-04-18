@@ -45,8 +45,8 @@ export function CategoryCircles({
   if (categories.length === 0) return null;
 
   const shapeRadius = shape === "circle" ? "50%" : `${borderRadius}px`;
-  const fontSize = `${Math.max(9, circleSize * 0.13)}px`;
-  const itemWidth = circleSize + 16;
+  const fontSize = `${Math.max(11, circleSize * 0.145)}px`;
+  const itemWidth = circleSize + 20;
 
   // ─── مكوّن القسم الواحد ─────────────────────────────────────────
   const CategoryItem = ({ category }: { category: Category }) => (
@@ -76,21 +76,26 @@ export function CategoryCircles({
               </div>
             )}
           </div>
-          {/* شارة عدد المنتجات */}
-          {typeof category.productCount === "number" && (
+          {/* شارة عدد المنتجات — أعلى اليمين */}
+          {typeof category.productCount === "number" && category.productCount > 0 && (
             <span
-              className={`absolute -bottom-1 -left-1 text-white text-[9px] font-bold px-1 py-0.5 rounded-full min-w-[16px] text-center leading-none ${
-                category.productCount > 0 ? "bg-primary" : "bg-gray-400"
-              }`}
-              style={{ fontSize: "9px" }}
+              className="absolute -top-1 -right-1 bg-primary text-white font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none shadow-sm"
+              style={{ fontSize: "10px" }}
             >
-              {category.productCount > 0 ? category.productCount : "0"}
+              {category.productCount}
             </span>
           )}
         </div>
         <p
-          className="text-center font-semibold text-gray-800 dark:text-white line-clamp-2 leading-tight w-full"
-          style={{ fontSize }}
+          className="text-center font-semibold text-gray-800 dark:text-white leading-tight w-full px-1"
+          style={{
+            fontSize,
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            wordBreak: "break-word",
+          }}
         >
           {category.name}
         </p>

@@ -56,7 +56,7 @@ export function FloatingRobot() {
   ];
 
   return (
-    <div className="fixed bottom-24 left-3 z-50 flex flex-col items-start gap-2" dir="rtl">
+    <div className="fixed bottom-28 left-3 z-[65] flex flex-col items-start gap-2" dir="rtl">
       {/* Action Buttons */}
       {open && (
         <div className="flex flex-col gap-2 mb-2 animate-in slide-in-from-bottom-2">
