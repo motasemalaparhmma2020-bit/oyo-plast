@@ -20,7 +20,15 @@ const ALL_TABLES = [
   "product_costs","backup_settings","backup_logs","order_events",
   // نظام الرسائل الموحّد (مُضافة 2026-04)
   "conversations","messages",
+  // الشراء الجماعي (مُضافة 2026-04)
+  "group_buy_sessions","group_buy_participants",
 ];
+
+// الجداول الكبيرة — نأخذ آخر 5000 سجل فقط لتجنب timeout
+const LARGE_TABLES = new Set([
+  "product_views","messages","conversations","order_events","notifications",
+  "points_transactions","wallet_transactions","attendance","payroll_periods",
+]);
 
 // ── دالة إنشاء النسخة الاحتياطية ─────────────────────────────────────────
 export async function createBackupSnapshot(
@@ -34,7 +42,9 @@ export async function createBackupSnapshot(
 
     for (const table of ALL_TABLES) {
       try {
-        const r = await dbPool.query(`SELECT * FROM ${table}`);
+        // الجداول الكبيرة: آخر 5000 سجل فقط (لتجنب timeout وانتهاء الذاكرة)
+        const limit = LARGE_TABLES.has(table) ? "ORDER BY id DESC LIMIT 5000" : "ORDER BY id DESC LIMIT 50000";
+        const r = await dbPool.query(`SELECT * FROM ${table} ${limit}`);
         backup[table] = r.rows;
         totalRows += r.rows.length;
         successfulTables++;
@@ -278,5 +288,4 @@ export function getBackupStatus() {
   };
 }
 
-// بدء الـ cron تلقائياً عند استيراد الملف
-startAutoCron().catch(err => console.error("[Backup] startAutoCron error:", err));
+// ملاحظة: يبدأ الـ cron من server/index.ts عبر initBackupService() — لا تستدع startAutoCron() هنا تجنباً للتكرار

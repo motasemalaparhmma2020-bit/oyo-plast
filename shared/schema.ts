@@ -1032,6 +1032,39 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ─── الشراء الجماعي (اشتر مع صديق) ──────────────────────────────────────────
+export const groupBuySessions = pgTable("group_buy_sessions", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").references(() => products.id),
+  productName: text("product_name").notNull(),
+  productImage: text("product_image"),
+  creatorId: varchar("creator_id").references(() => users.id),
+  creatorName: text("creator_name").notNull(),
+  creatorPhone: text("creator_phone"),
+  targetCount: integer("target_count").notNull().default(5),
+  currentCount: integer("current_count").notNull().default(1),
+  discountPercent: integer("discount_percent").notNull().default(15),
+  basePrice: numeric("base_price").notNull(),
+  currency: text("currency").default("YER").notNull(),
+  shareToken: text("share_token").notNull().unique(),
+  status: text("status").default("open").notNull(), // open|filled|expired|cancelled
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const groupBuyParticipants = pgTable("group_buy_participants", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => groupBuySessions.id).notNull(),
+  userId: varchar("user_id").references(() => users.id),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  joinedAt: timestamp("joined_at").defaultNow(),
+});
+
+export type GroupBuySession = typeof groupBuySessions.$inferSelect;
+export type GroupBuyParticipant = typeof groupBuyParticipants.$inferSelect;
+export const insertGroupBuySessionSchema = createInsertSchema(groupBuySessions).omit({ id: true, createdAt: true, shareToken: true, currentCount: true });
+
 export type Conversation = typeof conversations.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export const insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true, lastMessageAt: true, unreadAdmin: true, unreadParticipant: true });
