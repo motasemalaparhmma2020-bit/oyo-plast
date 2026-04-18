@@ -1305,6 +1305,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         supplierId: data.supplierId ? Number(data.supplierId) : null,
         showReviews: data.showReviews ?? true,
         hasFreeShipping: data.hasFreeShipping ?? false,
+        // ── الخيارات الذكية (SHEIN-Style) ─────────────────────────────
+        enableSmartVariants: data.enableSmartVariants ?? false,
+        smartVariants: data.smartVariants || null,
+        enableVariantUI: data.enableVariantUI ?? false,
+        colorImages: data.colorImages || null,
       } as any);
       res.status(201).json(product);
     } catch (e: any) {
