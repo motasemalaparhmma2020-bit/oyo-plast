@@ -752,8 +752,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const itemsRes = await dbPool.query(
         `SELECT oi.*,
-                COALESCE(oi.product_name, p.name) AS product_name,
-                COALESCE(oi.product_image, p.image_urls[1]) AS product_image
+                COALESCE(NULLIF(oi.product_name,''), p.name)            AS product_name,
+                COALESCE(NULLIF(oi.product_image,''), p.image_urls[1])  AS product_image
          FROM order_items oi
          LEFT JOIN products p ON oi.product_id = p.id
          WHERE oi.order_id = $1
@@ -2275,9 +2275,15 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       if (cleanPhone !== cleanOrderPhone && !cleanOrderPhone.includes(phone.slice(-8))) {
         return res.status(403).json({ message: "رقم الهاتف غير مطابق" });
       }
-      // جلب عناصر الطلب
+      // جلب عناصر الطلب مع COALESCE للاسم والصورة
       const itemsRes = await dbPool.query(
-        `SELECT oi.*, p.name as product_name_db FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id=$1`,
+        `SELECT oi.*,
+                COALESCE(NULLIF(oi.product_name,''), p.name)            AS product_name,
+                COALESCE(NULLIF(oi.product_image,''), p.image_urls[1])  AS product_image
+         FROM order_items oi
+         LEFT JOIN products p ON oi.product_id = p.id
+         WHERE oi.order_id = $1
+         ORDER BY oi.id`,
         [parseInt(orderId)]
       );
       const safeOrder = {
@@ -2625,14 +2631,34 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const { pool: dbPool } = await import("./db");
       const supplier = (req as any).supplier;
       const orderId = parseInt(req.params.id);
-      // تحقق أن الطلب تابع لهذا المورد
       const orderCheck = await dbPool.query("SELECT id FROM orders WHERE id=$1 AND supplier_id=$2", [orderId, supplier.id]);
       if (!orderCheck.rows.length) return res.status(403).json({ message: "غير مصرح" });
-      const items = await dbPool.query(
-        `SELECT oi.*, p.name as product_name_db FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id=$1`,
+      const result = await dbPool.query(
+        `SELECT
+           oi.id,
+           oi.order_id          AS "orderId",
+           oi.product_id        AS "productId",
+           COALESCE(NULLIF(oi.product_name,''), p.name)            AS "productName",
+           COALESCE(NULLIF(oi.product_image,''), p.image_urls[1])  AS "productImage",
+           oi.quantity,
+           oi.price,
+           oi.selected_size     AS "selectedSize",
+           oi.selected_color    AS "selectedColor",
+           oi.selected_bag_color AS "selectedBagColor",
+           oi.print_color_count AS "printColorCount",
+           oi.print_color_1     AS "printColor1",
+           oi.print_color_2     AS "printColor2",
+           oi.print_color_3     AS "printColor3",
+           oi.custom_printing   AS "customPrinting",
+           oi.design_notes      AS "designNotes",
+           oi.design_file_url   AS "designFileUrl"
+         FROM order_items oi
+         LEFT JOIN products p ON oi.product_id = p.id
+         WHERE oi.order_id = $1
+         ORDER BY oi.id`,
         [orderId]
       );
-      res.json(items.rows);
+      res.json(result.rows);
     } catch (e: any) {
       res.status(500).json({ message: "فشل" });
     }
@@ -2968,35 +2994,33 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   // ─── Get Order Items (Public - for order confirmation) ────────────────────────
   app.get("/api/orders/:id/items", async (req, res) => {
     try {
-      const { db: dbInstance } = await import("./db");
-      const { orderItems: orderItemsTable, products: productsTable } = await import("@shared/schema");
-      const { eq: eqFn } = await import("drizzle-orm");
-      const { sql: sqlFn } = await import("drizzle-orm");
-
-      const items = await dbInstance
-        .select({
-          id: orderItemsTable.id,
-          productId: orderItemsTable.productId,
-          productName: orderItemsTable.productName,
-          quantity: orderItemsTable.quantity,
-          price: orderItemsTable.price,
-          selectedSize: orderItemsTable.selectedSize,
-          selectedColor: orderItemsTable.selectedColor,
-          selectedBagColor: orderItemsTable.selectedBagColor,
-          printColorCount: orderItemsTable.printColorCount,
-          printColor1: orderItemsTable.printColor1,
-          printColor2: orderItemsTable.printColor2,
-          printColor3: orderItemsTable.printColor3,
-          customPrinting: orderItemsTable.customPrinting,
-          designNotes: orderItemsTable.designNotes,
-          designFileUrl: orderItemsTable.designFileUrl,
-          productImage: orderItemsTable.productImage,
-        })
-        .from(orderItemsTable)
-        .leftJoin(productsTable, eqFn(orderItemsTable.productId, productsTable.id))
-        .where(eqFn(orderItemsTable.orderId, parseInt(req.params.id)));
-
-      res.json(items);
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        `SELECT
+           oi.id,
+           oi.order_id AS "orderId",
+           oi.product_id AS "productId",
+           COALESCE(NULLIF(oi.product_name,''), p.name)            AS "productName",
+           COALESCE(NULLIF(oi.product_image,''), p.image_urls[1])  AS "productImage",
+           oi.quantity,
+           oi.price,
+           oi.selected_size        AS "selectedSize",
+           oi.selected_color       AS "selectedColor",
+           oi.selected_bag_color   AS "selectedBagColor",
+           oi.print_color_count    AS "printColorCount",
+           oi.print_color_1        AS "printColor1",
+           oi.print_color_2        AS "printColor2",
+           oi.print_color_3        AS "printColor3",
+           oi.custom_printing      AS "customPrinting",
+           oi.design_notes         AS "designNotes",
+           oi.design_file_url      AS "designFileUrl"
+         FROM order_items oi
+         LEFT JOIN products p ON oi.product_id = p.id
+         WHERE oi.order_id = $1
+         ORDER BY oi.id`,
+        [parseInt(req.params.id)]
+      );
+      res.json(result.rows);
     } catch (e: any) {
       res.status(500).json({ message: "Failed to fetch order items", details: e.message });
     }
@@ -3011,34 +3035,33 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   // ─── Admin: Get Order Items (with full product details for invoice) ──────────
   app.get("/api/admin/orders/:id/items", requireAdmin, async (req, res) => {
     try {
-      const { db: dbInstance } = await import("./db");
-      const { orderItems: orderItemsTable, products: productsTable } = await import("@shared/schema");
-      const { eq: eqFn } = await import("drizzle-orm");
-
-      const items = await dbInstance
-        .select({
-          id: orderItemsTable.id,
-          productId: orderItemsTable.productId,
-          productName: orderItemsTable.productName,
-          productImage: orderItemsTable.productImage,
-          quantity: orderItemsTable.quantity,
-          price: orderItemsTable.price,
-          selectedSize: orderItemsTable.selectedSize,
-          selectedColor: orderItemsTable.selectedColor,
-          selectedBagColor: orderItemsTable.selectedBagColor,
-          printColorCount: orderItemsTable.printColorCount,
-          printColor1: orderItemsTable.printColor1,
-          printColor2: orderItemsTable.printColor2,
-          printColor3: orderItemsTable.printColor3,
-          customPrinting: orderItemsTable.customPrinting,
-          designNotes: orderItemsTable.designNotes,
-          designFileUrl: orderItemsTable.designFileUrl,
-        })
-        .from(orderItemsTable)
-        .leftJoin(productsTable, eqFn(orderItemsTable.productId, productsTable.id))
-        .where(eqFn(orderItemsTable.orderId, parseInt(req.params.id)));
-
-      res.json(items);
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(
+        `SELECT
+           oi.id,
+           oi.order_id AS "orderId",
+           oi.product_id AS "productId",
+           COALESCE(NULLIF(oi.product_name,''), p.name)            AS "productName",
+           COALESCE(NULLIF(oi.product_image,''), p.image_urls[1])  AS "productImage",
+           oi.quantity,
+           oi.price,
+           oi.selected_size        AS "selectedSize",
+           oi.selected_color       AS "selectedColor",
+           oi.selected_bag_color   AS "selectedBagColor",
+           oi.print_color_count    AS "printColorCount",
+           oi.print_color_1        AS "printColor1",
+           oi.print_color_2        AS "printColor2",
+           oi.print_color_3        AS "printColor3",
+           oi.custom_printing      AS "customPrinting",
+           oi.design_notes         AS "designNotes",
+           oi.design_file_url      AS "designFileUrl"
+         FROM order_items oi
+         LEFT JOIN products p ON oi.product_id = p.id
+         WHERE oi.order_id = $1
+         ORDER BY oi.id`,
+        [parseInt(req.params.id)]
+      );
+      res.json(result.rows);
     } catch (e: any) {
       res.status(500).json({ message: "Failed to fetch admin order items", details: e.message });
     }
