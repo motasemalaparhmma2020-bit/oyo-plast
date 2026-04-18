@@ -252,6 +252,7 @@ export default function ProductDetail() {
   const [variantActiveImg, setVariantActiveImg]   = useState<string | null>(null);
   const [promoBarOpen, setPromoBarOpen]           = useState(false);
   const [selectedSmartVariant, setSelectedSmartVariant] = useState<Record<string, string>>({});
+  const [lastClickedType, setLastClickedType] = useState<string | null>(null);
   const [reviewRating, setReviewRating]   = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   const [reviewImageUrl, setReviewImageUrl] = useState<string | null>(null);
@@ -397,12 +398,44 @@ export default function ProductDetail() {
     }
   }, [variantActiveImg, emblaApi, allImages, currentImageIndex]);
 
-  // ── Price Calculation ────────────────────────────────────────────────────
+  // ── Price Calculation — أولوية الأسعار الذكية ────────────────────────────
+  // منطق (ج): الوزن له أولوية تلقائية، لكن آخر نقرة هي الحكم
+  const smartVariantPrice = useMemo(() => {
+    if (!smartVariantsData || !showSmartVariants) return null;
+    const getV = (type: string): SmartV | null => {
+      const id = selectedSmartVariant[type];
+      if (!id) return null;
+      return smartVariantsData.variants.find(v => v.id === id) || null;
+    };
+    const pick = (v: SmartV | null) => v?.price
+      ? (currency === 'SAR' && v.priceSar ? v.priceSar : v.price)
+      : null;
+    // 1) آخر ما نقره المستخدم له الأولوية القصوى
+    if (lastClickedType) {
+      const lastV = getV(lastClickedType);
+      const lastP = pick(lastV);
+      if (lastP) return { price: lastP, label: lastV?.label || '', type: lastClickedType };
+    }
+    // 2) الوزن — أولوية تلقائية (بندل/كرتون)
+    const weightV = getV('weight');
+    const weightP = pick(weightV);
+    if (weightP) return { price: weightP, label: weightV?.label || '', type: 'weight' };
+    // 3) المقاس
+    const sizeV = getV('size');
+    const sizeP = pick(sizeV);
+    if (sizeP) return { price: sizeP, label: sizeV?.label || '', type: 'size' };
+    // 4) اللون أو الصورة (نادراً)
+    for (const type of ['color', 'image']) {
+      const v = getV(type); const p = pick(v);
+      if (p) return { price: p, label: v?.label || '', type };
+    }
+    return null;
+  }, [smartVariantsData, showSmartVariants, selectedSmartVariant, lastClickedType, currency]);
+
   const currentPrice = useMemo(() => {
     if (!product) return '0';
-    if (selectedSmartV?.price) {
-      return currency === 'SAR' && selectedSmartV.priceSar ? selectedSmartV.priceSar : selectedSmartV.price;
-    }
+    // الخيارات الذكية لها الأولوية الكاملة عند تفعيلها
+    if (showSmartVariants && smartVariantPrice) return smartVariantPrice.price;
     if (currentSizeData) {
       return currency === 'SAR' && currentSizeData.priceSar ? currentSizeData.priceSar : currentSizeData.price;
     }
@@ -412,7 +445,7 @@ export default function ProductDetail() {
       if (applicable) base = applicable.price;
     }
     return base;
-  }, [product, quantity, currency, bulkPricing, currentSizeData, selectedSmartV]);
+  }, [product, quantity, currency, bulkPricing, currentSizeData, showSmartVariants, smartVariantPrice]);
 
   // ── حساب تكلفة الطباعة ─────────────────────────────────────────────────────
   const bagPrintingCost = useMemo(() => {
@@ -738,6 +771,11 @@ export default function ProductDetail() {
                 {formatPrice(displayedPrice)}
               </span>
               <span className="text-base text-muted-foreground font-medium">{currLabel}</span>
+              {showSmartVariants && smartVariantPrice?.label && (
+                <span className="text-[11px] bg-gray-100 dark:bg-gray-700 text-muted-foreground px-2 py-0.5 rounded-full border">
+                  {smartVariantPrice.label}
+                </span>
+              )}
               {sadeemShowDiscountBadge && effectiveDiscount > 0 && (
                 <Badge className="text-xs px-2 py-0.5 font-bold rounded-md" style={{ background: 'var(--discount-badge-bg,#ef4444)', color:'white' }}
                   data-testid="badge-discount">
@@ -929,7 +967,7 @@ export default function ProductDetail() {
                             const isSelected = selectedSmartVariant[type] === v.id;
                             return (
                               <button key={v.id}
-                                onClick={() => { setSelectedSmartVariant(p => ({ ...p, [type]: v.id })); if (v.imageUrl) setVariantActiveImg(v.imageUrl); }}
+                                onClick={() => { setLastClickedType(type); setSelectedSmartVariant(p => ({ ...p, [type]: v.id })); if (v.imageUrl) setVariantActiveImg(v.imageUrl); }}
                                 className={`relative shrink-0 rounded-xl overflow-hidden border-2 transition-all ${isSelected ? 'border-primary shadow-md scale-105' : 'border-gray-200 hover:border-gray-400'}`}
                                 style={{ width: pdpColorThumbnailW, height: pdpColorThumbnailH }}
                                 data-testid={`button-smart-variant-${type}-${v.id}`}>
@@ -959,7 +997,7 @@ export default function ProductDetail() {
                             };
                             return (
                               <button key={v.id}
-                                onClick={() => { setSelectedSmartVariant(p => ({ ...p, [type]: v.id })); }}
+                                onClick={() => { setLastClickedType(type); setSelectedSmartVariant(p => ({ ...p, [type]: v.id })); }}
                                 style={btnStyle}
                                 className={`flex flex-col items-center justify-center px-3 py-2 ${sizeRadius} border-2 font-bold transition-all ${isSelected ? 'border-primary bg-primary text-white shadow' : 'border-gray-300 bg-white dark:bg-gray-800 text-foreground hover:border-gray-400'}`}
                                 data-testid={`button-smart-variant-${type}-${v.id}`}>
