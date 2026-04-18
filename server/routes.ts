@@ -2067,8 +2067,8 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         // ── إعدادات جديدة ──
         'promoBarEnabled', 'showMarketerCouponToAll', 'detailHideHeaderName',
         'flashSaleEnabled',
-        // ── واتساب ──
-        'showWhatsappButton',
+        // ── واتساب والأزرار العائمة ──
+        'showWhatsappButton', 'showAiEmployee', 'showSupportRobot',
         // ── عرض تفاصيل المنتج — السلة ──
         'cartShowColor', 'cartShowSize', 'cartShowBagColor',
         'cartShowPrintColors', 'cartShowDesignFile', 'cartShowDesignNotes',
@@ -2090,8 +2090,9 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         // ── إعدادات جديدة ──
         'promoBarText', 'promoBarColor', 'promoBarDetails',
         'flashSaleBg', 'flashSaleTag',
-        // ── واتساب ──
-        'whatsappNumber', 'whatsappMessage',
+        // ── واتساب والأزرار العائمة ──
+        'whatsappNumber', 'whatsappMessage', 'whatsappPages',
+        'aiEmployeePages', 'supportRobotPages',
         // ── وضع عرض عناصر السلة/الدفع/الطلب ──
         'cartItemMode', 'checkoutItemMode', 'orderItemMode',
         // ── منتقي الألوان والمقاس في صفحة المنتج ──

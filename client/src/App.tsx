@@ -420,8 +420,16 @@ function LoginTopBanner() {
   );
 }
 
+function pageMatchesWa(pages: string, loc: string): boolean {
+  if (!pages || pages === "all") return true;
+  const list = pages.split(",").map(p => p.trim()).filter(Boolean);
+  return list.some(p => loc === p || loc.startsWith(p + "/") || loc.startsWith(p + "?"));
+}
+
 function WhatsAppButton({ settings }: { settings: any }) {
+  const [location] = useLocation();
   if (!settings?.showWhatsappButton || !settings?.whatsappNumber) return null;
+  if (!pageMatchesWa(settings?.whatsappPages ?? "all", location)) return null;
   const phone = settings.whatsappNumber.replace(/\D/g, "");
   const msg = encodeURIComponent(settings.whatsappMessage || "مرحباً، أحتاج مساعدة");
   const url = `https://wa.me/${phone}?text=${msg}`;

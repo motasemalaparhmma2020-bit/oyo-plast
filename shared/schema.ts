@@ -612,6 +612,12 @@ export const displaySettings = pgTable("display_settings", {
   whatsappNumber: text("whatsapp_number").default(""),                            // رقم واتساب خدمة العملاء
   showWhatsappButton: boolean("show_whatsapp_button").default(false),             // إظهار زر واتساب العائم
   whatsappMessage: text("whatsapp_message").default("مرحباً، أحتاج مساعدة"), // الرسالة الافتراضية
+  whatsappPages: text("whatsapp_pages").default("all"),                          // all أو قائمة مسارات مفصولة بفاصلة
+  // ── الأزرار العائمة — التحكم الكامل ─────────────────────────────────────────
+  showAiEmployee: boolean("show_ai_employee").default(true),                      // إظهار الموظف الذكي
+  aiEmployeePages: text("ai_employee_pages").default("all"),                      // all أو قائمة مسارات
+  showSupportRobot: boolean("show_support_robot").default(true),                  // إظهار روبوت الدعم
+  supportRobotPages: text("support_robot_pages").default("all"),                  // all أو قائمة مسارات
   // ── منتقي الألوان في صفحة المنتج (PDP) ─────────────────────────────────────
   pdpColorThumbnailW: integer("pdp_color_thumbnail_w").default(72).notNull(),   // عرض الصورة المصغرة للون (بكسل)
   pdpColorThumbnailH: integer("pdp_color_thumbnail_h").default(72).notNull(),   // ارتفاع الصورة المصغرة للون (بكسل)

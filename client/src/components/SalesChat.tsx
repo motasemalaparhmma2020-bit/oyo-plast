@@ -4,6 +4,16 @@ import { Input } from "@/components/ui/input";
 import { Bot, MessageCircle, Send, X, User, Headphones, Minus, Maximize2, Minimize2, Sparkles, ShoppingCart } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+
+function pageMatches(pages: string, loc: string): boolean {
+  if (!pages || pages === "all") return true;
+  const list = pages.split(",").map(p => p.trim()).filter(Boolean);
+  return list.some(p => loc === p || loc.startsWith(p + "/") || loc.startsWith(p + "?"));
+}
+
+const AI_HIDE_PATHS = ["/admin", "/supplier", "/staff", "/marketer/dashboard"];
 
 type Msg = { role: "user" | "model"; text: string };
 type ChatMode = "closed" | "bubble" | "compact" | "expanded";
@@ -33,6 +43,18 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ y: number; mode: ChatMode } | null>(null);
   const { toast } = useToast();
+  const [location] = useLocation();
+
+  const { data: dispSettings } = useQuery<any>({
+    queryKey: ["/api/display-settings"],
+    staleTime: 60000,
+  });
+
+  const aiVisible = (() => {
+    if (AI_HIDE_PATHS.some(p => location.startsWith(p))) return false;
+    if (dispSettings?.showAiEmployee === false) return false;
+    return pageMatches(dispSettings?.aiEmployeePages ?? "all", location);
+  })();
 
   // ── قياس ارتفاع الشريط السفلي الثابت ديناميكياً (لا يحجب الدردشة) ──
   useEffect(() => {
@@ -218,7 +240,7 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
       {children}
 
       {/* الأيقونة الرئيسية — تظهر عندما لا يوجد شات مفتوح */}
-      {mode === "closed" && (
+      {mode === "closed" && aiVisible && (
         <button
           onClick={() => open()}
           style={{ bottom: `calc(${bottomOffset + 16}px + env(safe-area-inset-bottom))` }}
