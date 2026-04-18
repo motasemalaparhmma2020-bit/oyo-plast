@@ -240,8 +240,14 @@ export async function handlePrintingChat(input: PrintingChatInput): Promise<Prin
     const systemPrompt = buildPrintingSystemPrompt();
 
     // بناء محتوى المحادثة (تاريخ + الرسالة الجديدة)
+    // ملاحظة: Gemini API تشترط أن يبدأ التاريخ بـ role:"user"
+    // لذا نحذف أي رسائل model في بداية التاريخ
+    const rawHistory = input.history.slice(-16);
+    const firstUserIdx = rawHistory.findIndex((m) => m.role === "user");
+    const cleanHistory = firstUserIdx >= 0 ? rawHistory.slice(firstUserIdx) : [];
+
     const contents = [
-      ...input.history.slice(-16).map((m) => ({
+      ...cleanHistory.map((m) => ({
         role: m.role as "user" | "model",
         parts: [{ text: m.text }],
       })),
@@ -254,16 +260,16 @@ export async function handlePrintingChat(input: PrintingChatInput): Promise<Prin
       maxOutputTokens: 400,
     };
 
-    // استدعاء Gemini مع fallback
+    // استدعاء Gemini مع fallback شامل — نجرب كل النماذج
     const callGemini = (model: string) =>
       ai.models.generateContent({ model, contents, config });
 
-    const isRetriable = (msg: string) =>
-      msg.includes("503") || msg.includes("UNAVAILABLE") || msg.includes("overloaded") ||
-      msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota");
+    // الأخطاء التي تعني مشكلة في الطلب نفسه (لا فائدة من تجربة نماذج أخرى)
+    const isFatalError = (msg: string) =>
+      msg.includes("400") && !msg.includes("quota") && !msg.includes("RESOURCE_EXHAUSTED");
 
     let result;
-    const models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"];
+    const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro"];
     let lastError: any = null;
     for (const model of models) {
       try {
@@ -272,12 +278,13 @@ export async function handlePrintingChat(input: PrintingChatInput): Promise<Prin
         break;
       } catch (e: any) {
         const msg = String(e?.message || e || "");
-        console.warn(`[Printing AI] ⚠️ فشل ${model}: ${msg.slice(0, 120)}`);
-        if (isRetriable(msg)) {
-          lastError = e;
-          continue; // جرّب النموذج التالي
+        console.warn(`[Printing AI] ⚠️ فشل ${model}: ${msg.slice(0, 150)}`);
+        lastError = e;
+        // فقط أخطاء الطلب الخاطئ (400) توقف المحاولات — باقي الأخطاء نستكمل
+        if (isFatalError(msg)) {
+          throw e;
         }
-        throw e; // خطأ غير قابل للمعالجة
+        // استمر للنموذج التالي
       }
     }
     if (!result) throw lastError;
