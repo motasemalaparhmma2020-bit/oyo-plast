@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Order, Product, type PrintingCategory } from "@shared/schema";
 import FinancialReports from "@/components/FinancialReports";
 import AdminInstallments from "@/components/AdminInstallments";
@@ -67,7 +68,8 @@ import {
   Banknote,
   FileText,
   ChevronDown, ChevronUp,
-  PrinterCheck
+  PrinterCheck,
+  MessageSquare,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
@@ -5771,9 +5773,16 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <div className="bg-primary text-white px-4 py-3">
-        <div className="container mx-auto">
-          <h1 className="text-lg font-bold">لوحة تحكم OYO PLAST</h1>
-          <p className="text-primary-foreground/80 text-xs">إدارة الطلبات والمنتجات</p>
+        <div className="container mx-auto flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-bold">لوحة تحكم OYO PLAST</h1>
+            <p className="text-primary-foreground/80 text-xs">إدارة الطلبات والمنتجات</p>
+          </div>
+          <Link href="/admin/inbox">
+            <Button size="sm" variant="secondary" className="gap-1.5" data-testid="button-open-inbox">
+              <MessageSquare className="h-4 w-4" /> صندوق الرسائل
+            </Button>
+          </Link>
         </div>
       </div>
 

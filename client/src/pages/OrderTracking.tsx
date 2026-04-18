@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
+import CustomerChatWidget from "@/components/CustomerChatWidget";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -226,6 +227,11 @@ function OrderResult({ order, onBack }: { order: TrackOrder; onBack: () => void 
   const currency = order.currency || "ر.ي";
 
   return (
+    <>
+    <CustomerChatWidget
+      relatedOrderId={order.id}
+      buttonLabel={`استفسار طلب #${order.id}`}
+    />
     <div className="min-h-screen bg-gray-50 pb-20" dir="rtl">
       <header className="sticky top-0 z-40 bg-white border-b shadow-sm">
         <div className="max-w-xl mx-auto px-4 py-3 flex items-center gap-3">
@@ -395,6 +401,7 @@ function OrderResult({ order, onBack }: { order: TrackOrder; onBack: () => void 
         </Button>
       </div>
     </div>
+    </>
   );
 }
 

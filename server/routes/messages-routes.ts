@@ -157,6 +157,48 @@ export function registerMessagingRoutes(app: Express, requireAdmin: any) {
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ─── إعداد webhook تلجرام مع API الخاص بتلجرام ────────────────────────────
+  // POST /api/admin/telegram/setup-webhook { url }
+  app.post("/api/admin/telegram/setup-webhook", requireAdmin, async (req, res) => {
+    try {
+      const token = process.env.TELEGRAM_BOT_TOKEN;
+      if (!token) return res.status(400).json({ message: "TELEGRAM_BOT_TOKEN غير مُعرَّف" });
+      const baseUrl = (req.body?.url as string)?.replace(/\/$/, "") || `${req.protocol}://${req.get("host")}`;
+      const webhookUrl = `${baseUrl}/api/telegram/webhook`;
+      const secret = process.env.TELEGRAM_WEBHOOK_SECRET || undefined;
+      const params: any = { url: webhookUrl, allowed_updates: ["message"] };
+      if (secret) params.secret_token = secret;
+      const r = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+      });
+      const json = await r.json();
+      if (!json.ok) return res.status(500).json({ message: "فشل تسجيل webhook", details: json });
+      res.json({ ok: true, webhookUrl, telegramResponse: json });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.get("/api/admin/telegram/webhook-info", requireAdmin, async (_req, res) => {
+    try {
+      const token = process.env.TELEGRAM_BOT_TOKEN;
+      if (!token) return res.status(400).json({ message: "TELEGRAM_BOT_TOKEN غير مُعرَّف" });
+      const r = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+      res.json(await r.json());
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // قائمة الموردين مع حالة ربط تلجرام (للوحة الإدارة)
+  app.get("/api/admin/suppliers/telegram-status", requireAdmin, async (_req, res) => {
+    try {
+      const rows = await db.select({
+        id: suppliers.id, name: suppliers.name, phone: suppliers.phone,
+        telegramChatId: suppliers.telegramChatId, telegramLinkCode: suppliers.telegramLinkCode,
+      }).from(suppliers);
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // ─── webhook تلجرام (يستقبل ردود الموردين) ────────────────────────────────
   app.post("/api/telegram/webhook", async (req, res) => {
     try {
