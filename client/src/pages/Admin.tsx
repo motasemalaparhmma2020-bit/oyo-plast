@@ -6482,6 +6482,13 @@ export default function Admin() {
                                 data-testid="input-product-tags"
                               />
                               <p className="text-xs text-muted-foreground mt-1">تُستخدم للبحث وتصنيف المنتجات</p>
+                              <div className="mt-2 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-2 text-xs text-blue-700 dark:text-blue-300">
+                                <strong>💡 وسوم خاصة بالموظف الذكي:</strong>
+                                <ul className="mt-1 space-y-0.5 list-disc list-inside">
+                                  <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">مخزون-مفتوح</code> — مخزون غير محدود (لا يقول الموظف "نفد المخزون")</li>
+                                  <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">unlimited-stock</code> — نفس التأثير (بالإنجليزية)</li>
+                                </ul>
+                              </div>
                             </div>
                           </div>
                         )}
