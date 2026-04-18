@@ -4174,7 +4174,8 @@ h1{font-size:18px;color:#222;margin:4px 0;}
              'stock', p.stock,
              'categoryId', p.category_id,
              'sizes', p.sizes,
-             'colors', p.colors
+             'colors', p.colors,
+             'description', p.description
            ) AS product
          FROM cart_items ci
          LEFT JOIN products p ON p.id = ci.product_id

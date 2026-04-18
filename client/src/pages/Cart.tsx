@@ -22,7 +22,7 @@ function formatPrice(n: number) {
 
 /* ─── بطاقة العنصر — نمط SHEIN مع دعم الإعدادات ─── */
 function CartRow({
-  image, name, price, unit, quantity,
+  image, name, price, unit, quantity, description,
   selectedSize, selectedColor,
   selectedBagColor, printColor1, printColor2, printColor3, printColorCount,
   customPrinting, designNotes, designFileUrl,
@@ -30,6 +30,7 @@ function CartRow({
 }: {
   image: string; name: string; price: number;
   unit: string; quantity: number;
+  description?: string | null;
   selectedSize?: string | null; selectedColor?: string | null;
   selectedBagColor?: string | null;
   printColor1?: string | null; printColor2?: string | null; printColor3?: string | null;
@@ -59,6 +60,13 @@ function CartRow({
         <div className="flex-1 min-w-0 p-3 flex flex-col gap-1">
           {/* الاسم */}
           <p className="text-sm font-semibold leading-snug line-clamp-2 text-foreground">{name}</p>
+
+          {/* وصف المنتج كسطر معلومات دائم عندما يحتوي على تفاصيل المقاس/اللون */}
+          {description && (
+            <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2" data-testid={`text-description-${testPrefix}`}>
+              {description}
+            </p>
+          )}
 
           {/* تفاصيل المنتج حسب الإعدادات */}
           {cfg.mode === "collapsible"
@@ -269,6 +277,7 @@ export default function Cart() {
                   price={displayPrice}
                   unit={unit}
                   quantity={item.quantity}
+                  description={(item.product as any)?.description}
                   selectedSize={item.selectedSize || (item.product as any)?.sizes?.[0] || null}
                   selectedColor={item.selectedColor || (item.product as any)?.colors?.[0] || null}
                   selectedBagColor={item.selectedBagColor}
