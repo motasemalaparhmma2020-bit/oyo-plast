@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, createContext, useContext, useCallback, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Bot, MessageCircle, Send, X, User, Headphones, Minus, Maximize2, Minimize2, Sparkles } from "lucide-react";
+import { Bot, MessageCircle, Send, X, User, Headphones, Minus, Maximize2, Minimize2, Sparkles, ShoppingCart } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 
 type Msg = { role: "user" | "model"; text: string };
 type ChatMode = "closed" | "bubble" | "compact" | "expanded";
@@ -27,6 +28,7 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [mockupsShown, setMockupsShown] = useState(0);
   const [bottomOffset, setBottomOffset] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ y: number; mode: ChatMode } | null>(null);
@@ -118,11 +120,17 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ message: text, history: messages.slice(-12), productId }),
+        body: JSON.stringify({
+          message: text,
+          history: messages.slice(-12),
+          productId,
+          mockupsShownCount: mockupsShown,
+        }),
       });
       const data = await res.json();
       const reply = data.reply || "...";
       setMessages((m) => [...m, { role: "model", text: reply }]);
+
       if (mode === "bubble") {
         setUnread((n) => n + 1);
         toast({
@@ -130,11 +138,49 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
           description: reply.length > 80 ? reply.slice(0, 80) + "…" : reply,
         });
       }
-      if (data.orderCreated) {
-        toast({
-          title: `✅ تم إنشاء طلبك #${data.orderCreated.id}`,
-          description: `إجمالي ${Number(data.orderCreated.total).toLocaleString("ar-SA")} ريال يمني`,
-        });
+
+      // ── الموظف قدّم نموذجاً مبدئياً — عدّ النماذج ──────────────────
+      if (data.mockupRequest) {
+        setMockupsShown((n) => n + 1);
+      }
+
+      // ── إضافة للسلة ─────────────────────────────────────────────────
+      if (data.addToCartData) {
+        const cartData = data.addToCartData;
+        try {
+          const cartRes = await fetch("/api/cart", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              productId: cartData.productId,
+              quantity: cartData.quantity,
+              selectedSize: cartData.selectedSize,
+              selectedColor: cartData.selectedColor,
+              customPrinting: cartData.customPrinting,
+              designNotes: cartData.designNotes,
+              designFileUrl: cartData.designFileUrl,
+              printColorCount: cartData.printColorCount,
+              unitPrice: String(cartData.unitPrice),
+              aiDesignFee: String(cartData.designFee || 0),
+            }),
+          });
+          if (cartRes.ok) {
+            queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+            toast({
+              title: "🛒 تمت الإضافة للسلة!",
+              description: cartData.totalBreakdown || "راجع سلتك وأكمل الطلب",
+            });
+          } else {
+            toast({
+              title: "تنبيه",
+              description: "لم يتمكن النظام من الإضافة للسلة تلقائياً — تكرم أضف المنتج يدوياً.",
+              variant: "destructive",
+            });
+          }
+        } catch {
+          toast({ title: "خطأ في الإضافة للسلة", variant: "destructive" });
+        }
       }
     } catch {
       setMessages((m) => [...m, { role: "model", text: "عذراً، تعذّر الاتصال بالخادم. حاول مرة أخرى." }]);

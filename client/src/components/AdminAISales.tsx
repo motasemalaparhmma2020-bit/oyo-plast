@@ -260,6 +260,20 @@ export default function AdminAISales({ adminToken }: AdminAISalesProps) {
                 <Label>السماح بالنموذج المبدئي (Mockup)</Label>
               </div>
             </div>
+            <div>
+              <Label>رسوم التصميم لكل نموذج مُقدَّم (ريال)</Label>
+              <Input type="number" value={form.design_fee_per_mockup ?? 300}
+                onChange={(e) => update('design_fee_per_mockup', Number(e.target.value))}
+                data-testid="input-design-fee-per-mockup" />
+              <p className="text-xs text-muted-foreground mt-1">تُضاف تلقائياً في الطلب عند كل نموذج يُعرض على العميل</p>
+            </div>
+            <div>
+              <Label>سعر كل لون طباعة إضافي (ريال / قطعة)</Label>
+              <Input type="number" value={form.color_price_per_color ?? 20}
+                onChange={(e) => update('color_price_per_color', Number(e.target.value))}
+                data-testid="input-color-price-per-color" />
+              <p className="text-xs text-muted-foreground mt-1">مثال: عميل يطلب 100 قطعة بلونين → 100 × 2 × 20 = 4,000 ريال طباعة</p>
+            </div>
           </div>
         </CardContent>
       </Card>

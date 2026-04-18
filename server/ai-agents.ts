@@ -14,7 +14,6 @@ async function getAgentSettings() {
   try {
     let r = await dbPool.query(`SELECT * FROM ai_sales_settings WHERE id = 1`);
     if (!r.rows[0]) {
-      // إنشاء سجل افتراضي تلقائياً (يستخدم defaults من schema)
       await dbPool.query(`
         INSERT INTO ai_sales_settings (id) VALUES (1)
         ON CONFLICT (id) DO NOTHING
@@ -30,10 +29,6 @@ async function getAgentSettings() {
 }
 
 // ─── حساب الخصم المسموح حسب الكمية ────────────────────────────────────────────
-// المستوى 1: 1..tier_1_qty
-// المستوى 2: (tier_1_qty+1)..tier_2_qty
-// المستوى 3: (tier_2_qty+1)..tier_3_qty
-// المستوى 4: > tier_3_qty
 function computeDiscountPercent(qty: number, s: any): number {
   if (qty > s.discount_tier_3_qty) return s.discount_tier_4_percent;
   if (qty > s.discount_tier_2_qty) return s.discount_tier_3_percent;
@@ -51,11 +46,11 @@ function buildShippingContext(s: any): string {
 - شحن عادي: ${s.shipping_normal_days} أيام عمل، تكلفة ${Number(s.shipping_normal_cost).toLocaleString("ar-SA")} ريال.
 - شحن سريع: ${s.shipping_fast_days} أيام عمل، تكلفة ${Number(s.shipping_fast_cost).toLocaleString("ar-SA")} ريال.
 - ${freeLine}.
-- مدة التصنيع الافتراضية (للمنتجات المصنّعة حسب الطلب): ${s.manufacturing_days_default} أيام.
+- مدة التصنيع الافتراضية: ${s.manufacturing_days_default} أيام.
 - ⏱ إجمالي مدة التسليم = مدة تصنيع المنتج + مدة الشحن.`;
 }
 
-// ─── بناء سلّم الخصومات من الإعدادات ──────────────────────────────────────────
+// ─── بناء سلّم الخصومات ────────────────────────────────────────────────────────
 function buildDiscountContext(s: any): string {
   return `## سلّم الخصومات المعتمد (لا تتجاوزه مطلقاً):
 - من 1 إلى ${s.discount_tier_1_qty} قطعة: ${s.discount_tier_1_percent}% خصم.
@@ -65,12 +60,22 @@ function buildDiscountContext(s: any): string {
 - الحد الأقصى المطلق للخصم (لا يتجاوز تحت أي ظرف): ${s.max_discount_override}%.`;
 }
 
+// ─── بناء سياق التسعير الخاص بالألوان والتصميم ────────────────────────────────
+function buildPricingExtrasContext(s: any): string {
+  const designFee = Number(s.design_fee_per_mockup || 300);
+  const colorFee = Number(s.color_price_per_color || 20);
+  return `## رسوم إضافية مهمة (احتسبها دائماً):
+- رسوم التصميم: ${designFee.toLocaleString("ar-SA")} ريال لكل تصميم/نموذج مبدئي تُقدّمه للعميل في هذا الطلب — أضفها مرةً واحدةً في الطلب (ليس لكل رسالة).
+- الطباعة بالألوان: كل لون = ${colorFee.toLocaleString("ar-SA")} ريال × الكمية. مثلاً: 100 قطعة × لونان = ${(100 * colorFee * 2).toLocaleString("ar-SA")} ريال طباعة.
+- سعر المنتج: يُؤخذ من الكتالوج أدناه مباشرةً دون تعديل.`;
+}
+
 // ─── بناء كتالوج شامل لكل المنتجات النشطة ────────────────────────────────────
 async function buildFullCatalogContext(focusProductId?: number, maxItems = 60): Promise<string> {
   try {
     const r = await dbPool.query(`
       SELECT p.id, p.name, p.description, p.price, p.price_sar,
-             p.sizes, p.colors, p.size_pricing, p.stock,
+             p.sizes, p.colors, p.size_pricing, p.stock, p.tags,
              p.has_printing_options, p.allow_design_upload, p.printing_price_per_unit,
              p.manufacturing_days, p.has_free_shipping,
              c.name AS category_name, sc.name AS subcategory_name
@@ -111,10 +116,16 @@ async function buildFullCatalogContext(focusProductId?: number, maxItems = 60): 
         : "جاهز فوراً";
       const category = [p.category_name, p.subcategory_name].filter(Boolean).join(" › ");
       const freeShip = p.has_free_shipping ? " · شحن مجاني" : "";
+
+      // ─── تحديد المخزون: مفتوح إذا كان المنتج يحمل وسم "مخزون-مفتوح"
+      const tags: string[] = p.tags || [];
+      const isUnlimited = tags.includes("مخزون-مفتوح") || tags.includes("unlimited-stock");
+      const stockStr = isUnlimited ? "مخزون: غير محدود ✅" : `المخزون: ${p.stock ?? "—"}`;
+
       return `- [#${p.id}] ${p.name}${category ? ` (${category})` : ""}
     السعر: ${priceStr}${freeShip}
     المقاسات: ${sizes || "—"} | الألوان: ${colors || "—"}
-    المخزون: ${p.stock ?? "—"} | ${printing} | ${manufacturing}${p.description ? `
+    ${stockStr} | ${printing} | ${manufacturing}${p.description ? `
     الوصف: ${String(p.description).slice(0, 120)}` : ""}`;
     }).join("\n");
 
@@ -130,41 +141,61 @@ async function buildFullCatalogContext(focusProductId?: number, maxItems = 60): 
   }
 }
 
-// ─── آلية البيع كرجل مبيعات حقيقي ────────────────────────────────────────────
-const SALES_WORKFLOW = `
-## خطوات البيع (اتبعها كرجل مبيعات محترف):
-1. **الاستقبال**: رحّب بلطف واسأل عن احتياج العميل (النوع، الاستخدام، الكمية التقريبية).
-2. **الاقتراح**: اقترح 2-3 منتجات من الكتالوج المرفق تناسب احتياجه، مع ذكر السعر والمميزات.
-3. **التفصيل**: عند اختياره منتجاً، اسأل عن: المقاس، اللون، الكمية النهائية.
-4. **الطباعة**: إن كان المنتج يقبل الطباعة، اسأل: "هل تريد طباعة شعارك؟ ارفع صورة شعارك (PNG/JPG) وسأجهّز لك نموذجاً مبدئياً (Mockup)".
-5. **الحساب الشفّاف**: اعرض تفصيل الفاتورة:
-   - سعر الوحدة × الكمية = المبلغ الأساسي
-   - الخصم المطبّق (من سلّم الخصومات)
-   - تكلفة الطباعة (إن وُجدت)
-   - تكلفة الشحن (حسب الطريقة)
-   - مدة التصنيع + مدة الشحن = مدة التسليم
-   - الإجمالي النهائي
-6. **التأكيد**: اسأل "هل توافق على الطلب بهذه التفاصيل؟".
-7. **الإنهاء**: عند موافقة العميل الصريحة، اختم رسالتك بـ JSON إنشاء الطلب (أدناه).
+// ─── آلية البيع الجديدة (عميل مسجّل + إضافة سلة + الموظف يقدّم التصميم) ───────
+function buildSalesWorkflow(hasUserProfile: boolean, mockupsShown: number, settings: any): string {
+  const designFee = Number(settings.design_fee_per_mockup || 300);
+  const colorFee = Number(settings.color_price_per_color || 20);
 
-## آلية إنهاء الصفقة:
-عند موافقة العميل النهائية الصريحة، أضف في آخر رسالتك هذا الـ JSON بالضبط (في كتلة منفصلة):
+  const profileNote = hasUserProfile
+    ? `⚠️ بيانات العميل محفوظة في النظام (أنظر قسم "بيانات العميل" أدناه) — لا تطلب الاسم أو الجوال أو العنوان منه نهائياً.`
+    : `ℹ️ العميل غير مسجّل — اطلب اسمه وجواله فقط (مرةً واحدةً) ثم لا تعد لطلبهما.`;
+
+  const designFeeNote = mockupsShown > 0
+    ? `🎨 تم تقديم ${mockupsShown} تصميم في هذه المحادثة — أضف رسوم تصميم: ${(mockupsShown * designFee).toLocaleString("ar-SA")} ريال في الطلب (designFee = ${mockupsShown * designFee}).`
+    : `🎨 لم يُقدَّم تصميم حتى الآن (designFee = 0).`;
+
+  return `
+## خطوات البيع (اتبعها كمندوب مبيعات محترف):
+
+${profileNote}
+
+1. **الاستقبال**: رحّب بلطف واسأل عن الاحتياج (نوع المنتج، الاستخدام، الكمية التقريبية).
+2. **الاقتراح**: اقترح 2-3 منتجات من الكتالوج تناسب احتياجه مع ذكر السعر والمميزات.
+3. **التفصيل**: عند الاختيار اسأل عن: المقاس، عدد الألوان المطلوبة للطباعة (1-4 ألوان)، الكمية النهائية.
+4. **التصميم (الموظف يُبادر)**: إذا كان المنتج يقبل طباعة:
+   - **قدّم للعميل نموذجاً مبدئياً (Mockup) فوراً دون انتظار** بإرسال أمر request_mockup.
+   - أخبره بوضوح: "رسوم التصميم ${designFee.toLocaleString("ar-SA")} ريال لكل نموذج يُقدَّم".
+5. **الحساب الشفّاف** — اعرض فاتورة مفصّلة:
+   - سعر الوحدة (من الكتالوج) × الكمية = المبلغ الأساسي
+   - طباعة الألوان = (عدد الألوان × ${colorFee.toLocaleString("ar-SA")} ريال) × الكمية
+   - رسوم التصميم = (عدد النماذج المقدَّمة × ${designFee.toLocaleString("ar-SA")} ريال) — مرةً واحدةً لا تتكرر
+   - الخصم (من سلّم الخصومات)
+   - تكلفة الشحن
+   - الإجمالي النهائي
+6. **التأكيد**: اسأل "هل توافق على إضافة الطلب للسلة؟".
+7. **الإنهاء**: عند موافقة العميل الصريحة — أضف إلى السلة بـ JSON أدناه.
+
+${designFeeNote}
+
+## آلية إضافة الطلب للسلة:
+عند موافقة العميل الصريحة، أضف في آخر رسالتك هذا الـ JSON بالضبط:
 \`\`\`json
-{"action":"create_order","productId":<رقم>,"quantity":<كمية>,"agreedUnitPrice":<سعر القطعة بعد الخصم>,"selectedSize":"<المقاس>","selectedColor":"<اللون>","shippingOption":"<normal أو fast>","customPrinting":<true/false>,"designNotes":"<ملاحظات التصميم>","designFileUrl":"<رابط الشعار إن رُفع>","customerName":"<الاسم>","customerPhone":"<الجوال>","totalPrice":<الإجمالي شامل الشحن والطباعة>}
+{"action":"add_to_cart","productId":<رقم>,"quantity":<كمية>,"agreedUnitPrice":<سعر القطعة بعد الخصم>,"selectedSize":"<المقاس>","selectedColor":"<اللون>","shippingOption":"<normal أو fast>","colorsCount":<عدد الألوان 0-4>,"colorFeePerUnit":<عدد الألوان × ${colorFee}>,"customPrinting":<true/false>,"designNotes":"<ملاحظات التصميم>","designFileUrl":"<رابط الشعار إن رُفع>","designFee":<رسوم التصميم الإجمالية>,"totalPrice":<الإجمالي كامل>}
 \`\`\`
 
-## آلية طلب النموذج المبدئي (Mockup):
-إذا طلب العميل نموذجاً لشعاره على المنتج، اختم رسالتك بـ:
+## آلية تقديم النموذج المبدئي (ابدأ به أنت دون انتظار):
+عندما يختار العميل منتجاً يقبل الطباعة، أرسل هذا الـ JSON فوراً في رسالتك:
 \`\`\`json
-{"action":"request_mockup","productId":<رقم>,"selectedColor":"<اللون>","message":"<اطلب من العميل رفع الشعار>"}
+{"action":"request_mockup","productId":<رقم>,"selectedColor":"<اللون>","message":"<اعرض على العميل النموذج المبدئي>"}
 \`\`\`
 
 ## أسلوب الكتابة:
 - ردود قصيرة ومباشرة (2-5 أسطر)، بدون إطالة.
 - لهجة يمنية مهذبة (حياك الله، أبشر، تكرم، يا أستاذ).
 - بدون إيموجي إلا نادراً.
-- دائماً اعتمد على الأرقام من الكتالوج الحقيقي أدناه — ممنوع الاختراع.
+- دائماً اعتمد على الأرقام من الكتالوج الحقيقي — ممنوع الاختراع.
 `;
+}
 
 // ─── استخراج JSON الإجراء من رد المساعد ──────────────────────────────────────
 function extractActionJson(text: string): any | null {
@@ -190,9 +221,24 @@ export interface ChatMessage {
   text: string;
 }
 
+export interface AddToCartData {
+  productId: number;
+  quantity: number;
+  unitPrice: number;
+  selectedSize?: string | null;
+  selectedColor?: string | null;
+  customPrinting: boolean;
+  designNotes?: string | null;
+  designFileUrl?: string | null;
+  printColorCount: number;
+  designFee: number;
+  shippingOption: string;
+  totalBreakdown: string;
+}
+
 export interface ChatResponse {
   reply: string;
-  orderCreated?: { id: number; total: string };
+  addToCartData?: AddToCartData;
   mockupUrl?: string;
   mockupRequest?: { productId: number; selectedColor?: string };
   error?: string;
@@ -205,6 +251,13 @@ export async function handleSalesChat(params: {
   productId?: number;
   userId?: string | null;
   uploadedLogoUrl?: string | null;
+  userProfile?: {
+    name?: string | null;
+    phone?: string | null;
+    city?: string | null;
+    address?: string | null;
+  } | null;
+  mockupsShownCount?: number;
 }): Promise<ChatResponse> {
   if (!ai) {
     return { reply: "عذراً، خدمة المساعد الذكي غير متاحة حالياً. يرجى التواصل مع الإدارة مباشرة.", error: "no_api_key" };
@@ -221,9 +274,26 @@ export async function handleSalesChat(params: {
   const catalog = await buildFullCatalogContext(params.productId, settings.max_products_in_context || 60);
   const shipping = buildShippingContext(settings);
   const discounts = buildDiscountContext(settings);
+  const pricingExtras = buildPricingExtrasContext(settings);
+  const mockupsShown = params.mockupsShownCount || 0;
+  const hasUserProfile = !!(params.userProfile?.name || params.userProfile?.phone);
+  const salesWorkflow = buildSalesWorkflow(hasUserProfile, mockupsShown, settings);
+
+  // ─── سياق بيانات العميل المسجّل ───────────────────────────────────────────
+  let customerContext = "";
+  if (params.userProfile && (params.userProfile.name || params.userProfile.phone)) {
+    const p = params.userProfile;
+    customerContext = `
+## بيانات العميل (محفوظة في النظام — استخدمها مباشرةً لا تطلبها):
+- الاسم: ${p.name || "—"}
+- الجوال: ${p.phone || "—"}
+- المدينة: ${p.city || "—"}
+- العنوان: ${p.address || "—"}
+⚠️ هذه البيانات ستُستخدم تلقائياً عند إضافة الطلب للسلة. لا تطلبها من العميل.`;
+  }
 
   const logoNote = params.uploadedLogoUrl
-    ? `\n\n## 🖼️ رفع العميل شعاراً:\nرابط الشعار: ${params.uploadedLogoUrl}\nاذكر له أن النموذج المبدئي جاهز للمعاينة.`
+    ? `\n\n## 🖼️ رفع العميل شعاراً:\nرابط الشعار: ${params.uploadedLogoUrl}\nاعرض له النموذج المبدئي الآن.`
     : "";
 
   const systemInstruction = `${settings.personality_prompt}
@@ -234,7 +304,11 @@ ${discounts}
 
 ${shipping}
 
-${SALES_WORKFLOW}
+${pricingExtras}
+
+${salesWorkflow}
+
+${customerContext}
 
 ${catalog}${logoNote}`;
 
@@ -252,7 +326,7 @@ ${catalog}${logoNote}`;
     config: {
       systemInstruction,
       temperature: Number(settings.temperature || 0.6),
-      maxOutputTokens: 800,
+      maxOutputTokens: 900,
     },
   });
 
@@ -277,7 +351,7 @@ ${catalog}${logoNote}`;
 
     const response: ChatResponse = { reply: cleanReply };
 
-    // ─── إجراء: طلب Mockup ─────────────────────────────────────────
+    // ─── إجراء: طلب Mockup (الموظف يُقدّمه بنفسه) ─────────────────
     if (action?.action === "request_mockup" && settings.allow_mockup_generation) {
       response.mockupRequest = {
         productId: Number(action.productId),
@@ -285,61 +359,59 @@ ${catalog}${logoNote}`;
       };
     }
 
-    // ─── إجراء: إنشاء طلب (مع حُرّاس الحماية T5) ───────────────────
-    if (action?.action === "create_order" && action.productId && action.quantity) {
-      const guardResult = await validateOrderAction(action, settings);
+    // ─── إجراء: إضافة للسلة (مع حُرّاس الحماية) ────────────────────
+    if (action?.action === "add_to_cart" && action.productId && action.quantity) {
+      const guardResult = await validateCartAction(action, settings);
       if (!guardResult.ok) {
-        console.warn("[AI Sales] ❌ Guard blocked order:", guardResult.reason);
-        cleanReply += `\n\n⚠️ ${guardResult.reason} — سأحوّلك للإدارة لمراجعة الطلب.`;
+        console.warn("[AI Sales] ❌ Guard blocked cart:", guardResult.reason);
+        cleanReply += `\n\n⚠️ ${guardResult.reason}`;
         response.reply = cleanReply;
         return response;
       }
 
-      try {
-        const qty = Number(action.quantity);
-        const unitPrice = Number(action.agreedUnitPrice);
-        const shippingOption = action.shippingOption === "fast" ? "fast" : "normal";
-        const shippingCost = shippingOption === "fast"
-          ? Number(settings.shipping_fast_cost)
-          : Number(settings.shipping_normal_cost);
-        const subtotal = qty * unitPrice;
-        const freeThreshold = Number(settings.free_shipping_threshold || 0);
-        const effectiveShip = (freeThreshold > 0 && subtotal >= freeThreshold) ? 0 : shippingCost;
-        // ⚠ نحسب الإجمالي من السيرفر — لا نثق بـ totalPrice القادم من LLM (حماية من التلاعب)
-        const total = subtotal + effectiveShip;
+      const qty = Number(action.quantity);
+      const unitPrice = Number(action.agreedUnitPrice);
+      const colorsCount = Number(action.colorsCount || 0);
+      const colorFee = Number(settings.color_price_per_color || 20);
+      const colorFeePerUnit = colorsCount * colorFee;
+      const designFee = Number(action.designFee || 0);
+      const shippingOption = action.shippingOption === "fast" ? "fast" : "normal";
+      const shippingCost = shippingOption === "fast"
+        ? Number(settings.shipping_fast_cost)
+        : Number(settings.shipping_normal_cost);
+      const freeThreshold = Number(settings.free_shipping_threshold || 0);
+      const subtotal = qty * (unitPrice + colorFeePerUnit) + designFee;
+      const effectiveShip = (freeThreshold > 0 && subtotal >= freeThreshold) ? 0 : shippingCost;
+      const total = subtotal + effectiveShip;
 
-        const order = await storage.createOrder({
-          userId: params.userId || null,
-          customerName: action.customerName || "عميل (محادثة ذكية)",
-          customerPhone: action.customerPhone || null,
-          customerEmail: null,
-          shippingCity: null,
-          shippingAddress: null,
-          shippingOption,
-          shippingCost: String(effectiveShip),
-          notes: `تم الاتفاق عبر الموظف الذكي. ${action.designNotes ? "ملاحظات التصميم: " + action.designNotes : ""}`.trim(),
-          total: String(total),
-          paymentMethod: "cash_on_delivery",
-          items: [{
-            productId: Number(action.productId),
-            quantity: qty,
-            price: String(unitPrice),
-            selectedSize: action.selectedSize || null,
-            selectedColor: action.selectedColor || null,
-            designNotes: action.designNotes || null,
-            designFileUrl: action.designFileUrl || params.uploadedLogoUrl || null,
-            customPrinting: !!(action.customPrinting || action.designNotes || params.uploadedLogoUrl),
-          }],
-        });
+      // ملاحظات الفاتورة
+      const breakdown = [
+        `${qty} قطعة × ${unitPrice.toLocaleString("ar-SA")} ريال`,
+        colorsCount > 0 ? `طباعة ${colorsCount} لون × ${colorFee} ريال × ${qty} قطعة = ${(colorsCount * colorFee * qty).toLocaleString("ar-SA")} ريال` : null,
+        designFee > 0 ? `رسوم التصميم: ${designFee.toLocaleString("ar-SA")} ريال` : null,
+        `الشحن: ${effectiveShip.toLocaleString("ar-SA")} ريال`,
+        `الإجمالي: ${total.toLocaleString("ar-SA")} ريال`,
+      ].filter(Boolean).join(" | ");
 
-        response.orderCreated = { id: order.id, total: String(order.total) };
-        cleanReply += `\n\n✅ تم إنشاء طلبك برقم #${order.id} بقيمة ${Number(total).toLocaleString("ar-SA")} ريال. سيتواصل معك فريقنا لاستكمال الشحن والدفع.`;
-        response.reply = cleanReply;
-      } catch (e: any) {
-        console.error("[AI Sales] فشل إنشاء الطلب:", e?.message);
-        cleanReply += `\n\n⚠️ حصل خلل فني في حفظ الطلب. تكرم تواصل مع الإدارة.`;
-        response.reply = cleanReply;
-      }
+      response.addToCartData = {
+        productId: Number(action.productId),
+        quantity: qty,
+        unitPrice: unitPrice + colorFeePerUnit,
+        selectedSize: action.selectedSize || null,
+        selectedColor: action.selectedColor || null,
+        customPrinting: !!(action.customPrinting || action.designNotes || params.uploadedLogoUrl || colorsCount > 0),
+        designNotes: action.designNotes
+          ? `${action.designNotes} | ${breakdown}`
+          : breakdown,
+        designFileUrl: action.designFileUrl || params.uploadedLogoUrl || null,
+        printColorCount: colorsCount,
+        designFee,
+        shippingOption,
+        totalBreakdown: breakdown,
+      };
+
+      cleanReply += `\n\n🛒 تم تجهيز طلبك بقيمة إجمالية ${total.toLocaleString("ar-SA")} ريال — سيُضاف للسلة تلقائياً، راجع سلتك وأكمل الطلب!`;
+      response.reply = cleanReply;
     }
 
     // ─── حفظ المحادثة في السجل ─────────────────────────────────────
@@ -351,7 +423,7 @@ ${catalog}${logoNote}`;
       ];
       await dbPool.query(
         `INSERT INTO ai_conversations (user_id, product_id, messages, order_id) VALUES ($1, $2, $3, $4)`,
-        [params.userId || null, params.productId || null, JSON.stringify(allMessages), response.orderCreated?.id || null]
+        [params.userId || null, params.productId || null, JSON.stringify(allMessages), null]
       );
     } catch {}
 
@@ -362,8 +434,8 @@ ${catalog}${logoNote}`;
   }
 }
 
-// ─── T5: حُرّاس التحقق قبل إنشاء الطلب ───────────────────────────────────────
-async function validateOrderAction(
+// ─── T5: حُرّاس التحقق قبل إضافة للسلة ──────────────────────────────────────
+async function validateCartAction(
   action: any,
   settings: any
 ): Promise<{ ok: boolean; reason?: string }> {
@@ -373,16 +445,15 @@ async function validateOrderAction(
   if (!qty || qty <= 0) return { ok: false, reason: "الكمية غير صحيحة" };
   if (!unitPrice || unitPrice <= 0) return { ok: false, reason: "السعر غير صحيح" };
 
-  // جلب المنتج من DB للتحقق
   const r = await dbPool.query(
-    `SELECT id, name, price, stock, size_pricing, is_active FROM products WHERE id = $1`,
+    `SELECT id, name, price, stock, size_pricing, is_active, tags FROM products WHERE id = $1`,
     [Number(action.productId)]
   );
   const product = r.rows[0];
   if (!product) return { ok: false, reason: "المنتج غير موجود في النظام" };
   if (product.is_active === false) return { ok: false, reason: "المنتج غير متاح حالياً" };
 
-  // تحديد السعر الأساسي (يحترم sizePricing لو موجود مع مقاس محدد)
+  // تحديد السعر الأساسي
   let basePrice = Number(product.price);
   if (action.selectedSize && product.size_pricing) {
     try {
@@ -398,23 +469,24 @@ async function validateOrderAction(
   const effectiveMax = Math.min(allowedPercent, maxCap);
   const minAllowedPrice = basePrice * (1 - effectiveMax / 100);
 
-  // هامش تسامح 1 ريال للتقريبات
   if (unitPrice + 1 < minAllowedPrice) {
     return {
       ok: false,
-      reason: `السعر المقترح (${unitPrice} ر.ي) أقل من الحد المسموح للخصم (${Math.round(effectiveMax)}%). الحد الأدنى: ${Math.round(minAllowedPrice)} ر.ي`,
+      reason: `السعر المقترح (${unitPrice} ر.ي) أقل من الحد المسموح (${Math.round(effectiveMax)}%). الحد الأدنى: ${Math.round(minAllowedPrice)} ر.ي`,
     };
   }
 
-  // التحقق من المخزون (لو المخزون مسجّل)
-  if (product.stock !== null && product.stock !== undefined && Number(product.stock) > 0 && qty > Number(product.stock)) {
+  // التحقق من المخزون — يُتجاهل للمنتجات ذات المخزون المفتوح
+  const tags: string[] = product.tags || [];
+  const isUnlimited = tags.includes("مخزون-مفتوح") || tags.includes("unlimited-stock");
+  if (!isUnlimited && product.stock !== null && product.stock !== undefined && Number(product.stock) > 0 && qty > Number(product.stock)) {
     return { ok: false, reason: `الكمية المطلوبة (${qty}) أكبر من المخزون المتاح (${product.stock})` };
   }
 
   return { ok: true };
 }
 
-// ─── T4: توليد نموذج مبدئي (Mockup) بسيط ─────────────────────────────────────
+// ─── T4: توليد نموذج مبدئي (Mockup) ──────────────────────────────────────────
 export async function generateMockup(params: {
   productId: number;
   logoUrl: string;
@@ -437,9 +509,7 @@ export async function generateMockup(params: {
       } catch {}
     }
 
-    // رابط HTML ديناميكي لعرض المنتج + الشعار فوقه
     const mockupUrl = `/api/ai/mockup/render?product=${encodeURIComponent(productImage)}&logo=${encodeURIComponent(params.logoUrl)}&name=${encodeURIComponent(product.name)}`;
-
     return { mockupUrl, productImage, logoUrl: params.logoUrl };
   } catch (e: any) {
     console.error("[AI Mockup]", e.message);

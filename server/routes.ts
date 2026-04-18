@@ -1713,7 +1713,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/ai/chat", async (req, res) => {
     try {
-      const { message, history, productId, uploadedLogoUrl } = req.body || {};
+      const { message, history, productId, uploadedLogoUrl, mockupsShownCount } = req.body || {};
       if (!message || typeof message !== "string" || message.trim().length === 0) {
         return res.status(400).json({ message: "الرسالة مطلوبة" });
       }
@@ -1722,12 +1722,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const { handleSalesChat } = await import("./ai-agents");
       const userId = (req as any).user?.id || (req.session as any)?.userId || null;
+
+      // ── جلب بيانات العميل إذا كان مسجّل الدخول ──────────────────
+      let userProfile: { name?: string | null; phone?: string | null; city?: string | null; address?: string | null } | null = null;
+      if (userId) {
+        try {
+          const { pool: dbPool } = await import("./db");
+          const userRow = await dbPool.query(
+            `SELECT name, phone, city, address FROM users WHERE id = $1`,
+            [userId]
+          );
+          if (userRow.rows[0]) {
+            const u = userRow.rows[0];
+            userProfile = {
+              name: u.name || null,
+              phone: u.phone || null,
+              city: u.city || null,
+              address: u.address || null,
+            };
+          }
+        } catch {}
+      }
+
       const result = await handleSalesChat({
         history: Array.isArray(history) ? history.slice(-12) : [],
         message: message.trim(),
         productId: productId ? Number(productId) : undefined,
         userId,
         uploadedLogoUrl: typeof uploadedLogoUrl === "string" ? uploadedLogoUrl : null,
+        userProfile,
+        mockupsShownCount: typeof mockupsShownCount === "number" ? mockupsShownCount : 0,
       });
       res.json(result);
     } catch (e: any) {
@@ -4956,6 +4980,8 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         // ── حقول الطباعة الاحترافية ──
         printingCategoryId, printWidth, printHeight, printFinish, printColorSeparation, printingUnitPrice,
         unitPrice,
+        // ── رسوم التصميم من الموظف الذكي ──
+        aiDesignFee,
       } = req.body;
 
       // هل هذه طباعة مخصصة (لا نجمع الكميات مع عناصر أخرى)
@@ -5006,6 +5032,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
           printColorSeparation: printColorSeparation || false,
           printingUnitPrice: printingUnitPrice || null,
           unitPrice: unitPrice || null,
+          aiDesignFee: aiDesignFee || null,
         })
         .returning();
       

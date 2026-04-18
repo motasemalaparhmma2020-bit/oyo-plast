@@ -125,6 +125,7 @@ export const cartItems = pgTable("cart_items", {
   printFinish: text("print_finish"),        // نوع التشطيب المختار
   printColorSeparation: boolean("print_color_separation").default(false), // فرز الألوان
   printingUnitPrice: numeric("printing_unit_price"), // سعر الطباعة الاحترافية لهذا العنصر
+  aiDesignFee: numeric("ai_design_fee").default("0"), // رسوم التصميم المضافة من الموظف الذكي
 });
 
 export const orders = pgTable("orders", {
@@ -841,6 +842,8 @@ export const aiSalesSettings = pgTable("ai_sales_settings", {
   temperature: numeric("temperature").default("0.6").notNull(),
   maxProductsInContext: integer("max_products_in_context").default(60).notNull(),
   allowMockupGeneration: boolean("allow_mockup_generation").default(true).notNull(),
+  designFeePerMockup: numeric("design_fee_per_mockup").default("300").notNull(),
+  colorPricePerColor: numeric("color_price_per_color").default("20").notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 export type AiSalesSettings = typeof aiSalesSettings.$inferSelect;
