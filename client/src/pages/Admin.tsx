@@ -4343,12 +4343,13 @@ function OrderSupplierAssign({ order, adminToken }: { order: any; adminToken: st
       toast({ title: `✅ تم تعيين المورد — يستلم ${Number(data.supplierAmount).toLocaleString()} ر.ي` });
       if (data?.notify && !data.notify.ok) {
         toast({
-          title: "⚠️ لم يصل إشعار واتساب للمورد",
-          description: data.notify.error || "تعذّر إرسال الرسالة عبر Twilio",
+          title: "⚠️ لم يصل إشعار للمورد",
+          description: data.notify.error || "تعذّر إرسال الرسالة",
           variant: "destructive",
         });
       } else if (data?.notify?.ok) {
-        toast({ title: "📱 وصلت رسالة واتساب للمورد" });
+        const ch = data.notify.channel === "sms" ? "SMS رسالة نصية" : "واتساب";
+        toast({ title: `📱 وصل الإشعار للمورد عبر ${ch}` });
       }
       queryClient.invalidateQueries({ queryKey: ["/api/admin/suppliers"] });
     },

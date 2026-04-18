@@ -385,7 +385,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             Authorization: "Basic " + Buffer.from(`${accountSid}:${authToken}`).toString("base64"),
             "Content-Type": "application/x-www-form-urlencoded",
           },
-          body: new URLSearchParams({ To: `whatsapp:${phone}`, From: `whatsapp:${fromNumber}`, Body: msg }),
+          body: new URLSearchParams({ To: `whatsapp:${phone}`, From: `whatsapp:${fromNumber.replace(/^whatsapp:/i, "")}`, Body: msg }),
         }
       );
     } catch (e: any) {
@@ -416,36 +416,55 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return { ok: false, channel: "whatsapp", error: "إعدادات Twilio غير مكتملة (TWILIO_ACCOUNT_SID/AUTH_TOKEN/FROM_NUMBER)" };
       }
 
-      const msg = `📦 طلب جديد مُوكَّل إليك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\n👤 العميل: ${orderData.customerName || "—"}\n📱 الجوال: ${orderData.customerPhone || "—"}\n📍 المدينة: ${orderData.shippingCity || "—"}\n💰 المبلغ المستحق لك: ${Number(orderData.supplierAmount || 0).toLocaleString()} ${orderData.currency || "ر.ي"}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست | oyoplast.com`;
+      const msg = `OYO PLAST - Talab Jadid #${orderId}\nAl-Amel: ${orderData.customerName || "—"}\nJawal: ${orderData.customerPhone || "—"}\nMadina: ${orderData.shippingCity || "—"}\nAl-Mablag: ${Number(orderData.supplierAmount || 0).toLocaleString()} ${orderData.currency || "YER"}\noyoplast.com`;
 
-      const r = await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: "Basic " + Buffer.from(`${accountSid}:${authToken}`).toString("base64"),
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({ To: `whatsapp:${phone}`, From: `whatsapp:${fromNumber}`, Body: msg }),
-        }
-      );
-      const body = await r.json().catch(() => ({}));
-      console.log(`[notifySupplier] order=${orderId} supplier=${supplierId} phone=${phone} status=${r.status}`, body);
+      // تنظيف الرقم من أي بادئة whatsapp: مكررة
+      const cleanFrom = fromNumber.replace(/^whatsapp:/i, "");
 
-      if (!r.ok) {
-        // Twilio error: 63007=channel not active, 63016=sandbox not joined, 21408=region not enabled
-        const code = body?.code;
-        const message = body?.message || `HTTP ${r.status}`;
-        let hint = "";
-        if (code === 63016 || /sandbox/i.test(message)) hint = " — يجب على المورد إرسال join code إلى رقم Twilio Sandbox أولاً.";
-        else if (code === 21408) hint = " — رقم اليمن غير مفعّل في حساب Twilio (افتح Geographic Permissions).";
-        else if (code === 21211 || code === 21614) hint = " — رقم الجوال غير صالح للواتساب.";
-        else if (r.status === 401 || r.status === 403) hint = " — بيانات اعتماد Twilio خاطئة.";
-        return { ok: false, channel: "whatsapp", error: `${message}${hint}`, details: body };
+      const twilioHeaders = {
+        Authorization: "Basic " + Buffer.from(`${accountSid}:${authToken}`).toString("base64"),
+        "Content-Type": "application/x-www-form-urlencoded",
+      };
+      const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+
+      // المحاولة الأولى: واتساب
+      const waResp = await fetch(twilioUrl, {
+        method: "POST", headers: twilioHeaders,
+        body: new URLSearchParams({ To: `whatsapp:${phone}`, From: `whatsapp:${cleanFrom}`, Body: msg }),
+      });
+      const waBody = await waResp.json().catch(() => ({}));
+      console.log(`[notifySupplier/wa] order=${orderId} phone=${phone} status=${waResp.status}`, JSON.stringify(waBody));
+
+      if (waResp.ok) {
+        await dbPool.query("UPDATE orders SET supplier_notified=true WHERE id=$1", [orderId]);
+        return { ok: true, channel: "whatsapp", details: { sid: waBody?.sid, to: phone } };
       }
 
-      await dbPool.query("UPDATE orders SET supplier_notified=true WHERE id=$1", [orderId]);
-      return { ok: true, channel: "whatsapp", details: { sid: body?.sid, to: phone } };
+      // المحاولة الثانية: SMS عادي (إن فشل واتساب)
+      console.log(`[notifySupplier] WhatsApp failed (${waBody?.code}), trying SMS...`);
+      const smsResp = await fetch(twilioUrl, {
+        method: "POST", headers: twilioHeaders,
+        body: new URLSearchParams({ To: phone, From: cleanFrom, Body: msg }),
+      });
+      const smsBody = await smsResp.json().catch(() => ({}));
+      console.log(`[notifySupplier/sms] order=${orderId} phone=${phone} status=${smsResp.status}`, JSON.stringify(smsBody));
+
+      if (smsResp.ok) {
+        await dbPool.query("UPDATE orders SET supplier_notified=true WHERE id=$1", [orderId]);
+        return { ok: true, channel: "sms", details: { sid: smsBody?.sid, to: phone } };
+      }
+
+      // كلاهما فشل — إرجاع سبب WhatsApp كأساس + سبب SMS
+      const code = waBody?.code;
+      const message = waBody?.message || `HTTP ${waResp.status}`;
+      let hint = "";
+      if (code === 63016 || /sandbox/i.test(message)) hint = " — يجب على المورد إرسال 'join' لرقم Twilio Sandbox أولاً.";
+      else if (code === 63007 || /channel/i.test(message)) hint = " — رقم TWILIO_FROM_NUMBER ليس مُفعَّلاً لواتساب. تحقق من إعدادات Twilio.";
+      else if (code === 21408) hint = " — رقم اليمن غير مفعَّل في Twilio Geographic Permissions.";
+      else if (code === 21211 || code === 21614) hint = " — رقم الجوال غير صالح.";
+      else if (waResp.status === 401 || waResp.status === 403) hint = " — بيانات Twilio خاطئة.";
+      const smsHint = smsBody?.message ? ` | SMS: ${smsBody.message}` : "";
+      return { ok: false, channel: "whatsapp+sms", error: `${message}${hint}${smsHint}`, details: { wa: waBody, sms: smsBody } };
     } catch (e: any) {
       console.error("Supplier notification error:", e.message);
       return { ok: false, channel: "whatsapp", error: e.message || "خطأ غير معروف" };
