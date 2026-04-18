@@ -279,17 +279,24 @@ export function OrderItemCollapsibleMeta({
           )}
 
           {/* ملف التصميم */}
-          {cfg.showDesignFile && item.designFileUrl && (
-            <a
-              href={item.designFileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-[10px] text-primary hover:underline"
-            >
-              <ExternalLink className="h-3 w-3" />
-              فتح ملف التصميم
-            </a>
-          )}
+          {cfg.showDesignFile && item.designFileUrl && (() => {
+            const url = item.designFileUrl;
+            const downloadUrl = url.includes("/upload/") && !url.includes("fl_attachment")
+              ? url.replace("/upload/", "/upload/fl_attachment/")
+              : url;
+            return (
+              <a
+                href={downloadUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="flex items-center gap-1 text-[10px] text-primary hover:underline"
+              >
+                <ExternalLink className="h-3 w-3" />
+                تحميل ملف التصميم
+              </a>
+            );
+          })()}
         </div>
       )}
     </div>

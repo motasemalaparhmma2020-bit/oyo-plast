@@ -261,14 +261,48 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ─── Design Upload (Public) - still uses disk for large files ────────
+  // ─── Design Upload (Public) — يرفع إلى Cloudinary للاستمرارية في الإنتاج ─
   app.post("/api/upload/design", designUpload.single("design"), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: "لم يتم رفع ملف" });
     try {
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+      const apiKey = process.env.CLOUDINARY_API_KEY;
+      const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+      if (cloudName && apiKey && apiSecret) {
+        const fs = await import("fs/promises");
+        const { v2: cloudinary } = await import("cloudinary");
+        cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
+
+        const originalName = req.file.originalname || "design";
+        const safeBase = originalName.replace(/\.[^/.]+$/, "").replace(/[^\w\u0600-\u06FF.-]+/g, "_").slice(0, 80);
+        const publicId = `oyo_designs/${Date.now()}_${safeBase}`;
+
+        const uploadRes: any = await cloudinary.uploader.upload(req.file.path, {
+          public_id: publicId,
+          resource_type: "auto",
+          use_filename: true,
+          unique_filename: false,
+          overwrite: true,
+        });
+
+        await fs.unlink(req.file.path).catch(() => {});
+
+        return res.json({
+          designUrl: uploadRes.secure_url,
+          downloadUrl: uploadRes.secure_url.replace("/upload/", "/upload/fl_attachment/"),
+          provider: "cloudinary",
+          fileName: originalName,
+          bytes: uploadRes.bytes,
+        });
+      }
+
+      // Fallback to local disk only when Cloudinary not configured
       const designUrl = `/uploads/${req.file.filename}`;
-      res.json({ designUrl });
-    } catch (error) {
-      res.status(500).json({ message: "فشل في معالجة الملف" });
+      res.json({ designUrl, provider: "local" });
+    } catch (error: any) {
+      console.error("[design-upload] error:", error?.message || error);
+      res.status(500).json({ message: "فشل في معالجة الملف", details: error?.message });
     }
   });
 
