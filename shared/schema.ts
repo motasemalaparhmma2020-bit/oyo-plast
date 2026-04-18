@@ -182,6 +182,8 @@ export const suppliers = pgTable("suppliers", {
   totalSales: numeric("total_sales").default("0"),    // إجمالي مبيعاته
   isActive: boolean("is_active").default(true).notNull(),
   notes: text("notes"),
+  telegramChatId: text("telegram_chat_id"),                    // معرّف دردشة تلجرام للمورد
+  telegramLinkCode: text("telegram_link_code"),                // كود ربط مؤقت /start <code>
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -990,3 +992,47 @@ export const insertDisplaySettingsSchema = createInsertSchema(displaySettings).o
 export type PrintingCategory = typeof printingCategories.$inferSelect;
 export const insertPrintingCategorySchema = createInsertSchema(printingCategories).omit({ id: true });
 export type InsertPrintingCategory = z.infer<typeof insertPrintingCategorySchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// نظام الرسائل الموحّد — محادثات (عملاء/موردين/داخلي) + رسائل فردية
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const conversations = pgTable("conversations", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(),                                  // 'customer' | 'supplier' | 'internal'
+  subject: text("subject"),                                      // عنوان اختياري
+  // أطراف المحادثة (واحد منها فقط حسب النوع)
+  customerPhone: text("customer_phone"),                         // للعملاء
+  customerName: text("customer_name"),
+  supplierId: integer("supplier_id").references(() => suppliers.id),
+  // ربط بطلب أو منتج (اختياري)
+  relatedOrderId: integer("related_order_id"),
+  relatedProductId: integer("related_product_id"),
+  // حالة وعدّادات
+  status: text("status").default("open").notNull(),              // 'open' | 'closed' | 'archived'
+  unreadAdmin: integer("unread_admin").default(0).notNull(),
+  unreadParticipant: integer("unread_participant").default(0).notNull(),
+  lastMessageAt: timestamp("last_message_at").defaultNow(),
+  lastMessagePreview: text("last_message_preview"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const messages = pgTable("messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").references(() => conversations.id).notNull(),
+  senderType: text("sender_type").notNull(),                     // 'admin' | 'customer' | 'supplier' | 'system' | 'bot'
+  senderName: text("sender_name"),
+  content: text("content").notNull(),
+  attachments: jsonb("attachments"),                             // [{ url, name, type }]
+  channel: text("channel").default("web").notNull(),             // 'web' | 'telegram' | 'sms'
+  deliveryStatus: text("delivery_status").default("sent").notNull(), // 'sent' | 'delivered' | 'read' | 'failed'
+  metadata: jsonb("metadata"),                                   // معرفات تلجرام مثلاً
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type Conversation = typeof conversations.$inferSelect;
+export type Message = typeof messages.$inferSelect;
+export const insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true, lastMessageAt: true, unreadAdmin: true, unreadParticipant: true });
+export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, createdAt: true });
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+export type InsertMessage = z.infer<typeof insertMessageSchema>;

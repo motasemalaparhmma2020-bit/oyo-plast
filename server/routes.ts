@@ -123,6 +123,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   await setupAuth(app);
   registerAuthRoutes(app);
 
+  // ─── نظام الرسائل الموحّد ──────────────────────────────────────
+  const { registerMessagingRoutes } = await import("./routes/messages-routes");
+  registerMessagingRoutes(app, requireAdmin);
+
   // ─── Google Search Console Verification ──────────────────────────
   app.get("/google2bec18c5e7a1da83.html", (_req, res) => {
     res.setHeader("Content-Type", "text/html");
@@ -2929,6 +2933,14 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       // منح نقاط الولاء عند تسليم الطلب
       if (newStatus === "delivered" && order?.userId && order?.total) {
         await awardOrderPoints(Number(order.userId), order.id, Number(order.total));
+      }
+      // تسجيل حدث الطلب فوراً (T4 — حماية لحظية)
+      if (order) {
+        try {
+          const { logOrderEvent } = await import("./backup-service");
+          const eventType = newStatus === "cancelled" ? "cancelled" : newStatus === "delivered" ? "delivered" : "updated";
+          await logOrderEvent(order.id, eventType as any, order);
+        } catch {}
       }
     } catch (e: any) {
       res.status(500).json({ message: "فشل تحديث حالة الطلب", details: e.message });

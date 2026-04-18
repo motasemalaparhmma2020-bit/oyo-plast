@@ -57,6 +57,7 @@ import Profile from "@/pages/Profile";
 import Auth from "@/pages/Auth";
 import Register from "@/pages/Register";
 import Admin from "@/pages/Admin";
+import AdminInbox from "@/pages/AdminInbox";
 import Wishlist from "@/pages/Wishlist";
 import Notifications from "@/pages/Notifications";
 import MyAccount from "@/pages/MyAccount";
@@ -506,6 +507,7 @@ function Router() {
             <Route path="/register" component={Register} />
             <Route path="/onboarding" component={OnboardingPage} />
             <Route path="/admin" component={Admin} />
+            <Route path="/admin/inbox" component={AdminInbox} />
             <Route path="/about" component={About} />
             <Route path="/privacy" component={Privacy} />
             <Route path="/terms" component={Terms} />

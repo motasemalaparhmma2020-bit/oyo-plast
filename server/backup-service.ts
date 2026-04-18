@@ -18,6 +18,8 @@ const ALL_TABLES = [
   "payroll_periods","staff_rate_config","contract_texts","contract_acceptances",
   "installment_plans","supplier_payments","printing_categories",
   "product_costs","backup_settings","backup_logs","order_events",
+  // نظام الرسائل الموحّد (مُضافة 2026-04)
+  "conversations","messages",
 ];
 
 // ── دالة إنشاء النسخة الاحتياطية ─────────────────────────────────────────
@@ -190,50 +192,82 @@ export async function logOrderEvent(
 
 // ── إعداد الـ Cron (T2) ─────────────────────────────────────────────────────
 let cronJob: cron.ScheduledTask | null = null;
+let dailyCronJob: cron.ScheduledTask | null = null;
+let monthlyCronJob: cron.ScheduledTask | null = null;
 let lastAutoBackupTime: Date | null = null;
 let nextAutoBackupTime: Date | null = null;
+let activeIntervalHours: number = 1;
 
-export function startAutoCron(): void {
-  if (cronJob) {
-    cronJob.destroy();
-    cronJob = null;
+/**
+ * يقرأ من backup_settings: auto_backup_enabled + backup_interval_hours
+ * يبني تعبير cron مناسب (1=كل ساعة، 2=كل ساعتين، 6=كل 6 س، 24=يومياً)
+ */
+export async function startAutoCron(): Promise<void> {
+  // إيقاف أي جداول سابقة
+  for (const j of [cronJob, dailyCronJob, monthlyCronJob]) {
+    try { j?.destroy(); } catch {}
+  }
+  cronJob = null; dailyCronJob = null; monthlyCronJob = null;
+
+  // قراءة الإعدادات من DB
+  let enabled = true;
+  let interval = 1;
+  try {
+    const r = await dbPool.query(`SELECT auto_backup_enabled, backup_interval_hours FROM backup_settings WHERE id = 1`);
+    if (r.rows[0]) {
+      enabled = r.rows[0].auto_backup_enabled !== false;
+      interval = Math.max(1, Math.min(24, parseInt(r.rows[0].backup_interval_hours) || 1));
+    }
+  } catch (e: any) {
+    console.warn("[Backup] ⚠️ Could not read settings, using defaults:", e.message);
   }
 
-  // كل ساعة تماماً: 0 * * * *
-  cronJob = cron.schedule("0 * * * *", async () => {
+  if (!enabled) {
+    console.log("[Backup] ⏸️ Auto backup is disabled in settings");
+    return;
+  }
+
+  activeIntervalHours = interval;
+  const cronExpr = interval === 1 ? "0 * * * *" : `0 */${interval} * * *`;
+
+  // النسخة الساعية (حسب الفترة المُعدّة)
+  cronJob = cron.schedule(cronExpr, async () => {
     lastAutoBackupTime = new Date();
-    nextAutoBackupTime = new Date(lastAutoBackupTime.getTime() + 60 * 60 * 1000);
-    console.log("[Backup] 🕐 Auto hourly backup starting...");
-
+    nextAutoBackupTime = new Date(lastAutoBackupTime.getTime() + activeIntervalHours * 60 * 60 * 1000);
+    console.log(`[Backup] 🕐 Auto backup starting (every ${activeIntervalHours}h)...`);
     await createBackupSnapshot("auto", "hourly");
+  });
 
-    // مرة في اليوم (في أول ساعة): نسخة يومية
-    const hour = new Date().getHours();
-    if (hour === 0) {
-      await createBackupSnapshot("auto", "daily");
-    }
-    // مرة في الشهر (أول يوم): نسخة شهرية
-    const day = new Date().getDate();
-    if (day === 1 && hour === 0) {
-      await createBackupSnapshot("auto", "monthly");
-    }
+  // النسخة اليومية — مستقلة في منتصف الليل
+  dailyCronJob = cron.schedule("0 0 * * *", async () => {
+    console.log("[Backup] 🌙 Daily backup starting...");
+    await createBackupSnapshot("auto", "daily");
+  });
+
+  // النسخة الشهرية — مستقلة في أول كل شهر
+  monthlyCronJob = cron.schedule("0 0 1 * *", async () => {
+    console.log("[Backup] 📅 Monthly backup starting...");
+    await createBackupSnapshot("auto", "monthly");
   });
 
   // حساب وقت النسخة القادمة
   const now = new Date();
   nextAutoBackupTime = new Date(now);
   nextAutoBackupTime.setMinutes(0, 0, 0);
-  nextAutoBackupTime.setHours(nextAutoBackupTime.getHours() + 1);
+  // التقريب إلى أقرب فترة مستقبلية
+  while (nextAutoBackupTime <= now || nextAutoBackupTime.getHours() % activeIntervalHours !== 0) {
+    nextAutoBackupTime.setHours(nextAutoBackupTime.getHours() + 1);
+  }
 
-  console.log("[Backup] ✅ Auto cron started — next backup at", nextAutoBackupTime.toISOString());
+  console.log(`[Backup] ✅ Auto cron started — every ${activeIntervalHours}h — next backup at`, nextAutoBackupTime.toISOString());
 }
 
 export function stopAutoCron(): void {
-  if (cronJob) {
-    cronJob.destroy();
-    cronJob = null;
-    console.log("[Backup] ⏹️ Auto cron stopped");
+  for (const j of [cronJob, dailyCronJob, monthlyCronJob]) {
+    try { j?.destroy(); } catch {}
   }
+  cronJob = null; dailyCronJob = null; monthlyCronJob = null;
+  console.log("[Backup] ⏹️ Auto cron stopped");
 }
 
 export function getBackupStatus() {
@@ -245,4 +279,4 @@ export function getBackupStatus() {
 }
 
 // بدء الـ cron تلقائياً عند استيراد الملف
-startAutoCron();
+startAutoCron().catch(err => console.error("[Backup] startAutoCron error:", err));
