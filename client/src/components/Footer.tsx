@@ -161,17 +161,6 @@ export function Footer() {
         </div>
       )}
 
-      {/* WhatsApp Floating Button */}
-      <a
-        href={whatsappLink}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="fixed bottom-24 left-4 z-50 w-14 h-14 bg-green-500 rounded-full flex items-center justify-center shadow-lg hover:bg-green-600 transition-colors"
-        data-testid="button-whatsapp-float"
-        aria-label="تواصل عبر واتساب"
-      >
-        <SiWhatsapp className="w-7 h-7 text-white" />
-      </a>
     </footer>
   );
 }
@@ -282,17 +271,6 @@ export function MobileFooter() {
         </div>
       )}
 
-      {/* WhatsApp Floating Button */}
-      <a
-        href={whatsappLink}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="fixed bottom-24 left-4 z-50 w-12 h-12 bg-green-500 rounded-full flex items-center justify-center shadow-lg hover:bg-green-600 transition-colors"
-        data-testid="mobile-button-whatsapp-float"
-        aria-label="تواصل عبر واتساب"
-      >
-        <SiWhatsapp className="w-6 h-6 text-white" />
-      </a>
     </div>
   );
 }

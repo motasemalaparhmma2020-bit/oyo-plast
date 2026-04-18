@@ -56,7 +56,7 @@ export function FloatingRobot() {
   ];
 
   return (
-    <div className="fixed bottom-[76px] left-3 z-[65] flex flex-col items-start gap-2" dir="rtl">
+    <div className="fixed bottom-36 right-4 z-[65] flex flex-col items-end gap-2" dir="rtl">
       {/* Action Buttons */}
       {open && (
         <div className="flex flex-col gap-2 mb-2 animate-in slide-in-from-bottom-2">
@@ -127,9 +127,9 @@ export function FloatingRobot() {
 
       {/* Label */}
       {!open && pulse && (
-        <div className="absolute -top-8 left-0 bg-gray-800 text-white text-xs px-2 py-1 rounded-lg whitespace-nowrap shadow">
+        <div className="absolute -top-8 right-0 bg-gray-800 text-white text-xs px-2 py-1 rounded-lg whitespace-nowrap shadow">
           كيف أساعدك؟
-          <span className="absolute -bottom-1 left-4 w-2 h-2 bg-gray-800 rotate-45" />
+          <span className="absolute -bottom-1 right-4 w-2 h-2 bg-gray-800 rotate-45" />
         </div>
       )}
     </div>
