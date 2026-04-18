@@ -509,15 +509,8 @@ export default function ProductDetail() {
 
   // ── التحقق من اختيار المقاس قبل الإضافة للسلة ──
   const validateSelection = (): string | null => {
-    // 1) sizePricing يلزم اختيار مقاس
-    if (sizePricing.length > 0 && !selectedSize) {
-      return "⚠️ يرجى اختيار المقاس المناسب أولاً";
-    }
-    // 2) sizes بدون سعر يلزم اختيار مقاس
-    if (sizes.length > 0 && sizePricing.length === 0 && !selectedSize) {
-      return "⚠️ يرجى اختيار المقاس أولاً";
-    }
-    // 3) smartVariants — يجب اختيار متغير من كل نوع نشط
+    // عندما تكون الخيارات الذكية مفعّلة، تجاهل تماماً الفحوصات القديمة
+    // (لأن واجهات sizes/sizePricing القديمة مخفية ولا يمكن للمستخدم التفاعل معها)
     if (showSmartVariants && smartVariantsData) {
       const LABELS: Record<string, string> = { color: "اللون", size: "المقاس", weight: "الوزن", image: "الخيار" };
       for (const type of smartVariantsData.activeTypes) {
@@ -526,6 +519,15 @@ export default function ProductDetail() {
           return `⚠️ يرجى اختيار ${LABELS[type] || type} أولاً`;
         }
       }
+      return null;
+    }
+    // 1) sizePricing يلزم اختيار مقاس
+    if (sizePricing.length > 0 && !selectedSize) {
+      return "⚠️ يرجى اختيار المقاس المناسب أولاً";
+    }
+    // 2) sizes بدون سعر يلزم اختيار مقاس
+    if (sizes.length > 0 && sizePricing.length === 0 && !selectedSize) {
+      return "⚠️ يرجى اختيار المقاس أولاً";
     }
     return null;
   };
@@ -887,7 +889,7 @@ export default function ProductDetail() {
         return (
           <div key="variants" className="px-4 space-y-4" data-testid="section-variants">
 
-            {/* ── Smart Variants (SHEIN style) ── */}
+            {/* ── Smart Variants (SHEIN style) — تستخدم إعدادات العرض الموحدة ── */}
             {showSmartVariants && smartVariantsData && (
               <div className="space-y-4">
                 {smartVariantsData.activeTypes.map(type => {
@@ -896,6 +898,22 @@ export default function ProductDetail() {
                   const selectedId = selectedSmartVariant[type];
                   const selectedLabel = selectedId ? typeVariants.find(v => v.id === selectedId)?.label : null;
                   const isColorOrImage = type === 'color' || type === 'image';
+                  // ── إعدادات التخطيط حسب نوع الخيار ──
+                  const colorGridClass = pdpColorLayout === 'grid2'
+                    ? 'grid grid-cols-2 gap-2'
+                    : pdpColorLayout === 'grid3'
+                      ? 'grid grid-cols-3 gap-2'
+                      : 'flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1';
+                  const sizeGridClass =
+                    pdpSizeLayout === 'vertical' ? 'flex flex-col gap-2' :
+                    pdpSizeLayout === 'row'      ? 'flex flex-row gap-2 overflow-x-auto pb-1 scrollbar-hide' :
+                    pdpSizeLayout === 'grid2'    ? 'grid grid-cols-2 gap-2' :
+                    'flex flex-wrap gap-2';
+                  const sizeRadius =
+                    pdpSizeStyle === 'pill'   ? 'rounded-full' :
+                    pdpSizeStyle === 'square' ? 'rounded-md' :
+                    pdpSizeStyle === 'full'   ? 'rounded-lg' :
+                    'rounded-xl';
                   return (
                     <div key={type}>
                       {/* Label SHEIN-style */}
@@ -904,16 +922,16 @@ export default function ProductDetail() {
                         {selectedLabel && <span className="text-sm text-muted-foreground">{selectedLabel}</span>}
                         <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground mr-auto" />
                       </div>
-                      {/* Color/Image → thumbnails scroll */}
+                      {/* Color/Image → thumbnails بأبعاد قابلة للتحكم */}
                       {isColorOrImage ? (
-                        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
+                        <div className={colorGridClass}>
                           {typeVariants.map(v => {
                             const isSelected = selectedSmartVariant[type] === v.id;
                             return (
                               <button key={v.id}
                                 onClick={() => { setSelectedSmartVariant(p => ({ ...p, [type]: v.id })); if (v.imageUrl) setVariantActiveImg(v.imageUrl); }}
                                 className={`relative shrink-0 rounded-xl overflow-hidden border-2 transition-all ${isSelected ? 'border-primary shadow-md scale-105' : 'border-gray-200 hover:border-gray-400'}`}
-                                style={{ width: 72, height: 72 }}
+                                style={{ width: pdpColorThumbnailW, height: pdpColorThumbnailH }}
                                 data-testid={`button-smart-variant-${type}-${v.id}`}>
                                 {v.imageUrl
                                   ? <img src={v.imageUrl} alt={v.label} className="w-full h-full object-cover" />
@@ -929,15 +947,21 @@ export default function ProductDetail() {
                           })}
                         </div>
                       ) : (
-                        /* Size/Weight → pill buttons */
-                        <div className="flex flex-wrap gap-2">
+                        /* Size/Weight → أزرار بأبعاد وتخطيط قابلين للتحكم */
+                        <div className={sizeGridClass}>
                           {typeVariants.map(v => {
                             const isSelected = selectedSmartVariant[type] === v.id;
                             const priceNum = Number(currency === 'SAR' && v.priceSar ? v.priceSar : v.price || 0);
+                            const btnStyle: React.CSSProperties = {
+                              height: pdpSizeButtonH,
+                              ...(pdpSizeButtonW > 0 ? { width: pdpSizeButtonW } : { minWidth: 64 }),
+                              ...(pdpSizeLayout === 'vertical' ? { width: '100%' } : {}),
+                            };
                             return (
                               <button key={v.id}
                                 onClick={() => { setSelectedSmartVariant(p => ({ ...p, [type]: v.id })); }}
-                                className={`flex flex-col items-center justify-center px-5 py-3 rounded-xl border-2 font-bold transition-all min-w-[64px] ${isSelected ? 'border-primary bg-primary text-white shadow' : 'border-gray-300 bg-white dark:bg-gray-800 text-foreground hover:border-gray-400'}`}
+                                style={btnStyle}
+                                className={`flex flex-col items-center justify-center px-3 py-2 ${sizeRadius} border-2 font-bold transition-all ${isSelected ? 'border-primary bg-primary text-white shadow' : 'border-gray-300 bg-white dark:bg-gray-800 text-foreground hover:border-gray-400'}`}
                                 data-testid={`button-smart-variant-${type}-${v.id}`}>
                                 <span className="text-sm">{v.label}</span>
                                 {priceNum > 0 && (
