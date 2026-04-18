@@ -352,45 +352,63 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ─── Suppliers (الموردون/الموزعون) ──────────────────────────────────────────
 
-  // دالة إشعار واتساب/SMS للمورد
   // ─── إشعار العميل عبر واتساب عند تغيير حالة الطلب ────────────────────────────
   async function notifyCustomerStatus(customerPhone: string, orderId: number, newStatus: string, extra?: { trackingNumber?: string; expectedShippingDate?: string }) {
     try {
+      const trackLink = `https://oyoplast.com/track`;
+      const messages: Record<string, string> = {
+        confirmed: `✅ *تم تأكيد طلبك!*\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: *#${orderId}*\n${extra?.expectedShippingDate ? `📅 موعد الشحن: ${extra.expectedShippingDate}\n` : ""}سنبدأ تجهيز طلبك قريباً.\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\n_أويو بلاست 🛍️_`,
+        preparing:  `⚙️ *جاري تجهيز طلبك!*\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: *#${orderId}*\nطلبك قيد التجهيز والتعبئة الآن.\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\n_أويو بلاست 🛍️_`,
+        shipped:    `🚚 *تم شحن طلبك!*\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: *#${orderId}*\n${extra?.trackingNumber ? `📦 رقم التتبع: ${extra.trackingNumber}\n` : ""}طلبك في الطريق إليك.\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\n_أويو بلاست 🛍️_`,
+        delivered:  `🎉 *تم تسليم طلبك بنجاح!*\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: *#${orderId}*\nنتمنى أن ينال طلبك إعجابك. شكراً لثقتك! 💙\n⭐ قيّم منتجاتك: https://oyoplast.com/orders\n━━━━━━━━━━━━━━━━━━━━━\n_أويو بلاست 🛍️_`,
+        cancelled:  `❌ *تم إلغاء طلبك*\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: *#${orderId}*\nللاستفسار تواصل معنا.\n━━━━━━━━━━━━━━━━━━━━━\n_أويو بلاست 🛍️_`,
+      };
+      const msg = messages[newStatus];
+      if (!msg) return;
+
+      // إرسال عبر UltraMSG أولاً
+      const ultraResult = await sendUltraMsg(customerPhone, msg);
+      if (ultraResult.ok) { console.log(`[notifyCustomer] UltraMSG sent order=${orderId} status=${newStatus}`); return; }
+
+      // احتياطي: Twilio WhatsApp
       const phone = customerPhone.replace(/\s+/g, "").replace(/^00/, "+");
       if (!phone.startsWith("+")) return;
-
       const accountSid = process.env.TWILIO_ACCOUNT_SID;
       const authToken = process.env.TWILIO_AUTH_TOKEN;
       const fromNumber = process.env.TWILIO_FROM_NUMBER;
       if (!accountSid || !authToken || !fromNumber) return;
-
-      const trackLink = `https://oyoplast.com/track`;
-
-      const messages: Record<string, string> = {
-        confirmed: `✅ تم تأكيد طلبك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\n${extra?.expectedShippingDate ? `📅 موعد الشحن المتوقع: ${extra.expectedShippingDate}\n` : ""}سنبدأ تجهيز طلبك قريباً.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
-        preparing:  `⚙️ جاري تجهيز طلبك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\nطلبك قيد التجهيز والتعبئة الآن.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
-        shipped:    `🚚 تم شحن طلبك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\n${extra?.trackingNumber ? `📦 رقم التتبع: ${extra.trackingNumber}\n` : ""}طلبك في الطريق إليك.\n\n🔗 تتبع طلبك: ${trackLink}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
-        delivered:  `🎉 تم تسليم طلبك بنجاح!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\nنتمنى أن ينال طلبك إعجابك.\nشكراً لثقتك بأويو بلاست! 💙\n\n⭐ شاركنا رأيك وقيّم منتجاتك:\n🔗 https://oyoplast.replit.app/orders\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
-        cancelled:  `❌ تم إلغاء طلبك\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\nللاستفسار تواصل معنا.\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`,
-      };
-
-      const msg = messages[newStatus];
-      if (!msg) return;
-
-      await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: "Basic " + Buffer.from(`${accountSid}:${authToken}`).toString("base64"),
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({ To: `whatsapp:${phone}`, From: `whatsapp:${fromNumber.replace(/^whatsapp:/i, "")}`, Body: msg }),
-        }
-      );
+      await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+        method: "POST",
+        headers: { Authorization: "Basic " + Buffer.from(`${accountSid}:${authToken}`).toString("base64"), "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ To: `whatsapp:${phone}`, From: `whatsapp:${fromNumber.replace(/^whatsapp:/i, "")}`, Body: msg }),
+      });
     } catch (e: any) {
       console.error("Customer notification error:", e.message);
     }
+  }
+
+  // تحويل رقم الهاتف إلى صيغة UltraMSG (967XXXXXXXX@c.us)
+  function toUltraMsgPhone(raw: string): string {
+    let p = (raw || "").replace(/\s+/g, "").replace(/^00/, "").replace(/^\+/, "");
+    if (p.startsWith("7") && p.length === 9) p = "967" + p;
+    if (!p.startsWith("967") && p.length === 9) p = "967" + p;
+    return p + "@c.us";
+  }
+
+  async function sendUltraMsg(phone: string, msg: string): Promise<{ ok: boolean; error?: string; details?: any }> {
+    const instanceId = process.env.ULTRAMSG_INSTANCE_ID;
+    const token = process.env.ULTRAMSG_TOKEN;
+    if (!instanceId || !token) return { ok: false, error: "UltraMSG غير مُعدَّد (ULTRAMSG_INSTANCE_ID / ULTRAMSG_TOKEN)" };
+    const to = toUltraMsgPhone(phone);
+    const r = await fetch(`https://api.ultramsg.com/${instanceId}/messages/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token, to, body: msg, priority: "1" }),
+    });
+    const body = await r.json().catch(() => ({}));
+    console.log(`[UltraMSG] to=${to} status=${r.status}`, JSON.stringify(body));
+    if (body?.sent === "true" || body?.id) return { ok: true, details: body };
+    return { ok: false, error: body?.error || body?.message || `HTTP ${r.status}`, details: body };
   }
 
   async function notifySupplier(supplierId: number, orderId: number, orderData: any): Promise<{ ok: boolean; channel: string; error?: string; details?: any }> {
@@ -399,72 +417,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sup = await dbPool.query("SELECT * FROM suppliers WHERE id=$1", [supplierId]);
       if (!sup.rows.length) return { ok: false, channel: "none", error: "المورد غير موجود" };
       const supplier = sup.rows[0];
-      let phone = (supplier.phone || "").replace(/\s+/g, "").replace(/^00/, "+");
-      if (phone && !phone.startsWith("+")) {
-        // افتراض رقم يمني إذا لم يبدأ بـ +
-        if (phone.startsWith("7") && phone.length === 9) phone = "+967" + phone;
-        else if (phone.startsWith("9677")) phone = "+" + phone;
-      }
-      if (!phone || !phone.startsWith("+")) {
-        return { ok: false, channel: "whatsapp", error: `رقم المورد غير صالح: ${supplier.phone || "(فارغ)"}` };
-      }
+      const rawPhone = (supplier.phone || "").replace(/\s+/g, "").replace(/^00/, "+");
+      if (!rawPhone) return { ok: false, channel: "whatsapp", error: "رقم المورد فارغ" };
 
+      const msg = `📦 *طلب جديد مُوكَّل إليك!*\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: *#${orderId}*\n👤 العميل: ${orderData.customerName || "—"}\n📱 الجوال: ${orderData.customerPhone || "—"}\n📍 المدينة: ${orderData.shippingCity || "—"}\n💰 المبلغ المستحق لك: *${Number(orderData.supplierAmount || 0).toLocaleString()} ${orderData.currency || "ر.ي"}*\n━━━━━━━━━━━━━━━━━━━━━\n_أويو بلاست | oyoplast.com_`;
+
+      // المحاولة الأولى: UltraMSG (واتساب)
+      const ultraResult = await sendUltraMsg(rawPhone, msg);
+      if (ultraResult.ok) {
+        await dbPool.query("UPDATE orders SET supplier_notified=true WHERE id=$1", [orderId]);
+        return { ok: true, channel: "whatsapp", details: ultraResult.details };
+      }
+      console.warn(`[notifySupplier] UltraMSG failed: ${ultraResult.error} — trying Twilio SMS fallback`);
+
+      // المحاولة الثانية: Twilio SMS احتياطي
       const accountSid = process.env.TWILIO_ACCOUNT_SID;
       const authToken = process.env.TWILIO_AUTH_TOKEN;
-      const fromNumber = process.env.TWILIO_FROM_NUMBER;
-      if (!accountSid || !authToken || !fromNumber) {
-        return { ok: false, channel: "whatsapp", error: "إعدادات Twilio غير مكتملة (TWILIO_ACCOUNT_SID/AUTH_TOKEN/FROM_NUMBER)" };
+      const fromNumber = (process.env.TWILIO_FROM_NUMBER || "").replace(/^whatsapp:/i, "");
+      if (accountSid && authToken && fromNumber) {
+        let phone = rawPhone.replace(/^\+/, "");
+        if (phone.startsWith("7") && phone.length === 9) phone = "+967" + phone;
+        else phone = "+" + phone;
+        const smsMsg = `OYO PLAST - Talab #${orderId} | ${orderData.customerName || ""} | ${orderData.shippingCity || ""} | ${Number(orderData.supplierAmount || 0).toLocaleString()} ${orderData.currency || "YER"} | oyoplast.com`;
+        const smsResp = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+          method: "POST",
+          headers: { Authorization: "Basic " + Buffer.from(`${accountSid}:${authToken}`).toString("base64"), "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ To: phone, From: fromNumber, Body: smsMsg }),
+        });
+        const smsBody = await smsResp.json().catch(() => ({}));
+        if (smsResp.ok) {
+          await dbPool.query("UPDATE orders SET supplier_notified=true WHERE id=$1", [orderId]);
+          return { ok: true, channel: "sms", details: smsBody };
+        }
       }
 
-      const msg = `OYO PLAST - Talab Jadid #${orderId}\nAl-Amel: ${orderData.customerName || "—"}\nJawal: ${orderData.customerPhone || "—"}\nMadina: ${orderData.shippingCity || "—"}\nAl-Mablag: ${Number(orderData.supplierAmount || 0).toLocaleString()} ${orderData.currency || "YER"}\noyoplast.com`;
-
-      // تنظيف الرقم من أي بادئة whatsapp: مكررة
-      const cleanFrom = fromNumber.replace(/^whatsapp:/i, "");
-
-      const twilioHeaders = {
-        Authorization: "Basic " + Buffer.from(`${accountSid}:${authToken}`).toString("base64"),
-        "Content-Type": "application/x-www-form-urlencoded",
-      };
-      const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
-
-      // المحاولة الأولى: واتساب
-      const waResp = await fetch(twilioUrl, {
-        method: "POST", headers: twilioHeaders,
-        body: new URLSearchParams({ To: `whatsapp:${phone}`, From: `whatsapp:${cleanFrom}`, Body: msg }),
-      });
-      const waBody = await waResp.json().catch(() => ({}));
-      console.log(`[notifySupplier/wa] order=${orderId} phone=${phone} status=${waResp.status}`, JSON.stringify(waBody));
-
-      if (waResp.ok) {
-        await dbPool.query("UPDATE orders SET supplier_notified=true WHERE id=$1", [orderId]);
-        return { ok: true, channel: "whatsapp", details: { sid: waBody?.sid, to: phone } };
-      }
-
-      // المحاولة الثانية: SMS عادي (إن فشل واتساب)
-      console.log(`[notifySupplier] WhatsApp failed (${waBody?.code}), trying SMS...`);
-      const smsResp = await fetch(twilioUrl, {
-        method: "POST", headers: twilioHeaders,
-        body: new URLSearchParams({ To: phone, From: cleanFrom, Body: msg }),
-      });
-      const smsBody = await smsResp.json().catch(() => ({}));
-      console.log(`[notifySupplier/sms] order=${orderId} phone=${phone} status=${smsResp.status}`, JSON.stringify(smsBody));
-
-      if (smsResp.ok) {
-        await dbPool.query("UPDATE orders SET supplier_notified=true WHERE id=$1", [orderId]);
-        return { ok: true, channel: "sms", details: { sid: smsBody?.sid, to: phone } };
-      }
-
-      // كلاهما فشل — إرجاع سبب WhatsApp كأساس + سبب SMS
-      const code = waBody?.code;
-      const message = waBody?.message || `HTTP ${waResp.status}`;
-      let hint = "";
-      if (code === 63016 || /sandbox/i.test(message)) hint = " — يجب على المورد إرسال 'join' لرقم Twilio Sandbox أولاً.";
-      else if (code === 63007 || /channel/i.test(message)) hint = " — رقم TWILIO_FROM_NUMBER ليس مُفعَّلاً لواتساب. تحقق من إعدادات Twilio.";
-      else if (code === 21408) hint = " — رقم اليمن غير مفعَّل في Twilio Geographic Permissions.";
-      else if (code === 21211 || code === 21614) hint = " — رقم الجوال غير صالح.";
-      else if (waResp.status === 401 || waResp.status === 403) hint = " — بيانات Twilio خاطئة.";
-      const smsHint = smsBody?.message ? ` | SMS: ${smsBody.message}` : "";
-      return { ok: false, channel: "whatsapp+sms", error: `${message}${hint}${smsHint}`, details: { wa: waBody, sms: smsBody } };
+      return { ok: false, channel: "whatsapp", error: ultraResult.error || "فشل إرسال الإشعار" };
     } catch (e: any) {
       console.error("Supplier notification error:", e.message);
       return { ok: false, channel: "whatsapp", error: e.message || "خطأ غير معروف" };

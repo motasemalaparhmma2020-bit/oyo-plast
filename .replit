@@ -45,3 +45,5 @@ integrations = ["javascript_log_in_with_replit:2.0.0"]
 [userenv]
 
 [userenv.shared]
+ULTRAMSG_INSTANCE_ID = "instance170684"
+ULTRAMSG_TOKEN = "pyzrk5m7jn04bzc2"
