@@ -1688,6 +1688,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ─── 🤖 موظف المبيعات الذكي (Gemini Sales Agent) ────────────────
+  // ─── موظف الطباعة الذكي المتخصص ─────────────────────────────────────────────
+  app.post("/api/ai/printing-chat", async (req, res) => {
+    try {
+      const { message, history, productType } = req.body || {};
+      if (!message || typeof message !== "string" || message.trim().length === 0) {
+        return res.status(400).json({ message: "الرسالة مطلوبة" });
+      }
+      if (message.length > 1200) {
+        return res.status(400).json({ message: "الرسالة طويلة جداً" });
+      }
+      const { handlePrintingChat } = await import("./printing-ai");
+      const result = await handlePrintingChat({
+        message: message.trim(),
+        history: Array.isArray(history) ? history.slice(-16) : [],
+        productType: typeof productType === "string" ? productType : undefined,
+      });
+      res.json(result);
+    } catch (e: any) {
+      console.error("[/api/ai/printing-chat] خطأ:", e?.message);
+      res.status(500).json({ reply: "عذراً، حصل خلل. حاول مرة أخرى.", error: e?.message });
+    }
+  });
+
   app.post("/api/ai/chat", async (req, res) => {
     try {
       const { message, history, productId, uploadedLogoUrl } = req.body || {};

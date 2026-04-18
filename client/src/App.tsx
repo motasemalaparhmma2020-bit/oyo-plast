@@ -79,6 +79,7 @@ import NotFound from "@/pages/not-found";
 import { Footer, MobileFooter } from "@/components/Footer";
 import { GlobalBottomNav } from "@/components/GlobalBottomNav";
 import { SalesChatProvider } from "@/components/SalesChat";
+import { FloatingRobot } from "@/components/FloatingRobot";
 import { SplashScreen } from "@/components/SplashScreen";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { CompareBar } from "@/components/CompareBar";
@@ -576,6 +577,7 @@ function Router() {
         {!hideBottomNav && <GlobalBottomNav />}
         <CompareBar />
         <PwaInstallBanner />
+        <FloatingRobot />
         <WhatsAppButton settings={displaySettingsForNav} />
       </div>
     </>
