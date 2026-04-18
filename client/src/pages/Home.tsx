@@ -314,10 +314,10 @@ export default function Home() {
       {displaySettings.showCategories && (
         <CategoryCircles
           categories={categories || []}
-          circleSize={Math.max(displaySettings.categorySize ?? 72, 76)}
+          circleSize={displaySettings.categorySize}
           perRow={displaySettings.categoriesPerRow}
           layout={displaySettings.categoriesLayout ?? "scroll"}
-          rows={Math.min(displaySettings.categoriesRows ?? 2, 2)}
+          rows={displaySettings.categoriesRows ?? 2}
           shape={displaySettings.categoriesShape ?? "circle"}
           borderRadius={displaySettings.categoriesBorderRadius ?? 12}
         />

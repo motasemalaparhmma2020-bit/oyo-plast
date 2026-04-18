@@ -430,7 +430,7 @@ function WhatsAppButton({ settings }: { settings: any }) {
       target="_blank"
       rel="noopener noreferrer"
       data-testid="button-whatsapp-float"
-      className="fixed bottom-20 left-4 z-[60] w-14 h-14 rounded-full bg-[#25D366] shadow-lg flex items-center justify-center hover:bg-[#1EB855] transition-all hover:scale-110 active:scale-95"
+      className="fixed bottom-20 right-4 z-[60] w-14 h-14 rounded-full bg-[#25D366] shadow-lg flex items-center justify-center hover:bg-[#1EB855] transition-all hover:scale-110 active:scale-95"
       style={{ boxShadow: "0 4px 20px rgba(37,211,102,0.5)" }}
       title="تواصل معنا عبر واتساب"
     >
