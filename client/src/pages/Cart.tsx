@@ -13,7 +13,7 @@ import {
   setGuestCart,
 } from "@/lib/cartUtils";
 import { useDisplaySettings } from "@/hooks/use-display-settings";
-import { OrderItemCompactMeta, OrderItemCollapsibleMeta } from "@/components/OrderItemDetails";
+import { OrderItemCompactMeta, OrderItemCollapsibleMeta, ColorDot } from "@/components/OrderItemDetails";
 import type { ItemDisplayConfig } from "@/hooks/use-display-settings";
 
 function formatPrice(n: number) {
@@ -61,14 +61,32 @@ function CartRow({
           {/* الاسم */}
           <p className="text-sm font-semibold leading-snug line-clamp-2 text-foreground">{name}</p>
 
-          {/* وصف المنتج كسطر معلومات دائم عندما يحتوي على تفاصيل المقاس/اللون */}
+          {/* وصف المنتج كسطر معلومات */}
           {description && (
-            <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2" data-testid={`text-description-${testPrefix}`}>
+            <p className="text-[11px] text-muted-foreground leading-snug line-clamp-1" data-testid={`text-description-${testPrefix}`}>
               {description}
             </p>
           )}
 
-          {/* تفاصيل المنتج حسب الإعدادات */}
+          {/* سطر اللون والمقاس — نمط شي إن — دائم الظهور */}
+          {(selectedColor || selectedSize) && (
+            <div
+              className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5"
+              data-testid={`text-variant-${testPrefix}`}
+            >
+              {selectedColor && (
+                <span className="flex items-center gap-1">
+                  <ColorDot color={selectedColor} size="xs" />
+                  <span>{selectedColor}</span>
+                </span>
+              )}
+              {selectedColor && selectedSize && <span className="text-gray-300">/</span>}
+              {selectedSize && <span>{selectedSize}</span>}
+              <span className="text-gray-300">›</span>
+            </div>
+          )}
+
+          {/* بقية التفاصيل (طباعة/ملف/ملاحظات) حسب الإعدادات */}
           {cfg.mode === "collapsible"
             ? <OrderItemCollapsibleMeta item={meta} cfg={cfg} />
             : <OrderItemCompactMeta item={meta} cfg={cfg} />
