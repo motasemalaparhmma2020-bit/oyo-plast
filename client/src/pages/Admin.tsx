@@ -4341,6 +4341,15 @@ function OrderSupplierAssign({ order, adminToken }: { order: any; adminToken: st
     },
     onSuccess: (data) => {
       toast({ title: `✅ تم تعيين المورد — يستلم ${Number(data.supplierAmount).toLocaleString()} ر.ي` });
+      if (data?.notify && !data.notify.ok) {
+        toast({
+          title: "⚠️ لم يصل إشعار واتساب للمورد",
+          description: data.notify.error || "تعذّر إرسال الرسالة عبر Twilio",
+          variant: "destructive",
+        });
+      } else if (data?.notify?.ok) {
+        toast({ title: "📱 وصلت رسالة واتساب للمورد" });
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/admin/suppliers"] });
     },
     onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),

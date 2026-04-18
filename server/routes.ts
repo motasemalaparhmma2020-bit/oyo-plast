@@ -393,32 +393,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   }
 
-  async function notifySupplier(supplierId: number, orderId: number, orderData: any) {
+  async function notifySupplier(supplierId: number, orderId: number, orderData: any): Promise<{ ok: boolean; channel: string; error?: string; details?: any }> {
+    const { pool: dbPool } = await import("./db");
     try {
-      const { pool: dbPool } = await import("./db");
       const sup = await dbPool.query("SELECT * FROM suppliers WHERE id=$1", [supplierId]);
-      if (!sup.rows.length) return;
+      if (!sup.rows.length) return { ok: false, channel: "none", error: "المورد غير موجود" };
       const supplier = sup.rows[0];
-      const phone = supplier.phone.replace(/\s+/g, "").replace(/^00/, "+");
+      let phone = (supplier.phone || "").replace(/\s+/g, "").replace(/^00/, "+");
+      if (phone && !phone.startsWith("+")) {
+        // افتراض رقم يمني إذا لم يبدأ بـ +
+        if (phone.startsWith("7") && phone.length === 9) phone = "+967" + phone;
+        else if (phone.startsWith("9677")) phone = "+" + phone;
+      }
+      if (!phone || !phone.startsWith("+")) {
+        return { ok: false, channel: "whatsapp", error: `رقم المورد غير صالح: ${supplier.phone || "(فارغ)"}` };
+      }
 
       const accountSid = process.env.TWILIO_ACCOUNT_SID;
       const authToken = process.env.TWILIO_AUTH_TOKEN;
       const fromNumber = process.env.TWILIO_FROM_NUMBER;
-      if (!accountSid || !authToken || !fromNumber) return;
+      if (!accountSid || !authToken || !fromNumber) {
+        return { ok: false, channel: "whatsapp", error: "إعدادات Twilio غير مكتملة (TWILIO_ACCOUNT_SID/AUTH_TOKEN/FROM_NUMBER)" };
+      }
 
-      const msg = `
-📦 طلب جديد مُوكَّل إليك!
-━━━━━━━━━━━━━━━━━━━━━
-🆔 رقم الطلب: #${orderId}
-👤 العميل: ${orderData.customerName || "—"}
-📱 الجوال: ${orderData.customerPhone || "—"}
-📍 المدينة: ${orderData.shippingCity || "—"}
-💰 المبلغ المستحق لك: ${Number(orderData.supplierAmount || 0).toLocaleString()} ${orderData.currency || "ر.ي"}
-━━━━━━━━━━━━━━━━━━━━━
-أويو بلاست | oyoplast.com
-      `.trim();
+      const msg = `📦 طلب جديد مُوكَّل إليك!\n━━━━━━━━━━━━━━━━━━━━━\n🆔 رقم الطلب: #${orderId}\n👤 العميل: ${orderData.customerName || "—"}\n📱 الجوال: ${orderData.customerPhone || "—"}\n📍 المدينة: ${orderData.shippingCity || "—"}\n💰 المبلغ المستحق لك: ${Number(orderData.supplierAmount || 0).toLocaleString()} ${orderData.currency || "ر.ي"}\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست | oyoplast.com`;
 
-      await fetch(
+      const r = await fetch(
         `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
         {
           method: "POST",
@@ -429,9 +429,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           body: new URLSearchParams({ To: `whatsapp:${phone}`, From: `whatsapp:${fromNumber}`, Body: msg }),
         }
       );
+      const body = await r.json().catch(() => ({}));
+      console.log(`[notifySupplier] order=${orderId} supplier=${supplierId} phone=${phone} status=${r.status}`, body);
+
+      if (!r.ok) {
+        // Twilio error: 63007=channel not active, 63016=sandbox not joined, 21408=region not enabled
+        const code = body?.code;
+        const message = body?.message || `HTTP ${r.status}`;
+        let hint = "";
+        if (code === 63016 || /sandbox/i.test(message)) hint = " — يجب على المورد إرسال join code إلى رقم Twilio Sandbox أولاً.";
+        else if (code === 21408) hint = " — رقم اليمن غير مفعّل في حساب Twilio (افتح Geographic Permissions).";
+        else if (code === 21211 || code === 21614) hint = " — رقم الجوال غير صالح للواتساب.";
+        else if (r.status === 401 || r.status === 403) hint = " — بيانات اعتماد Twilio خاطئة.";
+        return { ok: false, channel: "whatsapp", error: `${message}${hint}`, details: body };
+      }
+
       await dbPool.query("UPDATE orders SET supplier_notified=true WHERE id=$1", [orderId]);
+      return { ok: true, channel: "whatsapp", details: { sid: body?.sid, to: phone } };
     } catch (e: any) {
       console.error("Supplier notification error:", e.message);
+      return { ok: false, channel: "whatsapp", error: e.message || "خطأ غير معروف" };
     }
   }
 
@@ -669,8 +686,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         [orderTotal, supplierAmount, supplierId]
       );
       // إرسال إشعار
-      await notifySupplier(supplierId, orderId, { customerName: order.customer_name, customerPhone: order.customer_phone, shippingCity: order.shipping_city, supplierAmount, currency: order.currency });
-      res.json({ success: true, supplierAmount, platformCommission });
+      const notifyResult = await notifySupplier(supplierId, orderId, { customerName: order.customer_name, customerPhone: order.customer_phone, shippingCity: order.shipping_city, supplierAmount, currency: order.currency });
+      res.json({ success: true, supplierAmount, platformCommission, notify: notifyResult });
     } catch (e: any) {
       res.status(500).json({ message: "فشل تعيين المورد" });
     }
@@ -685,8 +702,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!orderRes.rows.length) return res.status(404).json({ message: "الطلب غير موجود" });
       const order = orderRes.rows[0];
       if (!order.supplier_id) return res.status(400).json({ message: "لا يوجد مورد مُعيَّن لهذا الطلب" });
-      await notifySupplier(order.supplier_id, orderId, { customerName: order.customer_name, customerPhone: order.customer_phone, shippingCity: order.shipping_city, supplierAmount: order.supplier_amount, currency: order.currency });
-      res.json({ success: true });
+      const notifyResult = await notifySupplier(order.supplier_id, orderId, { customerName: order.customer_name, customerPhone: order.customer_phone, shippingCity: order.shipping_city, supplierAmount: order.supplier_amount, currency: order.currency });
+      if (!notifyResult.ok) return res.status(502).json({ message: notifyResult.error || "فشل إرسال الإشعار", notify: notifyResult });
+      res.json({ success: true, notify: notifyResult });
     } catch (e: any) {
       res.status(500).json({ message: "فشل الإشعار" });
     }
