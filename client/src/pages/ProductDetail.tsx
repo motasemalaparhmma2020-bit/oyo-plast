@@ -463,11 +463,22 @@ export default function ProductDetail() {
 
   const cartPayload = useMemo(() => {
     const filledColors = printColors.filter(c => c.trim());
+    // ── الخيارات الذكية لها الأولوية: استخرج تسميات اللون والمقاس من المتغيرات المختارة ──
+    let svSize: string | undefined;
+    let svColor: string | undefined;
+    if (showSmartVariants && smartVariantsData) {
+      for (const [type, vid] of Object.entries(selectedSmartVariant)) {
+        const v = smartVariantsData.variants.find(x => x.id === vid);
+        if (!v) continue;
+        if (type === 'size' || type === 'weight') svSize = v.label;
+        if (type === 'color' || type === 'image') svColor = v.label;
+      }
+    }
     return {
       productId: product?.id ?? 0,
       quantity,
-      selectedSize: selectedSize || undefined,
-      selectedColor: selectedColor || undefined,
+      selectedSize: svSize || selectedSize || undefined,
+      selectedColor: svColor || selectedColor || undefined,
       customPrinting: enableCustomPrinting,
       designNotes: designNotes || undefined,
       designFileUrl: uploadedDesignUrl || undefined,
@@ -946,7 +957,7 @@ export default function ProductDetail() {
             )}
 
             {/* ── الألوان من colorImages — صور مصغرة بأبعاد وتخطيط قابل للتحكم ── */}
-            {colorImages.length > 0 && (() => {
+            {!showSmartVariants && colorImages.length > 0 && (() => {
               const colorGridClass = pdpColorLayout === 'grid2'
                 ? 'grid grid-cols-2 gap-2'
                 : pdpColorLayout === 'grid3'
@@ -980,7 +991,7 @@ export default function ProductDetail() {
             })()}
 
             {/* ── الألوان العادية (hex/dot) — دوائر بأبعاد وتخطيط قابل للتحكم ── */}
-            {colorImages.length === 0 && availableColors.length > 0 && (() => {
+            {!showSmartVariants && colorImages.length === 0 && availableColors.length > 0 && (() => {
               const dotGrid = pdpColorLayout === 'grid2'
                 ? 'grid grid-cols-4 gap-2'
                 : pdpColorLayout === 'grid3'
@@ -1017,7 +1028,7 @@ export default function ProductDetail() {
             })()}
 
             {/* ── المقاسات مع سعر — أبعاد وتخطيط وشكل قابل للتحكم ── */}
-            {sizePricing.length > 0 && (() => {
+            {!showSmartVariants && sizePricing.length > 0 && (() => {
               const sizeGridClass =
                 pdpSizeLayout === 'vertical' ? 'flex flex-col gap-2' :
                 pdpSizeLayout === 'row'      ? 'flex flex-row gap-2 overflow-x-auto pb-1 scrollbar-hide' :
@@ -1063,7 +1074,7 @@ export default function ProductDetail() {
             })()}
 
             {/* ── مقاسات بدون سعر — أبعاد وتخطيط وشكل قابل للتحكم ── */}
-            {sizes.length > 0 && sizePricing.length === 0 && (() => {
+            {!showSmartVariants && sizes.length > 0 && sizePricing.length === 0 && (() => {
               const sizeGridClass =
                 pdpSizeLayout === 'vertical' ? 'flex flex-col gap-2' :
                 pdpSizeLayout === 'row'      ? 'flex flex-row gap-2 overflow-x-auto pb-1 scrollbar-hide' :

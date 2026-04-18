@@ -423,6 +423,78 @@ export async function runMigrations(): Promise<void> {
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS gps_longitude varchar`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed varchar DEFAULT 'false'`);
 
+    // ── ترحيل تلقائي: تحويل colors/sizes/sizePricing إلى smartVariants ──
+    // يعمل مرة واحدة فقط لكل منتج (إذا كان smart_variants فارغ)
+    try {
+      const COLOR_HEX: Record<string, string> = {
+        'أبيض': '#FFFFFF', 'أسود': '#000000', 'أحمر': '#EF4444', 'أزرق': '#3B82F6',
+        'أخضر': '#22C55E', 'أصفر': '#FACC15', 'بيج': '#D4B896', 'سماوي': '#67E8F9',
+        'مخطط': '#9CA3AF', 'ألوان': '#A78BFA', 'برتقالي': '#FB923C', 'بني': '#92400E',
+        'رمادي': '#6B7280', 'وردي': '#EC4899', 'بنفسجي': '#A855F7', 'ذهبي': '#D4AF37',
+      };
+      const toMigrate = await client.query(`
+        SELECT id, price, price_sar, colors, sizes, size_pricing
+        FROM products
+        WHERE (smart_variants IS NULL OR smart_variants = '' OR smart_variants = 'null')
+          AND ( (colors IS NOT NULL AND array_length(colors,1) > 0)
+                OR (sizes IS NOT NULL AND array_length(sizes,1) > 0)
+                OR (size_pricing IS NOT NULL AND size_pricing <> '') )
+      `);
+      let migrated = 0;
+      for (const p of toMigrate.rows) {
+        const variants: any[] = [];
+        const activeTypes: string[] = [];
+        // sizes / sizePricing → variants type=size
+        let sp: any[] = [];
+        try { sp = p.size_pricing ? JSON.parse(p.size_pricing) : []; } catch {}
+        if (Array.isArray(sp) && sp.length > 0) {
+          activeTypes.push('size');
+          sp.forEach((s: any, i: number) => {
+            variants.push({
+              id: `mig-size-${p.id}-${i}`, type: 'size',
+              label: String(s.size ?? ''),
+              price: String(s.price ?? p.price ?? ''),
+              priceSar: String(s.priceSar ?? p.price_sar ?? ''),
+              discount: '', hex: '', imageUrl: '',
+            });
+          });
+        } else if (Array.isArray(p.sizes) && p.sizes.length > 0) {
+          activeTypes.push('size');
+          p.sizes.forEach((sz: string, i: number) => {
+            variants.push({
+              id: `mig-size-${p.id}-${i}`, type: 'size', label: String(sz),
+              price: String(p.price ?? ''), priceSar: String(p.price_sar ?? ''),
+              discount: '', hex: '', imageUrl: '',
+            });
+          });
+        }
+        // colors → variants type=color
+        if (Array.isArray(p.colors) && p.colors.length > 0) {
+          activeTypes.push('color');
+          p.colors.forEach((c: string, i: number) => {
+            variants.push({
+              id: `mig-color-${p.id}-${i}`, type: 'color', label: String(c),
+              price: '', priceSar: '', discount: '',
+              hex: COLOR_HEX[c] || '#CCCCCC', imageUrl: '',
+            });
+          });
+        }
+        if (variants.length > 0) {
+          const json = JSON.stringify({ activeTypes, variants });
+          await client.query(
+            `UPDATE products SET smart_variants = $1, enable_smart_variants = true WHERE id = $2`,
+            [json, p.id]
+          );
+          migrated++;
+        }
+      }
+      if (migrated > 0) {
+        console.log(`[INFO] Migrated ${migrated} product(s) → smartVariants`);
+      }
+    } catch (e) {
+      console.warn("[WARN] smartVariants migration:", e instanceof Error ? e.message : e);
+    }
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));
