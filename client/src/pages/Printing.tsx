@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { ArrowLeft, Sparkles, Printer } from "lucide-react";
+import { ArrowLeft, Sparkles, Printer, RefreshCw, PackageSearch } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { ProductCard } from "@/components/ProductCard";
 import { useSEO } from "@/hooks/use-seo";
 import { PrintingAssistant } from "@/components/PrintingAssistant";
@@ -14,13 +15,16 @@ export default function Printing() {
     canonical: "https://oyoplast.com/printing",
   });
 
-  const { data: products = [], isLoading } = useQuery<any[]>({
+  const {
+    data: products = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<any[]>({
     queryKey: ["/api/printing-products"],
-    queryFn: async () => {
-      const res = await fetch("/api/printing-products", { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    },
+    staleTime: 0,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
   });
 
   return (
@@ -53,30 +57,56 @@ export default function Printing() {
         <PrintingAssistant />
       </section>
 
-      {/* Divider with Products Section */}
-      {(products.length > 0 || isLoading) && (
-        <section className="px-4 pt-2 pb-4">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="h-px flex-1 bg-gray-200" />
-            <span className="text-xs text-gray-400 font-medium">منتجات الطباعة الجاهزة</span>
-            <div className="h-px flex-1 bg-gray-200" />
-          </div>
+      {/* منتجات الطباعة */}
+      <section className="px-4 pt-2 pb-4">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="h-px flex-1 bg-gray-200 dark:bg-border" />
+          <span className="text-xs text-gray-400 font-medium">منتجات الطباعة الجاهزة</span>
+          <div className="h-px flex-1 bg-gray-200 dark:bg-border" />
+        </div>
 
-          {isLoading ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-64 rounded-xl bg-gray-100 animate-pulse dark:bg-gray-800" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {products.map((product: any) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
-            </div>
-          )}
-        </section>
-      )}
+        {/* جاري التحميل */}
+        {isLoading && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-64 rounded-xl bg-gray-100 animate-pulse dark:bg-gray-800" />
+            ))}
+          </div>
+        )}
+
+        {/* خطأ في التحميل */}
+        {isError && !isLoading && (
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <PackageSearch className="h-10 w-10 text-gray-300" />
+            <p className="text-sm text-gray-400">تعذّر تحميل المنتجات</p>
+            <button
+              onClick={() => refetch()}
+              className="flex items-center gap-1.5 text-xs text-primary font-semibold hover:underline"
+              data-testid="btn-retry-printing-products"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> إعادة المحاولة
+            </button>
+          </div>
+        )}
+
+        {/* المنتجات */}
+        {!isLoading && !isError && products.length > 0 && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {products.map((product: any) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        )}
+
+        {/* فارغة — لا منتجات */}
+        {!isLoading && !isError && products.length === 0 && (
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <PackageSearch className="h-10 w-10 text-gray-300" />
+            <p className="text-sm text-gray-400">لا توجد منتجات طباعة متاحة حالياً</p>
+            <p className="text-xs text-gray-300">استخدم الموظف الذكي أعلاه للطلب المباشر</p>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

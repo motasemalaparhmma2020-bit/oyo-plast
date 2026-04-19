@@ -1023,7 +1023,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const imageUrls = result.rows[0].image_urls;
       if (!imageUrls || !imageUrls[imgIndex]) return res.status(404).send("No image at index");
       const imageUrl = imageUrls[imgIndex];
-      if (!imageUrl.startsWith("data:")) return res.redirect(imageUrl);
+      if (!imageUrl.startsWith("data:")) {
+        // صورة خارجية (Cloudinary) — وجّه مباشرةً مع caching
+        res.set("Cache-Control", "public, max-age=86400");
+        return res.redirect(302, imageUrl);
+      }
       const matches = imageUrl.match(new RegExp("^data:([^;]+);base64,(.+)$", "s"));
       if (!matches) return res.status(400).send("Invalid image data");
       const mimeType = matches[1];
@@ -1191,15 +1195,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const id = parseInt(req.params.id);
       if (Number.isNaN(id)) return res.status(404).json({ message: "المنتج غير موجود" });
       const result = await dbPool.query(
-        `SELECT ${LITE_COLS}, cardinality(image_urls) as extra_count FROM products WHERE id = $1`,
+        `SELECT ${LITE_COLS}, image_urls FROM products WHERE id = $1`,
         [id]
       );
       if (!result.rows.length) return res.status(404).json({ message: "المنتج غير موجود" });
       const r = result.rows[0];
-      const extraCount = r.extra_count || 0;
+      // أعد الـ URLs الحقيقية مباشرةً — استخدم الـ proxy فقط للصور base64
+      const rawUrls: string[] = Array.isArray(r.image_urls) ? r.image_urls : [];
+      const imageUrls = rawUrls.map((url: string, i: number) =>
+        url.startsWith("data:") ? `/api/products/image/${id}/${i}` : url
+      );
       const product = {
         ...mapProductRow(r),
-        imageUrls: Array.from({ length: extraCount }, (_: any, i: number) => `/api/products/image/${id}/${i}`),
+        imageUrls,
       };
       res.json(product);
     } catch (error: any) {
@@ -1395,12 +1403,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const { pool: dbPool } = await import("./db");
       const result = await dbPool.query(
-        `SELECT ${LITE_COLS}, cardinality(image_urls) as extra_count FROM products ORDER BY id DESC`
+        `SELECT ${LITE_COLS}, image_urls FROM products ORDER BY id DESC`
       );
-      const rows = result.rows.map((r: any) => ({
-        ...mapProductRow(r),
-        imageUrls: Array.from({ length: r.extra_count || 0 }, (_: any, i: number) => `/api/products/image/${r.id}/${i}`),
-      }));
+      const rows = result.rows.map((r: any) => {
+        const rawUrls: string[] = Array.isArray(r.image_urls) ? r.image_urls : [];
+        return {
+          ...mapProductRow(r),
+          imageUrls: rawUrls.map((url: string, i: number) =>
+            url.startsWith("data:") ? `/api/products/image/${r.id}/${i}` : url
+          ),
+        };
+      });
       res.json(rows);
     } catch (e: any) {
       res.status(500).json({ message: "فشل تحميل المنتجات", details: e.message });
