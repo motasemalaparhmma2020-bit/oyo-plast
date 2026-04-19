@@ -15,8 +15,10 @@ export default function MarketerLogin() {
   const [pin, setPin] = useState("");
 
   const loginMutation = useMutation({
-    mutationFn: (data: { phone: string; pin: string }) =>
-      apiRequest("POST", "/api/marketer/login", data),
+    mutationFn: async (data: { phone: string; pin: string }) => {
+      const res = await apiRequest("POST", "/api/marketer/login", data);
+      return res.json();
+    },
     onSuccess: (data: any) => {
       localStorage.setItem("marketerToken", data.token);
       localStorage.setItem("marketerData", JSON.stringify(data.marketer));
