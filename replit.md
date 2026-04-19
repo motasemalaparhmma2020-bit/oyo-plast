@@ -51,13 +51,14 @@ I want iterative development. Ask before making major changes. I prefer detailed
     - Installment plan reminders via WhatsApp.
 - **AI Printing Assistant ("أويو"):**
     - Specialized Gemini-powered chat assistant embedded in /printing page.
-    - Guides users through: product type → background color → size → quantity → print colors → design notes.
-    - Supports 10 product types: cloth bags, nut bags, invoices, business cards, stickers, sign boards, pens/notebooks, t-shirts, mugs, medals.
-    - Suggests Arabic-localized color combinations based on business type.
-    - Offers "initial design service" (300 YER) with WhatsApp redirect including spec summary.
-    - Backend: `server/printing-ai.ts` with multi-model fallback (gemini-2.5-flash → 1.5-flash → 2.0-flash).
+    - **DYNAMIC**: Reads products directly from database (WHERE show_in_printing=true) before every chat — automatically knows new products, prices, colors instantly.
+    - System prompt built at runtime: live DB products + static knowledge (printing types, delivery times, color guide, design description guide).
+    - 6-step guided order flow: product type → size → color → quantity → print type → design → contact info → structured WhatsApp summary.
+    - Structured WhatsApp order summary (📦 format) auto-detected by frontend and sent to WhatsApp.
+    - Offers optional "initial design service" (300 YER, deducted from final order).
+    - Backend: `server/printing-ai.ts` with `fetchPrintingProducts()` DB query + 4-model Gemini fallback.
     - Route: POST `/api/ai/printing-chat`
-    - Component: `client/src/components/PrintingAssistant.tsx`
+    - Component: `client/src/components/PrintingAssistant.tsx` (fetches WhatsApp number from display-settings).
 - **Floating Robot (FloatingRobot):**
     - Simple animated robot button at bottom-left on all pages EXCEPT /printing, /admin, /staff, /supplier, /marketer/dashboard.
     - Opens 4 quick action buttons: file complaint, suggestion, contact support, browse printing.

@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
   Send, Bot, User, ShoppingCart, Palette, Sparkles,
-  ChevronDown, ChevronUp, Loader2, RefreshCw,
+  ChevronDown, ChevronUp, Loader2, RefreshCw, MessageCircle,
 } from "lucide-react";
 
 type Msg = { role: "user" | "model"; text: string; action?: string | null };
@@ -15,10 +15,10 @@ const PRODUCT_TYPES = [
   { key: "nut_bag", emoji: "🥜", label: "أكياس مكسرات" },
   { key: "invoice", emoji: "🧾", label: "فواتير" },
   { key: "business_card", emoji: "💼", label: "كروت شخصية" },
-  { key: "sticker", emoji: "🏷️", label: "لاصق ملصقات" },
+  { key: "sticker", emoji: "🏷️", label: "ملصقات" },
   { key: "sign_board", emoji: "📋", label: "لوحات إعلانية" },
   { key: "pen_notebook", emoji: "✏️", label: "أقلام ودفاتر" },
-  { key: "tshirt", emoji: "👕", label: "فنايل مطبوعة" },
+  { key: "tshirt", emoji: "👕", label: "فنايل" },
   { key: "mug", emoji: "☕", label: "أكواب" },
   { key: "medal", emoji: "🏅", label: "ميداليات" },
 ];
@@ -26,24 +26,40 @@ const PRODUCT_TYPES = [
 const QUICK_REPLIES = [
   "كم سعر الطلب؟",
   "ما هو الحد الأدنى للكمية؟",
-  "كم يستغرق التصنيع؟",
+  "كم يستغرق التسليم؟",
   "اقترح تركيبة ألوان",
 ];
 
 const GREETING: Msg = {
   role: "model",
-  text: "حياك الله! أنا أويو 🎨 موظف الطباعة في أويو بلاست.\n\nأساعدك تختار، تصمم، وتطلب — كل شيء من مكان واحد.\n\nاضغط على نوع المنتج الذي تريده أو اكتب سؤالك مباشرة 👇",
+  text: "حياك الله! أنا أويو 🎨 موظف الطباعة في أويو بلاست.\n\nأساعدك تختار، تصمم، وتطلب — كل شيء من مكان واحد.\n\nاضغط على نوع المنتج أو اكتب طلبك مباشرة 👇",
 };
 
 function formatText(text: string) {
-  // Bold **text**
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((part, i) => {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return <strong key={i}>{part.slice(2, -2)}</strong>;
     }
     return <span key={i}>{part}</span>;
   });
+}
+
+// استخراج ملخص الطلب من رد الموظف لإرساله للواتساب
+function extractOrderSummary(messages: Msg[]): string {
+  // نبحث في آخر رسائل الموظف عن الملخص المنظّم
+  const modelMsgs = [...messages].reverse().filter(m => m.role === "model");
+  for (const msg of modelMsgs) {
+    if (msg.text.includes("📦") && msg.text.includes("━━")) {
+      return msg.text;
+    }
+  }
+  // إذا لم يجد ملخصاً منظّماً، نجمع كل رسائل العميل
+  const userMsgs = messages
+    .filter(m => m.role === "user")
+    .slice(-8)
+    .map(m => m.text)
+    .join("\n");
+  return `تفاصيل الطلب:\n${userMsgs}`;
 }
 
 export function PrintingAssistant() {
@@ -56,11 +72,46 @@ export function PrintingAssistant() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // جلب رقم الواتساب من الإعدادات
+  const { data: displaySettings } = useQuery<any>({
+    queryKey: ["/api/display-settings"],
+    staleTime: 5 * 60 * 1000,
+  });
+  const waNumber = displaySettings?.whatsappNumber?.replace(/\D/g, "") || "967777777777";
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // فتح واتساب مع ملخص الطلب
+  const openWhatsApp = (text: string) => {
+    const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank");
+  };
+
+  // إجراء: طلب تصميم أولي (300 ريال)
+  const handleDesignService = (currentMessages: Msg[]) => {
+    const summary = extractOrderSummary(currentMessages);
+    const waText = `مرحباً أويو بلاست 🎨\n\nأريد نموذج تصميم أولي (300 ريال)\n\n${summary}\n\nأرجو التواصل لإتمام التصميم.`;
+    openWhatsApp(waText);
+    toast({
+      title: "✅ يتم تحويلك للواتساب",
+      description: "أرسل الرسالة وسيتواصل معك فريق التصميم خلال دقائق",
+    });
+  };
+
+  // إجراء: إتمام الطلب النهائي
+  const handleReadyToOrder = (currentMessages: Msg[]) => {
+    const summary = extractOrderSummary(currentMessages);
+    const waText = `مرحباً أويو بلاست 📦\n\nلديّ طلب طباعة جديد:\n\n${summary}\n\nأرجو التأكيد والمتابعة.`;
+    openWhatsApp(waText);
+    toast({
+      title: "✅ تم إرسال طلبك للواتساب",
+      description: "سيتواصل معك الفريق قريباً لتأكيد الطلب",
+    });
+  };
 
   const chatMutation = useMutation({
     mutationFn: async (text: string) => {
@@ -79,19 +130,30 @@ export function PrintingAssistant() {
       return data;
     },
     onSuccess: (data) => {
-      const reply: Msg = { role: "model", text: data.reply, action: data.action };
-      setMessages((prev) => [...prev, reply]);
+      // كشف تلقائي للملخص المنسّق حتى لو لم يُضف الموظف الإجراء صريحاً
+      let action = data.action;
+      if (!action && data.reply.includes("📦") && data.reply.includes("━━")) {
+        action = "ready_to_order";
+      }
+      if (!action && data.reply.includes("تصميم أولي") && data.reply.includes("300 ريال") && data.reply.includes("إضافة")) {
+        action = "add_design_service";
+      }
+
+      const reply: Msg = { role: "model", text: data.reply, action };
+      const newMessages = [...messages, reply];
+      setMessages(newMessages);
       setShowQuickTypes(false);
 
-      // إذا طلب إضافة خدمة التصميم للسلة
-      if (data.action === "add_design_service") {
-        addDesignServiceToCart();
+      if (action === "add_design_service") {
+        setTimeout(() => handleDesignService(newMessages), 800);
+      } else if (action === "ready_to_order") {
+        setTimeout(() => handleReadyToOrder(newMessages), 800);
       }
     },
     onError: () => {
       setMessages((prev) => [
         ...prev,
-        { role: "model", text: "عذراً، حصل خلل تقني. حاول مرة أخرى." },
+        { role: "model", text: "عذراً، حصل خلل تقني. حاول مرة أخرى أو تواصل معنا على واتساب." },
       ]);
     },
   });
@@ -111,24 +173,6 @@ export function PrintingAssistant() {
     chatMutation.mutate(msg);
   };
 
-  const addDesignServiceToCart = () => {
-    // جمع ملخص المحادثة
-    const specsSummary = messages
-      .filter((m) => m.role === "user")
-      .slice(-5)
-      .map((m) => m.text)
-      .join(" | ");
-
-    const waText = encodeURIComponent(
-      `مرحباً، أريد نموذج تصميم أولي بـ 300 ريال يمني 🎨\n\nتفاصيل طلبي:\n${specsSummary}\n\nأرجو التواصل لإتمام التصميم.`
-    );
-    window.open(`https://wa.me/967000000000?text=${waText}`, "_blank");
-    toast({
-      title: "✅ يتم تحويلك للواتساب",
-      description: "أرسل الرسالة وسيتواصل معك فريق التصميم خلال دقائق",
-    });
-  };
-
   const reset = () => {
     setMessages([GREETING]);
     setInput("");
@@ -141,7 +185,6 @@ export function PrintingAssistant() {
       {/* Header */}
       <div className="bg-gradient-to-l from-teal-500 to-cyan-600 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          {/* Robot Avatar */}
           <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
             <svg viewBox="0 0 40 40" className="w-7 h-7" fill="none">
               <rect x="6" y="10" width="28" height="22" rx="6" fill="white" fillOpacity="0.9" />
@@ -193,37 +236,47 @@ export function PrintingAssistant() {
                 key={idx}
                 className={`flex items-end gap-2 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
               >
-                {/* Avatar */}
                 <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold ${
                   msg.role === "model" ? "bg-gradient-to-br from-teal-400 to-cyan-600" : "bg-gray-400"
                 }`}>
                   {msg.role === "model" ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
                 </div>
 
-                {/* Bubble */}
-                <div className={`max-w-[78%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-line ${
+                <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-line ${
                   msg.role === "model"
                     ? "bg-white text-gray-800 shadow-sm border border-gray-100 rounded-tl-sm"
                     : "bg-teal-500 text-white rounded-tr-sm"
                 }`}>
                   {msg.role === "model" ? formatText(msg.text) : msg.text}
 
-                  {/* Design service CTA */}
+                  {/* زر خدمة التصميم */}
                   {msg.action === "add_design_service" && (
                     <button
                       data-testid="button-add-design"
-                      onClick={addDesignServiceToCart}
-                      className="mt-2 flex items-center gap-1.5 bg-teal-600 text-white text-xs font-bold px-3 py-1.5 rounded-xl hover:bg-teal-700 w-full justify-center"
+                      onClick={() => handleDesignService(messages)}
+                      className="mt-2.5 flex items-center gap-1.5 bg-teal-600 text-white text-xs font-bold px-3 py-2 rounded-xl hover:bg-teal-700 w-full justify-center"
                     >
                       <ShoppingCart className="w-3.5 h-3.5" />
                       إضافة تصميم أولي — 300 ريال
+                    </button>
+                  )}
+
+                  {/* زر إتمام الطلب */}
+                  {msg.action === "ready_to_order" && (
+                    <button
+                      data-testid="button-ready-order"
+                      onClick={() => handleReadyToOrder(messages)}
+                      className="mt-2.5 flex items-center gap-1.5 bg-green-600 text-white text-xs font-bold px-3 py-2 rounded-xl hover:bg-green-700 w-full justify-center"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      إرسال الطلب على الواتساب
                     </button>
                   )}
                 </div>
               </div>
             ))}
 
-            {/* Typing indicator */}
+            {/* مؤشر الكتابة */}
             {chatMutation.isPending && (
               <div className="flex items-end gap-2">
                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-400 to-cyan-600 flex items-center justify-center">
@@ -244,7 +297,7 @@ export function PrintingAssistant() {
             )}
           </div>
 
-          {/* Product Type Quick Selection */}
+          {/* اختيار نوع المنتج */}
           {showQuickTypes && (
             <div className="border-t border-gray-100 px-3 py-2.5 bg-white">
               <p className="text-xs text-gray-400 mb-2 flex items-center gap-1">
@@ -268,7 +321,7 @@ export function PrintingAssistant() {
             </div>
           )}
 
-          {/* Quick Replies */}
+          {/* ردود سريعة */}
           {!showQuickTypes && messages.length > 1 && (
             <div className="border-t border-gray-100 px-3 py-2 bg-white">
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
@@ -286,7 +339,7 @@ export function PrintingAssistant() {
             </div>
           )}
 
-          {/* Input */}
+          {/* حقل الإدخال */}
           <div className="border-t border-gray-100 px-3 py-2.5 bg-white">
             <div className="flex items-center gap-2">
               <Input
