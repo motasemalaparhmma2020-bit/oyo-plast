@@ -132,6 +132,40 @@ export default function ProductDetail() {
   const { data: cartItems = [] } = useQuery<any[]>({ queryKey: ['/api/cart'], staleTime: 30000 });
   const cartCount = cartItems.length;
 
+  // ── المفضلة ─────────────────────────────────────────────────────────────────
+  const { data: wishlistItems = [] } = useQuery<any[]>({
+    queryKey: ['/api/wishlist'],
+    enabled: isAuthenticated,
+    staleTime: 60000,
+  });
+  const numericId = parseInt(id || "0");
+  const inWishlist = (wishlistItems as any[]).some((w: any) => w.productId === numericId);
+
+  const toggleWishlistMutation = useMutation({
+    mutationFn: async () => {
+      if (!isAuthenticated) {
+        toast({ title: "سجّل دخولك أولاً", description: "لحفظ المفضلة يجب تسجيل الدخول" });
+        return;
+      }
+      if (inWishlist) {
+        await fetch(`/api/wishlist/${numericId}`, { method: "DELETE", credentials: "include" });
+      } else {
+        await fetch("/api/wishlist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ productId: numericId }),
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/wishlist'] });
+      toast({ title: inWishlist ? "أُزيل من المفضلة" : "✅ أُضيف للمفضلة" });
+    },
+    onMutate: () => setWishlistPending(true),
+    onSettled: () => setWishlistPending(false),
+  });
+
   // ── فئات الطباعة الاحترافية ─────────────────────────────────────────────
   const { data: printingCategoriesData = [] } = useQuery<any[]>({
     queryKey: ["/api/printing-categories"],
@@ -258,7 +292,7 @@ export default function ProductDetail() {
   const [reviewImageUrl, setReviewImageUrl] = useState<string | null>(null);
   const [isUploadingReviewImage, setIsUploadingReviewImage] = useState(false);
   const [activeTab, setActiveTab]         = useState<"description" | "reviews">("description");
-  const [wishlist, setWishlist]           = useState(false);
+  const [wishlistPending, setWishlistPending] = useState(false);
   const [variantsExpanded, setVariantsExpanded] = useState(true);
   const [searchQuery, setSearchQuery]     = useState("");
 
@@ -1782,9 +1816,10 @@ export default function ProductDetail() {
       <button
         className="flex items-center justify-center px-4 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
         data-testid="sticky-button-wishlist"
-        onClick={() => setWishlist(w => !w)}
+        onClick={() => toggleWishlistMutation.mutate()}
+        disabled={wishlistPending}
         aria-label="أضف للمفضلة">
-        <Heart className={`h-5 w-5 transition-colors ${wishlist ? 'text-red-500 fill-red-500' : 'text-gray-400'}`} />
+        <Heart className={`h-5 w-5 transition-colors ${inWishlist ? 'text-red-500 fill-red-500' : 'text-gray-400'}`} />
       </button>
     </div>
   ) : null;
@@ -1840,10 +1875,11 @@ export default function ProductDetail() {
             </button>
           </Link>
           <button
-            onClick={() => setWishlist(w => !w)}
+            onClick={() => toggleWishlistMutation.mutate()}
+            disabled={wishlistPending}
             className="p-2 rounded-full bg-black/25 hover:bg-black/40 backdrop-blur-sm transition-colors shrink-0"
             data-testid="button-wishlist-top">
-            <Heart className={`h-5 w-5 ${wishlist ? 'text-red-400 fill-red-400' : 'text-white'}`} />
+            <Heart className={`h-5 w-5 ${inWishlist ? 'text-red-400 fill-red-400' : 'text-white'}`} />
           </button>
         </div>
       </div>

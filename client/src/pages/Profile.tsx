@@ -10,7 +10,7 @@ import {
   Tag, ChevronLeft, ChevronDown, ChevronUp, LogIn, LogOut,
   Truck, Package, CreditCard, RotateCcw, Star,
   BadgeDollarSign, ShieldCheck, Award, Headphones, Users,
-  ExternalLink,
+  ExternalLink, TrendingUp, Wallet, Copy, CheckCheck,
 } from "lucide-react";
 
 const APP_VERSION = "1.0.0";
@@ -97,6 +97,36 @@ export default function Profile() {
     enabled: isAuthenticated,
     staleTime: 60_000,
   });
+
+  const { data: marketerInfo } = useQuery<any>({
+    queryKey: ["/api/me/marketer-info"],
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  });
+
+  const { data: wishlistItems = [] } = useQuery<any[]>({
+    queryKey: ["/api/wishlist"],
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  });
+
+  const { data: addressList = [] } = useQuery<any[]>({
+    queryKey: ["/api/addresses"],
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  });
+
+  const [copiedCoupon, setCopiedCoupon] = useState(false);
+
+  const copyCoupon = (code: string) => {
+    navigator.clipboard.writeText(code).catch(() => {});
+    setCopiedCoupon(true);
+    setTimeout(() => setCopiedCoupon(false), 2000);
+  };
+
+  const marketer = marketerInfo?.isMarketer ? marketerInfo.marketer : null;
+  const wishlistCount = (wishlistItems as any[]).length;
+  const defaultAddress = (addressList as any[])[0];
 
   const toggleDark = () => {
     const next = !dark;
@@ -202,6 +232,18 @@ export default function Profile() {
             {isAuthenticated && user?.email && (
               <p className="text-white/45 text-xs mt-0.5">{user.email}</p>
             )}
+            {isAuthenticated && defaultAddress?.phone && (
+              <p className="text-white/40 text-xs mt-0.5 flex items-center justify-end gap-1">
+                <Phone className="h-3 w-3" />
+                {defaultAddress.phone}
+              </p>
+            )}
+            {isAuthenticated && defaultAddress?.city && (
+              <p className="text-white/40 text-xs mt-0.5 flex items-center justify-end gap-1">
+                <MapPin className="h-3 w-3" />
+                {defaultAddress.city}{defaultAddress.district ? ` · ${defaultAddress.district}` : ""}
+              </p>
+            )}
             {!isAuthenticated && (
               <p className="text-white/45 text-xs mt-0.5">
                 <Link href="/auth">
@@ -224,7 +266,7 @@ export default function Profile() {
           <div className="flex items-center divide-x divide-x-reverse divide-white/15 bg-white/8 rounded-2xl px-2 py-2.5">
             <StatChip icon={<Package className="h-4 w-4" />} value={String(totalOrders)}   label="طلباتي" />
             <StatChip icon={<Star className="h-4 w-4" />}   value={String(loyaltyPoints)} label="نقاطي" />
-            <StatChip icon={<Truck className="h-4 w-4" />}  value={String(shippedOrders)} label="قيد الشحن" />
+            <StatChip icon={<Heart className="h-4 w-4" />}  value={String(wishlistCount)} label="المفضلة" />
           </div>
         )}
       </div>
@@ -260,6 +302,74 @@ export default function Profile() {
               </Link>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ══ لوحة المسوق ══════════════════════════════════════════════ */}
+      {isAuthenticated && marketer && (
+        <div className="mt-3 mx-3 rounded-2xl overflow-hidden shadow-sm" data-testid="marketer-panel">
+          {/* هيدر المسوق */}
+          <div className="bg-gradient-to-bl from-amber-500 to-orange-600 px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="bg-white/20 rounded-full p-1.5">
+                <TrendingUp className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <p className="text-white/70 text-[10px]">رمز الكوبون</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-white font-black text-base tracking-widest">{marketer.couponCode}</span>
+                  <button
+                    onClick={() => copyCoupon(marketer.couponCode)}
+                    className="bg-white/20 rounded p-0.5 hover:bg-white/30 transition-colors"
+                    data-testid="btn-copy-coupon"
+                  >
+                    {copiedCoupon
+                      ? <CheckCheck className="h-3 w-3 text-white" />
+                      : <Copy className="h-3 w-3 text-white" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-white font-bold text-sm">لوحة المسوق</p>
+              <p className="text-white/70 text-[10px]">{marketer.name}</p>
+            </div>
+          </div>
+          {/* إحصائيات المسوق */}
+          <div className="bg-white dark:bg-card grid grid-cols-3 divide-x divide-x-reverse divide-gray-100 dark:divide-border">
+            <div className="flex flex-col items-center py-3 gap-0.5">
+              <span className="text-amber-600 font-black text-lg">{marketer.totalOrders ?? 0}</span>
+              <span className="text-gray-500 text-[10px]">إجمالي الطلبات</span>
+            </div>
+            <div className="flex flex-col items-center py-3 gap-0.5">
+              <span className="text-green-600 font-black text-lg">{Number(marketer.commissionRate ?? 0)}%</span>
+              <span className="text-gray-500 text-[10px]">عمولتك</span>
+            </div>
+            <div className="flex flex-col items-center py-3 gap-0.5">
+              <span className="text-blue-600 font-black text-lg">{Number(marketer.discountRate ?? 0)}%</span>
+              <span className="text-gray-500 text-[10px]">خصم العملاء</span>
+            </div>
+          </div>
+          {/* محفظة */}
+          <div className="bg-gray-50 dark:bg-muted/30 px-4 py-2.5 flex items-center justify-between">
+            <span className="text-xs text-gray-500 dark:text-gray-400">رصيد المحفظة</span>
+            <div className="flex items-center gap-1.5">
+              <Wallet className="h-4 w-4 text-amber-500" />
+              <span className="font-bold text-sm text-gray-800 dark:text-foreground">
+                {Number(marketer.walletBalance ?? 0).toLocaleString()} ريال
+              </span>
+            </div>
+          </div>
+          {/* رابط لوحة التحكم الكاملة */}
+          <Link href="/marketer/dashboard">
+            <div
+              className="bg-white dark:bg-card px-4 py-3 flex items-center justify-between hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors cursor-pointer border-t border-gray-100 dark:border-border"
+              data-testid="link-marketer-dashboard"
+            >
+              <ChevronLeft className="h-4 w-4 text-amber-500" />
+              <span className="text-sm font-semibold text-amber-600">لوحة تحكم المسوق الكاملة</span>
+            </div>
+          </Link>
         </div>
       )}
 

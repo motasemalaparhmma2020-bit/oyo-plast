@@ -5091,10 +5091,99 @@ h1{font-size:18px;color:#222;margin:4px 0;}
     try {
       const user = (req as any).user;
       if (!user || !getUserId(user)) return res.status(401).json({ message: "Not authenticated" });
-      
       res.json({ user });
     } catch (e: any) {
       res.status(500).json({ message: "Failed to fetch profile", details: e.message });
+    }
+  });
+
+  // ─── Wishlist (المفضلة) ─────────────────────────────────────────────────────
+  app.get("/api/wishlist", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !getUserId(user)) return res.json([]);
+      const userId = getUserId(user);
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(
+        `SELECT w.id, w.product_id as "productId", w.created_at as "createdAt",
+                p.name, p.image_url as "imageUrl", p.price, p.price_sar as "priceSar"
+         FROM wishlist w
+         JOIN products p ON p.id = w.product_id
+         WHERE w.user_id = $1
+         ORDER BY w.created_at DESC`,
+        [userId]
+      );
+      res.json(r.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب المفضلة", details: e.message });
+    }
+  });
+
+  app.post("/api/wishlist", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !getUserId(user)) return res.status(401).json({ message: "Not authenticated" });
+      const userId = getUserId(user);
+      const { productId } = req.body;
+      if (!productId) return res.status(400).json({ message: "productId مطلوب" });
+      const { pool: dbPool } = await import("./db");
+      // تجنب التكرار
+      const existing = await dbPool.query(
+        `SELECT id FROM wishlist WHERE user_id=$1 AND product_id=$2`,
+        [userId, productId]
+      );
+      if (existing.rows.length > 0) {
+        return res.json({ id: existing.rows[0].id, productId, alreadyExists: true });
+      }
+      const r = await dbPool.query(
+        `INSERT INTO wishlist (user_id, product_id) VALUES ($1, $2) RETURNING id`,
+        [userId, productId]
+      );
+      res.status(201).json({ id: r.rows[0].id, productId });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إضافة للمفضلة", details: e.message });
+    }
+  });
+
+  app.delete("/api/wishlist/:productId", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !getUserId(user)) return res.status(401).json({ message: "Not authenticated" });
+      const userId = getUserId(user);
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query(
+        `DELETE FROM wishlist WHERE user_id=$1 AND product_id=$2`,
+        [userId, parseInt(req.params.productId)]
+      );
+      res.json({ message: "تم الإزالة" });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إزالة من المفضلة", details: e.message });
+    }
+  });
+
+  // ─── معلومات المسوق للمستخدم الحالي ────────────────────────────────────────
+  app.get("/api/me/marketer-info", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !getUserId(user)) return res.json({ isMarketer: false });
+      const { pool: dbPool } = await import("./db");
+      // البحث بالهاتف المسجّل في حساب المستخدم
+      const userPhone = (user as any).phone || (user as any).claims?.phone || null;
+      if (!userPhone) return res.json({ isMarketer: false });
+      const r = await dbPool.query(
+        `SELECT m.id, m.name, m.phone, m.coupon_code as "couponCode",
+                m.commission_rate as "commissionRate", m.discount_rate as "discountRate",
+                m.wallet_balance as "walletBalance", m.total_earnings as "totalEarnings",
+                m.total_orders as "totalOrders", m.is_active as "isActive",
+                (SELECT COUNT(*) FROM orders o WHERE o.marketer_table_id=m.id AND o.marketer_commission_paid=false AND o.status IN ('delivered','completed')) as "pendingPayout"
+         FROM standalone_marketers m
+         WHERE m.phone=$1 AND m.is_active=true`,
+        [userPhone.replace(/\D/g, "")]
+      );
+      if (!r.rows.length) return res.json({ isMarketer: false });
+      res.json({ isMarketer: true, marketer: r.rows[0] });
+    } catch (e: any) {
+      res.json({ isMarketer: false });
     }
   });
 
