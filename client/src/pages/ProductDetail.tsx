@@ -1854,14 +1854,6 @@ export default function ProductDetail() {
           <Zap className="h-4 w-4 text-primary" />تسوق الآن
         </button>
       )}
-      <button
-        className="flex items-center justify-center px-4 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-        data-testid="sticky-button-wishlist"
-        onClick={() => toggleWishlistMutation.mutate()}
-        disabled={wishlistPending}
-        aria-label="أضف للمفضلة">
-        <Heart className={`h-5 w-5 transition-colors ${inWishlist ? 'text-red-500 fill-red-500' : 'text-gray-400'}`} />
-      </button>
     </div>
   ) : null;
 
