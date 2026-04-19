@@ -1,11 +1,11 @@
 {
-  "name": "أويو بلاست - OYO PLAST",
+  "name": "أويو بلاست - مستلزمات التغليف",
   "short_name": "أويو بلاست",
-  "description": "متجر أويو بلاست لمستلزمات التغليف والأكياس البلاستيكية في اليمن",
+  "description": "متجر أويو بلاست — متخصصون في مستلزمات التغليف والأكياس القماشية والبلاستيكية وخدمات الطباعة في اليمن",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#2196F3",
+  "theme_color": "#06B6D4",
   "orientation": "portrait",
   "dir": "rtl",
   "lang": "ar",
@@ -20,9 +20,18 @@
     }
   ],
   "prefer_related_applications": false,
+  "screenshots": [
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "الصفحة الرئيسية"
+    }
+  ],
   "icons": [
-    { "src": "/icons/icon-72x72.png", "sizes": "72x72", "type": "image/png" },
-    { "src": "/icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" },
+    { "src": "/icons/icon-72x72.png",   "sizes": "72x72",   "type": "image/png" },
+    { "src": "/icons/icon-96x96.png",   "sizes": "96x96",   "type": "image/png" },
     { "src": "/icons/icon-128x128.png", "sizes": "128x128", "type": "image/png" },
     { "src": "/icons/icon-144x144.png", "sizes": "144x144", "type": "image/png" },
     { "src": "/icons/icon-152x152.png", "sizes": "152x152", "type": "image/png" },
