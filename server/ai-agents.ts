@@ -312,8 +312,13 @@ ${customerContext}
 
 ${catalog}${logoNote}`;
 
+  // Gemini يشترط أن يبدأ التاريخ برسالة user — نحذف أي model في البداية
+  const rawHistory = params.history.slice(-16);
+  const firstUserIdx = rawHistory.findIndex((m) => m.role === "user");
+  const cleanHistory = firstUserIdx >= 0 ? rawHistory.slice(firstUserIdx) : [];
+
   const contents = [
-    ...params.history.map((m) => ({
+    ...cleanHistory.map((m) => ({
       role: m.role,
       parts: [{ text: m.text }],
     })),
@@ -330,19 +335,27 @@ ${catalog}${logoNote}`;
     },
   });
 
+  // فقط أخطاء الطلب الخاطئ (400 بدون سبب حصة) توقف المحاولات
+  const isFatalError = (msg: string) =>
+    msg.includes("400") && !msg.includes("quota") && !msg.includes("RESOURCE_EXHAUSTED");
+
   try {
     let result;
-    try {
-      result = await callGemini("gemini-2.5-flash");
-    } catch (e: any) {
-      const msg = e?.message || "";
-      if (msg.includes("503") || msg.includes("UNAVAILABLE") || msg.includes("overloaded")) {
-        console.warn("[AI Sales] 2.5-flash overloaded, falling back to 2.0-flash");
-        result = await callGemini("gemini-2.0-flash");
-      } else {
-        throw e;
+    const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro"];
+    let lastError: any = null;
+    for (const model of models) {
+      try {
+        result = await callGemini(model);
+        console.log(`[AI Sales] ✅ نجح النموذج: ${model}`);
+        break;
+      } catch (e: any) {
+        const msg = String(e?.message || e || "");
+        console.warn(`[AI Sales] ⚠️ فشل ${model}: ${msg.slice(0, 150)}`);
+        lastError = e;
+        if (isFatalError(msg)) throw e;
       }
     }
+    if (!result) throw lastError;
 
     const replyRaw = result.text || "تكرم، كيف أقدر أساعدك؟";
     const action = extractActionJson(replyRaw);
