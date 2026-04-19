@@ -5200,6 +5200,124 @@ h1{font-size:18px;color:#222;margin:4px 0;}
     }
   });
 
+  // ── معلومات المورد المرتبط بالحساب (بالهاتف) ─────────────────────────────
+  app.get("/api/me/supplier-info", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !getUserId(user)) return res.json({ isSupplier: false });
+      const { pool: dbPool } = await import("./db");
+      const userPhone = (user as any).phone || (user as any).claims?.phone || null;
+      if (!userPhone) return res.json({ isSupplier: false });
+      const r = await dbPool.query(
+        `SELECT id, name, phone, commission_rate as "commissionRate",
+                balance_due as "balanceDue", total_paid as "totalPaid",
+                total_sales as "totalSales", cities, is_active as "isActive",
+                (SELECT COUNT(*) FROM orders o WHERE o.supplier_id=s.id) as "totalOrders"
+         FROM suppliers s WHERE phone=$1 AND is_active=true`,
+        [userPhone.replace(/\D/g, "")]
+      );
+      if (!r.rows.length) return res.json({ isSupplier: false });
+      res.json({ isSupplier: true, supplier: r.rows[0] });
+    } catch (e: any) {
+      res.json({ isSupplier: false });
+    }
+  });
+
+  // ── طلبات المسوق (جلسة عادية بالهاتف) ───────────────────────────────────
+  app.get("/api/me/marketer/orders", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !getUserId(user)) return res.status(401).json({ message: "غير مصادق" });
+      const { pool: dbPool } = await import("./db");
+      const userPhone = (user as any).phone || (user as any).claims?.phone || null;
+      if (!userPhone) return res.status(403).json({ message: "لا يوجد رقم هاتف مرتبط" });
+      const mRes = await dbPool.query(
+        "SELECT id FROM standalone_marketers WHERE phone=$1 AND is_active=true",
+        [userPhone.replace(/\D/g, "")]
+      );
+      if (!mRes.rows.length) return res.status(403).json({ message: "لست مسوقاً نشطاً" });
+      const marketerId = mRes.rows[0].id;
+      const result = await dbPool.query(
+        `SELECT id, customer_name, shipping_city, total, status, coupon_code,
+                marketer_commission_amount as "commissionAmount",
+                marketer_commission_paid as "commissionPaid", created_at as "createdAt"
+         FROM orders WHERE marketer_table_id=$1 ORDER BY created_at DESC LIMIT 100`,
+        [marketerId]
+      );
+      res.json(result.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الطلبات" });
+    }
+  });
+
+  // ── محفظة المسوق (جلسة عادية بالهاتف) ───────────────────────────────────
+  app.get("/api/me/marketer/wallet", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !getUserId(user)) return res.status(401).json({ message: "غير مصادق" });
+      const { pool: dbPool } = await import("./db");
+      const userPhone = (user as any).phone || (user as any).claims?.phone || null;
+      if (!userPhone) return res.status(403).json({ message: "لا يوجد رقم هاتف" });
+      const mRes = await dbPool.query(
+        `SELECT id, wallet_balance as "walletBalance", total_earnings as "totalEarnings", total_orders as "totalOrders"
+         FROM standalone_marketers WHERE phone=$1 AND is_active=true`,
+        [userPhone.replace(/\D/g, "")]
+      );
+      if (!mRes.rows.length) return res.status(403).json({ message: "لست مسوقاً نشطاً" });
+      const m = mRes.rows[0];
+      const pendingRes = await dbPool.query(
+        `SELECT COALESCE(SUM(marketer_commission_amount),0) as pending
+         FROM orders WHERE marketer_table_id=$1 AND marketer_commission_paid=false AND status IN ('delivered','completed')`,
+        [m.id]
+      );
+      const withdrawals = await dbPool.query(
+        "SELECT id, amount, payment_method as \"paymentMethod\", status, requested_at as \"requestedAt\", admin_notes as \"adminNotes\" FROM marketer_withdrawal_requests WHERE marketer_id=$1 ORDER BY requested_at DESC LIMIT 20",
+        [m.id]
+      );
+      res.json({
+        walletBalance: Number(m.walletBalance),
+        totalEarnings: Number(m.totalEarnings),
+        totalOrders: Number(m.totalOrders),
+        pendingPayout: Number(pendingRes.rows[0].pending),
+        withdrawals: withdrawals.rows,
+        marketerId: m.id,
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب المحفظة" });
+    }
+  });
+
+  // ── طلب سحب رصيد (جلسة عادية) ────────────────────────────────────────────
+  app.post("/api/me/marketer/withdraw", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user || !getUserId(user)) return res.status(401).json({ message: "غير مصادق" });
+      const { pool: dbPool } = await import("./db");
+      const userPhone = (user as any).phone || (user as any).claims?.phone || null;
+      if (!userPhone) return res.status(403).json({ message: "لا يوجد رقم هاتف" });
+      const mRes = await dbPool.query(
+        "SELECT id, wallet_balance FROM standalone_marketers WHERE phone=$1 AND is_active=true",
+        [userPhone.replace(/\D/g, "")]
+      );
+      if (!mRes.rows.length) return res.status(403).json({ message: "لست مسوقاً" });
+      const m = mRes.rows[0];
+      const { amount, paymentMethod, paymentDetails } = req.body;
+      if (!amount || Number(amount) <= 0) return res.status(400).json({ message: "المبلغ غير صالح" });
+      if (Number(amount) > Number(m.wallet_balance)) return res.status(400).json({ message: "الرصيد غير كافٍ" });
+      const pending = await dbPool.query(
+        "SELECT id FROM marketer_withdrawal_requests WHERE marketer_id=$1 AND status='pending'", [m.id]
+      );
+      if (pending.rows.length) return res.status(409).json({ message: "يوجد طلب سحب معلّق بالفعل" });
+      await dbPool.query(
+        "INSERT INTO marketer_withdrawal_requests (marketer_id, amount, payment_method, payment_details) VALUES ($1,$2,$3,$4)",
+        [m.id, Number(amount), paymentMethod || "bank", paymentDetails || null]
+      );
+      res.json({ success: true, message: "تم إرسال طلب السحب بنجاح" });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إرسال طلب السحب" });
+    }
+  });
+
   app.get("/api/addresses", async (req, res) => {
     try {
       const user = (req as any).user;

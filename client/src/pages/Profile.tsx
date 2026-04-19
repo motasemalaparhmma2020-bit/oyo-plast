@@ -7,66 +7,47 @@ import { useState } from "react";
 import {
   Moon, Sun, User, MapPin, Ticket, LayoutGrid, Bell, Settings,
   Phone, MessageSquare, HelpCircle, FileText, Heart, ShoppingCart,
-  Tag, ChevronLeft, ChevronDown, ChevronUp, LogIn, LogOut,
+  ChevronLeft, ChevronDown, ChevronUp, LogIn, LogOut,
   Truck, Package, CreditCard, RotateCcw, Star,
   BadgeDollarSign, ShieldCheck, Award, Headphones, Users,
   ExternalLink, TrendingUp, Wallet, Copy, CheckCheck,
+  Building2, UserPlus, Tag,
 } from "lucide-react";
 
 const APP_VERSION = "1.0.0";
+const WHATSAPP_MARKETER = "https://wa.me/967774997589?text=%D8%A3%D8%B1%D9%8A%D8%AF%20%D8%A7%D9%84%D8%A7%D9%86%D8%B6%D9%85%D8%A7%D9%85%20%D9%83%D9%85%D8%B3%D9%88%D9%82";
+const WHATSAPP_SUPPLIER  = "https://wa.me/967774997589?text=%D8%A3%D8%B1%D9%8A%D8%AF%20%D8%A7%D9%84%D8%A7%D9%86%D8%B6%D9%85%D8%A7%D9%85%20%D9%83%D9%85%D9%88%D8%B1%D8%AF";
 
-/* ────────────────────────────────────────────────────
-   مكوّن: صف قابل للطيّ داخل صفحة أنا
-   يُظهر عنواناً بأيقونة، وعند الضغط يمتد المحتوى
-   ──────────────────────────────────────────────────── */
+/* ── قسم قابل للطيّ ── */
 function CollapsibleSection({
-  icon,
-  label,
-  color,
-  badge,
-  children,
-  testId,
+  icon, label, color, badge, children, testId,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  color: string;
-  badge?: string;
-  children: React.ReactNode;
-  testId: string;
+  icon: React.ReactNode; label: string; color: string;
+  badge?: string; children: React.ReactNode; testId: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="overflow-hidden">
       <button
-        className="w-full flex items-center justify-between px-4 py-3.5 border-b border-gray-50 dark:border-border hover:bg-gray-50 dark:hover:bg-muted/50 transition-colors cursor-pointer"
-        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3.5 border-b border-gray-50 dark:border-border hover:bg-gray-50 dark:hover:bg-muted/50 transition-colors"
+        onClick={() => setOpen(v => !v)}
         data-testid={testId}
       >
         <div className="flex items-center gap-2">
-          {open
-            ? <ChevronUp className="h-4 w-4 text-gray-300" />
-            : <ChevronDown className="h-4 w-4 text-gray-300" />}
-          {badge && (
-            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">{badge}</span>
-          )}
+          {open ? <ChevronUp className="h-4 w-4 text-gray-300" /> : <ChevronDown className="h-4 w-4 text-gray-300" />}
+          {badge && <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">{badge}</span>}
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold text-gray-700 dark:text-foreground">{label}</span>
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${color}`}>
-            {icon}
-          </div>
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${color}`}>{icon}</div>
         </div>
       </button>
-      {open && (
-        <div className="bg-gray-50/80 dark:bg-muted/30 border-b border-gray-100 dark:border-border">
-          {children}
-        </div>
-      )}
+      {open && <div className="bg-gray-50/80 dark:bg-muted/30 border-b border-gray-100 dark:border-border">{children}</div>}
     </div>
   );
 }
 
-/* ── بطاقة إحصائية صغيرة ── */
+/* ── بطاقة إحصائية في الهيدر ── */
 function StatChip({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   return (
     <div className="flex flex-col items-center gap-0.5 flex-1">
@@ -77,56 +58,64 @@ function StatChip({ icon, value, label }: { icon: React.ReactNode; value: string
   );
 }
 
-/* ────────────────────────────────────────────────────
+/* ── صف قائمة عادي ── */
+function MenuRow({ icon: Icon, label, color, iconColor, badge, external }: {
+  icon: any; label: string; color: string; iconColor: string; badge?: number; external?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50 dark:border-border/60 last:border-0 hover:bg-gray-50/80 dark:hover:bg-muted/50 cursor-pointer transition-colors">
+      <div className="flex items-center gap-2">
+        <ChevronLeft className="h-3.5 w-3.5 text-gray-300" />
+        {external && <ExternalLink className="h-3 w-3 text-gray-300" />}
+        {badge !== undefined && badge > 0 && (
+          <span className="h-5 min-w-5 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1">{badge}</span>
+        )}
+      </div>
+      <div className="flex items-center gap-2.5">
+        <span className="text-sm text-gray-700 dark:text-foreground">{label}</span>
+        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${color}`}>
+          <Icon className={`h-4 w-4 ${iconColor}`} strokeWidth={1.5} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
    الصفحة الرئيسية
-   ──────────────────────────────────────────────────── */
+   ═══════════════════════════════════════════════════════════════ */
 export default function Profile() {
   const { user, isLoading: isAuthLoading, logout, isAuthenticated } = useAuth();
   const { data: orders } = useOrders();
   const { data: cart } = useCart();
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-
-  const { data: displaySettings } = useQuery<any>({
-    queryKey: ["/api/display-settings"],
-    staleTime: 60_000,
-  });
-
-  const { data: pointsData } = useQuery<any>({
-    queryKey: ["/api/points"],
-    enabled: isAuthenticated,
-    staleTime: 60_000,
-  });
-
-  const { data: marketerInfo } = useQuery<any>({
-    queryKey: ["/api/me/marketer-info"],
-    enabled: isAuthenticated,
-    staleTime: 60_000,
-  });
-
-  const { data: wishlistItems = [] } = useQuery<any[]>({
-    queryKey: ["/api/wishlist"],
-    enabled: isAuthenticated,
-    staleTime: 60_000,
-  });
-
-  const { data: addressList = [] } = useQuery<any[]>({
-    queryKey: ["/api/addresses"],
-    enabled: isAuthenticated,
-    staleTime: 60_000,
-  });
-
   const [copiedCoupon, setCopiedCoupon] = useState(false);
 
-  const copyCoupon = (code: string) => {
-    navigator.clipboard.writeText(code).catch(() => {});
-    setCopiedCoupon(true);
-    setTimeout(() => setCopiedCoupon(false), 2000);
-  };
+  const { data: displaySettings } = useQuery<any>({ queryKey: ["/api/display-settings"], staleTime: 60_000 });
+  const { data: pointsData }       = useQuery<any>({ queryKey: ["/api/points"],           enabled: isAuthenticated, staleTime: 60_000 });
+  const { data: marketerInfo }     = useQuery<any>({ queryKey: ["/api/me/marketer-info"], enabled: isAuthenticated, staleTime: 60_000 });
+  const { data: supplierInfo }     = useQuery<any>({ queryKey: ["/api/me/supplier-info"], enabled: isAuthenticated, staleTime: 60_000 });
+  const { data: wishlistItems = [] } = useQuery<any[]>({ queryKey: ["/api/wishlist"],    enabled: isAuthenticated, staleTime: 60_000 });
+  const { data: addressList = [] }   = useQuery<any[]>({ queryKey: ["/api/addresses"],  enabled: isAuthenticated, staleTime: 60_000 });
 
-  const marketer = marketerInfo?.isMarketer ? marketerInfo.marketer : null;
+  const marketer      = marketerInfo?.isMarketer ? marketerInfo.marketer : null;
+  const supplier      = supplierInfo?.isSupplier  ? supplierInfo.supplier  : null;
   const wishlistCount = (wishlistItems as any[]).length;
-  const defaultAddress = (addressList as any[])[0];
+  const defaultAddr   = (addressList as any[])[0];
+  const cartCount     = (cart as any[])?.reduce((a, i) => a + (i.quantity || 0), 0) || 0;
+  const totalOrders   = (orders as any[])?.length || 0;
+  const loyaltyPoints = pointsData?.points ?? 0;
+
+  const pendingOrders    = (orders as any[])?.filter(o => o.status === "pending").length    || 0;
+  const processingOrders = (orders as any[])?.filter(o => o.status === "processing").length || 0;
+  const shippedOrders    = (orders as any[])?.filter(o => o.status === "shipped").length    || 0;
+  const reviewOrders     = (orders as any[])?.filter(o => o.status === "review").length     || 0;
+  const returnedOrders   = (orders as any[])?.filter(o => ["returned","cancelled"].includes(o.status)).length || 0;
+
+  const userName = isAuthenticated
+    ? (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.firstName || user?.email?.split("@")[0] || "مستخدم")
+    : "زائر";
 
   const toggleDark = () => {
     const next = !dark;
@@ -135,57 +124,45 @@ export default function Profile() {
     localStorage.setItem("theme", next ? "dark" : "light");
   };
 
-  const cartCount = (cart as any[])?.reduce((a, i) => a + (i.quantity || 0), 0) || 0;
-  const totalOrders = (orders as any[])?.length || 0;
-
-  const pendingOrders    = (orders as any[])?.filter(o => o.status === "pending").length || 0;
-  const processingOrders = (orders as any[])?.filter(o => o.status === "processing").length || 0;
-  const shippedOrders    = (orders as any[])?.filter(o => o.status === "shipped").length || 0;
-  const reviewOrders     = (orders as any[])?.filter(o => o.status === "review").length || 0;
-  const returnedOrders   = (orders as any[])?.filter(o => ["returned","cancelled"].includes(o.status)).length || 0;
-
-  const loyaltyPoints = pointsData?.points ?? 0;
-
-  const userName = isAuthenticated
-    ? (user?.firstName && user?.lastName
-        ? `${user.firstName} ${user.lastName}`
-        : user?.firstName || user?.email?.split("@")[0] || "مستخدم")
-    : "زائر";
+  const copyCoupon = (code: string) => {
+    navigator.clipboard.writeText(code).catch(() => {});
+    setCopiedCoupon(true);
+    setTimeout(() => setCopiedCoupon(false), 2000);
+  };
 
   const orderStatuses = [
-    { icon: CreditCard,    label: "غير مدفوع",  count: pendingOrders,    href: "/orders" },
-    { icon: Package,       label: "جاري التجهيز", count: processingOrders, href: "/orders" },
-    { icon: Truck,         label: "تم الشحن",   count: shippedOrders,    href: "/orders" },
-    { icon: MessageSquare, label: "تعليق",       count: reviewOrders,     href: "/orders" },
-    { icon: RotateCcw,     label: "مسترجع",      count: returnedOrders,   href: "/orders" },
+    { icon: CreditCard,    label: "غير مدفوع",   count: pendingOrders,    href: "/orders" },
+    { icon: Package,       label: "تجهيز",        count: processingOrders, href: "/orders" },
+    { icon: Truck,         label: "شحن",          count: shippedOrders,    href: "/orders" },
+    { icon: MessageSquare, label: "تعليق",        count: reviewOrders,     href: "/orders" },
+    { icon: RotateCcw,     label: "مسترجع",       count: returnedOrders,   href: "/orders" },
   ];
 
   const generalItems = [
-    { icon: Truck,       label: "تتبع الطلب",  href: "/orders",              color: "bg-green-100 dark:bg-green-900/30",  iconColor: "text-green-600 dark:text-green-400" },
-    { icon: MapPin,      label: "العناوين",     href: "/account",             color: "bg-orange-100 dark:bg-orange-900/30", iconColor: "text-orange-500" },
-    { icon: Ticket,      label: "الكوبونات",    href: "/marketer/coupons",    color: "bg-purple-100 dark:bg-purple-900/30", iconColor: "text-purple-500" },
-    { icon: LayoutGrid,  label: "الفئات",       href: "/products",            color: "bg-blue-100 dark:bg-blue-900/30",    iconColor: "text-blue-500" },
-    { icon: Heart,       label: "المفضلة",      href: "/wishlist",            color: "bg-red-100 dark:bg-red-900/30",      iconColor: "text-red-500" },
-    { icon: ShoppingCart,label: "السلة",        href: "/cart",                color: "bg-teal-100 dark:bg-teal-900/30",    iconColor: "text-teal-500", badge: cartCount > 0 ? cartCount : undefined },
-    { icon: Bell,        label: "الإشعارات",    href: "/notifications",       color: "bg-yellow-100 dark:bg-yellow-900/30", iconColor: "text-yellow-600" },
-    { icon: Settings,    label: "الإعدادات",    href: "/account",             color: "bg-gray-100 dark:bg-gray-800",       iconColor: "text-gray-500" },
+    { icon: Truck,        label: "تتبع الطلب",   href: "/orders",           color: "bg-green-100 dark:bg-green-900/30",   iconColor: "text-green-600" },
+    { icon: MapPin,       label: "العناوين",      href: "/account",          color: "bg-orange-100 dark:bg-orange-900/30", iconColor: "text-orange-500" },
+    { icon: Ticket,       label: "الكوبونات",     href: "/marketer/coupons", color: "bg-purple-100 dark:bg-purple-900/30", iconColor: "text-purple-500" },
+    { icon: LayoutGrid,   label: "الفئات",        href: "/products",         color: "bg-blue-100 dark:bg-blue-900/30",     iconColor: "text-blue-500" },
+    { icon: Heart,        label: "المفضلة",       href: "/wishlist",         color: "bg-red-100 dark:bg-red-900/30",       iconColor: "text-red-500" },
+    { icon: ShoppingCart, label: "السلة",         href: "/cart",             color: "bg-teal-100 dark:bg-teal-900/30",     iconColor: "text-teal-500", badge: cartCount },
+    { icon: Bell,         label: "الإشعارات",     href: "/notifications",    color: "bg-yellow-100 dark:bg-yellow-900/30", iconColor: "text-yellow-600" },
+    { icon: Settings,     label: "الإعدادات",     href: "/account",          color: "bg-gray-100 dark:bg-gray-800",        iconColor: "text-gray-500" },
   ];
 
   const supportItems = [
-    { icon: Phone,         label: "تواصل معنا",      href: "/about",    active: true,  color: "bg-green-100 dark:bg-green-900/30",  iconColor: "text-green-600" },
-    { icon: MessageSquare, label: "دعم واتساب",      href: "https://wa.me/967774997589", active: true, external: true, color: "bg-green-50 dark:bg-green-900/20", iconColor: "text-green-500" },
-    { icon: FileText,      label: "سياسة الخصوصية",  href: "/privacy",  active: true,  color: "bg-gray-100 dark:bg-gray-800",       iconColor: "text-gray-500" },
-    { icon: FileText,      label: "شروط الاستخدام",  href: "/terms",    active: true,  color: "bg-gray-100 dark:bg-gray-800",       iconColor: "text-gray-400" },
+    { icon: Phone,         label: "تواصل معنا",      href: "/about",                      color: "bg-green-100 dark:bg-green-900/30",  iconColor: "text-green-600" },
+    { icon: MessageSquare, label: "دعم واتساب",      href: "https://wa.me/967774997589",  color: "bg-green-50 dark:bg-green-900/20",   iconColor: "text-green-500", external: true },
+    { icon: FileText,      label: "سياسة الخصوصية", href: "/privacy",                    color: "bg-gray-100 dark:bg-gray-800",       iconColor: "text-gray-500" },
+    { icon: FileText,      label: "شروط الاستخدام", href: "/terms",                      color: "bg-gray-100 dark:bg-gray-800",       iconColor: "text-gray-400" },
   ];
 
-  /* ── بيانات لماذا أويو بلاست (مضغوطة) ── */
   const whyUsItems = [
-    { icon: <BadgeDollarSign className="h-4 w-4" />, label: "أسعار الجملة",   color: "bg-green-500" },
-    { icon: <ShieldCheck className="h-4 w-4" />,    label: "جودة مضمونة",    color: "bg-blue-500" },
+    { icon: <BadgeDollarSign className="h-4 w-4" />, label: "أسعار الجملة",    color: "bg-green-500" },
+    { icon: <ShieldCheck className="h-4 w-4" />,    label: "جودة مضمونة",     color: "bg-blue-500" },
     { icon: <Truck className="h-4 w-4" />,          label: "توصيل لكل اليمن", color: "bg-orange-500" },
-    { icon: <Package className="h-4 w-4" />,        label: "500+ منتج",       color: "bg-purple-500" },
-    { icon: <Headphones className="h-4 w-4" />,     label: "دعم واتساب",     color: "bg-teal-500" },
-    { icon: <Award className="h-4 w-4" />,          label: "نقاط الولاء",    color: "bg-yellow-500" },
+    { icon: <Package className="h-4 w-4" />,        label: "+500 منتج",        color: "bg-purple-500" },
+    { icon: <Headphones className="h-4 w-4" />,     label: "دعم واتساب",      color: "bg-teal-500" },
+    { icon: <Award className="h-4 w-4" />,          label: "نقاط الولاء",     color: "bg-yellow-500" },
   ];
 
   const statsItems = [
@@ -196,11 +173,11 @@ export default function Profile() {
   ];
 
   const faqItems = [
-    { q: "كيف أطلب من أويو بلاست؟",              a: "سجّل حساباً، تصفّح المنتجات، أضف للسلة، ثم أكمل الطلب. سيتواصل معك فريقنا لتأكيد الطلب." },
-    { q: "هل تبيعون بالجملة للتجار؟",             a: "نعم، نتخصص في بيع الجملة. كلما زادت الكمية انخفض السعر." },
-    { q: "هل يمكن الطباعة على المنتجات؟",          a: "نعم، كثير من منتجاتنا تدعم الطباعة المخصصة بشعارك." },
-    { q: "كيف يتم الدفع؟",                         a: "الدفع نقداً عند الاستلام أو بالتحويل البنكي. نظام التقسيط متاح للطلبات الكبيرة." },
-    { q: "كيف أتواصل مع خدمة العملاء؟",           a: "عبر واتساب مباشرةً أو من خلال قسم الطلبات في حسابك." },
+    { q: "كيف أطلب من أويو بلاست؟",             a: "سجّل حساباً، تصفّح المنتجات، أضف للسلة، ثم أكمل الطلب. سيتواصل معك فريقنا لتأكيد الطلب." },
+    { q: "هل تبيعون بالجملة للتجار؟",            a: "نعم، نتخصص في بيع الجملة. كلما زادت الكمية انخفض السعر." },
+    { q: "هل يمكن الطباعة على المنتجات؟",         a: "نعم، كثير من منتجاتنا تدعم الطباعة المخصصة بشعارك." },
+    { q: "كيف يتم الدفع؟",                        a: "الدفع نقداً عند الاستلام أو بالتحويل البنكي. نظام التقسيط متاح للطلبات الكبيرة." },
+    { q: "كيف أتواصل مع خدمة العملاء؟",          a: "عبر واتساب مباشرةً أو من خلال قسم الطلبات في حسابك." },
   ];
 
   if (isAuthLoading) {
@@ -212,11 +189,10 @@ export default function Profile() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-background pb-24" dir="rtl">
+    <div className="min-h-screen bg-[#f2f2f7] dark:bg-background pb-24" dir="rtl">
 
-      {/* ══ HEADER ══════════════════════════════════════════════════ */}
-      <div className="bg-gradient-to-bl from-[#1a3a4a] to-[#0d2535] dark:from-[#0f2230] dark:to-[#070f17] relative pt-10 pb-5 px-5">
-        {/* زر الوضع الداكن */}
+      {/* ══ HEADER ══════════════════════════════════════════════════════════ */}
+      <div className="bg-gradient-to-bl from-[#1a3a4a] to-[#0d2535] dark:from-[#0f2230] dark:to-[#070f17] pt-10 pb-5 px-5 relative">
         <button
           onClick={toggleDark}
           className="absolute top-4 left-4 w-9 h-9 flex items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 transition-colors"
@@ -225,27 +201,31 @@ export default function Profile() {
           {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </button>
 
-        {/* معلومات المستخدم */}
+        {/* بيانات المستخدم */}
         <div className="flex items-center justify-end gap-3 mb-4">
           <div className="text-right">
-            <h2 className="text-white font-bold text-lg leading-tight">{userName}</h2>
-            {isAuthenticated && user?.email && (
-              <p className="text-white/45 text-xs mt-0.5">{user.email}</p>
-            )}
-            {isAuthenticated && defaultAddress?.phone && (
-              <p className="text-white/40 text-xs mt-0.5 flex items-center justify-end gap-1">
-                <Phone className="h-3 w-3" />
-                {defaultAddress.phone}
+            <h2 className="text-white font-black text-xl leading-tight">{userName}</h2>
+
+            {/* هاتف */}
+            {isAuthenticated && defaultAddr?.phone && (
+              <p className="text-white/55 text-xs mt-1 flex items-center justify-end gap-1.5">
+                <Phone className="h-3.5 w-3.5 text-white/40" />
+                {defaultAddr.phone}
               </p>
             )}
-            {isAuthenticated && defaultAddress?.city && (
-              <p className="text-white/40 text-xs mt-0.5 flex items-center justify-end gap-1">
-                <MapPin className="h-3 w-3" />
-                {defaultAddress.city}{defaultAddress.district ? ` · ${defaultAddress.district}` : ""}
+            {/* مدينة + حي */}
+            {isAuthenticated && (defaultAddr?.city || defaultAddr?.district) && (
+              <p className="text-white/50 text-xs mt-0.5 flex items-center justify-end gap-1.5">
+                <MapPin className="h-3.5 w-3.5 text-white/40" />
+                {[defaultAddr.city, defaultAddr.district].filter(Boolean).join(" · ")}
               </p>
+            )}
+            {/* البريد الإلكتروني للزوار غير المسجلين */}
+            {isAuthenticated && !defaultAddr?.city && user?.email && (
+              <p className="text-white/40 text-xs mt-0.5">{user.email}</p>
             )}
             {!isAuthenticated && (
-              <p className="text-white/45 text-xs mt-0.5">
+              <p className="text-white/45 text-xs mt-1">
                 <Link href="/auth">
                   <span className="text-primary/90 underline underline-offset-2">سجّل دخولك الآن</span>
                 </Link>
@@ -253,15 +233,15 @@ export default function Profile() {
             )}
           </div>
           <div className="w-14 h-14 rounded-full border-2 border-white/25 overflow-hidden bg-white/15 flex items-center justify-center flex-shrink-0">
-            {isAuthenticated && user?.profileImageUrl ? (
-              <img src={user.profileImageUrl} alt="" className="w-full h-full object-cover" />
+            {isAuthenticated && (user as any)?.profileImageUrl ? (
+              <img src={(user as any).profileImageUrl} alt="" className="w-full h-full object-cover" />
             ) : (
               <User className="h-8 w-8 text-white/70" strokeWidth={1.5} />
             )}
           </div>
         </div>
 
-        {/* شريط الإحصائيات السريعة — للمستخدمين المسجّلين */}
+        {/* شريط الإحصائيات */}
         {isAuthenticated && (
           <div className="flex items-center divide-x divide-x-reverse divide-white/15 bg-white/8 rounded-2xl px-2 py-2.5">
             <StatChip icon={<Package className="h-4 w-4" />} value={String(totalOrders)}   label="طلباتي" />
@@ -271,44 +251,85 @@ export default function Profile() {
         )}
       </div>
 
-      {/* ══ طلباتي ═══════════════════════════════════════════════════ */}
-      {isAuthenticated && (
-        <div className="mt-3 bg-white dark:bg-card mx-3 rounded-2xl overflow-hidden shadow-sm">
-          <div className="px-4 py-2.5 border-b border-gray-100 dark:border-border flex items-center justify-between">
-            <Link href="/orders">
-              <span className="text-xs text-primary flex items-center gap-0.5" data-testid="link-all-orders">
-                كل الطلبات <ChevronLeft className="h-3 w-3" />
-              </span>
-            </Link>
-            <span className="text-sm font-bold text-gray-800 dark:text-foreground">طلباتي</span>
-          </div>
-          <div className="grid grid-cols-5 gap-0 px-1 py-2">
-            {orderStatuses.map((s, i) => (
-              <Link key={i} href={s.href}>
-                <button
-                  className="flex flex-col items-center gap-1 w-full py-2 px-1 rounded-xl hover:bg-gray-50 dark:hover:bg-muted transition-colors relative"
-                  data-testid={`order-status-${i}`}
-                >
-                  <div className="relative">
-                    <s.icon className="h-[22px] w-[22px] text-gray-500 dark:text-gray-300" strokeWidth={1.5} />
-                    {s.count > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 h-4 min-w-4 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold px-0.5">
-                        {s.count}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[9px] text-gray-500 dark:text-gray-400 text-center leading-tight">{s.label}</span>
-                </button>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* ══ البطاقة الرئيسية الموحّدة ══════════════════════════════════════ */}
+      <div className="mx-3 mt-2 bg-white dark:bg-card rounded-2xl overflow-hidden shadow-sm">
 
-      {/* ══ لوحة المسوق ══════════════════════════════════════════════ */}
+        {/* طلباتي */}
+        {isAuthenticated && (
+          <>
+            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 dark:border-border">
+              <Link href="/orders">
+                <span className="text-xs text-primary flex items-center gap-0.5" data-testid="link-all-orders">
+                  كل الطلبات <ChevronLeft className="h-3 w-3" />
+                </span>
+              </Link>
+              <span className="text-sm font-bold text-gray-800 dark:text-foreground">طلباتي</span>
+            </div>
+            <div className="grid grid-cols-5 gap-0 px-1 py-2 border-b border-gray-100 dark:border-border">
+              {orderStatuses.map((s, i) => (
+                <Link key={i} href={s.href}>
+                  <button className="flex flex-col items-center gap-1 w-full py-2 px-1 rounded-xl hover:bg-gray-50 dark:hover:bg-muted transition-colors relative" data-testid={`order-status-${i}`}>
+                    <div className="relative">
+                      <s.icon className="h-[22px] w-[22px] text-gray-500 dark:text-gray-300" strokeWidth={1.5} />
+                      {s.count > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 h-4 min-w-4 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold px-0.5">
+                          {s.count}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[9px] text-gray-500 dark:text-gray-400 text-center leading-tight">{s.label}</span>
+                  </button>
+                </Link>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* القائمة العامة */}
+        <div className="px-4 py-2 border-b border-gray-100 dark:border-border">
+          <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 tracking-widest uppercase">عام</span>
+        </div>
+        {generalItems.map((item, i) => {
+          const row = <MenuRow key={i} icon={item.icon} label={item.label} color={item.color} iconColor={item.iconColor} badge={item.badge} />;
+          return <Link key={i} href={item.href}>{row}</Link>;
+        })}
+
+        {/* الدعم والمساعدة */}
+        <div className="px-4 py-2 border-t border-b border-gray-100 dark:border-border">
+          <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 tracking-widest uppercase">المساعدة</span>
+        </div>
+        {supportItems.map((item, i) => {
+          const row = <MenuRow key={i} icon={item.icon} label={item.label} color={item.color} iconColor={item.iconColor} external={(item as any).external} />;
+          if ((item as any).external) return <a key={i} href={item.href!} target="_blank" rel="noopener noreferrer">{row}</a>;
+          return item.href ? <Link key={i} href={item.href}>{row}</Link> : <div key={i}>{row}</div>;
+        })}
+
+        {/* تسجيل الخروج / الدخول */}
+        <div className="border-t border-gray-100 dark:border-border">
+          {isAuthenticated ? (
+            <button
+              onClick={() => logout()}
+              className="w-full flex items-center justify-between px-4 py-3.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+              data-testid="button-logout"
+            >
+              <LogOut className="h-5 w-5" />
+              <span className="font-semibold text-sm">تسجيل الخروج</span>
+            </button>
+          ) : (
+            <Link href="/auth">
+              <div className="w-full flex items-center justify-between px-4 py-3.5 cursor-pointer hover:bg-primary/5 dark:hover:bg-muted transition-colors" data-testid="button-login">
+                <LogIn className="h-5 w-5 text-primary" />
+                <span className="font-semibold text-sm text-gray-700 dark:text-foreground">تسجيل الدخول / إنشاء حساب</span>
+              </div>
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {/* ══ لوحة المسوق (مشروطة) ══════════════════════════════════════════ */}
       {isAuthenticated && marketer && (
-        <div className="mt-3 mx-3 rounded-2xl overflow-hidden shadow-sm" data-testid="marketer-panel">
-          {/* هيدر المسوق */}
+        <div className="mx-3 mt-[2px] bg-white dark:bg-card rounded-2xl overflow-hidden shadow-sm" data-testid="marketer-panel">
+          {/* هيدر ذهبي */}
           <div className="bg-gradient-to-bl from-amber-500 to-orange-600 px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="bg-white/20 rounded-full p-1.5">
@@ -323,9 +344,7 @@ export default function Profile() {
                     className="bg-white/20 rounded p-0.5 hover:bg-white/30 transition-colors"
                     data-testid="btn-copy-coupon"
                   >
-                    {copiedCoupon
-                      ? <CheckCheck className="h-3 w-3 text-white" />
-                      : <Copy className="h-3 w-3 text-white" />}
+                    {copiedCoupon ? <CheckCheck className="h-3 w-3 text-white" /> : <Copy className="h-3 w-3 text-white" />}
                   </button>
                 </div>
               </div>
@@ -335,145 +354,122 @@ export default function Profile() {
               <p className="text-white/70 text-[10px]">{marketer.name}</p>
             </div>
           </div>
-          {/* إحصائيات المسوق */}
-          <div className="bg-white dark:bg-card grid grid-cols-3 divide-x divide-x-reverse divide-gray-100 dark:divide-border">
-            <div className="flex flex-col items-center py-3 gap-0.5">
-              <span className="text-amber-600 font-black text-lg">{marketer.totalOrders ?? 0}</span>
-              <span className="text-gray-500 text-[10px]">إجمالي الطلبات</span>
-            </div>
-            <div className="flex flex-col items-center py-3 gap-0.5">
-              <span className="text-green-600 font-black text-lg">{Number(marketer.commissionRate ?? 0)}%</span>
-              <span className="text-gray-500 text-[10px]">عمولتك</span>
-            </div>
-            <div className="flex flex-col items-center py-3 gap-0.5">
-              <span className="text-blue-600 font-black text-lg">{Number(marketer.discountRate ?? 0)}%</span>
-              <span className="text-gray-500 text-[10px]">خصم العملاء</span>
-            </div>
+
+          {/* إحصائيات */}
+          <div className="grid grid-cols-4 divide-x divide-x-reverse divide-gray-100 dark:divide-border">
+            {[
+              { v: marketer.totalOrders ?? 0,                          l: "الطلبات",   c: "text-amber-600" },
+              { v: `${Number(marketer.commissionRate ?? 0)}%`,          l: "عمولتك",   c: "text-green-600" },
+              { v: `${Number(marketer.discountRate ?? 0)}%`,            l: "خصم العملاء", c: "text-blue-600" },
+              { v: `${Number(marketer.walletBalance ?? 0).toLocaleString()} ﷼`, l: "الرصيد", c: "text-purple-600" },
+            ].map((s, i) => (
+              <div key={i} className="flex flex-col items-center py-2.5 gap-0.5">
+                <span className={`font-black text-base leading-none ${s.c}`}>{s.v}</span>
+                <span className="text-gray-400 text-[9px]">{s.l}</span>
+              </div>
+            ))}
           </div>
-          {/* محفظة */}
-          <div className="bg-gray-50 dark:bg-muted/30 px-4 py-2.5 flex items-center justify-between">
-            <span className="text-xs text-gray-500 dark:text-gray-400">رصيد المحفظة</span>
-            <div className="flex items-center gap-1.5">
-              <Wallet className="h-4 w-4 text-amber-500" />
-              <span className="font-bold text-sm text-gray-800 dark:text-foreground">
-                {Number(marketer.walletBalance ?? 0).toLocaleString()} ريال
-              </span>
-            </div>
+
+          {/* 4 أزرار كبيرة */}
+          <div className="grid grid-cols-2 gap-2 p-3 border-t border-gray-100 dark:border-border">
+            {[
+              { icon: TrendingUp,  label: "لوحة التحكم",    href: "/marketer/dashboard", color: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800", iconColor: "text-amber-600" },
+              { icon: Package,     label: "طلباتي كمسوق",   href: "/marketer/orders",    color: "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800",    iconColor: "text-blue-600" },
+              { icon: Tag,         label: "كوبوناتي",        href: "/marketer/coupons",   color: "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800", iconColor: "text-purple-600" },
+              { icon: Wallet,      label: "محفظتي",          href: "/marketer/wallet",    color: "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800", iconColor: "text-green-600" },
+            ].map((btn, i) => (
+              <Link key={i} href={btn.href}>
+                <button
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border ${btn.color} hover:opacity-80 transition-opacity`}
+                  data-testid={`btn-marketer-${i}`}
+                >
+                  <btn.icon className={`h-5 w-5 flex-shrink-0 ${btn.iconColor}`} />
+                  <span className="font-semibold text-sm text-gray-700 dark:text-foreground">{btn.label}</span>
+                </button>
+              </Link>
+            ))}
           </div>
-          {/* رابط لوحة التحكم الكاملة */}
-          <Link href="/marketer/dashboard">
-            <div
-              className="bg-white dark:bg-card px-4 py-3 flex items-center justify-between hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors cursor-pointer border-t border-gray-100 dark:border-border"
-              data-testid="link-marketer-dashboard"
-            >
-              <ChevronLeft className="h-4 w-4 text-amber-500" />
-              <span className="text-sm font-semibold text-amber-600">لوحة تحكم المسوق الكاملة</span>
-            </div>
-          </Link>
         </div>
       )}
 
-      {/* ══ القائمة العامة ════════════════════════════════════════════ */}
-      <div className="mt-3 bg-white dark:bg-card mx-3 rounded-2xl overflow-hidden shadow-sm">
-        <div className="px-4 py-2 border-b border-gray-100 dark:border-border">
-          <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 tracking-widest uppercase">عام</span>
+      {/* ══ قسم الشركاء (ثابت للجميع) ═══════════════════════════════════ */}
+      <div className="mx-3 mt-[2px] bg-white dark:bg-card rounded-2xl overflow-hidden shadow-sm" data-testid="partners-section">
+        {/* هيدر القسم */}
+        <div className="px-4 py-3 border-b border-gray-100 dark:border-border flex items-center justify-between">
+          <Building2 className="h-4 w-4 text-gray-400" />
+          <span className="text-sm font-bold text-gray-700 dark:text-foreground">شركاؤنا في النمو</span>
         </div>
-        {generalItems.map((item, i) => {
-          const Row = (
-            <div
-              className="flex items-center justify-between px-4 py-3 border-b border-gray-50 dark:border-border/60 last:border-0 hover:bg-gray-50/80 dark:hover:bg-muted/50 cursor-pointer transition-colors"
-              data-testid={`menu-general-${i}`}
-            >
-              <div className="flex items-center gap-2">
-                <ChevronLeft className="h-3.5 w-3.5 text-gray-300" />
-                {item.badge !== undefined && (
-                  <span className="h-5 min-w-5 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1">
-                    {item.badge}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2.5">
-                <span className="text-sm text-gray-700 dark:text-foreground">{item.label}</span>
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${item.color}`}>
-                  <item.icon className={`h-4 w-4 ${item.iconColor}`} strokeWidth={1.5} />
-                </div>
-              </div>
-            </div>
-          );
-          return <Link key={i} href={item.href}>{Row}</Link>;
-        })}
-      </div>
 
-      {/* ══ الدعم والمساعدة ══════════════════════════════════════════ */}
-      <div className="mt-3 bg-white dark:bg-card mx-3 rounded-2xl overflow-hidden shadow-sm">
-        <div className="px-4 py-2 border-b border-gray-100 dark:border-border">
-          <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 tracking-widest uppercase">المساعدة</span>
-        </div>
-        {supportItems.map((item, i) => {
-          const Row = (
-            <div
-              className="flex items-center justify-between px-4 py-3 border-b border-gray-50 dark:border-border/60 last:border-0 hover:bg-gray-50/80 dark:hover:bg-muted/50 cursor-pointer transition-colors"
-              data-testid={`menu-support-${i}`}
-            >
-              <div className="flex items-center gap-1.5">
-                <ChevronLeft className="h-3.5 w-3.5 text-gray-300" />
-                {(item as any).external && <ExternalLink className="h-3 w-3 text-gray-300" />}
+        {/* لوحة المورد المعتمد */}
+        {isAuthenticated && supplier && (
+          <div className="border-b border-gray-100 dark:border-border">
+            <div className="bg-gradient-to-bl from-cyan-600 to-teal-700 px-4 py-3 flex items-center justify-between">
+              <div>
+                <p className="text-white/70 text-[10px]">مورد معتمد</p>
+                <p className="text-white font-bold text-sm">{supplier.name}</p>
               </div>
-              <div className="flex items-center gap-2.5">
-                <span className="text-sm text-gray-700 dark:text-foreground">{item.label}</span>
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${item.color}`}>
-                  <item.icon className={`h-4 w-4 ${item.iconColor}`} strokeWidth={1.5} />
+              <div className="bg-white/20 rounded-full p-1.5">
+                <Building2 className="h-4 w-4 text-white" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 divide-x divide-x-reverse divide-gray-100 dark:divide-border">
+              {[
+                { v: `${Number(supplier.balanceDue ?? 0).toLocaleString()} ﷼`, l: "مستحق لك",    c: "text-teal-600" },
+                { v: `${Number(supplier.totalSales ?? 0).toLocaleString()} ﷼`, l: "إجمالي المبيعات", c: "text-blue-600" },
+                { v: String(supplier.totalOrders ?? 0),                         l: "الطلبات",      c: "text-gray-700" },
+              ].map((s, i) => (
+                <div key={i} className="flex flex-col items-center py-3 gap-0.5">
+                  <span className={`font-black text-base leading-none ${s.c} dark:text-foreground`}>{s.v}</span>
+                  <span className="text-gray-400 text-[9px]">{s.l}</span>
                 </div>
-              </div>
+              ))}
             </div>
-          );
-          if ((item as any).external) {
-            return (
-              <a key={i} href={item.href!} target="_blank" rel="noopener noreferrer">{Row}</a>
-            );
-          }
-          return item.href ? <Link key={i} href={item.href}>{Row}</Link> : <div key={i}>{Row}</div>;
-        })}
-      </div>
-
-      {/* ══ تسجيل الخروج / الدخول ════════════════════════════════════ */}
-      <div className="mt-3 mx-3">
-        {isAuthenticated ? (
-          <button
-            onClick={() => logout()}
-            className="w-full flex items-center justify-between px-4 py-3.5 bg-white dark:bg-card rounded-2xl shadow-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-            data-testid="button-logout"
-          >
-            <LogOut className="h-5 w-5" />
-            <span className="font-semibold text-sm">تسجيل الخروج</span>
-          </button>
-        ) : (
-          <Link href="/auth">
-            <div
-              className="w-full flex items-center justify-between px-4 py-3.5 bg-white dark:bg-card rounded-2xl shadow-sm cursor-pointer hover:bg-primary/5 dark:hover:bg-muted transition-colors"
-              data-testid="button-login"
-            >
-              <LogIn className="h-5 w-5 text-primary" />
-              <span className="font-semibold text-sm text-gray-700 dark:text-foreground">تسجيل الدخول / إنشاء حساب</span>
-            </div>
-          </Link>
+            <a href="/supplier" className="flex items-center justify-between px-4 py-3 hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-colors border-t border-gray-100 dark:border-border" data-testid="link-supplier-portal">
+              <ChevronLeft className="h-4 w-4 text-teal-500" />
+              <span className="text-sm font-semibold text-teal-600">بوابة المورد</span>
+            </a>
+          </div>
         )}
+
+        {/* دعوة الانضمام — دائمة الظهور للجميع */}
+        <div className="px-4 py-3">
+          <p className="text-xs text-gray-400 text-right mb-3">انضم إلى شبكة شركائنا وابدأ الكسب معنا</p>
+          <div className="grid grid-cols-2 gap-2">
+            <a
+              href={WHATSAPP_MARKETER}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 transition-colors"
+              data-testid="btn-join-marketer"
+            >
+              <UserPlus className="h-4 w-4 text-white" />
+              <span className="text-white font-bold text-sm">انضم كمسوق</span>
+            </a>
+            <a
+              href={WHATSAPP_SUPPLIER}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 transition-colors"
+              data-testid="btn-join-supplier"
+            >
+              <Building2 className="h-4 w-4 text-white" />
+              <span className="text-white font-bold text-sm">انضم كمورد</span>
+            </a>
+          </div>
+        </div>
       </div>
 
-      {/* ══ الأقسام الذكية المضغوطة (تحكّم من الأدمن) ═══════════════
-          كل قسم = صف قابل للطيّ — مضغوط بدون ضغط على الصفحة
-         ══════════════════════════════════════════════════════════════ */}
+      {/* ══ الأقسام الذكية (تحكّم من الأدمن) ═══════════════════════════ */}
       {(
         (displaySettings?.showWhyUs === true && displaySettings?.whyUsOnAccount === true) ||
         (displaySettings?.showStats === true && displaySettings?.statsOnAccount === true) ||
         (displaySettings?.showFaq   === true && displaySettings?.faqOnAccount   === true)
       ) && (
-        <div className="mt-3 bg-white dark:bg-card mx-3 rounded-2xl overflow-hidden shadow-sm">
+        <div className="mx-3 mt-[2px] bg-white dark:bg-card rounded-2xl overflow-hidden shadow-sm">
           <div className="px-4 py-2 border-b border-gray-100 dark:border-border">
             <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 tracking-widest uppercase">أويو بلاست</span>
           </div>
 
-          {/* لماذا أويو بلاست؟ */}
           {displaySettings?.showWhyUs === true && displaySettings?.whyUsOnAccount === true && (
             <CollapsibleSection
               icon={<ShieldCheck className="h-4 w-4 text-blue-600" />}
@@ -485,9 +481,7 @@ export default function Profile() {
               <div className="grid grid-cols-3 gap-2 p-3">
                 {whyUsItems.map((f, i) => (
                   <div key={i} className="flex flex-col items-center gap-1.5 bg-white dark:bg-card rounded-xl p-2.5 text-center shadow-sm">
-                    <div className={`w-7 h-7 rounded-lg ${f.color} text-white flex items-center justify-center`}>
-                      {f.icon}
-                    </div>
+                    <div className={`w-7 h-7 rounded-lg ${f.color} text-white flex items-center justify-center`}>{f.icon}</div>
                     <span className="text-[10px] font-semibold text-gray-700 dark:text-foreground leading-tight">{f.label}</span>
                   </div>
                 ))}
@@ -495,7 +489,6 @@ export default function Profile() {
             </CollapsibleSection>
           )}
 
-          {/* أرقامنا تتحدث */}
           {displaySettings?.showStats === true && displaySettings?.statsOnAccount === true && (
             <CollapsibleSection
               icon={<Users className="h-4 w-4 text-indigo-600" />}
@@ -515,7 +508,6 @@ export default function Profile() {
             </CollapsibleSection>
           )}
 
-          {/* الأسئلة الشائعة */}
           {displaySettings?.showFaq === true && displaySettings?.faqOnAccount === true && (
             <CollapsibleSection
               icon={<HelpCircle className="h-4 w-4 text-purple-600" />}
@@ -537,9 +529,7 @@ export default function Profile() {
                       </div>
                       <span className="text-sm font-semibold text-gray-800 dark:text-foreground text-right flex-1 mr-2">{item.q}</span>
                     </button>
-                    {openFaq === i && (
-                      <p className="text-xs text-muted-foreground leading-relaxed pb-3 pr-2">{item.a}</p>
-                    )}
+                    {openFaq === i && <p className="text-xs text-muted-foreground leading-relaxed pb-3 pr-2">{item.a}</p>}
                   </div>
                 ))}
                 <div className="pt-3 pb-1 flex justify-center">
@@ -560,7 +550,7 @@ export default function Profile() {
         </div>
       )}
 
-      {/* ══ الإصدار ══════════════════════════════════════════════════ */}
+      {/* ══ الإصدار ══════════════════════════════════════════════════════ */}
       <div className="flex items-center justify-center gap-2 mt-5 mb-2">
         <span className="text-[11px] text-gray-400 dark:text-gray-600">الإصدار {APP_VERSION}</span>
         <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-700" />
