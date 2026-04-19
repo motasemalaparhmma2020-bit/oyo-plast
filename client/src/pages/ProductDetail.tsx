@@ -1358,21 +1358,32 @@ export default function ProductDetail() {
                 </button>
 
                 {enableBagPrinting && (
-                  <div className="px-4 pb-4 space-y-4 border-t border-cyan-200/50">
+                  <div className="border-t border-cyan-200/50 divide-y divide-gray-100 dark:divide-border">
 
-                    {/* لون الكيس */}
+                    {/* ══ لون الكيس ══════════════════════════════════════════ */}
                     {(product.availableBagColors || []).length > 0 && (
-                      <div className="pt-3">
-                        <p className="text-xs font-bold text-muted-foreground mb-2">🎨 لون الكيس</p>
+                      <div className="px-4 py-3 bg-sky-50/60 dark:bg-sky-950/20">
+                        <div className="flex items-center gap-2 mb-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-sky-500 flex items-center justify-center text-white text-xs font-bold shrink-0">١</div>
+                          <div>
+                            <p className="text-xs font-bold text-sky-700 dark:text-sky-400">لون الكيس (خلفية)</p>
+                            <p className="text-[10px] text-muted-foreground">اختر لون الكيس نفسه</p>
+                          </div>
+                          {selectedBagColor && (
+                            <span className="mr-auto text-[10px] bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 px-2 py-0.5 rounded-full font-semibold">
+                              {selectedBagColor}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex flex-wrap gap-2">
                           {(product.availableBagColors || []).map((color: string) => {
                             const isSelected = selectedBagColor === color;
-                            const hex = ({ أبيض:"#FFF",أسود:"#111",بيج:"#D4A574",أزرق:"#3B82F6",أحمر:"#EF4444",أخضر:"#22C55E" } as Record<string, string>)[color] || "#9CA3AF";
+                            const hex = ({ أبيض:"#FFFFFF",أسود:"#1a1a1a",بيج:"#D4A574",أزرق:"#3B82F6",أحمر:"#EF4444",أخضر:"#22C55E",رمادي:"#6B7280",بني:"#92400E",وردي:"#EC4899" } as Record<string, string>)[color] || "#9CA3AF";
                             return (
                               <button key={color} onClick={() => setSelectedBagColor(isSelected ? null : color)}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-all ${isSelected ? "border-primary shadow-md scale-105" : "border-border hover:border-primary/50"}`}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-all ${isSelected ? "border-sky-500 shadow-md ring-2 ring-sky-200 dark:ring-sky-800" : "border-border hover:border-sky-400"}`}
                                 data-testid={`bag-color-${color}`}>
-                                <span className="w-4 h-4 rounded-full border border-black/10" style={{ backgroundColor: hex }} />
+                                <span className="w-4 h-4 rounded-full border border-black/15 shadow-sm" style={{ backgroundColor: hex }} />
                                 {color}
                               </button>
                             );
@@ -1381,49 +1392,79 @@ export default function ProductDetail() {
                       </div>
                     )}
 
-                    {/* ألوان التصميم */}
-                    <div>
-                      <p className="text-xs font-bold text-muted-foreground mb-2">🖨️ ألوان التصميم</p>
+                    {/* ══ لون الطباعة / الخط ════════════════════════════════ */}
+                    <div className="px-4 py-3 bg-orange-50/60 dark:bg-orange-950/20">
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center text-white text-xs font-bold shrink-0">٢</div>
+                        <div className="flex-1">
+                          <p className="text-xs font-bold text-orange-700 dark:text-orange-400">لون الطباعة / الخط (حبر)</p>
+                          <p className="text-[10px] text-muted-foreground">اكتب اسم لون الحبر المطلوب للطباعة</p>
+                        </div>
+                        {product.singleColorPrintPrice && (
+                          <span className="text-[10px] bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded-full font-semibold shrink-0">
+                            +{formatPrice(Number(product.singleColorPrintPrice))} {currLabel}/لون
+                          </span>
+                        )}
+                      </div>
                       <div className="space-y-2">
                         {printColors.map((color, i) => (
                           <div key={i} className="flex items-center gap-2">
-                            <input
-                              className="flex-1 border rounded-lg px-3 py-2 text-sm bg-background"
-                              value={color}
-                              onChange={e => setPrintColors(prev => { const n = [...prev]; n[i] = e.target.value; return n; })}
-                              placeholder={`اسم اللون ${i + 1} (مثال: أسود، ذهبي)`}
-                              data-testid={`input-print-color-${i}`}
-                            />
-                            {product.singleColorPrintPrice && color.trim() && (
-                              <span className="text-xs text-primary font-bold whitespace-nowrap shrink-0">
-                                +{formatPrice(Number(product.singleColorPrintPrice) * quantity)} {currLabel}
-                              </span>
-                            )}
+                            <div className="flex-1 flex items-center gap-2 bg-white dark:bg-background border border-orange-200 dark:border-orange-800 rounded-lg px-3 py-1.5">
+                              <span className="text-orange-400 text-sm">🖊️</span>
+                              <input
+                                className="flex-1 text-sm bg-transparent outline-none"
+                                value={color}
+                                onChange={e => setPrintColors(prev => { const n = [...prev]; n[i] = e.target.value; return n; })}
+                                placeholder={i === 0 ? "مثال: أسود، ذهبي، أحمر..." : `لون إضافي ${i + 1}`}
+                                data-testid={`input-print-color-${i}`}
+                              />
+                            </div>
                             {i > 0 && (
                               <button onClick={() => setPrintColors(prev => prev.filter((_, j) => j !== i))}
-                                className="text-destructive hover:text-destructive/70 text-lg font-bold shrink-0">×</button>
+                                className="text-destructive hover:text-destructive/70 text-lg font-bold shrink-0 w-7 h-7 flex items-center justify-center">×</button>
                             )}
                           </div>
                         ))}
                         {printColors.length < 3 && (
                           <button onClick={() => setPrintColors(prev => [...prev, ""])}
-                            className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-semibold transition"
+                            className="flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400 hover:text-orange-700 font-semibold transition"
                             data-testid="add-print-color">
-                            <Plus className="h-3.5 w-3.5" /> إضافة لون آخر
+                            <Plus className="h-3.5 w-3.5" /> إضافة لون طباعة آخر
                           </button>
                         )}
                       </div>
                     </div>
 
-                    {/* ملخص تكلفة الطباعة */}
-                    {bagPrintingCost > 0 && (
-                      <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">
-                          تكلفة الطباعة ({printColors.filter(c=>c.trim()).length} لون × {quantity} قطعة):
-                        </span>
-                        <span className="font-bold text-primary text-sm">
-                          {formatPrice(bagPrintingCost)} {currLabel}
-                        </span>
+                    {/* ══ معاينة + تكلفة ════════════════════════════════════ */}
+                    {(selectedBagColor || printColors.some(c => c.trim())) && (
+                      <div className="px-4 py-2.5 bg-gray-50/80 dark:bg-muted/20 flex items-center gap-3">
+                        {/* معاينة بصرية */}
+                        {selectedBagColor && printColors[0]?.trim() && (() => {
+                          const bgHex = ({ أبيض:"#FFFFFF",أسود:"#1a1a1a",بيج:"#D4A574",أزرق:"#3B82F6",أحمر:"#EF4444",أخضر:"#22C55E",رمادي:"#6B7280",بني:"#92400E",وردي:"#EC4899" } as Record<string, string>)[selectedBagColor] || "#9CA3AF";
+                          const textHex = ({ أسود:"#1a1a1a",أبيض:"#FFFFFF",ذهبي:"#D4AF37",فضي:"#C0C0C0",أحمر:"#EF4444",أزرق:"#3B82F6",أخضر:"#22C55E" } as Record<string, string>)[printColors[0].trim()] || "#1a1a1a";
+                          return (
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <div className="w-10 h-10 rounded-lg border border-black/10 shadow-sm flex items-center justify-center text-[9px] font-black"
+                                style={{ backgroundColor: bgHex, color: textHex }}>
+                                ABC
+                              </div>
+                              <span className="text-[10px] text-muted-foreground leading-tight">
+                                كيس {selectedBagColor}<br/>+ طباعة {printColors[0]}
+                              </span>
+                            </div>
+                          );
+                        })()}
+                        {/* تكلفة */}
+                        {bagPrintingCost > 0 && (
+                          <div className="flex-1 flex items-center justify-between">
+                            <span className="text-[11px] text-muted-foreground">
+                              {printColors.filter(c=>c.trim()).length} لون × {quantity} قطعة
+                            </span>
+                            <span className="font-bold text-primary text-sm">
+                              +{formatPrice(bagPrintingCost)} {currLabel}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

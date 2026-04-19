@@ -5126,8 +5126,8 @@ export default function Admin() {
   const [smartVariantsList, setSmartVariantsList] = useState<SmartVariant[]>([]);
   const [smartActiveTypes, setSmartActiveTypes] = useState<SmartVariantType[]>([]);
   const [formSections, setFormSections] = useState<Record<string, boolean>>({
-    basics: true,
-    media: true,
+    basics: false,
+    media: false,
     discount: false,
     smart: false,
     printing: false,
@@ -5832,15 +5832,11 @@ export default function Admin() {
       setSmartActiveTypes([]);
     }
     setFormSections({
-      basics: true,
-      media: true,
-      discount: !!(
-        (product as any).discountPercent ||
-        ((product as any).promotionalTags?.length > 0) ||
-        (product as any).hasFreeShipping
-      ),
-      smart: !!(product as any).enableVariantUI || !!(product as any).enableSmartVariants,
-      printing: !!(product as any).allowDesignUpload || !!(product as any).hasPrintingOptions,
+      basics: false,
+      media: false,
+      discount: false,
+      smart: false,
+      printing: false,
     });
     setShowProductForm(true);
   };
@@ -6395,6 +6391,11 @@ export default function Admin() {
                             <span className="w-6 h-6 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">١</span>
                             <span className="font-semibold text-sm">الأساسيات</span>
                             <span className="text-xs text-muted-foreground">الاسم · القسم · الوصف · السعر · المخزون</span>
+                            {(productForm.name && productForm.price && productForm.categoryId > 0) ? (
+                              <span className="text-xs bg-primary text-white px-1.5 py-0.5 rounded-full">✓ مكتمل</span>
+                            ) : productForm.name ? (
+                              <span className="text-xs bg-amber-500 text-white px-1.5 py-0.5 rounded-full">ناقص</span>
+                            ) : null}
                           </div>
                           <ChevronDown className={`h-4 w-4 transition-transform text-muted-foreground ${formSections.basics ? 'rotate-180' : ''}`} />
                         </button>
@@ -6562,9 +6563,11 @@ export default function Admin() {
                             <span className="w-6 h-6 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center font-bold">٢</span>
                             <span className="font-semibold text-sm">الصور والألوان</span>
                             <span className="text-xs text-muted-foreground">صور المنتج · الألوان · المقاسات · الكلمات الدلالية</span>
-                            {productForm.imageUrls.length > 0 && (
-                              <span className="text-xs bg-blue-500 text-white px-1.5 py-0.5 rounded-full">{productForm.imageUrls.length} صور</span>
-                            )}
+                            {productForm.imageUrls.length > 0 ? (
+                              <span className="text-xs bg-blue-500 text-white px-1.5 py-0.5 rounded-full">✓ {productForm.imageUrls.length} صورة</span>
+                            ) : productForm.imageUrl ? (
+                              <span className="text-xs bg-blue-400 text-white px-1.5 py-0.5 rounded-full">✓ صورة رئيسية</span>
+                            ) : null}
                           </div>
                           <ChevronDown className={`h-4 w-4 transition-transform text-muted-foreground ${formSections.media ? 'rotate-180' : ''}`} />
                         </button>
