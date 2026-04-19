@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Trash2, Plus, Minus, ShoppingBag, Loader2, Paperclip, CheckCircle2 } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingBag, Loader2, Paperclip, CheckCircle2, ArrowRight } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Product } from "@shared/schema";
@@ -354,9 +354,17 @@ export default function Cart() {
       />
 
       {/* رأس الصفحة */}
-      <div className="flex justify-between items-center mb-4">
-        <span className="text-sm text-muted-foreground">{itemCount} منتجات</span>
-        <h1 className="text-lg font-bold">سلة التسوق</h1>
+      <div className="flex items-center mb-4 gap-2">
+        <button
+          onClick={() => window.history.back()}
+          className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-muted transition-colors flex-shrink-0"
+          data-testid="btn-cart-back"
+          aria-label="رجوع"
+        >
+          <ArrowRight className="h-5 w-5" />
+        </button>
+        <h1 className="flex-1 text-center text-lg font-bold">سلة التسوق</h1>
+        <span className="text-sm text-muted-foreground w-9 text-center">{itemCount}</span>
       </div>
 
       {/* قائمة المنتجات */}
