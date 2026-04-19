@@ -5053,10 +5053,13 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const { cartItems: cartTable } = await import("@shared/schema");
       const { eq: eqFn } = await import("drizzle-orm");
       
-      const { quantity } = req.body;
+      const { quantity, designFileUrl } = req.body;
+      const updateData: Record<string, any> = {};
+      if (quantity !== undefined) updateData.quantity = quantity;
+      if (designFileUrl !== undefined) updateData.designFileUrl = designFileUrl;
       const [updated] = await dbInstance
         .update(cartTable)
-        .set({ quantity })
+        .set(updateData)
         .where(eqFn(cartTable.id, parseInt(req.params.id)))
         .returning();
       

@@ -1,12 +1,13 @@
 import { useCart, useUpdateCartItem, useRemoveFromCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Trash2, Plus, Minus, ShoppingBag, Loader2 } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingBag, Loader2, Paperclip, CheckCircle2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Product } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
 import {
   GuestCartItem,
   getGuestCart,
@@ -26,7 +27,8 @@ function CartRow({
   selectedSize, selectedColor,
   selectedBagColor, printColor1, printColor2, printColor3, printColorCount,
   customPrinting, designNotes, designFileUrl,
-  onIncrease, onDecrease, onRemove, testPrefix, cfg,
+  onIncrease, onDecrease, onRemove, onUploadDesign, isUploadingDesign,
+  testPrefix, cfg,
 }: {
   image: string; name: string; price: number;
   unit: string; quantity: number;
@@ -38,6 +40,8 @@ function CartRow({
   customPrinting?: boolean | null;
   designNotes?: string | null; designFileUrl?: string | null;
   onIncrease: () => void; onDecrease: () => void; onRemove: () => void;
+  onUploadDesign?: () => void;
+  isUploadingDesign?: boolean;
   testPrefix: string;
   cfg: ItemDisplayConfig;
 }) {
@@ -91,6 +95,28 @@ function CartRow({
             ? <OrderItemCollapsibleMeta item={meta} cfg={cfg} />
             : <OrderItemCompactMeta item={meta} cfg={cfg} />
           }
+
+          {/* زر رفع ملف التصميم — للطلبات المخصصة بدون ملف */}
+          {customPrinting && onUploadDesign && (
+            <button
+              data-testid={`button-upload-design-${testPrefix}`}
+              onClick={onUploadDesign}
+              disabled={isUploadingDesign}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-all mt-1 ${
+                designFileUrl
+                  ? "bg-green-50 border-green-200 text-green-700"
+                  : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+              }`}
+            >
+              {isUploadingDesign ? (
+                <><Loader2 className="w-3 h-3 animate-spin" /> جاري الرفع...</>
+              ) : designFileUrl ? (
+                <><CheckCircle2 className="w-3 h-3" /> ملف التصميم مرفق</>
+              ) : (
+                <><Paperclip className="w-3 h-3" /> ارفع ملف تصميمك</>
+              )}
+            </button>
+          )}
 
           {/* السعر والكمية */}
           <div className="flex items-center justify-between mt-auto pt-1">
@@ -148,6 +174,52 @@ export default function Cart() {
   const queryClient = useQueryClient();
   const displaySettings = useDisplaySettings();
   const cartCfg = displaySettings.cart;
+  const { toast } = useToast();
+  const [uploadingItemId, setUploadingItemId] = useState<number | null>(null);
+  const designFileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingUploadItemId, setPendingUploadItemId] = useState<number | null>(null);
+
+  const uploadDesignMutation = useMutation({
+    mutationFn: async ({ file, itemId }: { file: File; itemId: number }) => {
+      const formData = new FormData();
+      formData.append("design", file);
+      const uploadRes = await fetch("/api/upload/design", { method: "POST", body: formData, credentials: "include" });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(uploadData.message || "فشل رفع الملف");
+      const patchRes = await fetch(`/api/cart/${itemId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ designFileUrl: uploadData.designUrl }),
+      });
+      if (!patchRes.ok) throw new Error("فشل حفظ رابط الملف");
+      return uploadData.designUrl;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+      toast({ title: "✅ تم رفع ملف التصميم", description: "تم حفظه مع طلبك" });
+    },
+    onError: (e: any) => {
+      toast({ title: "فشل رفع الملف", description: e.message, variant: "destructive" });
+    },
+    onSettled: () => {
+      setUploadingItemId(null);
+      setPendingUploadItemId(null);
+    },
+  });
+
+  const handleUploadForItem = (itemId: number) => {
+    setPendingUploadItemId(itemId);
+    designFileInputRef.current?.click();
+  };
+
+  const handleDesignFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !pendingUploadItemId) return;
+    setUploadingItemId(pendingUploadItemId);
+    uploadDesignMutation.mutate({ file, itemId: pendingUploadItemId });
+    e.target.value = "";
+  };
 
   const [currency, setCurrency] = useState<"YER" | "SAR">(
     () => (localStorage.getItem("currency") as "YER" | "SAR") || "YER"
@@ -271,6 +343,16 @@ export default function Cart() {
 
   return (
     <div className="max-w-lg mx-auto px-4 py-5 pb-28">
+      {/* input مخفي لرفع ملف التصميم */}
+      <input
+        ref={designFileInputRef}
+        type="file"
+        accept="image/*,.pdf,.ai,.eps,.psd,.png,.jpg,.svg"
+        className="hidden"
+        data-testid="input-design-file-cart"
+        onChange={handleDesignFileChange}
+      />
+
       {/* رأس الصفحة */}
       <div className="flex justify-between items-center mb-4">
         <span className="text-sm text-muted-foreground">{itemCount} منتجات</span>
@@ -318,6 +400,8 @@ export default function Cart() {
                   onIncrease={() => updateItem({ id: item.id, quantity: item.quantity + 1 })}
                   onDecrease={() => updateItem({ id: item.id, quantity: item.quantity - 1 })}
                   onRemove={() => removeItem(item.id)}
+                  onUploadDesign={item.customPrinting ? () => handleUploadForItem(item.id) : undefined}
+                  isUploadingDesign={uploadingItemId === item.id}
                   testPrefix={String(item.id)}
                   cfg={cartCfg}
                 />

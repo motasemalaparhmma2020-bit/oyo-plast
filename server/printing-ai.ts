@@ -44,7 +44,7 @@ async function fetchPrintingProducts(): Promise<string> {
       const stock = p.stock > 0 ? `المخزون: ${p.stock.toLocaleString()} وحدة` : "غير متوفر حالياً";
 
       const parts = [
-        `🖨️ **${p.name}**`,
+        `🖨️ **${p.name}** (ID:${p.id})`,
         p.description ? `   ${p.description}` : "",
         `   ${basePrice}`,
         printPrice ? `   ${printPrice}` : "",
@@ -203,28 +203,24 @@ ${DESIGN_DESCRIPTION_GUIDE}
 (سعر الوحدة × الكمية) + (سعر الطباعة × الكمية)
 قدّم التقدير بوضوح.
 
-**الخطوة 5 — عرض التصميم الأولي:**
-بعد تأكيد كل المواصفات:
-"يمكنني تحضير لك نموذج تصميم أولي بـ 300 ريال يمني فقط — يُخصم من الطلب النهائي. هل تريد؟"
-إذا وافق، أضف {ACTION:ADD_DESIGN_SERVICE} في ردك وأعدّ وصف التصميم التفصيلي.
-
-**الخطوة 6 — جمع بيانات التواصل:**
+**الخطوة 5 — جمع بيانات التواصل:**
 اطلب: الاسم الكامل، رقم الهاتف، المدينة.
-ثم أضف {ACTION:READY_TO_ORDER} مع ملخص الطلب الكامل بهذا الشكل:
+ثم أضف {ACTION:READY_TO_ORDER} مع ملخص الطلب الكامل بهذا الشكل بالضبط:
 
 📦 طلب طباعة جديد — أويو بلاست
 ━━━━━━━━━━━━━━
 👤 [الاسم الكامل]
 📞 [رقم الهاتف] | [المدينة]
 ━━━━━━━━━━━━━━
+🆔 رقم المنتج: [ID الرقمي من القائمة أعلاه]
 📋 المنتج: [اسم المنتج]
 📐 المقاس: [المقاس المختار]
 🎨 لون المنتج: [اللون]
 🖊️ الطباعة: [لون الطباعة + النوع + عدد الألوان]
 📝 المحتوى: [ما سيُطبع]
-🔢 الكمية: [العدد]
+🔢 الكمية: [العدد بالأرقام فقط بدون فواصل]
 ━━━━━━━━━━━━━━
-🎨 وصف التصميم: [وصف تفصيلي للمصمم]
+🎨 وصف التصميم: [وصف تفصيلي دقيق للمصمم يشمل: الخلفية، الألوان، المحتوى، المكان، الملاحظات]
 ━━━━━━━━━━━━━━
 💰 التقدير: [السعر × الكمية] = [الإجمالي] ريال يمني
 ⏱️ التسليم: [وقت التسليم المتوقع]
@@ -246,7 +242,7 @@ export interface PrintingChatInput {
 
 export interface PrintingChatOutput {
   reply: string;
-  action?: "add_design_service" | "ready_to_order" | null;
+  action?: "ready_to_order" | null;
   collectedSpecs?: Record<string, string>;
 }
 
@@ -309,10 +305,7 @@ export async function handlePrintingChat(input: PrintingChatInput): Promise<Prin
 
     // كشف الإجراءات المضمّنة في الرد
     let action: PrintingChatOutput["action"] = null;
-    if (reply.includes("{ACTION:ADD_DESIGN_SERVICE}")) {
-      action = "add_design_service";
-      reply = reply.replace("{ACTION:ADD_DESIGN_SERVICE}", "").trim();
-    } else if (reply.includes("{ACTION:READY_TO_ORDER}")) {
+    if (reply.includes("{ACTION:READY_TO_ORDER}")) {
       action = "ready_to_order";
       reply = reply.replace("{ACTION:READY_TO_ORDER}", "").trim();
     }

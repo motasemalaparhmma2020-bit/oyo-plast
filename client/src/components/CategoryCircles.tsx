@@ -76,15 +76,6 @@ export function CategoryCircles({
               </div>
             )}
           </div>
-          {/* شارة عدد المنتجات — أعلى اليمين */}
-          {typeof category.productCount === "number" && category.productCount > 0 && (
-            <span
-              className="absolute -top-1 -right-1 bg-primary text-white font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none shadow-sm"
-              style={{ fontSize: "10px" }}
-            >
-              {category.productCount}
-            </span>
-          )}
         </div>
         <p
           className="text-center font-semibold text-gray-800 dark:text-white leading-tight w-full px-1"

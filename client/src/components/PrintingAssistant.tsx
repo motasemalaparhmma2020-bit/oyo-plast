@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
   Send, Bot, User, ShoppingCart, Palette, Sparkles,
-  ChevronDown, ChevronUp, Loader2, RefreshCw, MessageCircle,
+  ChevronDown, ChevronUp, Loader2, RefreshCw, Paperclip, CheckCircle2, X,
 } from "lucide-react";
+import { useLocation } from "wouter";
 
 type Msg = { role: "user" | "model"; text: string; action?: string | null };
 
@@ -44,40 +45,64 @@ function formatText(text: string) {
   });
 }
 
-// استخراج ملخص الطلب من رد الموظف لإرساله للواتساب
-function extractOrderSummary(messages: Msg[]): string {
-  // نبحث في آخر رسائل الموظف عن الملخص المنظّم
+// استخراج بيانات الطلب من ملخص الموظف الذكي
+function parseCartData(messages: Msg[]) {
   const modelMsgs = [...messages].reverse().filter(m => m.role === "model");
+  let summary = "";
   for (const msg of modelMsgs) {
     if (msg.text.includes("📦") && msg.text.includes("━━")) {
-      return msg.text;
+      summary = msg.text;
+      break;
     }
   }
-  // إذا لم يجد ملخصاً منظّماً، نجمع كل رسائل العميل
-  const userMsgs = messages
-    .filter(m => m.role === "user")
-    .slice(-8)
-    .map(m => m.text)
-    .join("\n");
-  return `تفاصيل الطلب:\n${userMsgs}`;
+  if (!summary) return null;
+
+  const getLine = (emoji: string) => {
+    const re = new RegExp(`${emoji}[^:：]*[:：]\\s*(.+)`);
+    const m = summary.match(re);
+    return m ? m[1].trim() : null;
+  };
+
+  // رقم المنتج
+  const productIdStr = getLine("🆔");
+  const productId = productIdStr ? parseInt(productIdStr.replace(/\D/g, "")) : null;
+
+  // الكمية
+  const qtyStr = getLine("🔢");
+  const quantity = qtyStr ? parseInt(qtyStr.replace(/[^\d]/g, "")) : null;
+
+  // لون المنتج
+  const selectedColor = getLine("🎨 لون المنتج") || getLine("🎨");
+
+  // المقاس
+  const selectedSize = getLine("📐");
+
+  // وصف التصميم (قد يمتد عدة أسطر)
+  const designMatch = summary.match(/🎨 وصف التصميم[^:：]*[:：]\s*([\s\S]*?)(?:━━|💰|⏱️|$)/);
+  const designNotes = designMatch ? designMatch[1].trim() : summary;
+
+  return { productId, quantity, selectedColor, selectedSize, designNotes, fullSummary: summary };
 }
 
 export function PrintingAssistant() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const [messages, setMessages] = useState<Msg[]>([GREETING]);
   const [input, setInput] = useState("");
   const [collapsed, setCollapsed] = useState(false);
   const [productType, setProductType] = useState<string | undefined>();
   const [showQuickTypes, setShowQuickTypes] = useState(true);
+  const [designFile, setDesignFile] = useState<File | null>(null);
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
+  const [addedToCart, setAddedToCart] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // جلب رقم الواتساب من الإعدادات
   const { data: displaySettings } = useQuery<any>({
     queryKey: ["/api/display-settings"],
     staleTime: 5 * 60 * 1000,
   });
-  const waNumber = displaySettings?.whatsappNumber?.replace(/\D/g, "") || "967777777777";
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -85,33 +110,64 @@ export function PrintingAssistant() {
     }
   }, [messages]);
 
-  // فتح واتساب مع ملخص الطلب
-  const openWhatsApp = (text: string) => {
-    const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank");
-  };
+  // رفع ملف التصميم
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("design", file);
+      const res = await fetch("/api/upload/design", { method: "POST", body: formData, credentials: "include" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "فشل رفع الملف");
+      return data.designUrl as string;
+    },
+    onSuccess: (url) => {
+      setUploadedUrl(url);
+      toast({ title: "✅ تم رفع ملف التصميم", description: "سيُضاف مع طلبك في السلة" });
+    },
+    onError: () => {
+      toast({ title: "فشل رفع الملف", description: "تأكد من نوع الملف وحاول مجدداً", variant: "destructive" });
+    },
+  });
 
-  // إجراء: طلب تصميم أولي (300 ريال)
-  const handleDesignService = (currentMessages: Msg[]) => {
-    const summary = extractOrderSummary(currentMessages);
-    const waText = `مرحباً أويو بلاست 🎨\n\nأريد نموذج تصميم أولي (300 ريال)\n\n${summary}\n\nأرجو التواصل لإتمام التصميم.`;
-    openWhatsApp(waText);
-    toast({
-      title: "✅ يتم تحويلك للواتساب",
-      description: "أرسل الرسالة وسيتواصل معك فريق التصميم خلال دقائق",
-    });
-  };
+  // إضافة الطلب للسلة
+  const addToCartMutation = useMutation({
+    mutationFn: async () => {
+      const parsed = parseCartData(messages);
+      if (!parsed?.productId) throw new Error("لم يتم تحديد المنتج بعد");
+      if (!parsed?.quantity || parsed.quantity < 1) throw new Error("الكمية غير صحيحة");
 
-  // إجراء: إتمام الطلب النهائي
-  const handleReadyToOrder = (currentMessages: Msg[]) => {
-    const summary = extractOrderSummary(currentMessages);
-    const waText = `مرحباً أويو بلاست 📦\n\nلديّ طلب طباعة جديد:\n\n${summary}\n\nأرجو التأكيد والمتابعة.`;
-    openWhatsApp(waText);
-    toast({
-      title: "✅ تم إرسال طلبك للواتساب",
-      description: "سيتواصل معك الفريق قريباً لتأكيد الطلب",
-    });
-  };
+      const body = {
+        productId: parsed.productId,
+        quantity: parsed.quantity,
+        selectedColor: parsed.selectedColor || null,
+        selectedSize: parsed.selectedSize || null,
+        customPrinting: true,
+        designNotes: parsed.designNotes || parsed.fullSummary,
+        designFileUrl: uploadedUrl || null,
+      };
+
+      const res = await fetch("/api/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "فشل إضافة الطلب");
+      return data;
+    },
+    onSuccess: () => {
+      setAddedToCart(true);
+      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+      toast({
+        title: "✅ تمت إضافة الطلب للسلة",
+        description: "يمكنك استكمال الطلب والدفع من السلة",
+      });
+    },
+    onError: (e: any) => {
+      toast({ title: "فشل إضافة الطلب", description: e.message, variant: "destructive" });
+    },
+  });
 
   const chatMutation = useMutation({
     mutationFn: async (text: string) => {
@@ -119,41 +175,26 @@ export function PrintingAssistant() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          message: text,
-          history: messages.slice(-16),
-          productType,
-        }),
+        body: JSON.stringify({ message: text, history: messages.slice(-16), productType }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "خطأ في الاتصال");
       return data;
     },
     onSuccess: (data) => {
-      // كشف تلقائي للملخص المنسّق حتى لو لم يُضف الموظف الإجراء صريحاً
       let action = data.action;
       if (!action && data.reply.includes("📦") && data.reply.includes("━━")) {
         action = "ready_to_order";
       }
-      if (!action && data.reply.includes("تصميم أولي") && data.reply.includes("300 ريال") && data.reply.includes("إضافة")) {
-        action = "add_design_service";
-      }
-
       const reply: Msg = { role: "model", text: data.reply, action };
-      const newMessages = [...messages, reply];
-      setMessages(newMessages);
+      setMessages((prev) => [...prev, reply]);
       setShowQuickTypes(false);
-
-      if (action === "add_design_service") {
-        setTimeout(() => handleDesignService(newMessages), 800);
-      } else if (action === "ready_to_order") {
-        setTimeout(() => handleReadyToOrder(newMessages), 800);
-      }
+      setAddedToCart(false);
     },
     onError: () => {
       setMessages((prev) => [
         ...prev,
-        { role: "model", text: "عذراً، حصل خلل تقني. حاول مرة أخرى أو تواصل معنا على واتساب." },
+        { role: "model", text: "عذراً، حصل خلل تقني. حاول مرة أخرى." },
       ]);
     },
   });
@@ -178,7 +219,21 @@ export function PrintingAssistant() {
     setInput("");
     setProductType(undefined);
     setShowQuickTypes(true);
+    setDesignFile(null);
+    setUploadedUrl(null);
+    setAddedToCart(false);
   };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setDesignFile(f);
+    uploadMutation.mutate(f);
+  };
+
+  const hasOrderSummary = messages.some(
+    m => m.role === "model" && m.text.includes("📦") && m.text.includes("━━")
+  );
 
   return (
     <div className="rounded-2xl border border-teal-100 shadow-xl bg-white overflow-hidden" dir="rtl">
@@ -249,28 +304,65 @@ export function PrintingAssistant() {
                 }`}>
                   {msg.role === "model" ? formatText(msg.text) : msg.text}
 
-                  {/* زر خدمة التصميم */}
-                  {msg.action === "add_design_service" && (
-                    <button
-                      data-testid="button-add-design"
-                      onClick={() => handleDesignService(messages)}
-                      className="mt-2.5 flex items-center gap-1.5 bg-teal-600 text-white text-xs font-bold px-3 py-2 rounded-xl hover:bg-teal-700 w-full justify-center"
-                    >
-                      <ShoppingCart className="w-3.5 h-3.5" />
-                      إضافة تصميم أولي — 300 ريال
-                    </button>
-                  )}
-
-                  {/* زر إتمام الطلب */}
+                  {/* أزرار إضافة للسلة عند ظهور ملخص الطلب */}
                   {msg.action === "ready_to_order" && (
-                    <button
-                      data-testid="button-ready-order"
-                      onClick={() => handleReadyToOrder(messages)}
-                      className="mt-2.5 flex items-center gap-1.5 bg-green-600 text-white text-xs font-bold px-3 py-2 rounded-xl hover:bg-green-700 w-full justify-center"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5" />
-                      إرسال الطلب على الواتساب
-                    </button>
+                    <div className="mt-3 space-y-2">
+                      {/* رفع ملف التصميم */}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*,.pdf,.ai,.eps,.psd,.png,.jpg,.svg"
+                        className="hidden"
+                        data-testid="input-design-file"
+                        onChange={handleFileChange}
+                      />
+                      <button
+                        data-testid="button-upload-design"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadMutation.isPending}
+                        className={`flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-xl w-full justify-center border transition-all ${
+                          uploadedUrl
+                            ? "bg-green-50 border-green-300 text-green-700"
+                            : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-teal-50 hover:border-teal-300 hover:text-teal-700"
+                        }`}
+                      >
+                        {uploadMutation.isPending ? (
+                          <><Loader2 className="w-3.5 h-3.5 animate-spin" /> جاري رفع الملف...</>
+                        ) : uploadedUrl ? (
+                          <><CheckCircle2 className="w-3.5 h-3.5" /> تم رفع ملف التصميم ✓</>
+                        ) : (
+                          <><Paperclip className="w-3.5 h-3.5" /> إرفاق ملف التصميم (اختياري)</>
+                        )}
+                      </button>
+                      {designFile && !uploadedUrl && !uploadMutation.isPending && (
+                        <p className="text-xs text-gray-400 text-center">{designFile.name}</p>
+                      )}
+
+                      {/* زر إضافة للسلة */}
+                      {addedToCart ? (
+                        <button
+                          data-testid="button-go-to-cart"
+                          onClick={() => setLocation("/cart")}
+                          className="flex items-center gap-1.5 bg-green-600 text-white text-xs font-bold px-3 py-2 rounded-xl hover:bg-green-700 w-full justify-center"
+                        >
+                          <ShoppingCart className="w-3.5 h-3.5" />
+                          الذهاب للسلة لإتمام الطلب
+                        </button>
+                      ) : (
+                        <button
+                          data-testid="button-add-to-cart"
+                          onClick={() => addToCartMutation.mutate()}
+                          disabled={addToCartMutation.isPending || uploadMutation.isPending}
+                          className="flex items-center gap-1.5 bg-teal-600 text-white text-xs font-bold px-3 py-2 rounded-xl hover:bg-teal-700 w-full justify-center disabled:opacity-60"
+                        >
+                          {addToCartMutation.isPending ? (
+                            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> جاري الإضافة...</>
+                          ) : (
+                            <><ShoppingCart className="w-3.5 h-3.5" /> أضف للسلة 🛒</>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -296,6 +388,35 @@ export function PrintingAssistant() {
               </div>
             )}
           </div>
+
+          {/* شريط رفع ملف التصميم — يظهر في أي وقت بعد بدء المحادثة */}
+          {hasOrderSummary && (
+            <div className="border-t border-teal-100 px-3 py-2 bg-teal-50 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-teal-700">
+                {uploadedUrl ? (
+                  <><CheckCircle2 className="w-3.5 h-3.5 text-green-600" /><span className="text-green-700">ملف التصميم مرفق</span></>
+                ) : (
+                  <><Paperclip className="w-3.5 h-3.5" /><span>لديك ملف تصميم جاهز؟</span></>
+                )}
+              </div>
+              {uploadedUrl ? (
+                <button
+                  onClick={() => { setUploadedUrl(null); setDesignFile(null); }}
+                  className="text-xs text-red-400 hover:text-red-600 flex items-center gap-0.5"
+                >
+                  <X className="w-3 h-3" /> إزالة
+                </button>
+              ) : (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadMutation.isPending}
+                  className="text-xs bg-white border border-teal-300 text-teal-700 px-2 py-1 rounded-lg hover:bg-teal-100 transition-all"
+                >
+                  {uploadMutation.isPending ? "جاري الرفع..." : "ارفع الملف"}
+                </button>
+              )}
+            </div>
+          )}
 
           {/* اختيار نوع المنتج */}
           {showQuickTypes && (
@@ -343,7 +464,6 @@ export function PrintingAssistant() {
           <div className="border-t border-gray-100 px-3 py-2.5 bg-white">
             <div className="flex items-center gap-2">
               <Input
-                ref={inputRef}
                 data-testid="input-printing-chat"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
