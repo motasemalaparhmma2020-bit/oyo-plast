@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, createContext, useContext, useCallback, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Bot, MessageCircle, Send, X, User, Headphones, Minus, Maximize2, Minimize2, Sparkles, ShoppingCart } from "lucide-react";
+import { Bot, MessageCircle, Send, X, User, Headphones, Minus, Maximize2, Minimize2, Sparkles, Paperclip, ShoppingCart, CheckCircle2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
@@ -15,7 +15,7 @@ function pageMatches(pages: string, loc: string): boolean {
 
 const AI_HIDE_PATHS = ["/admin", "/supplier", "/staff", "/marketer/dashboard"];
 
-type Msg = { role: "user" | "model"; text: string };
+type Msg = { role: "user" | "model"; text: string; attachUrl?: string };
 type ChatMode = "closed" | "bubble" | "compact" | "expanded";
 
 interface ChatContext {
@@ -28,21 +28,60 @@ const SalesChatCtx = createContext<ChatContext>({ open: () => {}, close: () => {
 export function useSalesChat() { return useContext(SalesChatCtx); }
 
 const QUICK_SUGGESTIONS = ["كم السعر؟", "أريد طباعة مخصصة", "الكميات المتاحة", "موعد التوصيل"];
-const MODE_KEY = "oyo-sales-chat-mode";
+const MODE_KEY   = "oyo-sales-chat-mode";
+const CHAT_KEY   = () => `oyo-chat-${new Date().toISOString().slice(0, 10)}`;   // يومي
+const MAX_HISTORY_DAYS = 1;   // نُبقي فقط اليوم الحالي
+
+/* ── حفظ واسترجاع المحادثة من localStorage ── */
+type SavedChat = { messages: Msg[]; productId?: number; productName?: string; savedAt: number };
+
+function loadTodayChat(): SavedChat | null {
+  try {
+    const raw = localStorage.getItem(CHAT_KEY());
+    if (!raw) return null;
+    const data: SavedChat = JSON.parse(raw);
+    // مسح إذا مضى عليه أكثر من 24 ساعة
+    if (Date.now() - data.savedAt > 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(CHAT_KEY());
+      return null;
+    }
+    return data;
+  } catch { return null; }
+}
+
+function saveChat(msgs: Msg[], productId?: number, productName?: string) {
+  try {
+    // حذف مفاتيح قديمة (أقدم من اليوم)
+    const todayKey = CHAT_KEY();
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("oyo-chat-") && k !== todayKey) {
+        localStorage.removeItem(k);
+        i--;
+      }
+    }
+    const data: SavedChat = { messages: msgs, productId, productName, savedAt: Date.now() };
+    localStorage.setItem(todayKey, JSON.stringify(data));
+  } catch {}
+}
 
 export function SalesChatProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<ChatMode>("closed");
-  const [productId, setProductId] = useState<number | undefined>();
-  const [productName, setProductName] = useState<string | undefined>();
-  const [messages, setMessages] = useState<Msg[]>([]);
-  const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
-  const [unread, setUnread] = useState(0);
+  const saved       = loadTodayChat();
+  const [mode, setModeState]       = useState<ChatMode>("closed");
+  const [productId, setProductId]   = useState<number | undefined>(saved?.productId);
+  const [productName, setProductName] = useState<string | undefined>(saved?.productName);
+  const [messages, setMessages]     = useState<Msg[]>(saved?.messages || []);
+  const [input, setInput]           = useState("");
+  const [sending, setSending]       = useState(false);
+  const [unread, setUnread]         = useState(0);
   const [mockupsShown, setMockupsShown] = useState(0);
   const [bottomOffset, setBottomOffset] = useState(0);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [uploadedLogoUrl, setUploadedLogoUrl] = useState<string | null>(null);
+  const [uploading, setUploading]   = useState(false);
+  const scrollRef  = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ y: number; mode: ChatMode } | null>(null);
-  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast }  = useToast();
   const [location] = useLocation();
 
   const { data: dispSettings } = useQuery<any>({
@@ -56,15 +95,14 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
     return pageMatches(dispSettings?.aiEmployeePages ?? "all", location);
   })();
 
-  // ── قياس ارتفاع الشريط السفلي الثابت ديناميكياً (لا يحجب الدردشة) ──
+  // ── قياس ارتفاع الشريط السفلي ──────────────────────────────────────────────
   useEffect(() => {
     const measure = () => {
       const bars = document.querySelectorAll<HTMLElement>('.app-fixed-bar');
       let maxH = 0;
       bars.forEach((b) => {
-        if (b.dataset.salesChat === 'true') return; // تجاهل عناصر الدردشة نفسها
+        if (b.dataset.salesChat === 'true') return;
         const r = b.getBoundingClientRect();
-        // فقط الأشرطة الفعلية في أسفل الشاشة
         if (r.height > 0 && r.bottom >= window.innerHeight - 8) {
           if (r.height > maxH) maxH = r.height;
         }
@@ -88,49 +126,154 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
   const buildGreeting = useCallback((name?: string): Msg => ({
     role: "model",
     text: name
-      ? `حياك الله! أنا موظف مبيعات أويو بلاست. أرى أنك مهتم بـ "${name}" — تكرم، كم قطعة تحتاج؟ وهل تريد طباعة مخصصة؟`
-      : "حياك الله! أنا موظف مبيعات أويو بلاست. كيف أقدر أخدمك يا أستاذ؟",
+      ? `حياك الله! أنا موظف مبيعات أويو بلاست. أرى اهتمامك بـ "${name}" — كم قطعة تحتاج؟`
+      : "حياك الله! أنا موظف مبيعات أويو بلاست. كيف أخدمك؟",
   }), []);
 
+  // ── حفظ المحادثة عند أي تغيير ──────────────────────────────────────────────
+  useEffect(() => {
+    if (messages.length > 0) {
+      saveChat(messages, productId, productName);
+    }
+  }, [messages, productId, productName]);
+
   const open: ChatContext["open"] = useCallback((opts) => {
-    const newPid = opts?.productId;
+    const newPid   = opts?.productId;
     const newPname = opts?.productName;
-    setProductId((prev) => {
-      if (prev !== newPid) {
-        setMessages([buildGreeting(newPname)]);
+
+    // إذا تغيّر المنتج — نُضيف رسالة ترحيب بالمنتج الجديد فقط في نهاية المحادثة الموجودة
+    setProductId(prev => {
+      if (prev !== newPid && newPid) {
+        setMessages(cur => {
+          const greeting = buildGreeting(newPname);
+          // لا نُضيف رسالة ترحيب مكررة إذا كانت آخر رسالة هي نفسها
+          if (cur.length > 0 && cur[cur.length - 1].text === greeting.text) return cur;
+          return [...cur, greeting];
+        });
       } else if (messages.length === 0) {
         setMessages([buildGreeting(newPname)]);
       }
       return newPid;
     });
     setProductName(newPname);
+
     let saved: ChatMode = "compact";
     try {
       const s = localStorage.getItem(MODE_KEY);
       if (s === "expanded" || s === "compact") saved = s;
     } catch {}
     setMode(saved);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildGreeting, messages.length, setMode]);
 
-  const close = useCallback(() => {
-    setModeState("closed");
-    setUnread(0);
-  }, []);
-
+  const close    = useCallback(() => { setModeState("closed"); setUnread(0); }, []);
   const minimize = useCallback(() => setModeState("bubble"), []);
 
+  // ── تهيئة الترحيب إذا لم تكن هناك محادثة محفوظة ────────────────────────────
   useEffect(() => {
     if ((mode === "compact" || mode === "expanded") && messages.length === 0) {
       setMessages([buildGreeting(productName)]);
     }
   }, [mode, messages.length, productName, buildGreeting]);
 
+  // ── تمرير للأسفل عند كل رسالة ───────────────────────────────────────────────
   useEffect(() => {
     if ((mode === "compact" || mode === "expanded") && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, mode, sending]);
 
+  // ── رفع ملف التصميم ─────────────────────────────────────────────────────────
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "فقط صور مدعومة (PNG, JPG, WebP)", variant: "destructive" });
+      return;
+    }
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("logo", file);
+      const res = await fetch("/api/ai/upload-logo", { method: "POST", credentials: "include", body: formData });
+      const data = await res.json();
+      if (data?.imageUrl) {
+        setUploadedLogoUrl(data.imageUrl);
+        // أضف رسالة مرئية من طرف العميل تُعلم الموظف
+        const notifyMsg: Msg = {
+          role: "user",
+          text: "رفعت ملف التصميم (الشعار)",
+          attachUrl: data.imageUrl,
+        };
+        const newHistory = [...messages, notifyMsg];
+        setMessages(newHistory);
+        // أرسل للموظف الذكي ليرى الملف
+        setSending(true);
+        const chatRes = await fetch("/api/ai/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            message: "رفعت ملف التصميم (الشعار)",
+            history: newHistory.slice(-12),
+            productId,
+            mockupsShownCount: mockupsShown,
+            uploadedLogoUrl: data.imageUrl,
+          }),
+        });
+        const chatData = await chatRes.json();
+        setMessages(m => [...m, { role: "model", text: chatData.reply || "تكرم..." }]);
+        if (chatData.mockupRequest) setMockupsShown(n => n + 1);
+        await processCartAction(chatData);
+        setSending(false);
+      } else {
+        toast({ title: "فشل رفع الملف، حاول مرة أخرى", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "خطأ في رفع الملف", variant: "destructive" });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  // ── معالجة إضافة للسلة (مُشتركة) ───────────────────────────────────────────
+  const processCartAction = async (data: any) => {
+    if (!data.addToCartData) return;
+    const cartData = data.addToCartData;
+    try {
+      const cartRes = await fetch("/api/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          productId:     cartData.productId,
+          quantity:      cartData.quantity,
+          selectedSize:  cartData.selectedSize,
+          selectedColor: cartData.selectedColor,
+          customPrinting: cartData.customPrinting,
+          designNotes:   cartData.designNotes,
+          designFileUrl: cartData.designFileUrl,
+          printColorCount: cartData.printColorCount,
+          unitPrice:     String(cartData.unitPrice),
+          aiDesignFee:   String(cartData.designFee || 0),
+        }),
+      });
+      if (cartRes.ok) {
+        queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+        toast({
+          title: "🛒 تمت الإضافة للسلة",
+          description: (cartData.totalBreakdown || "راجع سلتك وأكمل الطلب") + " — اضغط على السلة للدفع",
+        });
+      } else {
+        toast({ title: "تعذّر الإضافة للسلة تلقائياً", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "خطأ في الإضافة للسلة", variant: "destructive" });
+    }
+  };
+
+  // ── إرسال رسالة نصية ────────────────────────────────────────────────────────
   const sendMessage = async (text: string) => {
     if (!text.trim() || sending) return;
     setInput("");
@@ -147,65 +290,24 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
           history: messages.slice(-12),
           productId,
           mockupsShownCount: mockupsShown,
+          uploadedLogoUrl: uploadedLogoUrl || undefined,
         }),
       });
       const data = await res.json();
       const reply = data.reply || "...";
-      setMessages((m) => [...m, { role: "model", text: reply }]);
+      setMessages(m => [...m, { role: "model", text: reply }]);
 
       if (mode === "bubble") {
-        setUnread((n) => n + 1);
+        setUnread(n => n + 1);
         toast({
           title: "💬 رسالة من موظف المبيعات",
           description: reply.length > 80 ? reply.slice(0, 80) + "…" : reply,
         });
       }
-
-      // ── الموظف قدّم نموذجاً مبدئياً — عدّ النماذج ──────────────────
-      if (data.mockupRequest) {
-        setMockupsShown((n) => n + 1);
-      }
-
-      // ── إضافة للسلة ─────────────────────────────────────────────────
-      if (data.addToCartData) {
-        const cartData = data.addToCartData;
-        try {
-          const cartRes = await fetch("/api/cart", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({
-              productId: cartData.productId,
-              quantity: cartData.quantity,
-              selectedSize: cartData.selectedSize,
-              selectedColor: cartData.selectedColor,
-              customPrinting: cartData.customPrinting,
-              designNotes: cartData.designNotes,
-              designFileUrl: cartData.designFileUrl,
-              printColorCount: cartData.printColorCount,
-              unitPrice: String(cartData.unitPrice),
-              aiDesignFee: String(cartData.designFee || 0),
-            }),
-          });
-          if (cartRes.ok) {
-            queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
-            toast({
-              title: "🛒 تمت الإضافة للسلة!",
-              description: cartData.totalBreakdown || "راجع سلتك وأكمل الطلب",
-            });
-          } else {
-            toast({
-              title: "تنبيه",
-              description: "لم يتمكن النظام من الإضافة للسلة تلقائياً — تكرم أضف المنتج يدوياً.",
-              variant: "destructive",
-            });
-          }
-        } catch {
-          toast({ title: "خطأ في الإضافة للسلة", variant: "destructive" });
-        }
-      }
+      if (data.mockupRequest) setMockupsShown(n => n + 1);
+      await processCartAction(data);
     } catch {
-      setMessages((m) => [...m, { role: "model", text: "عذراً، تعذّر الاتصال بالخادم. حاول مرة أخرى." }]);
+      setMessages(m => [...m, { role: "model", text: "عذراً، تعذّر الاتصال. حاول مرة أخرى." }]);
     } finally {
       setSending(false);
     }
@@ -213,7 +315,7 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
 
   const send = () => sendMessage(input.trim());
 
-  // ── Drag handle: swipe up/down between compact/expanded/bubble ──
+  // ── Drag handle ──────────────────────────────────────────────────────────────
   const onDragStart = (e: React.TouchEvent | React.MouseEvent) => {
     const y = "touches" in e ? e.touches[0].clientY : e.clientY;
     dragStartRef.current = { y, mode };
@@ -239,7 +341,7 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
     <SalesChatCtx.Provider value={{ open, close, minimize }}>
       {children}
 
-      {/* الأيقونة الرئيسية — تظهر عندما لا يوجد شات مفتوح */}
+      {/* الأيقونة الرئيسية */}
       {mode === "closed" && aiVisible && (
         <button
           onClick={() => open()}
@@ -256,7 +358,7 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
         </button>
       )}
 
-      {/* الفقاعة المصغّرة — تحافظ على المحادثة */}
+      {/* الفقاعة المصغّرة */}
       {mode === "bubble" && (
         <button
           onClick={() => setMode("compact")}
@@ -325,7 +427,6 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
                   className="rounded-full p-1.5 hover:bg-white/20"
                   data-testid="button-toggle-size-sales-chat"
                   aria-label={mode === "expanded" ? "تصغير" : "تكبير"}
-                  title={mode === "expanded" ? "تصغير" : "تكبير"}
                 >
                   {mode === "expanded" ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
                 </button>
@@ -334,7 +435,6 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
                   className="rounded-full p-1.5 hover:bg-white/20"
                   data-testid="button-minimize-sales-chat"
                   aria-label="طي"
-                  title="طي لفقاعة"
                 >
                   <Minus className="h-5 w-5" />
                 </button>
@@ -343,12 +443,20 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
                   className="rounded-full p-1.5 hover:bg-white/20"
                   data-testid="button-close-sales-chat"
                   aria-label="إغلاق"
-                  title="إغلاق"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
             </div>
+
+            {/* تنبيه الشعار المرفوع */}
+            {uploadedLogoUrl && (
+              <div className="flex items-center gap-2 border-b border-teal-100 bg-teal-50 px-3 py-1.5 text-xs text-teal-700 dark:border-teal-800 dark:bg-teal-900/30 dark:text-teal-300">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                <span>تم رفع ملف التصميم — سيُستخدم في النموذج المبدئي</span>
+                <button onClick={() => setUploadedLogoUrl(null)} className="mr-auto text-teal-400 hover:text-teal-600 text-[10px]">إزالة</button>
+              </div>
+            )}
 
             {/* Messages */}
             <div
@@ -368,14 +476,23 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
                   >
                     {m.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
                   </div>
-                  <div
-                    className={`max-w-[75%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-[15px] leading-relaxed ${
-                      m.role === "user"
-                        ? "rounded-br-sm bg-cyan-600 text-white"
-                        : "rounded-bl-sm bg-white text-gray-800 shadow-sm dark:bg-gray-800 dark:text-gray-100"
-                    }`}
-                  >
-                    {m.text}
+                  <div className={`flex flex-col gap-1 max-w-[75%] ${m.role === "user" ? "items-end" : "items-start"}`}>
+                    {m.attachUrl && (
+                      <img
+                        src={m.attachUrl}
+                        alt="ملف التصميم"
+                        className="h-16 w-16 rounded-xl object-cover border border-teal-200 shadow-sm"
+                      />
+                    )}
+                    <div
+                      className={`whitespace-pre-wrap rounded-2xl px-3 py-2 text-[15px] leading-relaxed ${
+                        m.role === "user"
+                          ? "rounded-br-sm bg-cyan-600 text-white"
+                          : "rounded-bl-sm bg-white text-gray-800 shadow-sm dark:bg-gray-800 dark:text-gray-100"
+                      }`}
+                    >
+                      {m.text}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -412,14 +529,39 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
 
             {/* Input */}
             <div className="flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2 dark:border-gray-800 dark:bg-gray-900">
+              {/* زر رفع التصميم (اختياري) */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+                data-testid="input-file-design"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading || sending}
+                title="رفع ملف التصميم (اختياري)"
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                  uploadedLogoUrl
+                    ? "border-teal-400 bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400"
+                    : "border-gray-200 bg-gray-50 text-gray-400 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500"
+                } disabled:opacity-50`}
+                data-testid="button-upload-design"
+              >
+                {uploading
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : uploadedLogoUrl
+                    ? <CheckCircle2 className="h-4 w-4" />
+                    : <Paperclip className="h-4 w-4" />
+                }
+              </button>
+
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    send();
-                  }
+                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
                 }}
                 placeholder="اكتب رسالتك..."
                 disabled={sending}
@@ -443,7 +585,7 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// ─── زر "تواصل مع المبيعات" يُستخدم في صفحة المنتج ─────────────────
+// ─── زر "تواصل مع المبيعات" ────────────────────────────────────────────────
 export function ContactSalesButton({ productId, productName }: { productId?: number; productName?: string }) {
   const { open } = useSalesChat();
   return (
