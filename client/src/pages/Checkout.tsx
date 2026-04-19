@@ -589,7 +589,7 @@ export default function Checkout() {
                 {hasAddress ? (
                   <div>
                     <p className="text-sm font-semibold truncate">{formData.shippingCity}، {formData.shippingAddress}</p>
-                    {locationLat && <p className="text-[10px] text-green-600 flex items-center gap-1 mt-0.5"><MapPin className="w-2.5 h-2.5" />📍 GPS محدد{nearestDistributor ? ` — ${nearestDistributor.name} (${nearestDistributor.distanceKm} كم)` : ""}</p>}
+                    {locationLat && <p className="text-[10px] text-green-600 flex items-center gap-1 mt-0.5"><MapPin className="w-2.5 h-2.5" />📍 تم تحديد الموقع بنجاح</p>}
                   </div>
                 ) : (
                   <p className="text-sm text-orange-500 font-semibold">أضف عنوان التوصيل</p>
@@ -627,10 +627,13 @@ export default function Checkout() {
                       <button onClick={() => { setLocationLat(null); setLocationLng(null); setLocationLabel(""); setNearestDistributor(null); }} className="text-green-400 hover:text-red-500 text-xs">✕</button>
                     </div>
                     {nearestDistributor && (
-                      <div className={`flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 ${nearestDistributor.withinRadius ? "bg-blue-50 text-blue-700" : "bg-orange-50 text-orange-700"}`}>
-                        <span className="text-base">{nearestDistributor.withinRadius ? "🏪" : "📍"}</span>
-                        <span>أقرب موزع: <strong>{nearestDistributor.name}</strong> ({nearestDistributor.distanceKm} كم)</span>
-                        {!nearestDistributor.withinRadius && <span className="text-[10px] opacity-75">— خارج نطاق التغطية المعتادة</span>}
+                      <div className={`flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 ${nearestDistributor.withinRadius ? "bg-green-50 text-green-700" : "bg-orange-50 text-orange-700"}`}>
+                        <span className="text-base">{nearestDistributor.withinRadius ? "✅" : "⚠️"}</span>
+                        <span>
+                          {nearestDistributor.withinRadius
+                            ? "منطقتك ضمن نطاق التوصيل"
+                            : "منطقتك خارج نطاق التغطية المعتادة — سنتواصل معك لترتيب التوصيل"}
+                        </span>
                       </div>
                     )}
                     <button onClick={handleGetLocation} disabled={locationLoading} className="w-full text-xs text-green-600 underline text-center">
