@@ -226,16 +226,16 @@ title = "🏷️ صورة منتج — ليبلات وستيكر"
 id = "EDZofhANNJk7wGvm9g9wy"
 uri = "file://attached_assets/play-store/feature-graphic-1024x500.png"
 type = "image"
-title = "صورة العرض Feature Graphic (1024×500) - مطلوبة"
+title = "2️⃣ صورة العرض Feature Graphic (1024×500)"
 
 [[outputs]]
 id = "t2eoKoNFCwg2l1_qg8tZM"
 uri = "file://attached_assets/play-store/app-icon-512x512.png"
 type = "image"
-title = "أيقونة التطبيق (512×512) - مطلوبة"
+title = "1️⃣ أيقونة التطبيق (512×512)"
 
 [[outputs]]
 id = "uTHILGMLoSrU2bi7raXn4"
 uri = "file://attached_assets/play-store/screenshot-from-phone.jpg"
 type = "image"
-title = "لقطة شاشة من هاتفك (الرئيسية)"
+title = "3️⃣ لقطة الصفحة الرئيسية"
