@@ -228,6 +228,46 @@ export default function Privacy() {
                 </Card>
               </section>
 
+              <section id="delete-account">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="bg-red-500/10 p-2 rounded-full">
+                    <AlertCircle className="h-5 w-5 text-red-500" />
+                  </div>
+                  <h2 className="text-xl font-bold">حذف الحساب والبيانات</h2>
+                </div>
+                <Card>
+                  <CardContent className="p-6 space-y-4">
+                    <p className="text-muted-foreground leading-relaxed">
+                      يحق لك في أي وقت طلب حذف حسابك وجميع بياناتك الشخصية المخزّنة لدينا (الاسم، رقم الهاتف، عنوان التوصيل، سجل الطلبات).
+                    </p>
+                    <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <p className="font-semibold mb-2">كيفية طلب الحذف:</p>
+                      <ol className="list-decimal list-inside space-y-2 text-muted-foreground">
+                        <li>أرسل رسالة عبر واتساب إلى الرقم: <strong className="text-primary" dir="ltr">+967 774 997 589</strong></li>
+                        <li>اكتب: "أرغب في حذف حسابي وبياناتي" مع ذكر رقم هاتفك المسجّل في التطبيق</li>
+                        <li>سنقوم بحذف بياناتك خلال 7 أيام عمل كحد أقصى</li>
+                        <li>سيتم إرسال رسالة تأكيد عبر واتساب عند اكتمال الحذف</li>
+                      </ol>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      <strong>البيانات التي يتم حذفها:</strong> جميع المعلومات الشخصية، سجل الطلبات، تفضيلات الحساب، والبيانات المرتبطة بحسابك.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      <strong>البيانات المحتفظ بها:</strong> سجلات المعاملات المالية المطلوبة قانونياً (إن وجدت) لمدة لا تتجاوز ما يقتضيه القانون.
+                    </p>
+                    <a
+                      href="https://wa.me/967774997589?text=%D8%A3%D8%B1%D8%BA%D8%A8%20%D9%81%D9%8A%20%D8%AD%D8%B0%D9%81%20%D8%AD%D8%B3%D8%A7%D8%A8%D9%8A%20%D9%88%D8%A8%D9%8A%D8%A7%D9%86%D8%A7%D8%AA%D9%8A"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+                      data-testid="link-request-deletion"
+                    >
+                      طلب حذف الحساب عبر واتساب
+                    </a>
+                  </CardContent>
+                </Card>
+              </section>
+
               <section>
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-[#2196F3]/10 p-2 rounded-full">
