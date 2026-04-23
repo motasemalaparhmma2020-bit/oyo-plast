@@ -96,6 +96,12 @@ uri = "file://attached_assets/generated_images/product_labels.png"
 type = "image"
 title = "labels stickers product"
 
+[[generated]]
+id = "Y_28cnw6DyHFG0_dR6h45"
+uri = "file://attached_assets/play-store/feature-graphic-raw.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "9khr7Nh71CvY-pKqMhryJ"
 uri = "file://oyo-plast-backup-20260407.tar.gz"
@@ -215,3 +221,21 @@ id = "YlR33S2zvPCNQ0J77PmVe"
 uri = "file://attached_assets/generated_images/product_labels.png"
 type = "image"
 title = "🏷️ صورة منتج — ليبلات وستيكر"
+
+[[outputs]]
+id = "EDZofhANNJk7wGvm9g9wy"
+uri = "file://attached_assets/play-store/feature-graphic-1024x500.png"
+type = "image"
+title = "صورة العرض Feature Graphic (1024×500) - مطلوبة"
+
+[[outputs]]
+id = "t2eoKoNFCwg2l1_qg8tZM"
+uri = "file://attached_assets/play-store/app-icon-512x512.png"
+type = "image"
+title = "أيقونة التطبيق (512×512) - مطلوبة"
+
+[[outputs]]
+id = "uTHILGMLoSrU2bi7raXn4"
+uri = "file://attached_assets/play-store/screenshot-from-phone.jpg"
+type = "image"
+title = "لقطة شاشة من هاتفك (الرئيسية)"
