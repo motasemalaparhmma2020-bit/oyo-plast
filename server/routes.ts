@@ -137,7 +137,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // يتم تحديث sha256_cert_fingerprints بعد الحصول على التوقيع من Google Play Console
   app.get("/.well-known/assetlinks.json", (_req, res) => {
     const { PLAY_SIGNING_SHA256 } = process.env;
-    const fingerprint = PLAY_SIGNING_SHA256 || "60:0A:3B:CB:4D:B4:76:23:15:60:96:E8:42:45:8A:46:F6:3B:51:7C:36:95:0F:BA:52:13:99:EB:81:19:14:E9";
+    const fingerprint = PLAY_SIGNING_SHA256 || "5C:E0:7F:F9:98:3D:8C:DD:9C:8F:3C:1A:AA:A8:29:B2:C9:0C:04:92:88:BB:9C:94:F4:A2:27:77:5D:46:E8:C8";
     res.setHeader("Content-Type", "application/json");
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.json([{
