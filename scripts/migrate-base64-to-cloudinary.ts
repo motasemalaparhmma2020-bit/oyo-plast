@@ -8,7 +8,6 @@
  * تشغيل:  npx tsx scripts/migrate-base64-to-cloudinary.ts
  *         npx tsx scripts/migrate-base64-to-cloudinary.ts --dry
  */
-import "dotenv/config";
 import { v2 as cloudinary } from "cloudinary";
 import { pool } from "../server/db";
 
