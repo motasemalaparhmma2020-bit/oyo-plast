@@ -1004,6 +1004,7 @@ function ProductsDashboard() {
   const [form, setForm] = useState<ProductFormState>(emptyProductForm);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadingFullProduct, setLoadingFullProduct] = useState(false);
   const [colorInput, setColorInput] = useState("");
   const [sizeInput, setSizeInput] = useState("");
   const [search, setSearch] = useState("");
@@ -1105,25 +1106,47 @@ function ProductsDashboard() {
   };
 
   // ─── فتح الفورم للتعديل ───────────────────────────────────────────────
-  const openEdit = (p: any) => {
-    setEditing(p);
-    setForm({
-      name: p.name || "",
-      description: p.description || "",
-      price: String(p.price ?? ""),
-      priceSar: p.priceSar ? String(p.priceSar) : "",
-      categoryId: String(p.categoryId ?? ""),
-      subcategoryId: p.subcategoryId ? String(p.subcategoryId) : "",
-      stock: String(p.stock ?? 0),
-      imageUrl: p.imageUrl || "",
-      imageUrls: Array.isArray(p.imageUrls) ? p.imageUrls : [],
-      colors: Array.isArray(p.colors) ? p.colors : [],
-      sizes: Array.isArray(p.sizes) ? p.sizes : [],
-      originalPrice: p.originalPrice ? String(p.originalPrice) : "",
-      originalPriceSar: p.originalPriceSar ? String(p.originalPriceSar) : "",
-      discountPercent: p.discountPercent != null ? String(p.discountPercent) : "",
-    });
+  // نجلب المنتج بكامل بياناته (مع الصور الأصلية) لكي لا نخرّبها عند الحفظ.
+  const openEdit = async (lightweightProduct: any) => {
+    setEditing(lightweightProduct);
     setShowForm(true);
+    setLoadingFullProduct(true);
+    // قيم مبدئية من النسخة الخفيفة (لتظهر فوراً)
+    setForm({
+      name: lightweightProduct.name || "",
+      description: lightweightProduct.description || "",
+      price: String(lightweightProduct.price ?? ""),
+      priceSar: lightweightProduct.priceSar ? String(lightweightProduct.priceSar) : "",
+      categoryId: String(lightweightProduct.categoryId ?? ""),
+      subcategoryId: lightweightProduct.subcategoryId ? String(lightweightProduct.subcategoryId) : "",
+      stock: String(lightweightProduct.stock ?? 0),
+      imageUrl: lightweightProduct.imageUrl || "",
+      imageUrls: Array.isArray(lightweightProduct.imageUrls) ? lightweightProduct.imageUrls : [],
+      colors: Array.isArray(lightweightProduct.colors) ? lightweightProduct.colors : [],
+      sizes: Array.isArray(lightweightProduct.sizes) ? lightweightProduct.sizes : [],
+      originalPrice: lightweightProduct.originalPrice ? String(lightweightProduct.originalPrice) : "",
+      originalPriceSar: lightweightProduct.originalPriceSar ? String(lightweightProduct.originalPriceSar) : "",
+      discountPercent: lightweightProduct.discountPercent != null ? String(lightweightProduct.discountPercent) : "",
+    });
+    // جلب البيانات الخام (الصور الأصلية) لاستخدامها عند الحفظ
+    try {
+      const r = await fetch(`/api/staff/products/${lightweightProduct.id}`, { credentials: "include" });
+      if (r.ok) {
+        const full = await r.json();
+        setEditing(full);
+        setForm(f => ({
+          ...f,
+          imageUrl: full.imageUrl || f.imageUrl,
+          imageUrls: Array.isArray(full.imageUrls) ? full.imageUrls : f.imageUrls,
+        }));
+      } else {
+        toast({ title: "تنبيه", description: "تعذّر تحميل بيانات الصور — رجاءً ارفع صورة جديدة قبل الحفظ", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "تنبيه", description: "تعذّر تحميل بيانات الصور — رجاءً ارفع صورة جديدة قبل الحفظ", variant: "destructive" });
+    } finally {
+      setLoadingFullProduct(false);
+    }
   };
 
   const visibleProducts = search.trim()
@@ -1377,7 +1400,7 @@ function ProductsDashboard() {
               </div>
             </section>
 
-            <Button className="w-full" onClick={save} disabled={saving || uploading} data-testid="button-save-product">
+            <Button className="w-full" onClick={save} disabled={saving || uploading || loadingFullProduct} data-testid="button-save-product">
               {saving ? "جاري الحفظ…" : (editing ? "حفظ التعديلات" : "إضافة المنتج")}
             </Button>
           </div>

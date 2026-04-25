@@ -6307,9 +6307,40 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   app.get("/api/staff/products", requireStaff(["product_manager", "owner"]), async (_req, res) => {
     try {
       const products = await storage.getProducts();
-      res.json(products);
+      // ─── تخفيف الـ payload: استبدل صور base64 الضخمة بروابط خفيفة ─────
+      // (نفس النهج المستخدم في /api/products العام)
+      const lightweight = products.map((p: any) => {
+        const rawImg: string = p.imageUrl || "";
+        const lightImageUrl = rawImg.startsWith("data:")
+          ? `/api/products/image/${p.id}`
+          : (rawImg || null);
+        const lightImageUrls = Array.isArray(p.imageUrls)
+          ? p.imageUrls.map((url: string, i: number) =>
+              typeof url === "string" && url.startsWith("data:")
+                ? `/api/products/image/${p.id}/${i}`
+                : url
+            )
+          : [];
+        return { ...p, imageUrl: lightImageUrl, imageUrls: lightImageUrls };
+      });
+      res.json(lightweight);
     } catch (e: any) {
       res.status(500).json({ message: "فشل جلب المنتجات" });
+    }
+  });
+
+  // ─── جلب منتج واحد بكامل بياناته (للتعديل) ───────────────────────────
+  // نُرجع البيانات الخام (بما فيها imageUrl/imageUrls الأصلية) حتى يقدر
+  // الموظف يحفظ التعديلات دون أن نخرّب الصورة الأصلية.
+  app.get("/api/staff/products/:id", requireStaff(["product_manager", "owner"]), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (Number.isNaN(id)) return res.status(400).json({ message: "معرّف غير صحيح" });
+      const product = await storage.getProduct(id);
+      if (!product) return res.status(404).json({ message: "المنتج غير موجود" });
+      res.json(product);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب المنتج" });
     }
   });
 
