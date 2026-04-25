@@ -39,7 +39,7 @@ async function uploadDataUrl(dataUrl: string, folder: string): Promise<string | 
   }
 }
 
-const stats = { products: 0, productImageUrls: 0, categories: 0, categoryIcons: 0, banners: 0, offers: 0, failed: 0 };
+const stats = { products: 0, productImageUrls: 0, categories: 0, categoryIcons: 0, subcategories: 0, banners: 0, offers: 0, failed: 0 };
 
 async function migrateProducts() {
   console.log("\n📦 المنتجات…");
@@ -104,6 +104,23 @@ async function migrateCategories() {
   }
 }
 
+async function migrateSubcategories() {
+  console.log("\n📑 الأقسام الفرعية…");
+  const r = await pool.query(`SELECT id, name, image_url FROM subcategories ORDER BY id`);
+  for (const row of r.rows) {
+    if (typeof row.image_url === "string" && row.image_url.startsWith("data:")) {
+      console.log(`  • قسم فرعي #${row.id} (${row.name})`);
+      if (!DRY) {
+        const url = await uploadDataUrl(row.image_url, "subcategories");
+        if (url) {
+          await pool.query(`UPDATE subcategories SET image_url = $1 WHERE id = $2`, [url, row.id]);
+          stats.subcategories++;
+        } else stats.failed++;
+      } else stats.subcategories++;
+    }
+  }
+}
+
 async function migrateBanners() {
   console.log("\n🎯 البنرات…");
   // فحص إن الجدول موجود
@@ -150,6 +167,7 @@ async function main() {
   console.time("⏱  المدة");
   await migrateProducts();
   await migrateCategories();
+  await migrateSubcategories();
   await migrateBanners();
   await migrateOffers();
   console.timeEnd("⏱  المدة");

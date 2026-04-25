@@ -21,7 +21,8 @@ I want iterative development. Ask before making major changes. I prefer detailed
 - **Lightweight payload** for `/api/printing-products` (matches existing `/api/products` pattern). Solves the slow/empty printing section.
 - **Saved-image protection**: PATCH endpoints for products/categories/staff-products now ignore lightweight proxy URLs (`/api/categories/image/:id`, `/api/products/image/:id`) to prevent overwriting real images when admin saves without uploading. Helper: `isProxyImageUrl()` in `server/routes.ts`.
 - **Cloudinary migration script**: `scripts/migrate-base64-to-cloudinary.ts` (run with `npx tsx scripts/migrate-base64-to-cloudinary.ts --dry` first, then without `--dry`). Migrates `products.image_url` + `image_urls`, `categories.image_url` + `icon_url`, `banners.image_url`, `offers.image_url`.
-- **Pending**: Need `ULTRAMSG_INSTANCE_ID` and `ULTRAMSG_TOKEN` secrets to activate WhatsApp OTP in production.
+- **Subcategories speed fix** (3-5 second delay → instant): `/api/subcategories` now returns lightweight proxy URLs instead of base64. New endpoint `/api/subcategories/image/:id` serves the full image. CategoryPage.tsx removed cache-busting (`_=Date.now()`, `cache: "no-store"`), set `staleTime: 5min`, and shows a skeleton while loading. Admin PATCH for subcategories now protects against proxy URL overwrites. Migration script extended to cover `subcategories.image_url`.
+- **Pending**: Need `ULTRAMSG_INSTANCE_ID` and `ULTRAMSG_TOKEN` secrets to activate WhatsApp OTP in production. ✅ Already configured.
 
 ## System Architecture
 

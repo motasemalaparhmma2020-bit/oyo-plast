@@ -1017,7 +1017,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const subs = await storage.getSubcategories(categoryId);
     // الواجهة العامة تُخفي الأقسام الفرعية المُعطّلة، الأدمن يستخدم /api/admin/subcategories إن لزم
     const includeHidden = req.query.includeHidden === '1';
-    res.json(includeHidden ? subs : subs.filter((s: any) => s.isActive !== false));
+    const filtered = includeHidden ? subs : subs.filter((s: any) => s.isActive !== false);
+    // ─── تخفيف الـ payload: استبدال صور base64 الضخمة بروابط بروكسي خفيفة ──
+    const lightweight = filtered.map((s: any) => ({
+      ...s,
+      imageUrl: s.imageUrl?.startsWith("data:") ? `/api/subcategories/image/${s.id}` : (s.imageUrl || null),
+    }));
+    res.set("Cache-Control", "public, max-age=300"); // كاش 5 دقائق
+    res.json(lightweight);
+  });
+
+  // ─── Subcategory image proxy (يخدم الصور الكبيرة base64 من DB) ──
+  app.get("/api/subcategories/image/:id", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const id = parseInt(req.params.id);
+      if (Number.isNaN(id)) return res.status(400).send("Invalid ID");
+      const result = await dbPool.query("SELECT image_url FROM subcategories WHERE id = $1", [id]);
+      if (!result.rows.length) return res.status(404).send("Not found");
+      const imageUrl = result.rows[0].image_url;
+      if (!imageUrl) return res.status(404).send("No image");
+      if (!imageUrl.startsWith("data:")) return res.redirect(imageUrl);
+      const matches = imageUrl.match(new RegExp("^data:([^;]+);base64,(.+)$", "s"));
+      if (!matches) return res.status(400).send("Invalid image data");
+      res.set("Content-Type", matches[1]);
+      res.set("Cache-Control", "public, max-age=604800");
+      res.send(Buffer.from(matches[2], "base64"));
+    } catch (err: any) {
+      res.status(500).send("Error");
+    }
   });
 
   app.get("/api/subcategories/by-slug/:slug", async (req, res) => {
@@ -1036,7 +1064,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/admin/subcategories/:id", requireAdmin, async (req, res) => {
     try {
-      const sub = await storage.updateSubcategory(parseInt(req.params.id), req.body);
+      const id = parseInt(req.params.id);
+      const data = { ...req.body };
+      // ⚠️ تجاهل روابط البروكسي (مثل /api/subcategories/image/12) كي لا تطمس الصورة الأصلية
+      if (typeof data.imageUrl === "string" && isProxyImageUrl(data.imageUrl)) {
+        delete data.imageUrl;
+      }
+      const sub = await storage.updateSubcategory(id, data);
       res.json(sub);
     } catch (e: any) { res.status(400).json({ message: e.message }); }
   });

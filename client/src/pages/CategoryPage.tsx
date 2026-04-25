@@ -29,20 +29,17 @@ export default function CategoryPage() {
     String(c.id) === decodedSlug
   );
 
-  const { data: subcategories = [] } = useQuery<any[]>({
+  const { data: subcategories = [], isLoading: subsLoading } = useQuery<any[]>({
     queryKey: ["/api/subcategories", cat?.id],
     queryFn: async () => {
       if (!cat?.id) return [];
-      // إضافة timestamp لمنع التخزين المؤقت في المتصفح بعد رفع صور جديدة
-      const res = await fetch(`/api/subcategories?categoryId=${cat.id}&_=${Date.now()}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(`/api/subcategories?categoryId=${cat.id}`);
       if (!res.ok) return [];
       return res.json();
     },
     enabled: !!cat?.id,
-    staleTime: 5_000, // إعادة جلب سريعة لظهور التحديثات الإدارية
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60_000, // كاش 5 دقائق — التحديثات الإدارية تظهر بإبطال الكاش (queryClient.invalidateQueries)
+    refetchOnWindowFocus: false,
   });
 
   const activeSubcategories = subcategories.filter((s: any) => s.isActive);
@@ -73,7 +70,24 @@ export default function CategoryPage() {
   return (
     <div className="pb-24 min-h-screen bg-white dark:bg-background" dir="rtl">
       {/* شريط الدوائر — مباشرة تحت Navbar بدون أي حشو */}
-      {activeSubcategories.length > 0 && (
+      {/* Skeleton أثناء تحميل الأقسام الفرعية */}
+      {subsLoading && (
+        <div
+          className="w-full overflow-x-auto scrollbar-hide bg-white dark:bg-background border-b"
+          style={{ height: `${stripHeight}px` }}
+          data-testid="subcategory-strip-skeleton"
+        >
+          <div className="flex items-center gap-3 h-full px-3" style={{ minWidth: "max-content" }}>
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="flex flex-col items-center gap-1.5 flex-shrink-0" style={{ width: `${circleSize + 12}px` }}>
+                <div className="rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" style={{ width: `${circleSize}px`, height: `${circleSize}px` }} />
+                <div className="h-3 w-12 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {!subsLoading && activeSubcategories.length > 0 && (
         <div
           className="w-full overflow-x-auto scrollbar-hide bg-white dark:bg-background border-b"
           style={{
