@@ -972,12 +972,41 @@ function FinancialDashboard({ staffRole }: { staffRole: string }) {
 }
 
 // ── ProductsDashboard (enhanced with add/edit) ──────────────────────────────
+// ── Helpers مشتركة لفورم المنتج ─────────────────────────────────────────
+type ProductFormState = {
+  name: string;
+  description: string;
+  price: string;
+  priceSar: string;
+  categoryId: string;
+  subcategoryId: string;
+  stock: string;
+  imageUrl: string;
+  imageUrls: string[];
+  colors: string[];
+  sizes: string[];
+  originalPrice: string;
+  originalPriceSar: string;
+  discountPercent: string;
+};
+const emptyProductForm: ProductFormState = {
+  name: "", description: "", price: "", priceSar: "",
+  categoryId: "", subcategoryId: "", stock: "0",
+  imageUrl: "", imageUrls: [], colors: [], sizes: [],
+  originalPrice: "", originalPriceSar: "", discountPercent: "",
+};
+
 function ProductsDashboard() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [form, setForm] = useState({ name: "", price: "", priceSar: "", categoryId: "", stock: "0", description: "" });
+  const [form, setForm] = useState<ProductFormState>(emptyProductForm);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [colorInput, setColorInput] = useState("");
+  const [sizeInput, setSizeInput] = useState("");
+  const [search, setSearch] = useState("");
 
   const { data: products = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/staff/products"],
@@ -987,34 +1016,141 @@ function ProductsDashboard() {
     queryKey: ["/api/categories"],
     queryFn: async () => { const r = await fetch("/api/categories"); return r.ok ? r.json() : []; },
   });
+  const { data: subcategories = [] } = useQuery<any[]>({
+    queryKey: ["/api/subcategories"],
+    queryFn: async () => { const r = await fetch("/api/subcategories"); return r.ok ? r.json() : []; },
+  });
   const catMap: Record<number, string> = {};
   categories.forEach((c: any) => { catMap[c.id] = c.name; });
+  const filteredSubs = form.categoryId
+    ? subcategories.filter((s: any) => String(s.categoryId) === form.categoryId)
+    : [];
 
-  const save = async () => {
-    if (!form.name || !form.price || !form.categoryId) { toast({ title: "الاسم والسعر والفئة مطلوبة", variant: "destructive" }); return; }
-    const url = editing ? `/api/staff/products/${editing.id}` : "/api/staff/products";
-    const method = editing ? "PUT" : "POST";
-    const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ ...form, categoryId: Number(form.categoryId) }) });
-    const d = await r.json();
-    if (!r.ok) { toast({ title: "خطأ", description: d.message, variant: "destructive" }); return; }
-    toast({ title: editing ? "✅ تم التعديل" : "✅ تم الإضافة" });
-    qc.invalidateQueries({ queryKey: ["/api/staff/products"] });
-    setShowForm(false); setEditing(null); setForm({ name: "", price: "", priceSar: "", categoryId: "", stock: "0", description: "" });
+  // ─── رفع صورة (واحدة أو متعددة) ────────────────────────────────────────
+  const uploadFiles = async (files: FileList, target: "main" | "gallery") => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const uploaded: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const fd = new FormData();
+        fd.append("image", files[i]);
+        const r = await fetch("/api/staff/upload", { method: "POST", credentials: "include", body: fd });
+        const d = await r.json();
+        if (!r.ok) { toast({ title: "تعذّر رفع الصورة", description: d.message, variant: "destructive" }); continue; }
+        uploaded.push(d.imageUrl);
+      }
+      if (uploaded.length === 0) return;
+      if (target === "main") {
+        setForm(f => ({ ...f, imageUrl: uploaded[0], imageUrls: [...f.imageUrls, ...uploaded.slice(1)] }));
+      } else {
+        setForm(f => ({ ...f, imageUrls: [...f.imageUrls, ...uploaded] }));
+      }
+      toast({ title: `✅ تم رفع ${uploaded.length} صورة` });
+    } finally { setUploading(false); }
   };
+
+  // ─── chips للألوان والمقاسات ───────────────────────────────────────────
+  const addChip = (kind: "colors" | "sizes", value: string) => {
+    const v = value.trim();
+    if (!v) return;
+    setForm(f => f[kind].includes(v) ? f : ({ ...f, [kind]: [...f[kind], v] }));
+    if (kind === "colors") setColorInput(""); else setSizeInput("");
+  };
+  const removeChip = (kind: "colors" | "sizes", value: string) =>
+    setForm(f => ({ ...f, [kind]: f[kind].filter(x => x !== value) }));
+
+  // ─── حفظ المنتج ────────────────────────────────────────────────────────
+  const save = async () => {
+    if (!form.name || !form.price || !form.categoryId) {
+      toast({ title: "الاسم والسعر والفئة مطلوبة", variant: "destructive" });
+      return;
+    }
+    if (!form.imageUrl) {
+      toast({ title: "يرجى رفع صورة رئيسية للمنتج", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const url = editing ? `/api/staff/products/${editing.id}` : "/api/staff/products";
+      const method = editing ? "PUT" : "POST";
+      const payload = {
+        name: form.name,
+        description: form.description,
+        price: form.price,
+        priceSar: form.priceSar || null,
+        categoryId: Number(form.categoryId),
+        subcategoryId: form.subcategoryId ? Number(form.subcategoryId) : null,
+        stock: Number(form.stock || 0),
+        imageUrl: form.imageUrl,
+        imageUrls: form.imageUrls,
+        colors: form.colors,
+        sizes: form.sizes,
+        originalPrice: form.originalPrice || null,
+        originalPriceSar: form.originalPriceSar || null,
+        discountPercent: form.discountPercent ? Number(form.discountPercent) : null,
+      };
+      const r = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      const d = await r.json();
+      if (!r.ok) { toast({ title: "خطأ", description: d.message, variant: "destructive" }); return; }
+      toast({ title: editing ? "✅ تم التعديل بنجاح" : "✅ تمت الإضافة بنجاح" });
+      qc.invalidateQueries({ queryKey: ["/api/staff/products"] });
+      setShowForm(false); setEditing(null); setForm(emptyProductForm);
+    } finally { setSaving(false); }
+  };
+
+  // ─── فتح الفورم للتعديل ───────────────────────────────────────────────
+  const openEdit = (p: any) => {
+    setEditing(p);
+    setForm({
+      name: p.name || "",
+      description: p.description || "",
+      price: String(p.price ?? ""),
+      priceSar: p.priceSar ? String(p.priceSar) : "",
+      categoryId: String(p.categoryId ?? ""),
+      subcategoryId: p.subcategoryId ? String(p.subcategoryId) : "",
+      stock: String(p.stock ?? 0),
+      imageUrl: p.imageUrl || "",
+      imageUrls: Array.isArray(p.imageUrls) ? p.imageUrls : [],
+      colors: Array.isArray(p.colors) ? p.colors : [],
+      sizes: Array.isArray(p.sizes) ? p.sizes : [],
+      originalPrice: p.originalPrice ? String(p.originalPrice) : "",
+      originalPriceSar: p.originalPriceSar ? String(p.originalPriceSar) : "",
+      discountPercent: p.discountPercent != null ? String(p.discountPercent) : "",
+    });
+    setShowForm(true);
+  };
+
+  const visibleProducts = search.trim()
+    ? products.filter((p: any) => (p.name || "").toLowerCase().includes(search.trim().toLowerCase()))
+    : products;
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-muted-foreground">{products.length} منتج</p>
-        <Button size="sm" onClick={() => { setEditing(null); setForm({ name: "", price: "", priceSar: "", categoryId: "", stock: "0", description: "" }); setShowForm(true); }}>
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <p className="text-sm text-muted-foreground" data-testid="text-product-count">{products.length} منتج</p>
+        <Button size="sm" onClick={() => { setEditing(null); setForm(emptyProductForm); setShowForm(true); }} data-testid="button-add-product">
           <Plus className="w-4 h-4 ml-1" />إضافة منتج
         </Button>
       </div>
 
+      <Input
+        placeholder="🔎 ابحث باسم المنتج…"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        className="mb-3"
+        data-testid="input-search-products"
+      />
+
       {isLoading ? <div className="text-center py-8 text-muted-foreground">جاري التحميل...</div> : (
         <div className="space-y-2">
-          {products.map((p: any) => (
-            <Card key={p.id} className="border shadow-sm">
+          {visibleProducts.map((p: any) => (
+            <Card key={p.id} className="border shadow-sm" data-testid={`card-product-${p.id}`}>
               <CardContent className="p-3 flex items-center gap-3">
                 {p.imageUrl && <img src={p.imageUrl} alt={p.name} className="w-14 h-14 rounded-lg object-cover shrink-0" />}
                 <div className="flex-1 min-w-0">
@@ -1024,32 +1160,226 @@ function ProductsDashboard() {
                 </div>
                 <div className="text-right shrink-0 space-y-1">
                   <Badge variant={p.stock > 0 ? "default" : "destructive"} className="text-xs block">{p.stock > 0 ? `${p.stock} متوفر` : "نفذ"}</Badge>
-                  <button onClick={() => { setEditing(p); setForm({ name: p.name, price: p.price, priceSar: p.priceSar||"", categoryId: String(p.categoryId||""), stock: String(p.stock||0), description: p.description||"" }); setShowForm(true); }} className="text-blue-500 hover:text-blue-700 block mx-auto"><Edit className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => openEdit(p)} className="text-blue-500 hover:text-blue-700 block mx-auto" data-testid={`button-edit-product-${p.id}`}><Edit className="w-3.5 h-3.5" /></button>
                 </div>
               </CardContent>
             </Card>
           ))}
+          {visibleProducts.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">{search ? "لا توجد نتائج للبحث" : "لا توجد منتجات بعد — أضف أول منتج"}</p>
+            </div>
+          )}
         </div>
       )}
 
-      <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent dir="rtl" className="max-w-sm">
-          <DialogHeader><DialogTitle>{editing ? "تعديل منتج" : "إضافة منتج جديد"}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><label className="text-sm font-medium mb-1 block">اسم المنتج *</label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
-            <div><label className="text-sm font-medium mb-1 block">الفئة *</label>
-              <Select value={form.categoryId} onValueChange={v => setForm(f => ({ ...f, categoryId: v }))}>
-                <SelectTrigger><SelectValue placeholder="اختر الفئة" /></SelectTrigger>
-                <SelectContent>{categories.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div><label className="text-sm font-medium mb-1 block">السعر ر.ي *</label><Input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} /></div>
-              <div><label className="text-sm font-medium mb-1 block">السعر ر.س</label><Input type="number" value={form.priceSar} onChange={e => setForm(f => ({ ...f, priceSar: e.target.value }))} /></div>
-            </div>
-            <div><label className="text-sm font-medium mb-1 block">المخزون</label><Input type="number" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} /></div>
-            <div><label className="text-sm font-medium mb-1 block">الوصف</label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} /></div>
-            <Button className="w-full" onClick={save}>{editing ? "حفظ التعديلات" : "إضافة"}</Button>
+      <Dialog open={showForm} onOpenChange={(o) => { setShowForm(o); if (!o) { setEditing(null); setForm(emptyProductForm); } }}>
+        <DialogContent dir="rtl" className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editing ? "تعديل المنتج" : "إضافة منتج جديد"}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* ── 1) الأساسيات ───────────────────────────────────────── */}
+            <section className="rounded-lg border p-3 space-y-3 bg-slate-50">
+              <h3 className="text-sm font-bold text-slate-700 flex items-center gap-1">
+                <Package className="w-4 h-4" /> الأساسيات
+              </h3>
+              <div>
+                <label className="text-xs font-medium mb-1 block">اسم المنتج *</label>
+                <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} data-testid="input-product-name" />
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block">الفئة *</label>
+                <Select value={form.categoryId} onValueChange={v => setForm(f => ({ ...f, categoryId: v, subcategoryId: "" }))}>
+                  <SelectTrigger data-testid="select-product-category"><SelectValue placeholder="اختر الفئة" /></SelectTrigger>
+                  <SelectContent>{categories.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              {filteredSubs.length > 0 && (
+                <div>
+                  <label className="text-xs font-medium mb-1 block">الفئة الفرعية (اختياري)</label>
+                  <Select value={form.subcategoryId} onValueChange={v => setForm(f => ({ ...f, subcategoryId: v }))}>
+                    <SelectTrigger data-testid="select-product-subcategory"><SelectValue placeholder="بدون" /></SelectTrigger>
+                    <SelectContent>{filteredSubs.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-medium mb-1 block">السعر ر.ي *</label>
+                  <Input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} data-testid="input-product-price" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1 block">السعر ر.س</label>
+                  <Input type="number" value={form.priceSar} onChange={e => setForm(f => ({ ...f, priceSar: e.target.value }))} data-testid="input-product-price-sar" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block">المخزون</label>
+                <Input type="number" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} data-testid="input-product-stock" />
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block">الوصف</label>
+                <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} data-testid="input-product-description" />
+              </div>
+            </section>
+
+            {/* ── 2) الصور ──────────────────────────────────────────── */}
+            <section className="rounded-lg border p-3 space-y-3 bg-blue-50/50">
+              <h3 className="text-sm font-bold text-slate-700 flex items-center gap-1">
+                📷 الصور <span className="text-red-500">*</span>
+              </h3>
+
+              {/* الصورة الرئيسية */}
+              <div>
+                <label className="text-xs font-medium mb-1 block">الصورة الرئيسية *</label>
+                {form.imageUrl ? (
+                  <div className="relative inline-block">
+                    <img src={form.imageUrl} alt="رئيسية" className="w-24 h-24 rounded-lg object-cover border" />
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, imageUrl: "" }))}
+                      className="absolute -top-2 -left-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
+                      data-testid="button-remove-main-image"
+                    >×</button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer bg-white hover:bg-blue-50 transition" data-testid="label-upload-main-image">
+                    <Plus className="w-6 h-6 text-blue-400" />
+                    <span className="text-xs text-blue-600 mt-1">رفع صورة رئيسية</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploading}
+                      onChange={e => { if (e.target.files) uploadFiles(e.target.files, "main"); e.target.value = ""; }}
+                      data-testid="input-upload-main-image"
+                    />
+                  </label>
+                )}
+              </div>
+
+              {/* صور إضافية (Gallery) */}
+              <div>
+                <label className="text-xs font-medium mb-1 block">صور إضافية (اختياري)</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {form.imageUrls.map((url, idx) => (
+                    <div key={idx} className="relative">
+                      <img src={url} alt={`صورة ${idx+1}`} className="w-full aspect-square rounded-lg object-cover border" />
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, imageUrls: f.imageUrls.filter((_, i) => i !== idx) }))}
+                        className="absolute -top-1 -left-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                        data-testid={`button-remove-gallery-${idx}`}
+                      >×</button>
+                    </div>
+                  ))}
+                  <label className="flex items-center justify-center aspect-square border-2 border-dashed border-blue-300 rounded-lg cursor-pointer bg-white hover:bg-blue-50">
+                    <Plus className="w-5 h-5 text-blue-400" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      disabled={uploading}
+                      onChange={e => { if (e.target.files) uploadFiles(e.target.files, "gallery"); e.target.value = ""; }}
+                      data-testid="input-upload-gallery"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {uploading && (
+                <p className="text-xs text-blue-600 flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3 animate-spin" /> جاري رفع الصور…
+                </p>
+              )}
+            </section>
+
+            {/* ── 3) الألوان والمقاسات ──────────────────────────────── */}
+            <section className="rounded-lg border p-3 space-y-3 bg-purple-50/50">
+              <h3 className="text-sm font-bold text-slate-700">🎨 الألوان والمقاسات (اختياري)</h3>
+
+              {/* ألوان */}
+              <div>
+                <label className="text-xs font-medium mb-1 block">الألوان المتاحة</label>
+                <div className="flex gap-2 mb-2">
+                  <Input
+                    placeholder="مثال: أحمر"
+                    value={colorInput}
+                    onChange={e => setColorInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addChip("colors", colorInput); } }}
+                    data-testid="input-color"
+                  />
+                  <Button type="button" size="sm" variant="outline" onClick={() => addChip("colors", colorInput)} data-testid="button-add-color">إضافة</Button>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {form.colors.map(c => (
+                    <span key={c} className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full" data-testid={`chip-color-${c}`}>
+                      {c}
+                      <button type="button" onClick={() => removeChip("colors", c)} className="hover:text-red-600">×</button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* مقاسات */}
+              <div>
+                <label className="text-xs font-medium mb-1 block">المقاسات المتاحة</label>
+                <div className="flex gap-2 mb-2">
+                  <Input
+                    placeholder="مثال: صغير / 8oz / M"
+                    value={sizeInput}
+                    onChange={e => setSizeInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addChip("sizes", sizeInput); } }}
+                    data-testid="input-size"
+                  />
+                  <Button type="button" size="sm" variant="outline" onClick={() => addChip("sizes", sizeInput)} data-testid="button-add-size">إضافة</Button>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {form.sizes.map(s => (
+                    <span key={s} className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded-full" data-testid={`chip-size-${s}`}>
+                      {s}
+                      <button type="button" onClick={() => removeChip("sizes", s)} className="hover:text-red-600">×</button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {/* ── 4) الخصم ──────────────────────────────────────────── */}
+            <section className="rounded-lg border p-3 space-y-3 bg-rose-50/50">
+              <h3 className="text-sm font-bold text-slate-700">🏷️ الخصم (اختياري)</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-medium mb-1 block">السعر قبل الخصم ر.ي</label>
+                  <Input type="number" value={form.originalPrice} onChange={e => setForm(f => ({ ...f, originalPrice: e.target.value }))} data-testid="input-original-price" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1 block">السعر قبل الخصم ر.س</label>
+                  <Input type="number" value={form.originalPriceSar} onChange={e => setForm(f => ({ ...f, originalPriceSar: e.target.value }))} data-testid="input-original-price-sar" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block">نسبة الخصم %  (اختياري)</label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  placeholder="مثال: 20"
+                  value={form.discountPercent}
+                  onChange={e => setForm(f => ({ ...f, discountPercent: e.target.value }))}
+                  data-testid="input-discount-percent"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">اتركها فارغة ليُحتسب الخصم تلقائياً من السعر قبل الخصم.</p>
+              </div>
+            </section>
+
+            <Button className="w-full" onClick={save} disabled={saving || uploading} data-testid="button-save-product">
+              {saving ? "جاري الحفظ…" : (editing ? "حفظ التعديلات" : "إضافة المنتج")}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

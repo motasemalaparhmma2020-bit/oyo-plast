@@ -227,6 +227,60 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Image Upload for Staff (product_manager / owner) ────────────────
+  // ملاحظة: نُعرِّفها هنا قبل تعريف requireStaff لتفادي مشاكل الترتيب،
+  // لذلك نستخدم middleware مدمج يتحقق من الدور.
+  app.post("/api/staff/upload", upload.single("image"), async (req: any, res) => {
+    if (!req.file) return res.status(400).json({ message: "لم يتم رفع صورة" });
+    try {
+      // التحقق من جلسة الموظف ودوره
+      const user = (req as any).user;
+      if (!user?.claims?.sub) return res.status(401).json({ message: "يجب تسجيل الدخول" });
+      const { db: dbI } = await import("./db");
+      const { users: usersT } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+      const [dbUser] = await dbI.select({ role: usersT.role }).from(usersT).where(eqFn(usersT.id, user.claims.sub));
+      const allowed = ["product_manager", "owner"];
+      if (!dbUser || !allowed.includes(dbUser.role || "")) {
+        return res.status(403).json({ message: "غير مصرح برفع الصور" });
+      }
+      // رفع إلى Cloudinary إن توفّر
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+      const apiKey = process.env.CLOUDINARY_API_KEY;
+      const apiSecret = process.env.CLOUDINARY_API_SECRET;
+      if (cloudName && apiKey && apiSecret) {
+        const { v2: cloudinary } = await import("cloudinary");
+        cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
+        const uploadRes: any = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "oyo-plast/products", resource_type: "image",
+              transformation: [{ quality: "auto:best", fetch_format: "auto", width: 900, crop: "limit" }] },
+            (err: any, result: any) => err ? reject(err) : resolve(result)
+          );
+          stream.end(req.file!.buffer);
+        });
+        return res.json({ imageUrl: uploadRes.secure_url, provider: "cloudinary" });
+      }
+      // Fallback: base64
+      const { pool: dbPool } = await import("./db");
+      const settings = await getImageSettings(dbPool);
+      const { buffer, mimeOut } = await processImage(req.file.buffer, req.file.mimetype, {
+        maxWidth: settings.img_max_width,
+        maxHeight: settings.img_max_height,
+        quality: settings.img_quality,
+      });
+      const base64 = buffer.toString("base64");
+      res.json({ imageUrl: `data:${mimeOut};base64,${base64}`, provider: "base64" });
+    } catch (e: any) {
+      try {
+        const base64 = req.file!.buffer.toString("base64");
+        res.json({ imageUrl: `data:${req.file!.mimetype};base64,${base64}`, provider: "base64" });
+      } catch {
+        res.status(500).json({ message: "فشل رفع الصورة" });
+      }
+    }
+  });
+
   // ─── Image Upload for Supplier (with compression, up to 10MB) ────────
   app.post("/api/supplier/upload", supplierUpload.single("image"), requireSupplier, async (req: any, res) => {
     if (!req.file) return res.status(400).json({ message: "لم يتم رفع صورة" });
@@ -6286,11 +6340,32 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   app.post("/api/staff/products", requireStaff(["product_manager", "owner"]), async (req, res) => {
     try {
       const { pool: dbPool } = await import("./db");
-      const { name, price, priceSar, categoryId, stock, description } = req.body;
+      const {
+        name, price, priceSar, categoryId, subcategoryId, stock, description,
+        imageUrl, imageUrls, colors, sizes,
+        originalPrice, originalPriceSar, discountPercent,
+      } = req.body;
       if (!name || !price || !categoryId) return res.status(400).json({ message: "الاسم والسعر والفئة مطلوبة" });
+      if (!imageUrl) return res.status(400).json({ message: "يرجى رفع صورة رئيسية للمنتج" });
       const r = await dbPool.query(
-        `INSERT INTO products (name, price, price_sar, category_id, stock, description, is_active) VALUES ($1,$2,$3,$4,$5,$6,true) RETURNING *`,
-        [name, price, priceSar || null, categoryId, stock || 0, description || null]
+        `INSERT INTO products
+          (name, price, price_sar, category_id, subcategory_id, stock, description,
+           image_url, image_urls, colors, sizes,
+           original_price, original_price_sar, discount_percent, is_active)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,true)
+         RETURNING *`,
+        [
+          name, price, priceSar || null, categoryId,
+          subcategoryId || null,
+          stock || 0, description || null,
+          imageUrl,
+          Array.isArray(imageUrls) && imageUrls.length ? imageUrls : null,
+          Array.isArray(colors) && colors.length ? colors : null,
+          Array.isArray(sizes) && sizes.length ? sizes : null,
+          originalPrice || null,
+          originalPriceSar || null,
+          discountPercent != null && discountPercent !== "" ? Number(discountPercent) : null,
+        ]
       );
       res.status(201).json(r.rows[0]);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -6299,11 +6374,52 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   app.put("/api/staff/products/:id", requireStaff(["product_manager", "owner"]), async (req, res) => {
     try {
       const { pool: dbPool } = await import("./db");
-      const { name, price, priceSar, stock, description, isActive } = req.body;
+      const {
+        name, price, priceSar, categoryId, subcategoryId, stock, description, isActive,
+        imageUrl, imageUrls, colors, sizes,
+        originalPrice, originalPriceSar, discountPercent,
+      } = req.body;
+      // الفرونت إند يرسل الحالة الكاملة للمنتج، فلا حاجة لـ COALESCE.
+      // الحقول الأساسية تُحفظ القيمة القديمة فقط لو لم تُرسل (undefined).
+      // الحقول الاختيارية (وصف، ألوان، مقاسات، صور إضافية، خصومات) يمكن مسحها بإرسال null/[].
+      if (!imageUrl) return res.status(400).json({ message: "يرجى رفع صورة رئيسية للمنتج" });
       const r = await dbPool.query(
-        `UPDATE products SET name=COALESCE($1,name), price=COALESCE($2,price), price_sar=COALESCE($3,price_sar),
-         stock=COALESCE($4,stock), description=COALESCE($5,description), is_active=COALESCE($6,is_active) WHERE id=$7 RETURNING *`,
-        [name||null, price||null, priceSar||null, stock!=null?stock:null, description||null, isActive!=null?isActive:null, req.params.id]
+        `UPDATE products SET
+           name = COALESCE($1, name),
+           price = COALESCE($2, price),
+           price_sar = $3,
+           category_id = COALESCE($4, category_id),
+           subcategory_id = $5,
+           stock = COALESCE($6, stock),
+           description = $7,
+           image_url = COALESCE($8, image_url),
+           image_urls = $9,
+           colors = $10,
+           sizes = $11,
+           original_price = $12,
+           original_price_sar = $13,
+           discount_percent = $14,
+           is_active = COALESCE($15, is_active)
+         WHERE id = $16
+         RETURNING *`,
+        [
+          name || null,
+          price || null,
+          priceSar || null,
+          categoryId || null,
+          subcategoryId || null,
+          stock != null ? stock : null,
+          description || null,
+          imageUrl || null,
+          Array.isArray(imageUrls) ? imageUrls : null,
+          Array.isArray(colors) ? colors : null,
+          Array.isArray(sizes) ? sizes : null,
+          originalPrice || null,
+          originalPriceSar || null,
+          discountPercent != null && discountPercent !== "" ? Number(discountPercent) : null,
+          isActive != null ? isActive : null,
+          req.params.id,
+        ]
       );
       if (!r.rows.length) return res.status(404).json({ message: "المنتج غير موجود" });
       res.json(r.rows[0]);
