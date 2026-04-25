@@ -15,6 +15,14 @@ OYO PLAST is a comprehensive e-commerce platform for plastic printing and suppli
 ## User Preferences
 I want iterative development. Ask before making major changes. I prefer detailed explanations. Do not make changes to the folder `Z`. Do not make changes to the file `Y`.
 
+## Recent Changes (April 2026 — pre-launch hardening)
+- **OTP channel default → WhatsApp** (`client/src/pages/Auth.tsx`). Twilio US trial number cannot deliver SMS to Yemen carriers; UltraMSG WhatsApp is the only working path.
+- **Auto-fallback to WhatsApp on SMS failure** (`server/lib/otp-sender.ts`).
+- **Lightweight payload** for `/api/printing-products` (matches existing `/api/products` pattern). Solves the slow/empty printing section.
+- **Saved-image protection**: PATCH endpoints for products/categories/staff-products now ignore lightweight proxy URLs (`/api/categories/image/:id`, `/api/products/image/:id`) to prevent overwriting real images when admin saves without uploading. Helper: `isProxyImageUrl()` in `server/routes.ts`.
+- **Cloudinary migration script**: `scripts/migrate-base64-to-cloudinary.ts` (run with `npx tsx scripts/migrate-base64-to-cloudinary.ts --dry` first, then without `--dry`). Migrates `products.image_url` + `image_urls`, `categories.image_url` + `icon_url`, `banners.image_url`, `offers.image_url`.
+- **Pending**: Need `ULTRAMSG_INSTANCE_ID` and `ULTRAMSG_TOKEN` secrets to activate WhatsApp OTP in production.
+
 ## System Architecture
 
 ### UI/UX Decisions

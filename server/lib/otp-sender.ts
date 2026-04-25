@@ -160,7 +160,7 @@ export async function sendOTP(
     };
   }
 
-  // ─ قناة SMS عبر Twilio ─
+  // ─ قناة SMS عبر Twilio (مع احتياط واتساب إذا فشل) ─
   const smsMsg = `اويو بلاست: رمز التحقق ${code}`;
   const smsResult = await sendViaTwilio(to, smsMsg);
   if (smsResult.success) {
@@ -168,6 +168,22 @@ export async function sendOTP(
     return { success: true, usedChannel: "sms" };
   }
 
-  console.error(`[OTP] ❌ Twilio SMS failed for ${to}:`, smsResult.error);
-  return { success: false, error: smsResult.error || "فشل إرسال الرمز" };
+  console.warn(`[OTP] Twilio SMS failed for ${to}: ${smsResult.error} — trying WhatsApp fallback`);
+
+  // احتياط: واتساب عبر UltraMSG
+  const waText = `🔐 *أويو بلاست*\n\nرمز التحقق:\n\n*${code}*\n\nصالح 5 دقائق — لا تشاركه مع أحد.`;
+  const waResult = await sendViaUltraMsg(to, waText);
+  if (waResult.success) {
+    console.log(`[OTP] ✅ Sent via UltraMSG WhatsApp (SMS fallback) to ${to}`);
+    return { success: true, usedChannel: "whatsapp" };
+  }
+
+  console.error(`[OTP] ❌ All channels failed for ${to}`, {
+    twilio: smsResult.error,
+    ultramsg: waResult.error,
+  });
+  return {
+    success: false,
+    error: smsResult.error || waResult.error || "فشل إرسال الرمز",
+  };
 }

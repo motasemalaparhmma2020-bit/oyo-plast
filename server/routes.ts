@@ -49,6 +49,12 @@ function pickFields(src: Record<string, unknown>, keys: string[]): Record<string
   );
 }
 
+// يعرّف ما إذا كان الرابط هو رابط بروكسي خفيف (نتجاهله في الحفظ كي لا تُمحى الصورة الأصلية)
+function isProxyImageUrl(url: unknown): boolean {
+  if (typeof url !== "string") return false;
+  return /^\/api\/(products|categories|banners|offers)\/image\//.test(url);
+}
+
 // Keep uploads dir for design files only (not product images)
 const uploadsDir = path.resolve(rootDir, "public", "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -1432,8 +1438,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const update: any = {};
       if (name !== undefined) { update.name = name; if (!slug) update.slug = generateSlug(name); }
       if (slug !== undefined) update.slug = slug;
-      if (imageUrl !== undefined) update.imageUrl = imageUrl;
-      if (iconUrl !== undefined) update.iconUrl = iconUrl;
+      // ⚠️ تجاهل أي رابط بروكسي خفيف (مثل /api/categories/image/12) كي لا يُحفظ مكان الصورة الأصلية
+      if (imageUrl !== undefined && !isProxyImageUrl(imageUrl)) update.imageUrl = imageUrl;
+      if (iconUrl !== undefined && !isProxyImageUrl(iconUrl)) update.iconUrl = iconUrl;
       if (sortOrder !== undefined) update.sortOrder = sortOrder;
       if (isActive !== undefined) update.isActive = isActive;
       const category = await storage.updateCategory(id, update);
@@ -1561,6 +1568,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "hasFreeShipping", "enableSmartVariants", "smartVariants"
       ];
       const update = pickFields(data as Record<string, unknown>, fields);
+      // ⚠️ تنظيف روابط البروكسي قبل الحفظ (لئلا تطمس الصور الأصلية)
+      // قاعدة: الـ imageUrl الذي يبدأ بـ /api/products/image/ يعني "نفس الصورة القديمة" — نحلّه إلى الحقيقي.
+      const { pool: dbPool2 } = await import("./db");
+      const oldRow = (await dbPool2.query(
+        `SELECT image_url, image_urls FROM products WHERE id = $1`, [id]
+      )).rows[0] || {};
+      const oldMain: string | null = oldRow.image_url || null;
+      const oldGallery: string[] = Array.isArray(oldRow.image_urls) ? oldRow.image_urls : [];
+
+      if (typeof update.imageUrl === "string" && isProxyImageUrl(update.imageUrl)) {
+        // حلّ الـ proxy إلى الصورة الحقيقية إن وُجدت، وإلا تجاهل التحديث
+        if (oldMain) update.imageUrl = oldMain; else delete update.imageUrl;
+      }
+      if (Array.isArray(update.imageUrls)) {
+        const resolved = update.imageUrls.map((u: any, i: number) => {
+          if (typeof u !== "string") return null;
+          if (!isProxyImageUrl(u)) return u;
+          // استخرج الفهرس من /api/products/image/:id/:index — فإن لم يوجد استخدم موقع العنصر
+          const m = u.match(/\/api\/products\/image\/\d+(?:\/(\d+))?$/);
+          const idx = m && m[1] != null ? parseInt(m[1]) : i;
+          return oldGallery[idx] ?? oldMain ?? null;
+        }).filter((x: any): x is string => typeof x === "string" && x.length > 0);
+        update.imageUrls = resolved;
+      }
       const product = await storage.updateProduct(id, update);
       res.json(product);
     } catch (e: any) {
@@ -1748,7 +1779,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/printing-products", async (_req, res) => {
     try {
       const products = await storage.getPrintingProducts();
-      res.json(products);
+      // ─── تخفيف الـ payload: استبدل صور base64 بروابط خفيفة ─────
+      const lightweight = products.map((p: any) => {
+        const rawImg: string = p.imageUrl || "";
+        const lightImageUrl = rawImg.startsWith("data:")
+          ? `/api/products/image/${p.id}`
+          : (rawImg || null);
+        const lightImageUrls = Array.isArray(p.imageUrls)
+          ? p.imageUrls.map((url: string, i: number) =>
+              typeof url === "string" && url.startsWith("data:")
+                ? `/api/products/image/${p.id}/${i}`
+                : url
+            )
+          : [];
+        return { ...p, imageUrl: lightImageUrl, imageUrls: lightImageUrls };
+      });
+      res.set("Cache-Control", "public, max-age=60");
+      res.json(lightweight);
     } catch (e: any) {
       res.status(500).json({ message: "فشل جلب منتجات الطباعة" });
     }
@@ -6414,6 +6461,27 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       // الحقول الأساسية تُحفظ القيمة القديمة فقط لو لم تُرسل (undefined).
       // الحقول الاختيارية (وصف، ألوان، مقاسات، صور إضافية، خصومات) يمكن مسحها بإرسال null/[].
       if (!imageUrl) return res.status(400).json({ message: "يرجى رفع صورة رئيسية للمنتج" });
+
+      // ⚠️ روابط البروكسي تعني "نفس الصورة القديمة" — نحلّها إلى الصور الحقيقية من DB حتى لا تُطمس.
+      const oldRow = (await dbPool.query(
+        `SELECT image_url, image_urls FROM products WHERE id = $1`, [req.params.id]
+      )).rows[0] || {};
+      const oldMain: string | null = oldRow.image_url || null;
+      const oldGallery: string[] = Array.isArray(oldRow.image_urls) ? oldRow.image_urls : [];
+
+      const safeImageUrl = isProxyImageUrl(imageUrl) ? oldMain : imageUrl;
+      let safeImageUrls: string[] | null = null;
+      if (Array.isArray(imageUrls)) {
+        const resolved = imageUrls.map((u: any, i: number) => {
+          if (typeof u !== "string") return null;
+          if (!isProxyImageUrl(u)) return u;
+          const m = u.match(/\/api\/products\/image\/\d+(?:\/(\d+))?$/);
+          const idx = m && m[1] != null ? parseInt(m[1]) : i;
+          return oldGallery[idx] ?? oldMain ?? null;
+        }).filter((x: any): x is string => typeof x === "string" && x.length > 0);
+        safeImageUrls = resolved;
+      }
+
       const r = await dbPool.query(
         `UPDATE products SET
            name = COALESCE($1, name),
@@ -6441,8 +6509,8 @@ h1{font-size:18px;color:#222;margin:4px 0;}
           subcategoryId || null,
           stock != null ? stock : null,
           description || null,
-          imageUrl || null,
-          Array.isArray(imageUrls) ? imageUrls : null,
+          safeImageUrl,
+          safeImageUrls,
           Array.isArray(colors) ? colors : null,
           Array.isArray(sizes) ? sizes : null,
           originalPrice || null,

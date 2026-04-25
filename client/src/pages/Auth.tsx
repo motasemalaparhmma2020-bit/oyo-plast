@@ -52,7 +52,7 @@ export default function Auth() {
 
   const [loginMode, setLoginMode] = useState<LoginMode>("phone");
   const [step, setStep] = useState<Step>("phone");
-  const [channel, setChannel] = useState<Channel>("sms");
+  const [channel, setChannel] = useState<Channel>("whatsapp");
   const [countryCode, setCountryCode] = useState(COUNTRY_CODES[0]);
   const [showCountries, setShowCountries] = useState(false);
   const [normalizedPhone, setNormalizedPhone] = useState("");
