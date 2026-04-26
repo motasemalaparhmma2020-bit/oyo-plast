@@ -95,3 +95,11 @@ I want iterative development. Ask before making major changes. I prefer detailed
 - **PostgreSQL:** Database managed via Drizzle ORM.
 - **Jawal Pay (محفظة جوالي):** Planned integration for electronic payments (pending).
 - **SMSGate:** For WhatsApp/SMS notifications (current implementation).
+
+## Authentication Mode (April 2026)
+- **Direct Registration (No-OTP Mode):** Active. Users register with name + phone in a single screen and are logged in immediately without any verification code. Endpoint: `POST /api/auth/register-direct`.
+- **OTP Code Preserved:** All OTP code (send-otp, verify-otp endpoints, channel selector UI, OTP step UI) remains intact in the codebase but hidden from users via `OTP_REQUIRED = false` constant in `client/src/pages/Auth.tsx`. To re-enable OTP, change the constant to `true`.
+- **Reason:** WhatsApp Cloud API (Meta) is restricted on the user's account due to a $125 unpaid Facebook ads debt. Twilio production WhatsApp is too expensive for early-stage budget. UltraMSG ($150/10K) and Yemeni provider (21,000 YER) also out of budget. The free WhatsApp sandbox cannot be used by real customers.
+- **Anti-Spam:** `/api/auth/register-direct` enforces 5 registrations per IP per hour using the existing `phone_verifications` table.
+- **Manual Order Verification:** Admin/staff manually contact each new customer to confirm orders before shipping (replaces OTP fraud prevention).
+- **Guest Browsing:** Already in place. Public pages (Home, Products, Categories, Cart) work without login. Only `/checkout`, `/orders`, `/wishlist`, `/notifications`, `/account`, and `/marketer/coupons` require authentication via `RequireAccountType` guard. Guest cart persists in localStorage and merges into server cart on login (handled by `CartMerger` in `client/src/App.tsx`).

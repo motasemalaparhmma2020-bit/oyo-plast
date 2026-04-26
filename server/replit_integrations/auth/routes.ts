@@ -141,6 +141,97 @@ export function registerAuthRoutes(app: Express): void {
     });
   });
 
+  // ── تسجيل/دخول مباشر بدون OTP (وضع التشغيل المجاني الحالي) ─────────
+  // يستخدم عندما يكون OTP معطّلاً (لا توفر مالي للـ Twilio/Meta).
+  // الحماية تتم يدوياً عند تأكيد الطلبات في لوحة الإدارة.
+  app.post("/api/auth/register-direct", async (req: any, res) => {
+    try {
+      const { phone, fullName } = req.body || {};
+
+      if (!phone || String(phone).trim().length < 9) {
+        return res.status(400).json({ message: "رقم الهاتف مطلوب وغير صالح" });
+      }
+      if (!fullName || String(fullName).trim().length < 2) {
+        return res.status(400).json({ message: "الاسم مطلوب (حرفان على الأقل)" });
+      }
+
+      const normalizedPhone = normalizePhone(String(phone).trim());
+      if (!normalizedPhone) {
+        return res.status(400).json({ message: "رقم الهاتف غير صالح. استخدم الصيغة الدولية مثل: +967777XXXXXX" });
+      }
+
+      // حماية من spam التسجيل: حد 5 محاولات/IP/ساعة
+      const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
+        || req.ip
+        || req.socket?.remoteAddress
+        || "unknown";
+
+      const client = await pool.connect();
+      try {
+        // نستخدم phone_verifications كسجل خفيف للحد من spam (نضع code='REG' كعلامة)
+        const rateCheck = await client.query(
+          `SELECT COUNT(*) FROM phone_verifications
+           WHERE code = 'REG' AND phone LIKE $1 AND created_at > NOW() - INTERVAL '1 hour'`,
+          [`REG:${ip}:%`]
+        );
+        if (parseInt(rateCheck.rows[0].count) >= 5) {
+          return res.status(429).json({
+            message: "تجاوزت الحد المسموح للتسجيل من نفس الجهاز. حاول بعد ساعة."
+          });
+        }
+
+        // البحث عن مستخدم موجود بنفس الرقم
+        let user = await authStorage.getUserByPhone(normalizedPhone);
+        const isNewUser = !user;
+
+        if (!user) {
+          // إنشاء مستخدم جديد مباشرة
+          user = await authStorage.createPhoneUser({
+            phone: normalizedPhone,
+            fullName: String(fullName).trim(),
+          });
+        } else if (!user.fullName && fullName) {
+          // تحديث الاسم لو كان فارغاً
+          await client.query(
+            `UPDATE users SET full_name = $1 WHERE id = $2`,
+            [String(fullName).trim(), user.id]
+          );
+          user = { ...user, fullName: String(fullName).trim() };
+        }
+
+        // تسجيل عملية التسجيل في السجل (للحماية من spam)
+        await client.query(
+          `INSERT INTO phone_verifications (phone, code, attempts, verified, expires_at)
+           VALUES ($1, 'REG', 0, true, NOW() + INTERVAL '1 hour')`,
+          [`REG:${ip}:${normalizedPhone}`]
+        );
+
+        // تسجيل الدخول عبر الجلسة
+        const sessionUser = {
+          claims: { sub: user.id },
+          expires_at: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60, // أسبوع
+        };
+
+        req.login(sessionUser, (err: any) => {
+          if (err) {
+            console.error("[register-direct] Session error:", err);
+            return res.status(500).json({ message: "فشل في تسجيل الدخول" });
+          }
+          res.json({
+            message: isNewUser ? "تم إنشاء حسابك بنجاح" : "أهلاً بعودتك",
+            user: { id: user!.id, phone: user!.phone, fullName: user!.fullName },
+            isNewUser,
+          });
+        });
+      } finally {
+        client.release();
+      }
+    } catch (err: any) {
+      console.error("[register-direct] Error:", err?.message || err);
+      res.status(500).json({ message: "حدث خطأ. أعد المحاولة." });
+    }
+  });
+
   // ── OTP: إرسال رمز التحقق للهاتف ──────────────────────────────────
   app.post("/api/auth/send-otp", async (req, res) => {
     try {

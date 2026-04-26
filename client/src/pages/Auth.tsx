@@ -12,6 +12,11 @@ import {
 import { Link } from "wouter";
 import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
 
+// ── إعداد التشغيل: OTP معطّل حالياً (وضع مجاني) ──────────────────
+// عند توفر اعتماد للـ Twilio/Meta WhatsApp، غيّر هذا إلى true لإعادة OTP.
+// كل الكود القديم محفوظ ويعمل تلقائياً عند التفعيل.
+const OTP_REQUIRED = false;
+
 // ── أكواد الدول الشائعة ──────────────────────────────────────────
 const COUNTRY_CODES = [
   { code: "+967", flag: "🇾🇪", name: "اليمن" },
@@ -230,6 +235,170 @@ export default function Auth() {
       toast({ title: "خطأ", description: err.message, variant: "destructive" });
     },
   });
+
+  // ── تسجيل/دخول مباشر بدون OTP (الوضع المجاني الحالي) ─────────────
+  const registerDirectMutation = useMutation({
+    mutationFn: async () => {
+      if (!validatePhone()) throw new Error("رقم الهاتف غير صالح");
+      if (fullName.trim().length < 2) {
+        setNameError("الاسم يجب أن يكون حرفين على الأقل");
+        throw new Error("الاسم مطلوب");
+      }
+      const codeDigits = countryCode.code.replace(/\D/g, "");
+      let cleanPhone = phone.replace(/\D/g, "");
+      if (cleanPhone.startsWith(codeDigits)) cleanPhone = cleanPhone.slice(codeDigits.length);
+      if (cleanPhone.startsWith("0")) cleanPhone = cleanPhone.slice(1);
+      const rawPhone = `${countryCode.code}${cleanPhone}`;
+      const res = await fetch("/api/auth/register-direct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ phone: rawPhone, fullName: fullName.trim() }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data?.message || "تعذّر إنشاء الحساب");
+      return data;
+    },
+    onSuccess: (data) => {
+      toast({
+        title: data.isNewUser ? "🎉 أهلاً بك في أويو بلاست!" : "👋 أهلاً بعودتك",
+        description: data.isNewUser
+          ? "تم إنشاء حسابك بنجاح، يمكنك بدء التسوق الآن"
+          : "تم تسجيل دخولك بنجاح",
+      });
+      handleLoginSuccess();
+    },
+    onError: (err: Error) => {
+      const message = extractErrorMessage(err);
+      if (!message.includes("الاسم")) {
+        toast({ title: "تعذّر إنشاء الحساب", description: message, variant: "destructive" });
+      }
+    },
+  });
+
+  // ── واجهة التسجيل المباشر (اسم + هاتف، بدون OTP) ─────────────────
+  const renderDirectRegisterStep = () => (
+    <div className="space-y-5">
+      {/* رسالة ترحيبية */}
+      <div className="text-center">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-2">
+          <User className="h-7 w-7 text-primary" />
+        </div>
+        <h3 className="font-extrabold text-base">أهلاً بك في أويو بلاست</h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          أدخل اسمك ورقم هاتفك لبدء التسوق فوراً
+        </p>
+      </div>
+
+      {/* الاسم */}
+      <div>
+        <label className="text-sm font-semibold text-foreground mb-1.5 block">الاسم الكامل</label>
+        <div className="relative">
+          <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            value={fullName}
+            onChange={e => { setFullName(e.target.value); setNameError(""); }}
+            placeholder="مثال: محمد أحمد"
+            className={`h-11 pr-10 ${nameError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+            data-testid="input-full-name"
+          />
+        </div>
+        {nameError && (
+          <div className="flex items-center gap-1.5 mt-1.5 text-red-500 text-xs font-medium">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            <span>{nameError}</span>
+          </div>
+        )}
+      </div>
+
+      {/* رقم الهاتف */}
+      <div>
+        <label className="text-sm font-semibold text-foreground mb-1.5 block">رقم الهاتف</label>
+        <div className="flex gap-2">
+          {/* كود الدولة */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowCountries(!showCountries)}
+              className="flex items-center gap-1.5 px-3 h-11 rounded-lg border-2 border-input bg-background hover:border-primary transition-colors text-sm font-bold min-w-[90px]"
+              data-testid="button-country-code"
+            >
+              <span className="text-lg">{countryCode.flag}</span>
+              <span className="text-xs">{countryCode.code}</span>
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            </button>
+            {showCountries && (
+              <div className="absolute top-12 right-0 z-50 bg-background border rounded-xl shadow-xl overflow-hidden min-w-[180px]">
+                {COUNTRY_CODES.map(c => (
+                  <button
+                    key={c.code}
+                    type="button"
+                    onClick={() => { setCountryCode(c); setShowCountries(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted text-sm"
+                  >
+                    <span className="text-lg">{c.flag}</span>
+                    <span className="font-medium">{c.name}</span>
+                    <span className="text-muted-foreground mr-auto">{c.code}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* رقم الهاتف */}
+          <Input
+            type="tel"
+            value={phone}
+            onChange={e => { setPhone(e.target.value.replace(/\D/g, "")); setPhoneError(""); }}
+            placeholder={countryCode.code === "+967" ? "7XXXXXXXX" : "5XXXXXXXX"}
+            className={`flex-1 h-11 text-base font-mono ${phoneError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+            dir="ltr"
+            onKeyDown={e => {
+              if (e.key === "Enter" && fullName.trim().length >= 2 && phone.length >= 7) {
+                registerDirectMutation.mutate();
+              }
+            }}
+            onBlur={validatePhone}
+            data-testid="input-phone"
+          />
+        </div>
+        {phoneError && (
+          <div className="flex items-center gap-1.5 mt-1.5 text-red-500 text-xs font-medium">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            <span>{phoneError}</span>
+          </div>
+        )}
+      </div>
+
+      {/* زر التسجيل المباشر */}
+      <Button
+        className="w-full h-12 text-base font-extrabold rounded-xl shadow-lg"
+        onClick={() => registerDirectMutation.mutate()}
+        disabled={registerDirectMutation.isPending || phone.length < 7 || fullName.trim().length < 2}
+        data-testid="button-register-direct"
+      >
+        {registerDirectMutation.isPending ? (
+          <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري إنشاء الحساب...</>
+        ) : (
+          <><CheckCircle className="h-4 w-4 ml-2" />إنشاء حسابي والدخول</>
+        )}
+      </Button>
+
+      {/* شارة الأمان */}
+      <div className="rounded-xl bg-muted/40 border border-border/60 p-3 space-y-1.5">
+        <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+          <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+          <span>بياناتك آمنة معنا</span>
+        </div>
+        <ul className="text-[11px] text-muted-foreground space-y-0.5 pr-5">
+          <li>• لن نشارك رقمك مع أي طرف خارجي</li>
+          <li>• استخدام رقمك فقط لتأكيد طلباتك</li>
+          <li>• فريقنا يتواصل معك قبل شحن الطلب</li>
+        </ul>
+      </div>
+    </div>
+  );
 
   // ── تسجيل دخول بالبريد ──────────────────────────────────────────
   const emailLoginMutation = useMutation({
@@ -685,9 +854,13 @@ export default function Auth() {
           {/* المحتوى */}
           {(enablePhone && (!enableEmail || loginMode === "phone")) ? (
             <>
-              {step === "phone" && renderPhoneStep()}
-              {step === "otp"   && renderOtpStep()}
-              {step === "name"  && renderNameStep()}
+              {/* وضع التشغيل المجاني: تسجيل مباشر بدون OTP */}
+              {!OTP_REQUIRED && renderDirectRegisterStep()}
+
+              {/* وضع OTP: يُفعَّل عند توفر اعتماد للرسائل */}
+              {OTP_REQUIRED && step === "phone" && renderPhoneStep()}
+              {OTP_REQUIRED && step === "otp"   && renderOtpStep()}
+              {OTP_REQUIRED && step === "name"  && renderNameStep()}
             </>
           ) : enableEmail ? (
             renderEmailLogin()
