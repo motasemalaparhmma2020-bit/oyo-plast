@@ -48,3 +48,4 @@ integrations = ["javascript_log_in_with_replit:2.0.0"]
 ULTRAMSG_INSTANCE_ID = "instance170684"
 ULTRAMSG_TOKEN = "pyzrk5m7jn04bzc2"
 PLAY_SIGNING_SHA256 = "60:0A:3B:CB:4D:B4:76:23:15:60:96:E8:42:45:8A:46:F6:3B:51:7C:36:95:0F:BA:52:13:99:EB:81:19:14:E9"
+TWILIO_WHATSAPP_FROM = "\twhatsapp:+14155238886"

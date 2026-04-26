@@ -80,17 +80,19 @@ async function sendViaTwilioWhatsApp(
   to: string,
   message: string
 ): Promise<{ success: boolean; error?: string; sid?: string }> {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromRaw = process.env.TWILIO_WHATSAPP_FROM;
+  const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
+  const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
+  const fromRaw = process.env.TWILIO_WHATSAPP_FROM?.trim();
 
   if (!accountSid || !authToken || !fromRaw) {
     return { success: false, error: "TWILIO_WA_NOT_CONFIGURED" };
   }
 
-  // قبول الصيغتين: "whatsapp:+14155238886" أو "+14155238886"
-  const from = fromRaw.startsWith("whatsapp:") ? fromRaw : `whatsapp:${fromRaw}`;
-  const toWA = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
+  // إزالة أي بادئات/مسافات شائعة، وتطبيع الصيغة لـ "whatsapp:+E164"
+  const cleanFrom = fromRaw.replace(/^whatsapp:/i, "").replace(/\s+/g, "").trim();
+  const cleanTo = to.replace(/^whatsapp:/i, "").replace(/\s+/g, "").trim();
+  const from = `whatsapp:${cleanFrom}`;
+  const toWA = `whatsapp:${cleanTo}`;
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
   const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
