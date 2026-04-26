@@ -71,6 +71,9 @@ import {
   ChevronDown, ChevronUp,
   PrinterCheck,
   MessageSquare,
+  Phone,
+  AlertTriangle,
+  ShieldCheck,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
@@ -5367,6 +5370,45 @@ export default function Admin() {
     }
   });
 
+  // تأكيد الطلب يدوياً بعد الاتصال الهاتفي بالعميل
+  const confirmOrderMutation = useMutation({
+    mutationFn: async ({ orderId, confirmed }: { orderId: number; confirmed: boolean }) => {
+      const res = await fetch(`/api/admin/orders/${orderId}/confirm`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken || ''
+        },
+        body: JSON.stringify({ confirmed })
+      });
+      if (!res.ok) throw new Error('Failed to confirm order');
+      return res.json();
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders/unconfirmed-count'] });
+      toast({ title: vars.confirmed ? "تم تأكيد الطلب" : "تم إلغاء التأكيد" });
+    },
+    onError: () => {
+      toast({ title: "فشل التأكيد", variant: "destructive" });
+    }
+  });
+
+  // عدد الطلبات غير المؤكدة منذ أكثر من ساعة
+  const { data: unconfirmedData } = useQuery<{ count: number }>({
+    queryKey: ['/api/admin/orders/unconfirmed-count'],
+    enabled: isAuthenticated && !!adminToken,
+    queryFn: async () => {
+      const res = await fetch('/api/admin/orders/unconfirmed-count', {
+        headers: { 'x-admin-token': adminToken || '' }
+      });
+      if (!res.ok) return { count: 0 };
+      return res.json();
+    },
+    refetchInterval: 60000, // تحديث كل دقيقة
+  });
+  const unconfirmedCount = unconfirmedData?.count || 0;
+
   const updateProductStock = useMutation({
     mutationFn: async ({ productId, stock, reorderPoint }: { productId: number; stock?: number; reorderPoint?: number }) => {
       const res = await fetch(`/api/admin/products/${productId}/stock`, {
@@ -5988,6 +6030,18 @@ export default function Admin() {
           <TabsList style={{ display: "none" }} />
 
           <TabsContent value="orders">
+            {/* تنبيه: طلبات بانتظار التأكيد منذ أكثر من ساعة */}
+            {unconfirmedCount > 0 && (
+              <div
+                className="mb-3 flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 shadow-sm"
+                data-testid="alert-unconfirmed-orders"
+              >
+                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+                <div className="flex-1 text-sm text-amber-900">
+                  <span className="font-bold">{unconfirmedCount}</span> طلب بانتظار التأكيد منذ أكثر من ساعة — يُفضّل الاتصال بالعميل للتأكيد.
+                </div>
+              </div>
+            )}
             {ordersLoading ? (
               <div className="flex justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -6074,8 +6128,24 @@ export default function Admin() {
                             {groupOrders.map((order) => {
                               const status = statusMap[order.status] || statusMap.pending;
                               const StatusIcon = status.icon;
+                              // حساب التأكيد + تنظيف الجوال للروابط
+                              const isConfirmed = !!(order as any).adminConfirmed;
+                              const orderClosed = ['cancelled', 'delivered', 'completed'].includes(order.status);
+                              const showAwaiting = !isConfirmed && !orderClosed;
+                              const rawPhone = (order.customerPhone || '').replace(/[^\d+]/g, '');
+                              // تنسيق الجوال للواتساب: إزالة + والأصفار البادئة، وإضافة 967 إن لم يبدأ بكود الدولة
+                              const waPhone = (() => {
+                                let p = rawPhone.replace(/^\+/, '');
+                                if (p.startsWith('00')) p = p.slice(2);
+                                if (p.startsWith('7') && p.length === 9) p = '967' + p;
+                                else if (p.startsWith('07') && p.length === 10) p = '967' + p.slice(1);
+                                return p;
+                              })();
+                              const waMessage = encodeURIComponent(
+                                `السلام عليكم ${order.customerName || ''}\nنتواصل معكم من *أويو بلاست* بخصوص طلبكم رقم #${order.id}.\nنرجو تأكيد الطلب لنبدأ بتجهيزه. شكراً لكم.`
+                              );
                               return (
-                                <div key={order.id} className="p-3 hover:bg-gray-50/60 transition-colors">
+                                <div key={order.id} className={`p-3 hover:bg-gray-50/60 transition-colors ${showAwaiting ? 'border-r-4 border-amber-400' : ''}`}>
                                   <div className="flex items-center gap-2">
                                     {/* رقم الطلب */}
                                     <div className="shrink-0 text-center w-10 hidden sm:block">
@@ -6089,6 +6159,24 @@ export default function Admin() {
                                         <span className="font-bold text-[11px] text-gray-400 sm:hidden">#{order.id}</span>
                                         <p className="font-semibold text-sm">{order.customerName || '—'}</p>
                                         <Badge variant="outline" className="text-[10px] h-4 px-1.5 shrink-0">{payLabel(order.paymentMethod)}</Badge>
+                                        {showAwaiting && (
+                                          <Badge
+                                            className="text-[10px] h-4 px-1.5 shrink-0 bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-100"
+                                            data-testid={`badge-awaiting-confirm-${order.id}`}
+                                          >
+                                            <Clock className="h-2.5 w-2.5 ml-0.5" />
+                                            بانتظار التأكيد
+                                          </Badge>
+                                        )}
+                                        {isConfirmed && (
+                                          <Badge
+                                            className="text-[10px] h-4 px-1.5 shrink-0 bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-100"
+                                            data-testid={`badge-confirmed-${order.id}`}
+                                          >
+                                            <ShieldCheck className="h-2.5 w-2.5 ml-0.5" />
+                                            مؤكد
+                                          </Badge>
+                                        )}
                                       </div>
                                       <div className="flex gap-3 text-xs text-muted-foreground mt-0.5 flex-wrap">
                                         <span>📱 {order.customerPhone || '—'}</span>
@@ -6107,6 +6195,44 @@ export default function Admin() {
 
                                     {/* الإجراءات */}
                                     <div className="flex gap-0.5 shrink-0">
+                                      {/* اتصال بالعميل */}
+                                      {rawPhone && (
+                                        <a
+                                          href={`tel:${rawPhone}`}
+                                          title="اتصال بالعميل"
+                                          data-testid={`button-call-customer-${order.id}`}
+                                          className="inline-flex items-center justify-center h-8 w-8 rounded-md text-blue-600 hover:bg-blue-50 transition-colors"
+                                        >
+                                          <Phone className="h-3.5 w-3.5" />
+                                        </a>
+                                      )}
+                                      {/* فتح واتساب */}
+                                      {waPhone && (
+                                        <a
+                                          href={`https://wa.me/${waPhone}?text=${waMessage}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          title="مراسلة عبر واتساب"
+                                          data-testid={`button-whatsapp-customer-${order.id}`}
+                                          className="inline-flex items-center justify-center h-8 w-8 rounded-md text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                        >
+                                          <MessageSquare className="h-3.5 w-3.5" />
+                                        </a>
+                                      )}
+                                      {/* تأكيد الطلب يدوياً */}
+                                      {showAwaiting && (
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          onClick={() => confirmOrderMutation.mutate({ orderId: order.id, confirmed: true })}
+                                          disabled={confirmOrderMutation.isPending}
+                                          title="تم التأكيد مع العميل"
+                                          data-testid={`button-confirm-order-${order.id}`}
+                                          className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-8 w-8"
+                                        >
+                                          {confirmOrderMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                                        </Button>
+                                      )}
                                       <Button
                                         size="icon"
                                         variant="ghost"

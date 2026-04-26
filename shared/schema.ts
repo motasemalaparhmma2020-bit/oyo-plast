@@ -172,6 +172,10 @@ export const orders = pgTable("orders", {
   marketerTableId: integer("marketer_table_id"),       // ID المسوق المستقل الذي جاء عبر كوبونه
   marketerCommissionAmount: numeric("marketer_commission_amount"), // مبلغ عمولة المسوق
   marketerCommissionPaid: boolean("marketer_commission_paid").default(false),
+  // ─── التأكيد الهاتفي اليدوي (وضع التشغيل المجاني — بديل OTP) ──────
+  adminConfirmed: boolean("admin_confirmed").default(false),  // هل تواصل الأدمن مع العميل وأكد الطلب؟
+  confirmedAt: timestamp("confirmed_at"),                     // وقت التأكيد
+  confirmedBy: text("confirmed_by"),                          // اسم/معرّف من أكد الطلب
   createdAt: timestamp("created_at").defaultNow(),
 });
 

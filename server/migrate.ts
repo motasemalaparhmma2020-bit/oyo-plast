@@ -385,6 +385,10 @@ export async function runMigrations(): Promise<void> {
     await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_lng NUMERIC;`);
     await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS location_accuracy NUMERIC;`);
     await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS location_method TEXT DEFAULT 'manual';`);
+    // التأكيد الهاتفي اليدوي (وضع التشغيل المجاني — بديل OTP)
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS admin_confirmed BOOLEAN DEFAULT false;`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP;`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS confirmed_by TEXT;`);
 
     // ─── جدول إعدادات مناطق الخدمة ──────────────────────────────────────
     await client.query(`

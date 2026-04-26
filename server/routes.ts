@@ -3326,6 +3326,47 @@ h1{font-size:18px;color:#222;margin:4px 0;}
     }
   });
 
+  // تأكيد الطلب يدوياً بعد الاتصال الهاتفي بالعميل (وضع التشغيل المجاني — بديل OTP)
+  app.patch("/api/admin/orders/:id/confirm", requireAdmin, async (req, res) => {
+    try {
+      const { db: dbInstance } = await import("./db");
+      const { orders: ordersTable } = await import("@shared/schema");
+      const { eq: eqFn } = await import("drizzle-orm");
+      const confirmed = req.body?.confirmed !== false; // default true
+      const updateData: any = {
+        adminConfirmed: confirmed,
+        confirmedAt: confirmed ? new Date() : null,
+        confirmedBy: confirmed ? (req.body?.confirmedBy || "admin") : null,
+      };
+      const [order] = await dbInstance
+        .update(ordersTable)
+        .set(updateData)
+        .where(eqFn(ordersTable.id, parseInt(req.params.id)))
+        .returning();
+      if (!order) return res.status(404).json({ message: "الطلب غير موجود" });
+      res.json(order);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تأكيد الطلب", details: e.message });
+    }
+  });
+
+  // عدد الطلبات غير المؤكدة منذ أكثر من ساعة (للإحصائية في لوحة الأدمن)
+  app.get("/api/admin/orders/unconfirmed-count", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(`
+        SELECT COUNT(*)::int AS count
+        FROM orders
+        WHERE COALESCE(admin_confirmed, false) = false
+          AND status NOT IN ('cancelled', 'delivered', 'completed')
+          AND created_at < NOW() - INTERVAL '1 hour'
+      `);
+      res.json({ count: result.rows[0]?.count || 0 });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب العدد", details: e.message, count: 0 });
+    }
+  });
+
   // ─── التقارير المالية ────────────────────────────────────────────────────────────
   app.get("/api/admin/reports/financial", requireAdmin, async (req, res) => {
     try {

@@ -103,3 +103,11 @@ I want iterative development. Ask before making major changes. I prefer detailed
 - **Anti-Spam:** `/api/auth/register-direct` enforces 5 registrations per IP per hour using the existing `phone_verifications` table.
 - **Manual Order Verification:** Admin/staff manually contact each new customer to confirm orders before shipping (replaces OTP fraud prevention).
 - **Guest Browsing:** Already in place. Public pages (Home, Products, Categories, Cart) work without login. Only `/checkout`, `/orders`, `/wishlist`, `/notifications`, `/account`, and `/marketer/coupons` require authentication via `RequireAccountType` guard. Guest cart persists in localStorage and merges into server cart on login (handled by `CartMerger` in `client/src/App.tsx`).
+
+## Admin Manual-Confirmation Tools (April 2026)
+Added to `client/src/pages/Admin.tsx` orders tab to support the no-OTP workflow:
+- **Call/WhatsApp buttons** next to every order (`button-call-customer-{id}`, `button-whatsapp-customer-{id}`). WhatsApp link normalizes Yemen numbers (7xxxxxxxx, 07xxxxxxxx, +967, 00967) to international `https://wa.me/967...` format and includes a pre-filled Arabic confirmation message.
+- **"بانتظار التأكيد" badge** shown on any order where `adminConfirmed=false` AND status is not in (cancelled/delivered/completed). Replaced by **"مؤكد" badge** after admin clicks the confirm button.
+- **Confirm button** (`button-confirm-order-{id}`) calls `PATCH /api/admin/orders/:id/confirm` and updates the new `admin_confirmed`, `confirmed_at`, `confirmed_by` columns on the orders table.
+- **Alert banner** (`alert-unconfirmed-orders`) at top of orders tab shows count of orders awaiting confirmation for >1 hour. Backed by `GET /api/admin/orders/unconfirmed-count` which polls every 60 seconds.
+- DB migration in `server/migrate.ts` adds the three new order columns idempotently (`IF NOT EXISTS`).
