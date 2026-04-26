@@ -52,7 +52,21 @@ function pickFields(src: Record<string, unknown>, keys: string[]): Record<string
 // يعرّف ما إذا كان الرابط هو رابط بروكسي خفيف (نتجاهله في الحفظ كي لا تُمحى الصورة الأصلية)
 function isProxyImageUrl(url: unknown): boolean {
   if (typeof url !== "string") return false;
-  return /^\/api\/(products|categories|banners|offers)\/image\//.test(url);
+  // نقبل الرابط مع أو بدون باراميتر ?v= بحيث لا يُحفظ مكان الصورة الأصلية
+  return /^\/api\/(products|categories|subcategories|banners|offers)\/image\//.test(url.split('?')[0]);
+}
+
+// بصمة قصيرة (8 حروف) من رابط/محتوى الصورة — تُستخدم كـ cache-buster:
+// عند تغيير الصورة في القاعدة يتغير الـ hash، فيتغير URL تلقائياً ويتجاوز كاش المتصفح/CDN.
+function imgVer(content: unknown): string {
+  if (typeof content !== "string" || !content) return "0";
+  return crypto.createHash("md5").update(content).digest("hex").slice(0, 8);
+}
+
+// يبني رابط بروكسي للصورة المخزنة كـ base64 مع cache-buster
+function proxyImg(type: "products" | "categories" | "subcategories", id: number, raw: string, sub?: string | number): string {
+  const base = sub !== undefined ? `/api/${type}/image/${id}/${sub}` : `/api/${type}/image/${id}`;
+  return `${base}?v=${imgVer(raw)}`;
 }
 
 // Keep uploads dir for design files only (not product images)
@@ -1002,11 +1016,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     );
     const countMap: Record<number, number> = {};
     for (const row of countResult.rows) { countMap[row.category_id] = parseInt(row.count); }
-    res.set("Cache-Control", "public, max-age=300"); // كاش 5 دقائق
+    res.set("Cache-Control", "public, max-age=60, must-revalidate"); // كاش دقيقة + إعادة تحقق
     res.json(cats.filter((c: any) => c.isActive !== false).map((c: any) => ({
       ...c,
-      // استبدال base64 بـ URL مستقل لتخفيف حجم الاستجابة
-      imageUrl: c.imageUrl?.startsWith("data:") ? `/api/categories/image/${c.id}` : (c.imageUrl || null),
+      // استبدال base64 بـ URL مستقل لتخفيف حجم الاستجابة + بصمة (cache-buster)
+      imageUrl: c.imageUrl?.startsWith("data:") ? proxyImg("categories", c.id, c.imageUrl) : (c.imageUrl || null),
       productCount: countMap[c.id] || 0,
     })));
   });
@@ -1018,12 +1032,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // الواجهة العامة تُخفي الأقسام الفرعية المُعطّلة، الأدمن يستخدم /api/admin/subcategories إن لزم
     const includeHidden = req.query.includeHidden === '1';
     const filtered = includeHidden ? subs : subs.filter((s: any) => s.isActive !== false);
-    // ─── تخفيف الـ payload: استبدال صور base64 الضخمة بروابط بروكسي خفيفة ──
+    // ─── تخفيف الـ payload: استبدال صور base64 الضخمة بروابط بروكسي خفيفة + بصمة ──
     const lightweight = filtered.map((s: any) => ({
       ...s,
-      imageUrl: s.imageUrl?.startsWith("data:") ? `/api/subcategories/image/${s.id}` : (s.imageUrl || null),
+      imageUrl: s.imageUrl?.startsWith("data:") ? proxyImg("subcategories", s.id, s.imageUrl) : (s.imageUrl || null),
     }));
-    res.set("Cache-Control", "public, max-age=300"); // كاش 5 دقائق
+    res.set("Cache-Control", "public, max-age=60, must-revalidate"); // كاش دقيقة + إعادة تحقق
     res.json(lightweight);
   });
 
@@ -1164,7 +1178,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       categoryId: r.category_id,
       subcategoryId: r.subcategory_id ?? null,
       isActive: r.is_active !== false,
-      imageUrl: rawImg.startsWith("data:") ? `/api/products/image/${r.id}` : (rawImg || null),
+      imageUrl: rawImg.startsWith("data:") ? proxyImg("products", r.id, rawImg) : (rawImg || null),
       imageUrls: [],
       stock: r.stock,
       reorderPoint: r.reorder_point ?? 10,
@@ -1294,10 +1308,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       );
       if (!result.rows.length) return res.status(404).json({ message: "المنتج غير موجود" });
       const r = result.rows[0];
-      // أعد الـ URLs الحقيقية مباشرةً — استخدم الـ proxy فقط للصور base64
+      // أعد الـ URLs الحقيقية مباشرةً — استخدم الـ proxy فقط للصور base64 + بصمة
       const rawUrls: string[] = Array.isArray(r.image_urls) ? r.image_urls : [];
       const imageUrls = rawUrls.map((url: string, i: number) =>
-        url.startsWith("data:") ? `/api/products/image/${id}/${i}` : url
+        url.startsWith("data:") ? proxyImg("products", id, url, i) : url
       );
       const product = {
         ...mapProductRow(r),
@@ -1440,10 +1454,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ─── Admin Categories ────────────────────────────────────────────
   app.get("/api/admin/categories", requireAdmin, async (_req, res) => {
     const cats = await storage.getCategories();
-    // استبدال base64 بـ URL مستقل حتى في لوحة الأدمن
+    // استبدال base64 بـ URL مستقل حتى في لوحة الأدمن + بصمة (cache-buster)
     res.json(cats.map((c: any) => ({
       ...c,
-      imageUrl: c.imageUrl?.startsWith("data:") ? `/api/categories/image/${c.id}` : (c.imageUrl || null),
+      imageUrl: c.imageUrl?.startsWith("data:") ? proxyImg("categories", c.id, c.imageUrl) : (c.imageUrl || null),
     })));
   });
 
@@ -1505,7 +1519,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return {
           ...mapProductRow(r),
           imageUrls: rawUrls.map((url: string, i: number) =>
-            url.startsWith("data:") ? `/api/products/image/${r.id}/${i}` : url
+            url.startsWith("data:") ? proxyImg("products", r.id, url, i) : url
           ),
         };
       });
@@ -1619,8 +1633,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const resolved = update.imageUrls.map((u: any, i: number) => {
           if (typeof u !== "string") return null;
           if (!isProxyImageUrl(u)) return u;
-          // استخرج الفهرس من /api/products/image/:id/:index — فإن لم يوجد استخدم موقع العنصر
-          const m = u.match(/\/api\/products\/image\/\d+(?:\/(\d+))?$/);
+          // استخرج الفهرس من /api/products/image/:id/:index — متجاهلًا أي ?v=...
+          const path = u.split("?")[0];
+          const m = path.match(/\/api\/products\/image\/\d+(?:\/(\d+))?$/);
           const idx = m && m[1] != null ? parseInt(m[1]) : i;
           return oldGallery[idx] ?? oldMain ?? null;
         }).filter((x: any): x is string => typeof x === "string" && x.length > 0);
@@ -1817,18 +1832,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const lightweight = products.map((p: any) => {
         const rawImg: string = p.imageUrl || "";
         const lightImageUrl = rawImg.startsWith("data:")
-          ? `/api/products/image/${p.id}`
+          ? proxyImg("products", p.id, rawImg)
           : (rawImg || null);
         const lightImageUrls = Array.isArray(p.imageUrls)
           ? p.imageUrls.map((url: string, i: number) =>
               typeof url === "string" && url.startsWith("data:")
-                ? `/api/products/image/${p.id}/${i}`
+                ? proxyImg("products", p.id, url, i)
                 : url
             )
           : [];
         return { ...p, imageUrl: lightImageUrl, imageUrls: lightImageUrls };
       });
-      res.set("Cache-Control", "public, max-age=60");
+      res.set("Cache-Control", "public, max-age=60, must-revalidate");
       res.json(lightweight);
     } catch (e: any) {
       res.status(500).json({ message: "فشل جلب منتجات الطباعة" });
@@ -5130,7 +5145,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
              'name', p.name,
              'price', p.price,
              'priceSar', p.price_sar,
-             'imageUrl', CASE WHEN p.image_url LIKE 'data:%' THEN '/api/products/image/' || p.id ELSE p.image_url END,
+             'imageUrl', CASE WHEN p.image_url LIKE 'data:%' THEN '/api/products/image/' || p.id || '?v=' || substr(md5(p.image_url), 1, 8) ELSE p.image_url END,
              'stock', p.stock,
              'categoryId', p.category_id,
              'sizes', p.sizes,
@@ -6434,12 +6449,12 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const lightweight = products.map((p: any) => {
         const rawImg: string = p.imageUrl || "";
         const lightImageUrl = rawImg.startsWith("data:")
-          ? `/api/products/image/${p.id}`
+          ? proxyImg("products", p.id, rawImg)
           : (rawImg || null);
         const lightImageUrls = Array.isArray(p.imageUrls)
           ? p.imageUrls.map((url: string, i: number) =>
               typeof url === "string" && url.startsWith("data:")
-                ? `/api/products/image/${p.id}/${i}`
+                ? proxyImg("products", p.id, url, i)
                 : url
             )
           : [];
@@ -6550,7 +6565,8 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         const resolved = imageUrls.map((u: any, i: number) => {
           if (typeof u !== "string") return null;
           if (!isProxyImageUrl(u)) return u;
-          const m = u.match(/\/api\/products\/image\/\d+(?:\/(\d+))?$/);
+          const path = u.split("?")[0];
+          const m = path.match(/\/api\/products\/image\/\d+(?:\/(\d+))?$/);
           const idx = m && m[1] != null ? parseInt(m[1]) : i;
           return oldGallery[idx] ?? oldMain ?? null;
         }).filter((x: any): x is string => typeof x === "string" && x.length > 0);
