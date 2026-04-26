@@ -1,13 +1,14 @@
 /**
  * OTP Sender — نظام إرسال رموز التحقق
  *
- * القنوات المدعومة:
- *  1. SMS       → Twilio باستخدام TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM_NUMBER
- *  2. WhatsApp  → UltraMSG (api.ultramsg.com) باستخدام ULTRAMSG_INSTANCE_ID / ULTRAMSG_TOKEN
+ * القنوات المدعومة (مرتبة حسب الأفضلية لعملاء اليمن):
+ *  1. WhatsApp عبر Twilio  → TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_WHATSAPP_FROM
+ *  2. WhatsApp عبر UltraMSG → ULTRAMSG_INSTANCE_ID / ULTRAMSG_TOKEN
+ *  3. SMS عبر Twilio        → TWILIO_FROM_NUMBER (يعمل دولياً، يحجبه مشغّلو اليمن غالباً)
  *
- * منطق الاحتياط (Fallback):
- *  - إذا طُلب WhatsApp ولم تُهيَّأ UltraMSG → يحاول عبر Twilio SMS
- *  - إذا فشل Twilio SMS → يُعيد الخطأ الصريح
+ * منطق الاحتياط:
+ *  - قناة WhatsApp: Twilio WA → UltraMSG → Twilio SMS
+ *  - قناة SMS:      Twilio SMS → Twilio WA → UltraMSG
  */
 
 export function generateOTP(): string {
@@ -74,6 +75,55 @@ async function sendViaUltraMsg(
   }
 }
 
+// ─── Twilio WhatsApp ──────────────────────────────────────────────
+async function sendViaTwilioWhatsApp(
+  to: string,
+  message: string
+): Promise<{ success: boolean; error?: string; sid?: string }> {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromRaw = process.env.TWILIO_WHATSAPP_FROM;
+
+  if (!accountSid || !authToken || !fromRaw) {
+    return { success: false, error: "TWILIO_WA_NOT_CONFIGURED" };
+  }
+
+  // قبول الصيغتين: "whatsapp:+14155238886" أو "+14155238886"
+  const from = fromRaw.startsWith("whatsapp:") ? fromRaw : `whatsapp:${fromRaw}`;
+  const toWA = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
+
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+  const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+
+  console.log(`[OTP-WA] Twilio WhatsApp → sending to ${toWA} from ${from}`);
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${credentials}`,
+      },
+      body: new URLSearchParams({ To: toWA, From: from, Body: message }),
+    });
+
+    const data = await res.json();
+    console.log(`[OTP-WA] Twilio WhatsApp response ${res.status}:`, JSON.stringify(data));
+
+    if (res.ok && data.sid) {
+      return { success: true, sid: data.sid };
+    }
+
+    const errMsg = data.message
+      ? `Twilio WA ${data.code || res.status}: ${data.message}`
+      : `HTTP ${res.status}`;
+    return { success: false, error: errMsg };
+  } catch (err: any) {
+    console.error(`[OTP-WA] Twilio WhatsApp fetch error:`, err.message);
+    return { success: false, error: "تعذّر الاتصال بـ Twilio WhatsApp" };
+  }
+}
+
 // ─── Twilio SMS ───────────────────────────────────────────────────
 async function sendViaTwilio(
   to: string,
@@ -131,59 +181,75 @@ export async function sendOTP(
       ? `🔐 *أويو بلاست*\n\nرمز التحقق الخاص بك:\n\n*${code}*\n\nصالح 5 دقائق — لا تشاركه مع أحد.`
       : `متجر اويو بلاست: رمز التحقق ${code} (صالح 5 دقائق)`;
 
-  // ─ قناة واتساب ─
+  const smsText = `اويو بلاست: رمز التحقق ${code} (صالح 5 دقائق)`;
+  const errors: Record<string, string> = {};
+
+  // ─ قناة واتساب: Twilio WA → UltraMSG → Twilio SMS ─
   if (channel === "whatsapp") {
-    const waResult = await sendViaUltraMsg(to, messageText);
-    if (waResult.success) {
+    // 1. Twilio WhatsApp (الأفضل لليمن)
+    const twWaRes = await sendViaTwilioWhatsApp(to, messageText);
+    if (twWaRes.success) {
+      console.log(`[OTP] ✅ Sent via Twilio WhatsApp to ${to}`);
+      return { success: true, usedChannel: "whatsapp" };
+    }
+    if (twWaRes.error !== "TWILIO_WA_NOT_CONFIGURED") {
+      console.warn(`[OTP] Twilio WhatsApp failed: ${twWaRes.error} — trying UltraMSG`);
+      errors.twilioWa = twWaRes.error || "";
+    }
+
+    // 2. UltraMSG WhatsApp (احتياط)
+    const umRes = await sendViaUltraMsg(to, messageText);
+    if (umRes.success) {
       console.log(`[OTP] ✅ Sent via UltraMSG WhatsApp to ${to}`);
       return { success: true, usedChannel: "whatsapp" };
     }
-
-    if (waResult.error !== "ULTRAMSG_NOT_CONFIGURED") {
-      console.warn(`[OTP] UltraMSG failed: ${waResult.error} — trying Twilio SMS`);
+    if (umRes.error !== "ULTRAMSG_NOT_CONFIGURED") {
+      console.warn(`[OTP] UltraMSG failed: ${umRes.error} — trying Twilio SMS`);
+      errors.ultramsg = umRes.error || "";
     }
 
-    // احتياط: Twilio SMS
-    const smsResult = await sendViaTwilio(to, `اويو بلاست: رمز التحقق ${code}`);
-    if (smsResult.success) {
+    // 3. Twilio SMS (احتياط أخير)
+    const smsRes = await sendViaTwilio(to, smsText);
+    if (smsRes.success) {
       console.log(`[OTP] ✅ Sent via Twilio SMS (WA fallback) to ${to}`);
       return { success: true, usedChannel: "sms" };
     }
+    errors.twilioSms = smsRes.error || "";
 
-    console.error(`[OTP] ❌ All channels failed for ${to}`, {
-      ultramsg: waResult.error,
-      twilio: smsResult.error,
-    });
+    console.error(`[OTP] ❌ All channels failed for ${to}`, errors);
     return {
       success: false,
-      error: smsResult.error || waResult.error || "فشل الإرسال",
+      error: smsRes.error || umRes.error || twWaRes.error || "فشل إرسال الرمز",
     };
   }
 
-  // ─ قناة SMS عبر Twilio (مع احتياط واتساب إذا فشل) ─
-  const smsMsg = `اويو بلاست: رمز التحقق ${code}`;
-  const smsResult = await sendViaTwilio(to, smsMsg);
-  if (smsResult.success) {
+  // ─ قناة SMS: Twilio SMS → Twilio WA → UltraMSG ─
+  const smsRes = await sendViaTwilio(to, smsText);
+  if (smsRes.success) {
     console.log(`[OTP] ✅ Sent via Twilio SMS to ${to}`);
     return { success: true, usedChannel: "sms" };
   }
+  console.warn(`[OTP] Twilio SMS failed: ${smsRes.error} — trying Twilio WhatsApp`);
+  errors.twilioSms = smsRes.error || "";
 
-  console.warn(`[OTP] Twilio SMS failed for ${to}: ${smsResult.error} — trying WhatsApp fallback`);
-
-  // احتياط: واتساب عبر UltraMSG
   const waText = `🔐 *أويو بلاست*\n\nرمز التحقق:\n\n*${code}*\n\nصالح 5 دقائق — لا تشاركه مع أحد.`;
-  const waResult = await sendViaUltraMsg(to, waText);
-  if (waResult.success) {
+  const twWaRes = await sendViaTwilioWhatsApp(to, waText);
+  if (twWaRes.success) {
+    console.log(`[OTP] ✅ Sent via Twilio WhatsApp (SMS fallback) to ${to}`);
+    return { success: true, usedChannel: "whatsapp" };
+  }
+  if (twWaRes.error !== "TWILIO_WA_NOT_CONFIGURED") errors.twilioWa = twWaRes.error || "";
+
+  const umRes = await sendViaUltraMsg(to, waText);
+  if (umRes.success) {
     console.log(`[OTP] ✅ Sent via UltraMSG WhatsApp (SMS fallback) to ${to}`);
     return { success: true, usedChannel: "whatsapp" };
   }
+  if (umRes.error !== "ULTRAMSG_NOT_CONFIGURED") errors.ultramsg = umRes.error || "";
 
-  console.error(`[OTP] ❌ All channels failed for ${to}`, {
-    twilio: smsResult.error,
-    ultramsg: waResult.error,
-  });
+  console.error(`[OTP] ❌ All channels failed for ${to}`, errors);
   return {
     success: false,
-    error: smsResult.error || waResult.error || "فشل إرسال الرمز",
+    error: smsRes.error || twWaRes.error || umRes.error || "فشل إرسال الرمز",
   };
 }
