@@ -239,3 +239,9 @@ id = "uTHILGMLoSrU2bi7raXn4"
 uri = "file://attached_assets/play-store/screenshot-from-phone.jpg"
 type = "image"
 title = "3️⃣ لقطة الصفحة الرئيسية"
+
+[[outputs]]
+id = "TRlrS6R3vnALu-RnYiJ0n"
+uri = "file://attached_assets/خطة_نظام_الائتمان_أويو_بلاست.md"
+type = "text"
+title = "خطة نظام الائتمان لأويو بلاست — للقراءة والمراجعة"
