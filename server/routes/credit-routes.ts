@@ -39,13 +39,15 @@ export function registerCreditRoutes(
   // ════════════════════════════════════════════════════════════════════════════
 
   // قائمة جميع الفئات
-  app.get("/api/admin/credit/tiers", requireAdmin, async (_req, res) => {
+  app.get("/api/admin/credit/tiers", requireAdmin, async (req, res) => {
     try {
       const r = await pool.query(
         `SELECT * FROM customer_credit_tiers ORDER BY sort_order ASC, id ASC`,
       );
+      console.log(`[CREDIT] GET /tiers → returning ${r.rows.length} tiers (UA: ${req.headers['user-agent']?.substring(0, 50)})`);
       res.json(r.rows);
     } catch (e: any) {
+      console.error("[CREDIT] GET /tiers error:", e);
       res.status(500).json({ message: e.message });
     }
   });

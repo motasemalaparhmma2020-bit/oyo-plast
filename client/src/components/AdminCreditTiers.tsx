@@ -246,7 +246,123 @@ export default function AdminCreditTiers({ adminToken }: { adminToken: string | 
       )}
 
       {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* الإعدادات العامة                                                */}
+      {/* بطاقات الفئات الأربع — في الأعلى لإبرازها                       */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      <Card className="border-2 border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-950/10">
+        <CardHeader className="bg-amber-100/50 dark:bg-amber-950/30">
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-amber-600" />
+              <span>الفئات الائتمانية الأربع</span>
+            </div>
+            <Badge
+              variant={tiers.length > 0 ? "default" : "destructive"}
+              className="text-sm"
+              data-testid="badge-tier-count"
+            >
+              {tiers.length} فئات
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6">
+          {tiers.length === 0 ? (
+            <div className="text-center py-12 space-y-3">
+              <AlertCircle className="h-12 w-12 text-amber-500 mx-auto" />
+              <h3 className="font-bold text-lg">لا توجد فئات للعرض</h3>
+              <p className="text-sm text-muted-foreground">
+                المتوقع 4 فئات: VIP / فضي / برونزي / محظور
+              </p>
+              <Button
+                onClick={() => tiersQuery.refetch()}
+                variant="outline"
+                data-testid="button-refetch-tiers"
+              >
+                <RefreshCw className="h-4 w-4 ms-2" />
+                إعادة تحميل
+              </Button>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 gap-4">
+              {tiers.map((tier) => (
+                <Card
+                  key={tier.id}
+                  className={`overflow-hidden border-2 transition-all hover:shadow-lg ${
+                    tier.is_active ? "border-gray-200 dark:border-gray-800" : "border-gray-100 opacity-60"
+                  }`}
+                  data-testid={`card-tier-${tier.tier_key}`}
+                >
+                  <div
+                    className="h-2"
+                    style={{ backgroundColor: tier.tier_color }}
+                  />
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-3xl">{tier.tier_icon || "⭐"}</span>
+                        <div>
+                          <CardTitle className="text-lg">{tier.tier_name_ar}</CardTitle>
+                          <p className="text-xs text-muted-foreground mt-1">{tier.tier_key}</p>
+                        </div>
+                      </div>
+                      {!tier.is_active && (
+                        <Badge variant="destructive" className="text-xs">
+                          معطّلة
+                        </Badge>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="p-2 rounded-md bg-muted/50">
+                        <p className="text-xs text-muted-foreground">السقف الائتماني</p>
+                        <p className="font-bold text-base">{formatNumber(tier.credit_limit)} ر.ي</p>
+                      </div>
+                      <div className="p-2 rounded-md bg-muted/50">
+                        <p className="text-xs text-muted-foreground">مدة السداد</p>
+                        <p className="font-bold text-base">{tier.payment_term_days} يوم</p>
+                      </div>
+                      <div className="p-2 rounded-md bg-muted/50">
+                        <p className="text-xs text-muted-foreground">الدفعة المقدمة</p>
+                        <p className="font-bold text-base">{tier.down_payment_percent}%</p>
+                      </div>
+                      <div className="p-2 rounded-md bg-green-50 dark:bg-green-950/30">
+                        <p className="text-xs text-muted-foreground">خصم الكاش</p>
+                        <p className="font-bold text-base text-green-700 dark:text-green-400">
+                          {tier.cash_discount_percent}%
+                        </p>
+                      </div>
+                    </div>
+                    {tier.description && (
+                      <p className="text-xs text-muted-foreground border-t pt-2">{tier.description}</p>
+                    )}
+                    {tier.benefits && tier.benefits.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {tier.benefits.map((b, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs">
+                            ✓ {b}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => openEdit(tier)}
+                      data-testid={`button-edit-tier-${tier.tier_key}`}
+                    >
+                      <Pencil className="h-4 w-4 ms-2" />
+                      تعديل الفئة
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* الإعدادات العامة — أسفل الفئات                                  */}
       {/* ═══════════════════════════════════════════════════════════════ */}
       <Card className="border-2 border-primary/20">
         <CardHeader className="bg-primary/5">
@@ -408,101 +524,6 @@ export default function AdminCreditTiers({ adminToken }: { adminToken: string | 
           )}
         </CardContent>
       </Card>
-
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* بطاقات الفئات الأربع                                            */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <Trophy className="h-5 w-5 text-primary" />
-          <h2 className="text-xl font-bold">الفئات الائتمانية</h2>
-          <Badge variant="outline" className="text-xs">
-            {tiers.length} فئات
-          </Badge>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-4">
-          {tiers.map((tier) => (
-            <Card
-              key={tier.id}
-              className={`overflow-hidden border-2 transition-all hover:shadow-lg ${
-                tier.is_active ? "border-gray-200 dark:border-gray-800" : "border-gray-100 opacity-60"
-              }`}
-              data-testid={`card-tier-${tier.tier_key}`}
-            >
-              <div
-                className="h-2"
-                style={{ backgroundColor: tier.tier_color }}
-              />
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-3xl">{tier.tier_icon || "⭐"}</span>
-                    <div>
-                      <CardTitle className="text-lg">{tier.tier_name_ar}</CardTitle>
-                      <p className="text-xs text-muted-foreground mt-1">{tier.tier_key}</p>
-                    </div>
-                  </div>
-                  {!tier.is_active && (
-                    <Badge variant="destructive" className="text-xs">
-                      معطّلة
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {/* الحدود الأساسية */}
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="p-2 rounded-md bg-muted/50">
-                    <p className="text-xs text-muted-foreground">السقف الائتماني</p>
-                    <p className="font-bold text-base">{formatNumber(tier.credit_limit)} ر.ي</p>
-                  </div>
-                  <div className="p-2 rounded-md bg-muted/50">
-                    <p className="text-xs text-muted-foreground">مدة السداد</p>
-                    <p className="font-bold text-base">{tier.payment_term_days} يوم</p>
-                  </div>
-                  <div className="p-2 rounded-md bg-muted/50">
-                    <p className="text-xs text-muted-foreground">الدفعة المقدمة</p>
-                    <p className="font-bold text-base">{tier.down_payment_percent}%</p>
-                  </div>
-                  <div className="p-2 rounded-md bg-green-50 dark:bg-green-950/30">
-                    <p className="text-xs text-muted-foreground">خصم الكاش</p>
-                    <p className="font-bold text-base text-green-700 dark:text-green-400">
-                      {tier.cash_discount_percent}%
-                    </p>
-                  </div>
-                </div>
-
-                {/* الوصف */}
-                {tier.description && (
-                  <p className="text-xs text-muted-foreground border-t pt-2">{tier.description}</p>
-                )}
-
-                {/* المزايا */}
-                {tier.benefits && tier.benefits.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {tier.benefits.map((b, i) => (
-                      <Badge key={i} variant="secondary" className="text-xs">
-                        ✓ {b}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => openEdit(tier)}
-                  data-testid={`button-edit-tier-${tier.tier_key}`}
-                >
-                  <Pencil className="h-4 w-4 ms-2" />
-                  تعديل الفئة
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
 
       {/* ═══════════════════════════════════════════════════════════════ */}
       {/* نافذة التعديل                                                   */}
