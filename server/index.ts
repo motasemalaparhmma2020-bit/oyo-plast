@@ -6,7 +6,7 @@ import { runMigrations } from "./migrate";
 import { createServer } from "http";
 import path from "path";
 import fs from "fs";
-import { generalLimiter, sanitizeInputs } from "./security";
+import { generalLimiter, sanitizeInputs, adminLimiter } from "./security";
 
 const app = express();
 const httpServer = createServer(app);
@@ -16,14 +16,42 @@ const httpServer = createServer(app);
 app.set("trust proxy", 1);
 
 // ══ Security Headers (Helmet) ══════════════════════════════════════════
+// CSP صارم في الإنتاج، مرن في التطوير لأن Vite يحقن سكربتات HMR ديناميكياً
+const isProd = process.env.NODE_ENV === "production";
 app.use(helmet({
-  contentSecurityPolicy: false, // نعطّله لأن Vite يحتاج مرونة في dev
+  contentSecurityPolicy: isProd
+    ? {
+        directives: {
+          defaultSrc: ["'self'"],
+          // 'unsafe-inline' للـ React + style وحدات tailwind
+          scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+          fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
+          imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
+          connectSrc: ["'self'", "https:", "wss:", "ws:"],
+          frameSrc: ["'self'", "https://www.google.com", "https://maps.google.com"],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+        },
+      }
+    : false,
   crossOriginEmbedderPolicy: false,
+  // يمنع تضمين الموقع داخل iframe خارجي (clickjacking)
+  frameguard: { action: "sameorigin" },
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  // يمنع المتصفحات من تخمين MIME type
+  noSniff: true,
+  // HSTS قوي في الإنتاج فقط (سنة واحدة)
+  hsts: isProd ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
 }));
 
 // ══ Rate Limiting العام ════════════════════════════════════════════════
 app.use("/api", generalLimiter);
+
+// ══ Rate Limiting صارم لمسارات الإدارة ════════════════════════════════
+// 50 طلب/دقيقة لكل IP لمنع الإغراق على واجهات الإدارة
+app.use("/api/admin", adminLimiter);
 
 // ══ تنظيف المدخلات من XSS ════════════════════════════════════════════
 app.use(sanitizeInputs);

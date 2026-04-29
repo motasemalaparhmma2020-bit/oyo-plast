@@ -10,8 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Loader2, TrendingUp, AlertTriangle, CheckCircle, XCircle,
   DollarSign, BarChart3, Factory, Package, ChevronDown, ChevronUp,
-  ShieldCheck, Lightbulb, ArrowUpRight
+  ShieldCheck, Lightbulb, ArrowUpRight, Sparkles, Settings, Snowflake, Flame, ArrowDown, ArrowUp
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 const fmt = (n: number | string | null | undefined) => n != null ? Number(n).toLocaleString("ar-YE") : "—";
 const fmtPct = (n: number | string | null | undefined) => n != null ? `${Number(n).toFixed(1)}%` : "—";
@@ -272,6 +273,541 @@ function ProductCostForm({ product, adminToken, onSaved }: { product: any; admin
   );
 }
 
+// ── لوحة التوصيات الذكية (راكد + سريع البيع) ───────────────────────────────
+function RecommendationsPanel({ adminToken }: { adminToken: string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<"stale" | "fast">("stale");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editPrice, setEditPrice] = useState<string>("");
+
+  const { data, isLoading, refetch } = useQuery<any>({
+    queryKey: ["/api/admin/pricing/recommendations"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/pricing/recommendations", {
+        headers: { "x-admin-token": adminToken },
+      });
+      if (!res.ok) throw new Error("فشل");
+      return res.json();
+    },
+    enabled: !!adminToken,
+  });
+
+  const applyMutation = useMutation({
+    mutationFn: async ({ productId, newPrice }: { productId: number; newPrice: number }) => {
+      const res = await fetch("/api/admin/pricing/apply-recommendation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+        body: JSON.stringify({ productId, newPrice }),
+      });
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.message || "فشل");
+      }
+      return res.json();
+    },
+    onSuccess: (r: any) => {
+      toast({ title: "✅ " + r.message });
+      setEditingId(null);
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/pricing/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/pricing/report"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-7 w-7 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const stale = data?.stale || [];
+  const fast = data?.fastSellers || [];
+  const settings = data?.settings || {};
+
+  return (
+    <div className="space-y-4">
+      {/* بطاقات السياق */}
+      <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-50 to-fuchsia-50 dark:from-violet-950/30 dark:to-fuchsia-950/30">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <Sparkles className="h-6 w-6 text-violet-600 shrink-0" />
+            <div className="text-xs space-y-1">
+              <p className="font-bold text-violet-900 dark:text-violet-200">
+                توصيات ذكية مبنية على تحليل المبيعات الفعلية
+              </p>
+              <p className="text-muted-foreground">
+                المنتجات الراكدة (لم تُبَع منذ {settings.staleProductDays || 60} يوماً): اقتراح خصم {settings.staleDiscountPercent || 10}٪.
+                المنتجات سريعة البيع (أكثر من {settings.fastSellerThreshold || 20} وحدة في 30 يوم): اقتراح زيادة {settings.fastSellerUpliftPercent || 5}٪.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* تبديل بين الراكد والسريع */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setTab("stale")}
+          className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+            tab === "stale"
+              ? "bg-blue-500 text-white shadow-md"
+              : "bg-muted text-muted-foreground hover:bg-muted/80"
+          }`}
+          data-testid="tab-stale"
+        >
+          <Snowflake className="h-4 w-4" />
+          منتجات راكدة ({stale.length})
+        </button>
+        <button
+          onClick={() => setTab("fast")}
+          className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+            tab === "fast"
+              ? "bg-orange-500 text-white shadow-md"
+              : "bg-muted text-muted-foreground hover:bg-muted/80"
+          }`}
+          data-testid="tab-fast-sellers"
+        >
+          <Flame className="h-4 w-4" />
+          سريع البيع ({fast.length})
+        </button>
+      </div>
+
+      {/* قائمة المنتجات الراكدة */}
+      {tab === "stale" && (
+        <>
+          {stale.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Snowflake className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">لا توجد منتجات راكدة حالياً 🎉</p>
+              <p className="text-xs mt-1">جميع المنتجات تباع خلال آخر {settings.staleProductDays || 60} يوماً</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {stale.map((p: any) => (
+                <Card key={p.id} className="border-0 shadow-sm overflow-hidden">
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={p.imageUrl}
+                        alt={p.name}
+                        className="w-14 h-14 rounded-lg object-cover bg-muted shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm truncate" data-testid={`stale-name-${p.id}`}>
+                          {p.name}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                          <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                            <Snowflake className="h-3 w-3" />
+                            {p.daysSinceLastSale ? `${p.daysSinceLastSale} يوم` : "لم يُباع أبداً"}
+                          </span>
+                          <span>المخزون: {fmt(p.totalSales30d)} مبيعات بـ 30 يوم</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 mt-3 text-center">
+                      <div className="bg-muted/40 rounded-lg p-2">
+                        <p className="text-[10px] text-muted-foreground">السعر الحالي</p>
+                        <p className="font-bold text-sm">{fmt(p.currentPrice)}</p>
+                      </div>
+                      <div className="bg-orange-50 dark:bg-orange-950/30 rounded-lg p-2">
+                        <p className="text-[10px] text-orange-700 dark:text-orange-300">السعر المقترح</p>
+                        <p className="font-bold text-sm text-orange-700 dark:text-orange-300">
+                          {fmt(p.suggestedPrice)} <ArrowDown className="h-3 w-3 inline" />
+                        </p>
+                      </div>
+                      <div className={`${p.isAllowed ? "bg-green-50 dark:bg-green-950/30" : "bg-red-50 dark:bg-red-950/30"} rounded-lg p-2`}>
+                        <p className="text-[10px] text-muted-foreground">الهامش بعد الخصم</p>
+                        <p className={`font-bold text-sm ${p.isAllowed ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
+                          {p.marginAfter != null ? fmtPct(p.marginAfter) : "—"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {!p.isAllowed && (
+                      <div className="mt-2 text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded-lg p-2 flex items-center gap-2">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        {p.reason}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 mt-3">
+                      {editingId === p.id ? (
+                        <>
+                          <Input
+                            type="number"
+                            value={editPrice}
+                            onChange={(e) => setEditPrice(e.target.value)}
+                            placeholder="السعر الجديد"
+                            className="text-right h-9 text-sm"
+                            data-testid={`input-edit-price-${p.id}`}
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              applyMutation.mutate({
+                                productId: p.id,
+                                newPrice: Number(editPrice) || p.suggestedPrice,
+                              })
+                            }
+                            disabled={applyMutation.isPending}
+                            data-testid={`button-confirm-edit-${p.id}`}
+                          >
+                            {applyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "تطبيق"}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
+                            إلغاء
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            size="sm"
+                            className="flex-1 bg-orange-500 hover:bg-orange-600"
+                            onClick={() =>
+                              applyMutation.mutate({ productId: p.id, newPrice: p.suggestedPrice })
+                            }
+                            disabled={applyMutation.isPending}
+                            data-testid={`button-apply-stale-${p.id}`}
+                          >
+                            <ArrowDown className="h-3.5 w-3.5 ml-1" />
+                            تطبيق الخصم {settings.staleDiscountPercent || 10}٪
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditingId(p.id);
+                              setEditPrice(String(p.suggestedPrice));
+                            }}
+                            data-testid={`button-custom-stale-${p.id}`}
+                          >
+                            تخصيص
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* قائمة منتجات سريعة البيع */}
+      {tab === "fast" && (
+        <>
+          {fast.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Flame className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">لا توجد منتجات سريعة البيع تستحق الزيادة</p>
+              <p className="text-xs mt-1">الحد الأدنى للاعتبار: {settings.fastSellerThreshold || 20} مبيعة في 30 يوم</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {fast.map((p: any) => (
+                <Card key={p.id} className="border-0 shadow-sm overflow-hidden">
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={p.imageUrl}
+                        alt={p.name}
+                        className="w-14 h-14 rounded-lg object-cover bg-muted shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm truncate" data-testid={`fast-name-${p.id}`}>
+                          {p.name}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                          <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-bold">
+                            <Flame className="h-3 w-3" />
+                            {p.totalSales30d} وحدة في 30 يوم
+                          </span>
+                          <span>المخزون: {p.stock}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 mt-3 text-center">
+                      <div className="bg-muted/40 rounded-lg p-2">
+                        <p className="text-[10px] text-muted-foreground">السعر الحالي</p>
+                        <p className="font-bold text-sm">{fmt(p.currentPrice)}</p>
+                      </div>
+                      <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-2">
+                        <p className="text-[10px] text-green-700 dark:text-green-300">السعر المقترح</p>
+                        <p className="font-bold text-sm text-green-700 dark:text-green-300">
+                          {fmt(p.suggestedPrice)} <ArrowUp className="h-3 w-3 inline" />
+                        </p>
+                      </div>
+                      <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-lg p-2">
+                        <p className="text-[10px] text-muted-foreground">هامش الربح</p>
+                        <p className="font-bold text-sm text-emerald-700 dark:text-emerald-400">
+                          {p.marginBefore != null ? fmtPct(p.marginBefore) : "—"}
+                          {p.marginAfter != null && (
+                            <span className="text-[10px] mr-1">
+                              → {fmtPct(p.marginAfter)}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 mt-3">
+                      {editingId === p.id ? (
+                        <>
+                          <Input
+                            type="number"
+                            value={editPrice}
+                            onChange={(e) => setEditPrice(e.target.value)}
+                            placeholder="السعر الجديد"
+                            className="text-right h-9 text-sm"
+                            data-testid={`input-edit-price-fast-${p.id}`}
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              applyMutation.mutate({
+                                productId: p.id,
+                                newPrice: Number(editPrice) || p.suggestedPrice,
+                              })
+                            }
+                            disabled={applyMutation.isPending}
+                          >
+                            {applyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "تطبيق"}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
+                            إلغاء
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            size="sm"
+                            className="flex-1 bg-green-600 hover:bg-green-700"
+                            onClick={() =>
+                              applyMutation.mutate({ productId: p.id, newPrice: p.suggestedPrice })
+                            }
+                            disabled={applyMutation.isPending}
+                            data-testid={`button-apply-fast-${p.id}`}
+                          >
+                            <ArrowUp className="h-3.5 w-3.5 ml-1" />
+                            تطبيق الزيادة {settings.fastSellerUpliftPercent || 5}٪
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditingId(p.id);
+                              setEditPrice(String(p.suggestedPrice));
+                            }}
+                            data-testid={`button-custom-fast-${p.id}`}
+                          >
+                            تخصيص
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── إعدادات التسعير الذكي ───────────────────────────────────────────────────
+function SmartPricingSettings({ adminToken }: { adminToken: string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({
+    staleProductDays: 60,
+    staleDiscountPercent: 10,
+    fastSellerThreshold: 20,
+    fastSellerUpliftPercent: 5,
+    protectMarginOnCoupons: true,
+  });
+  const [loaded, setLoaded] = useState(false);
+
+  const { data } = useQuery<any>({
+    queryKey: ["/api/admin/pricing/settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/pricing/settings", {
+        headers: { "x-admin-token": adminToken },
+      });
+      if (!res.ok) throw new Error();
+      return res.json();
+    },
+    enabled: !!adminToken,
+  });
+
+  if (data && !loaded) {
+    setForm(data);
+    setLoaded(true);
+  }
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/pricing/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.message);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "✅ تم حفظ الإعدادات" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/pricing/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/pricing/recommendations"] });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/30 dark:to-cyan-950/30">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="h-6 w-6 text-blue-600 shrink-0" />
+            <div className="text-xs">
+              <p className="font-bold text-blue-900 dark:text-blue-200 mb-1">
+                ضبط حساسية التوصيات الذكية
+              </p>
+              <p className="text-muted-foreground">
+                هذه الإعدادات تتحكم بكيفية اكتشاف المنتجات الراكدة، السريعة، وحماية الأرباح من الكوبونات الضارة.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* المنتجات الراكدة */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-bold flex items-center gap-2">
+            <Snowflake className="h-4 w-4 text-blue-500" />
+            اكتشاف المنتجات الراكدة
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <Label className="text-xs">عدد الأيام بدون مبيعات لاعتبار المنتج راكداً</Label>
+            <Input
+              type="number"
+              value={form.staleProductDays}
+              onChange={(e) => setForm((f) => ({ ...f, staleProductDays: Number(e.target.value) || 60 }))}
+              className="text-right"
+              data-testid="input-stale-days"
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              المنتج لم يُبَع منذ هذا العدد من الأيام = راكد
+            </p>
+          </div>
+          <div>
+            <Label className="text-xs">نسبة الخصم المقترحة للمنتج الراكد (%)</Label>
+            <Input
+              type="number"
+              value={form.staleDiscountPercent}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, staleDiscountPercent: Number(e.target.value) || 10 }))
+              }
+              className="text-right"
+              data-testid="input-stale-discount"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* سريع البيع */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-bold flex items-center gap-2">
+            <Flame className="h-4 w-4 text-orange-500" />
+            اكتشاف المنتجات سريعة البيع
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <Label className="text-xs">حد المبيعات في 30 يوم لاعتباره سريع البيع</Label>
+            <Input
+              type="number"
+              value={form.fastSellerThreshold}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, fastSellerThreshold: Number(e.target.value) || 20 }))
+              }
+              className="text-right"
+              data-testid="input-fast-threshold"
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              المنتج بيع أكثر من هذا العدد = طلب مرتفع → ارفع السعر
+            </p>
+          </div>
+          <div>
+            <Label className="text-xs">نسبة الزيادة المقترحة للسريع (%)</Label>
+            <Input
+              type="number"
+              value={form.fastSellerUpliftPercent}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, fastSellerUpliftPercent: Number(e.target.value) || 5 }))
+              }
+              className="text-right"
+              data-testid="input-fast-uplift"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* حماية الكوبونات */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-bold flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-green-600" />
+            حماية الأرباح من الكوبونات
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between gap-3 p-3 bg-muted/30 rounded-lg">
+            <div className="flex-1">
+              <p className="text-sm font-medium">رفض الكوبونات التي تأكل الربح تلقائياً</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                إذا كان السعر بعد الكوبون والعمولة أقل من الخط الأحمر للتكلفة، يُرفض الكوبون عند الدفع.
+              </p>
+            </div>
+            <Switch
+              checked={form.protectMarginOnCoupons}
+              onCheckedChange={(v) => setForm((f) => ({ ...f, protectMarginOnCoupons: v }))}
+              data-testid="switch-protect-coupons"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Button
+        className="w-full"
+        onClick={() => mutation.mutate()}
+        disabled={mutation.isPending}
+        data-testid="button-save-pricing-settings"
+      >
+        {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <ShieldCheck className="h-4 w-4 ml-2" />}
+        حفظ الإعدادات
+      </Button>
+    </div>
+  );
+}
+
 // ── المكوّن الرئيسي ──────────────────────────────────────────────────────────
 export default function AdminPricing({ adminToken }: { adminToken: string | null }) {
   const queryClient = useQueryClient();
@@ -346,8 +882,11 @@ export default function AdminPricing({ adminToken }: { adminToken: string | null
         ))}
       </div>
 
-      <Tabs defaultValue="products">
-        <TabsList className="w-full grid grid-cols-3">
+      <Tabs defaultValue="recommendations">
+        <TabsList className="w-full grid grid-cols-5">
+          <TabsTrigger value="recommendations" className="text-xs" data-testid="tab-pricing-recommendations">
+            <Sparkles className="h-3.5 w-3.5 ml-1" />التوصيات
+          </TabsTrigger>
           <TabsTrigger value="products" className="text-xs" data-testid="tab-pricing-products">
             <Package className="h-3.5 w-3.5 ml-1" />تكاليف المنتجات
           </TabsTrigger>
@@ -357,7 +896,20 @@ export default function AdminPricing({ adminToken }: { adminToken: string | null
           <TabsTrigger value="report" className="text-xs" data-testid="tab-pricing-report">
             <BarChart3 className="h-3.5 w-3.5 ml-1" />تقرير الهوامش
           </TabsTrigger>
+          <TabsTrigger value="settings" className="text-xs" data-testid="tab-pricing-settings">
+            <Settings className="h-3.5 w-3.5 ml-1" />الإعدادات
+          </TabsTrigger>
         </TabsList>
+
+        {/* ── تبويب التوصيات الذكية ── */}
+        <TabsContent value="recommendations" className="space-y-3 mt-4">
+          <RecommendationsPanel adminToken={adminToken || ""} />
+        </TabsContent>
+
+        {/* ── تبويب الإعدادات ── */}
+        <TabsContent value="settings" className="space-y-3 mt-4">
+          <SmartPricingSettings adminToken={adminToken || ""} />
+        </TabsContent>
 
         {/* ── تبويب المنتجات ── */}
         <TabsContent value="products" className="space-y-3 mt-4">

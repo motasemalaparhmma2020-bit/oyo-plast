@@ -701,6 +701,12 @@ export const homePageSettings = pgTable("home_page_settings", {
   affiliateContent: text("affiliate_content"),
   // Login flow control
   loginFlow: text("login_flow").default("checkout").notNull(), // 'checkout' | 'cart' | 'none'
+  // ── إعدادات التسعير الذكي (التوصيات + حماية الكوبونات) ─────────────────────
+  staleProductDays: integer("stale_product_days").default(60).notNull(),          // عدد الأيام لاعتبار المنتج راكداً
+  staleDiscountPercent: integer("stale_discount_percent").default(10).notNull(),   // نسبة الخصم المقترحة للمنتج الراكد
+  fastSellerThreshold: integer("fast_seller_threshold").default(20).notNull(),     // عدد المبيعات في آخر 30 يوم لاعتبار المنتج سريع البيع
+  fastSellerUpliftPercent: integer("fast_seller_uplift_percent").default(5).notNull(), // نسبة الزيادة المقترحة للمنتج سريع البيع
+  protectMarginOnCoupons: boolean("protect_margin_on_coupons").default(true).notNull(), // رفض الكوبونات التي تأكل الربح تحت الخط الأحمر
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

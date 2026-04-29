@@ -204,7 +204,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ─── Admin Login ─────────────────────────────────────────────────
-  app.post("/api/admin/login", (req, res) => {
+  app.post("/api/admin/login", loginLimiter, (req, res) => {
     const { password } = req.body;
     const adminPassword = process.env.ADMIN_PASSWORD;
     if (!adminPassword || password !== adminPassword) {
@@ -2502,6 +2502,53 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const user = (req as any).user;
       const userId = getUserId(user);
 
+      // ─── حماية الأرباح من الكوبونات (Smart Pricing) ───────────────────────────
+      if (couponCode && Array.isArray(items) && items.length > 0) {
+        try {
+          const { validateCouponAgainstCart } = await import("./smart-pricing");
+          const { pool: pp } = await import("./db");
+
+          // الحصول على نسبة الخصم والعمولة من الكوبون
+          const code = String(couponCode).toUpperCase();
+          const smR = await pp.query(
+            `SELECT discount_rate AS discount_percent, commission_rate AS marketer_commission_percent
+             FROM standalone_marketers WHERE coupon_code=$1 AND is_active=true`,
+            [code]
+          );
+          const cR = smR.rows.length
+            ? smR.rows[0]
+            : (await pp.query(
+                `SELECT discount_percent, marketer_commission_percent FROM coupons WHERE code=$1 AND is_active=true`,
+                [code]
+              )).rows[0];
+
+          if (cR) {
+            const cartItems = items
+              .filter((i: any) => i.productId)
+              .map((i: any) => ({
+                productId: Number(i.productId),
+                price: Number(i.price) || 0,
+                quantity: Number(i.quantity) || 1,
+              }));
+            const result = await validateCouponAgainstCart(
+              cartItems,
+              Number(cR.discount_percent) || 0,
+              Number(cR.marketer_commission_percent) || 0
+            );
+            if (!result.allowed) {
+              return res.status(400).json({
+                message: result.reason || "هذا الكوبون يأكل أرباح المتجر",
+                couponBlocked: true,
+                affectedProducts: result.affectedProducts,
+              });
+            }
+          }
+        } catch (couponCheckErr: any) {
+          console.warn("[smart-pricing] coupon check failed (allowing order):", couponCheckErr.message);
+          // فشل الفحص لا يمنع الطلب — نتعامل بسلاسة
+        }
+      }
+
       // ─── فحص + حجز ائتمان ذرّي قبل إنشاء الطلب (إن كان الدفع بالأجل) ──────────
       let creditPrecheck: any = null;
       let creditNoteAddon = "";
@@ -2975,7 +3022,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   });
 
   // ─── بوابة المورد — تسجيل دخول ────────────────────────────────────────────────
-  app.post("/api/supplier/login", async (req, res) => {
+  app.post("/api/supplier/login", loginLimiter, async (req, res) => {
     try {
       const { pool: dbPool } = await import("./db");
       const { phone, pin } = req.body;
@@ -3802,7 +3849,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   });
 
   // ── 2. تسجيل الدخول (هاتف + PIN) ─────────────────────────────────
-  app.post("/api/marketer/login", async (req, res) => {
+  app.post("/api/marketer/login", loginLimiter, async (req, res) => {
     try {
       const { pool: dbPool } = await import("./db");
       const crypto = await import("crypto");
@@ -4906,6 +4953,108 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       res.json({ summary, products: result.rows });
     } catch (e: any) {
       res.status(500).json({ message: "فشل جلب التقرير", details: e.message });
+    }
+  });
+
+  // GET /api/admin/pricing/recommendations — توصيات ذكية: راكد + سريع البيع
+  app.get("/api/admin/pricing/recommendations", requireAdmin, async (req, res) => {
+    try {
+      const { getRecommendations } = await import("./smart-pricing");
+      const limit = Math.min(Number(req.query.limit) || 30, 100);
+      const data = await getRecommendations(limit);
+      res.json(data);
+    } catch (e: any) {
+      console.error("recommendations error:", e);
+      res.status(500).json({ message: "فشل جلب التوصيات", details: e.message });
+    }
+  });
+
+  // POST /api/admin/pricing/check-price — تفقّد سعر قبل الحفظ
+  app.post("/api/admin/pricing/check-price", requireAdmin, async (req, res) => {
+    try {
+      const { checkPrice } = await import("./smart-pricing");
+      const productId = Number(req.body.productId);
+      const newPrice = Number(req.body.newPrice);
+      if (!productId || !Number.isFinite(newPrice)) {
+        return res.status(400).json({ message: "productId و newPrice مطلوبان" });
+      }
+      const result = await checkPrice(productId, newPrice);
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل الفحص", details: e.message });
+    }
+  });
+
+  // POST /api/admin/pricing/apply-recommendation — تطبيق توصية ذكية
+  app.post("/api/admin/pricing/apply-recommendation", requireAdmin, async (req, res) => {
+    try {
+      const { applyRecommendation } = await import("./smart-pricing");
+      const productId = Number(req.body.productId);
+      const newPrice = Number(req.body.newPrice);
+      const setOriginalPrice = req.body.setOriginalPrice !== false;
+      if (!productId || !Number.isFinite(newPrice)) {
+        return res.status(400).json({ message: "productId و newPrice مطلوبان" });
+      }
+      const result = await applyRecommendation(productId, newPrice, setOriginalPrice);
+      if (!result.ok) return res.status(400).json(result);
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل التطبيق", details: e.message });
+    }
+  });
+
+  // GET /api/admin/pricing/settings — قراءة إعدادات التسعير الذكي
+  app.get("/api/admin/pricing/settings", requireAdmin, async (_req, res) => {
+    try {
+      const { getPricingSettings } = await import("./smart-pricing");
+      const settings = await getPricingSettings();
+      res.json(settings);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الإعدادات", details: e.message });
+    }
+  });
+
+  // PATCH /api/admin/pricing/settings — تحديث إعدادات التسعير الذكي
+  app.patch("/api/admin/pricing/settings", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const allowed: Record<string, string> = {
+        staleProductDays: "stale_product_days",
+        staleDiscountPercent: "stale_discount_percent",
+        fastSellerThreshold: "fast_seller_threshold",
+        fastSellerUpliftPercent: "fast_seller_uplift_percent",
+        protectMarginOnCoupons: "protect_margin_on_coupons",
+      };
+      const updates: string[] = [];
+      const values: any[] = [];
+      let i = 1;
+      for (const [key, col] of Object.entries(allowed)) {
+        if (req.body[key] !== undefined) {
+          let v = req.body[key];
+          if (typeof v === "boolean") {
+            updates.push(`${col} = $${i}`);
+            values.push(v);
+          } else {
+            const n = Number(v);
+            if (!Number.isFinite(n) || n < 0) continue;
+            updates.push(`${col} = $${i}`);
+            values.push(Math.round(n));
+          }
+          i++;
+        }
+      }
+      if (updates.length === 0) {
+        return res.status(400).json({ message: "لا توجد حقول للتحديث" });
+      }
+      await dbPool.query(
+        `UPDATE display_settings SET ${updates.join(", ")} WHERE id = (SELECT id FROM display_settings ORDER BY id LIMIT 1)`,
+        values
+      );
+      const { getPricingSettings } = await import("./smart-pricing");
+      const settings = await getPricingSettings();
+      res.json({ ok: true, settings });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث الإعدادات", details: e.message });
     }
   });
 
