@@ -61,6 +61,7 @@ import AdminInbox from "@/pages/AdminInbox";
 import Wishlist from "@/pages/Wishlist";
 import Notifications from "@/pages/Notifications";
 import MyAccount from "@/pages/MyAccount";
+import MyCredit from "@/pages/MyCredit";
 import MarketerCoupons from "@/pages/MarketerCoupons";
 import Printing from "@/pages/Printing";
 import StaffPortal from "@/pages/StaffPortal";
@@ -575,6 +576,9 @@ function Router() {
             </Route>
             <Route path="/account">
               <RequireAccountType><MyAccount /></RequireAccountType>
+            </Route>
+            <Route path="/account/credit">
+              <RequireAccountType><MyCredit /></RequireAccountType>
             </Route>
             <Route path="/marketer/coupons">
               <RequireAccountType><MarketerCoupons /></RequireAccountType>

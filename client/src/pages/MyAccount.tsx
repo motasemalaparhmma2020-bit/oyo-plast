@@ -5,7 +5,8 @@ import { Link } from "wouter";
 import { 
   ShoppingBag, Wallet, Award, ChevronLeft, Package, Clock, 
   CheckCircle2, Truck, XCircle, Loader2, Eye, ArrowUpRight, ArrowDownLeft,
-  UserPlus, LogIn, ChevronDown, ChevronUp, Megaphone, TrendingUp, Tag, ExternalLink
+  UserPlus, LogIn, ChevronDown, ChevronUp, Megaphone, TrendingUp, Tag, ExternalLink,
+  CreditCard
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -37,6 +38,81 @@ function getColorHex(c: string | null | undefined) {
   if (!c) return "transparent";
   if (c.startsWith("#")) return c;
   return COLOR_MAP[c] || "#888888";
+}
+
+function CreditAccountCard() {
+  const { isAuthenticated } = useAuth();
+  const { data: credit } = useQuery<any>({
+    queryKey: ["/api/my/credit"],
+    enabled: isAuthenticated,
+    retry: false,
+    staleTime: 30_000,
+  });
+  if (!credit || Number(credit?.effective_credit_limit ?? 0) <= 0) return null;
+
+  const tierName = credit.tier_name_ar || "برونزي";
+  const tierIcon = credit.tier_icon || "🥉";
+  const tierColor = credit.tier_color || "#cd7f32";
+  const limit = Number(credit.effective_credit_limit ?? 0);
+  const balance = Number(credit.current_balance ?? 0);
+  const available = Number(credit.available_credit ?? 0);
+  const isFrozen = credit.is_frozen === true;
+
+  return (
+    <Link href="/account/credit">
+      <Card
+        className="mb-6 border-2 cursor-pointer hover-elevate transition-all"
+        style={{ borderColor: tierColor }}
+        data-testid="card-credit-summary"
+      >
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div
+                className="w-11 h-11 rounded-full flex items-center justify-center text-2xl"
+                style={{ background: `${tierColor}25` }}
+              >
+                {tierIcon}
+              </div>
+              <div>
+                <p className="font-bold text-sm flex items-center gap-1">
+                  حسابي المالي
+                  {isFrozen && <Badge className="bg-cyan-100 text-cyan-700 text-[10px] px-1.5">مجمَّد</Badge>}
+                </p>
+                <p className="text-xs" style={{ color: tierColor }}>
+                  فئة {tierName}
+                </p>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" className="gap-1" data-testid="button-go-credit">
+              التفاصيل
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-2 text-center border border-green-100 dark:border-green-900">
+              <p className="text-[10px] text-green-700 dark:text-green-400">المتاح</p>
+              <p className="text-xs font-bold text-green-700 dark:text-green-300">
+                {available.toLocaleString()}
+              </p>
+            </div>
+            <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-2 text-center border border-amber-100 dark:border-amber-900">
+              <p className="text-[10px] text-amber-700 dark:text-amber-400">المستحق</p>
+              <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
+                {balance.toLocaleString()}
+              </p>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-2 text-center border border-blue-100 dark:border-blue-900">
+              <p className="text-[10px] text-blue-700 dark:text-blue-400">السقف</p>
+              <p className="text-xs font-bold text-blue-700 dark:text-blue-300">
+                {limit.toLocaleString()}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  );
 }
 
 function OrderItemsRow({ orderId }: { orderId: number }) {
@@ -288,6 +364,9 @@ export default function MyAccount() {
           </CardContent>
         </Card>
       </div>
+
+      {/* بطاقة "حسابي المالي" — الشراء بالأجل والائتمان */}
+      <CreditAccountCard />
 
       {/* بطاقة حساب المسوق — تظهر إذا كان المستخدم مسوقاً مرتبطاً */}
       {marketerAccount && (

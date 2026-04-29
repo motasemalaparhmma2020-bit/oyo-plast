@@ -788,6 +788,46 @@ export function registerCreditRoutes(
     }
   });
 
+  // ── قائمة الفئات (عامة، للعرض في صفحة العميل المالي) ──
+  app.get("/api/credit/tiers/public", async (_req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT tier_key, tier_name_ar, tier_icon, tier_color,
+                credit_limit, payment_term_days, down_payment_percent,
+                cash_discount_percent, description
+         FROM customer_credit_tiers
+         WHERE tier_key <> 'blocked'
+           AND COALESCE(is_active, true) = true
+         ORDER BY CASE tier_key WHEN 'bronze' THEN 1 WHEN 'silver' THEN 2 WHEN 'vip' THEN 3 ELSE 99 END`,
+      );
+      res.json(r.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // ── طلبات العميل بالأجل (history) ──
+  app.get("/api/my/credit/orders", async (req, res) => {
+    try {
+      const userId = getUserIdFromReq(req);
+      if (!userId) return res.status(401).json({ message: "يجب تسجيل الدخول" });
+
+      const r = await pool.query(
+        `SELECT id, total, status, payment_method, notes, created_at,
+                customer_name, shipping_city
+         FROM orders
+         WHERE user_id = $1
+           AND payment_method = 'credit'
+         ORDER BY created_at DESC
+         LIMIT 100`,
+        [userId],
+      );
+      res.json(r.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
   // ── فحص قبل الشراء بالأجل (precheck) ──
   // POST /api/credit/precheck { amount: number, currency?: string }
   app.post("/api/credit/precheck", async (req, res) => {
