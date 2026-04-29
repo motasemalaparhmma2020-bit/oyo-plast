@@ -1253,6 +1253,20 @@ export const productPricingRules = pgTable("product_pricing_rules", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ── سجل الأحداث الأمنية (Rate limit, brute force, hijack attempts) ──────────
+// مرجعي لجميع التنبيهات الحرجة + لوحة الأمان في لوحة التحكم
+export const securityLogs = pgTable("security_logs", {
+  id: serial("id").primaryKey(),
+  eventType: varchar("event_type", { length: 100 }).notNull(),  // brute_force_attempt, rate_limit_admin, etc.
+  ipAddress: varchar("ip_address", { length: 50 }).notNull(),
+  path: varchar("path", { length: 500 }).notNull(),
+  method: varchar("method", { length: 20 }).notNull(),
+  userAgent: text("user_agent"),
+  details: text("details"),
+  severity: varchar("severity", { length: 20 }).notNull().default("info"),  // info | warning | critical
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // ── سجل تغيير فئة العميل (للتدقيق والتاريخ) ──────────────────────────────────
 export const customerTierHistory = pgTable("customer_tier_history", {
   id: serial("id").primaryKey(),

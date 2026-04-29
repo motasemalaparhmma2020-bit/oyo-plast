@@ -3036,9 +3036,15 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const supplier = result.rows[0];
       const supplierPin = supplier.pin || "1234";
       if (pin !== supplierPin) return res.status(401).json({ message: "الرمز السري غير صحيح" });
-      // إنشاء token بسيط
+      // إنشاء توكن عشوائي قوي يخزّن في DB (لا يمكن تزويره)
+      // ينتهي بعد 7 أيام، يُجدّد عند كل دخول
       const crypto = await import("crypto");
-      const token = crypto.createHmac("sha256", supplier.id + supplier.phone).update("supplier-v1").digest("hex");
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 أيام
+      await dbPool.query(
+        "UPDATE suppliers SET token=$1, token_expires_at=$2 WHERE id=$3",
+        [token, expiresAt, supplier.id]
+      );
       res.json({ token, supplier: { id: supplier.id, name: supplier.name, phone: supplier.phone, cities: supplier.cities, commissionRate: supplier.commission_rate } });
     } catch (e: any) {
       res.status(500).json({ message: "حدث خطأ" });
@@ -3046,18 +3052,28 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   });
 
   // ─── middleware تحقق من توكن المورد ────────────────────────────────────────────
+  // يبحث عن المورد بالتوكن العشوائي المخزّن (مع مقارنة timing-safe) ويتحقق من انتهاء الصلاحية
   async function requireSupplier(req: Request, res: Response, next: NextFunction) {
     const token = req.headers["x-supplier-token"] as string;
     const supplierId = req.headers["x-supplier-id"] as string;
     if (!token || !supplierId) return res.status(401).json({ message: "غير مصرح" });
     try {
       const { pool: dbPool } = await import("./db");
-      const result = await dbPool.query("SELECT * FROM suppliers WHERE id=$1 AND is_active=true", [parseInt(supplierId)]);
-      if (!result.rows.length) return res.status(401).json({ message: "غير مصرح" });
+      const result = await dbPool.query(
+        `SELECT * FROM suppliers
+         WHERE id=$1 AND is_active=true AND token IS NOT NULL
+           AND (token_expires_at IS NULL OR token_expires_at > NOW())`,
+        [parseInt(supplierId)]
+      );
+      if (!result.rows.length) return res.status(401).json({ message: "انتهت الجلسة، أعد تسجيل الدخول" });
       const supplier = result.rows[0];
+      // مقارنة timing-safe لمنع timing attacks
       const crypto = await import("crypto");
-      const expectedToken = crypto.createHmac("sha256", supplier.id + supplier.phone).update("supplier-v1").digest("hex");
-      if (token !== expectedToken) return res.status(401).json({ message: "غير مصرح" });
+      const tokenBuf = Buffer.from(token, "utf8");
+      const storedBuf = Buffer.from(supplier.token, "utf8");
+      if (tokenBuf.length !== storedBuf.length || !crypto.timingSafeEqual(tokenBuf, storedBuf)) {
+        return res.status(401).json({ message: "غير مصرح" });
+      }
       (req as any).supplier = supplier;
       next();
     } catch {
