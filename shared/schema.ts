@@ -592,6 +592,9 @@ export const displaySettings = pgTable("display_settings", {
   faqSize: text("faq_size").default("medium").notNull(),
   faqOnHome: boolean("faq_on_home").default(true).notNull(),
   faqOnAccount: boolean("faq_on_account").default(false).notNull(),
+  // ── إعدادات قسم الشركاء في صفحة حسابي ───────────────────────────────────
+  partnersOnAccount: boolean("partners_on_account").default(true).notNull(), // إظهار/إخفاء قسم الشركاء كلياً
+  partnersMinOrders: integer("partners_min_orders").default(3).notNull(),    // الحد الأدنى لعدد الطلبات لرؤية القسم
   // ── الخطوط وتصميم الواجهة ────────────────────────────────────────────────
   appFontArabic: text("app_font_arabic").default("cairo"),    // cairo|tajawal|almarai|ibm-plex-arabic|noto-kufi|rubik
   appFontNumbers: text("app_font_numbers").default("cairo"),  // cairo|roboto-condensed|barlow|inter|oswald

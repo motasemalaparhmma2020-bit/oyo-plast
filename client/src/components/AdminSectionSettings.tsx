@@ -5,7 +5,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Eye, EyeOff, LayoutDashboard, HelpCircle, BarChart3, Save } from "lucide-react";
+import { Eye, EyeOff, LayoutDashboard, HelpCircle, BarChart3, Save, Handshake } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { useState, useEffect } from "react";
 
 type SizeOption = "small" | "medium" | "large";
@@ -30,6 +31,9 @@ interface SectionSettings {
   faqSize: SizeOption;
   faqOnHome: boolean;
   faqOnAccount: boolean;
+  // قسم الشركاء (في صفحة حسابي)
+  partnersOnAccount: boolean;
+  partnersMinOrders: number;
 }
 
 const SIZE_LABELS: Record<SizeOption, string> = {
@@ -215,6 +219,8 @@ export default function AdminSectionSettings({ adminToken }: { adminToken?: stri
     faqSize: "medium",
     faqOnHome: true,
     faqOnAccount: false,
+    partnersOnAccount: true,
+    partnersMinOrders: 3,
   });
 
   useEffect(() => {
@@ -232,6 +238,8 @@ export default function AdminSectionSettings({ adminToken }: { adminToken?: stri
       faqSize: raw.faqSize ?? "medium",
       faqOnHome: raw.faqOnHome ?? true,
       faqOnAccount: raw.faqOnAccount ?? false,
+      partnersOnAccount: raw.partnersOnAccount ?? true,
+      partnersMinOrders: Number(raw.partnersMinOrders ?? 3),
     });
   }, [raw]);
 
@@ -365,6 +373,56 @@ export default function AdminSectionSettings({ adminToken }: { adminToken?: stri
         onChange={patchFaq}
         testPrefix="faq"
       />
+
+      {/* ── قسم الشركاء (للمسوقين والموردين) في صفحة "حسابي" ── */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden" dir="rtl">
+        <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-l from-amber-500 to-orange-600">
+          <div className="flex items-center gap-3">
+            <div className="text-white"><Handshake className="h-5 w-5" /></div>
+            <div>
+              <p className="font-black text-white text-sm">قسم "شركاؤنا في النمو"</p>
+              <p className="text-white/80 text-xs">دعوة المسوقين والموردين للانضمام</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {cfg.partnersOnAccount ? (
+              <Badge className="bg-white/20 text-white border-0 text-xs flex items-center gap-1">
+                <Eye className="h-3 w-3" /> مفعّل
+              </Badge>
+            ) : (
+              <Badge className="bg-black/20 text-white border-0 text-xs flex items-center gap-1">
+                <EyeOff className="h-3 w-3" /> مخفي
+              </Badge>
+            )}
+            <Switch
+              checked={cfg.partnersOnAccount}
+              onCheckedChange={(v) => setCfg(prev => ({ ...prev, partnersOnAccount: v }))}
+              data-testid="partners-show"
+            />
+          </div>
+        </div>
+
+        <div className={`p-4 transition-opacity ${cfg.partnersOnAccount ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
+          <p className="text-xs font-bold text-muted-foreground mb-2">
+            عدد الطلبات اللازمة لظهور القسم للعميل
+          </p>
+          <div className="flex items-center gap-3">
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              value={cfg.partnersMinOrders}
+              onChange={(e) => setCfg(prev => ({ ...prev, partnersMinOrders: Math.max(0, Number(e.target.value) || 0) }))}
+              className="w-24 text-center font-bold"
+              data-testid="partners-min-orders"
+            />
+            <span className="text-sm text-muted-foreground">طلب أو أكثر</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            💡 اضبطها على ٠ ليظهر القسم لكل العملاء، أو ٣ ليظهر فقط للعملاء النشطين.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

@@ -2215,6 +2215,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         'shippingFee', 'sliderHeight', 'offerBannerCols',
         'installmentMinAmount', 'categoriesRows', 'categoriesBorderRadius',
         'drawerWidth',
+        'partnersMinOrders',
       ];
       // boolean fields
       const boolFields = [
@@ -2229,6 +2230,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         'showWhyUs', 'whyUsOnHome', 'whyUsOnAccount',
         'showStats', 'statsOnHome', 'statsOnAccount',
         'showFaq', 'faqOnHome', 'faqOnAccount',
+        'partnersOnAccount',
         // ── صفحة المنتج — نمط وأزرار ──
         'detailSheinLayout', 'detailShowAddToCart', 'detailShowShopNow',
         // ── إعدادات جديدة ──
