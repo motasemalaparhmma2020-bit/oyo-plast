@@ -5117,6 +5117,10 @@ export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [password, setPassword] = useState("");
+  // ── 2FA state ──
+  const [otpSessionId, setOtpSessionId] = useState<string | null>(null);
+  const [otpCode, setOtpCode] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
   const [orderItems, setOrderItems] = useState<OrderItemWithName[]>([]);
@@ -5932,25 +5936,89 @@ export default function Admin() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoginLoading(true);
     try {
       const response = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password })
       });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setAdminToken(data.token);
-        setIsAuthenticated(true);
-        localStorage.setItem("admin_token", data.token);
-        toast({ title: "مرحباً بك في لوحة التحكم" });
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast({ title: data?.message || "كلمة المرور غير صحيحة", variant: "destructive" });
+        return;
+      }
+
+      // الحالة 1: المصادقة الثنائية مفعّلة → اطلب رمز OTP
+      if (data.requiresOtp && data.sessionId) {
+        setOtpSessionId(data.sessionId);
+        toast({
+          title: "📱 تم إرسال رمز التحقق",
+          description: data.message || "افحص واتساب وأدخل الرمز",
+        });
+        return;
+      }
+
+      // الحالة 2: دخول مباشر (Twilio معطّل أو رقم المدير غير معرّف)
+      setAdminToken(data.token);
+      setIsAuthenticated(true);
+      localStorage.setItem("admin_token", data.token);
+      if (data.warning2fa) {
+        toast({
+          title: "⚠️ تم الدخول بدون مصادقة ثنائية",
+          description: `سبب التعطيل: ${data.warning2fa}`,
+          variant: "destructive",
+        });
       } else {
-        toast({ title: "كلمة المرور غير صحيحة", variant: "destructive" });
+        toast({ title: "مرحباً بك في لوحة التحكم" });
       }
     } catch (error) {
       toast({ title: "حدث خطأ في الاتصال", variant: "destructive" });
+    } finally {
+      setLoginLoading(false);
     }
+  };
+
+  // ── 2FA: التحقق من رمز OTP ──
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpSessionId || !otpCode) return;
+    setLoginLoading(true);
+    try {
+      const response = await fetch('/api/admin/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: otpSessionId, code: otpCode }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        toast({ title: data?.message || "رمز خاطئ", variant: "destructive" });
+        // إن انتهت الجلسة، أعد المستخدم لشاشة كلمة المرور
+        if (response.status === 401 && data?.message?.includes("الجلسة")) {
+          setOtpSessionId(null);
+          setOtpCode("");
+        }
+        return;
+      }
+      setAdminToken(data.token);
+      setIsAuthenticated(true);
+      localStorage.setItem("admin_token", data.token);
+      setOtpSessionId(null);
+      setOtpCode("");
+      setPassword("");
+      toast({ title: "✅ تم التحقق، مرحباً بك" });
+    } catch {
+      toast({ title: "حدث خطأ في الاتصال", variant: "destructive" });
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleCancelOtp = () => {
+    setOtpSessionId(null);
+    setOtpCode("");
+    setPassword("");
   };
 
   const formatPrice = (price: string | number | null) => {
@@ -5970,6 +6038,66 @@ export default function Admin() {
   };
 
   if (!isAuthenticated) {
+    // ── شاشة 2FA: إدخال رمز واتساب ──
+    if (otpSessionId) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <div className="mx-auto w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4">
+                <Lock className="h-8 w-8 text-emerald-600" />
+              </div>
+              <CardTitle className="text-2xl">رمز التحقق</CardTitle>
+              <p className="text-muted-foreground mt-2">
+                تم إرسال رمز من 6 أرقام إلى واتساب المدير.
+                <br />
+                أدخله لإكمال الدخول. صالح لمدة 5 دقائق.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <div>
+                  <Label htmlFor="otp-code">رمز التحقق</Label>
+                  <Input
+                    id="otp-code"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="000000"
+                    className="mt-1 text-center text-2xl tracking-[0.5em] font-mono"
+                    autoFocus
+                    autoComplete="one-time-code"
+                    data-testid="input-admin-otp"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={loginLoading || otpCode.length !== 6}
+                  data-testid="button-verify-otp"
+                >
+                  {loginLoading ? "جاري التحقق..." : "تحقق ودخول"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  onClick={handleCancelOtp}
+                  data-testid="button-cancel-otp"
+                >
+                  ← العودة لإدخال كلمة المرور
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    // ── شاشة كلمة المرور ──
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
         <Card className="w-full max-w-md">
@@ -5994,9 +6122,17 @@ export default function Admin() {
                   data-testid="input-admin-password"
                 />
               </div>
-              <Button type="submit" className="w-full" data-testid="button-admin-login">
-                دخول
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loginLoading || !password}
+                data-testid="button-admin-login"
+              >
+                {loginLoading ? "جاري الإرسال..." : "دخول"}
               </Button>
+              <p className="text-xs text-center text-muted-foreground mt-2">
+                🔐 محمي بالمصادقة الثنائية — رمز التحقق يُرسل لواتساب المدير
+              </p>
             </form>
           </CardContent>
         </Card>

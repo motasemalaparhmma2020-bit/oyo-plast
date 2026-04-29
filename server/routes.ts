@@ -204,11 +204,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ─── Admin Login ─────────────────────────────────────────────────
-  app.post("/api/admin/login", loginLimiter, (req, res) => {
+  app.post("/api/admin/login", loginLimiter, async (req, res) => {
     const { password } = req.body;
     const adminPassword = process.env.ADMIN_PASSWORD;
     if (!adminPassword || password !== adminPassword) {
       return res.status(401).json({ message: "كلمة المرور غير صحيحة" });
+    }
+
+    // ── المصادقة الثنائية (2FA): أرسل رمز واتساب للمدير ──
+    const { createOtpSession, sendOtpViaWhatsapp } = await import("./admin-2fa");
+    const ip = req.ip || "unknown";
+    const { sessionId, code } = createOtpSession(ip);
+    const sendResult = await sendOtpViaWhatsapp(code);
+
+    if (!sendResult.sent) {
+      // Fallback: إن فشل واتساب (Twilio معطّل أو رقم غير معرّف)، اسمح بالدخول مباشرة
+      // هذا يضمن عدم قفل المدير خارج النظام عند مشكلة بنية تحتية
+      console.warn("[2FA] WhatsApp send failed, falling back to direct login:", sendResult.reason);
+      return res.json({ token: getAdminToken(), warning2fa: sendResult.reason });
+    }
+
+    // نجح الإرسال: المدير يجب أن يكتب الرمز ليحصل على التوكن
+    res.json({
+      requiresOtp: true,
+      sessionId,
+      message: "تم إرسال رمز التحقق إلى واتساب المدير. صالح لمدة 5 دقائق.",
+    });
+  });
+
+  // ── 2FA: التحقق من رمز OTP ────────────────────────────────────────
+  app.post("/api/admin/verify-otp", loginLimiter, async (req, res) => {
+    const { sessionId, code } = req.body;
+    if (!sessionId || !code) {
+      return res.status(400).json({ message: "الجلسة والرمز مطلوبان" });
+    }
+    const { verifyOtp } = await import("./admin-2fa");
+    const ip = req.ip || "unknown";
+    const result = verifyOtp(String(sessionId), String(code), ip);
+    if (!result.ok) {
+      return res.status(401).json({ message: result.reason });
     }
     res.json({ token: getAdminToken() });
   });
