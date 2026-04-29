@@ -463,31 +463,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { GoogleGenAI } = await import("@google/genai");
       const ai = new GoogleGenAI({ apiKey });
 
-      // ضغط الصورة قبل الإرسال (توفير في الباندويث)
+      // ضغط الصورة قوي (512px + q65) لتسريع الإرسال + تقليل وقت Gemini
       const sharp = (await import("sharp")).default;
       const compressed = await sharp(req.file.buffer)
-        .resize(800, 800, { fit: "inside", withoutEnlargement: true })
-        .jpeg({ quality: 80 })
+        .resize(512, 512, { fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 65, mozjpeg: true })
         .toBuffer();
       const base64 = compressed.toString("base64");
 
-      const prompt = `أنت مساعد بحث في متجر "أويو بلاست" المتخصص بمواد التغليف والطباعة في اليمن (أكياس بلاستيك، ورقية، شنط، تغليف، علاقات، أقمشة، أدوات طباعة).
+      // prompt مختصر = استجابة أسرع
+      const prompt = `متجر تغليف يمني (أكياس، شنط، علاقات، تغليف، طباعة).
+أخرج 2-4 كلمات عربية فقط تصف المنتج (نوع + مادة + لون).
+لا جمل ولا ترقيم. إن لم تعرف: "غير_معروف".
+مثال: "كيس بلاستيك شفاف"`;
 
-حلّل هذه الصورة وأخرج كلمات بحث عربية قصيرة تصف المنتج الظاهر، تشمل:
-- نوع المنتج (مثل: كيس، شنطة، علاقة، رول)
-- المادة إن أمكن (بلاستيك، ورق، قماش)
-- اللون الأبرز
-- أي خاصية مميزة (شفاف، مقاوم، كبير، صغير)
-
-قواعد صارمة:
-1. أرجع فقط ٢-٤ كلمات عربية مفصولة بمسافة (بدون شرح، بدون علامات ترقيم)
-2. لا تكتب جمل، فقط كلمات مفتاحية للبحث
-3. إذا لم تتعرّف على منتج تغليف/طباعة، أرجع كلمة واحدة "غير_معروف"
-
-مثال على الإخراج المطلوب: "كيس بلاستيك شفاف كبير"`;
-
+      // gemini-2.0-flash هو الأسرع (1-3 ثوان عادة)
       let result: any;
-      const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest"];
+      const models = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-2.5-flash"];
       let lastError: any = null;
       for (const model of models) {
         try {
@@ -500,7 +492,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
                 { inlineData: { mimeType: "image/jpeg", data: base64 } },
               ],
             }],
-            config: { temperature: 0.2, maxOutputTokens: 50 },
+            config: { temperature: 0.1, maxOutputTokens: 25 },
           });
           break;
         } catch (e: any) {

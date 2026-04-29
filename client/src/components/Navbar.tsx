@@ -42,7 +42,7 @@ import { useLogoSettings } from "@/hooks/use-logo-settings";
 import { useCategories } from "@/hooks/use-products";
 import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
 import { NotificationBell } from "@/components/NotificationBell";
-import { VisualSearchOverlay } from "@/components/VisualSearchOverlay";
+import { VisualSearchOverlay, type VisualResultProduct } from "@/components/VisualSearchOverlay";
 
 // ─── Search Bar Component ────────────────────────────────────────
 function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: () => void; glassy?: boolean }) {
@@ -50,6 +50,9 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
   const [open, setOpen] = useState(false);
   const [visualLoading, setVisualLoading] = useState(false);
   const [visualPreviewUrl, setVisualPreviewUrl] = useState<string | null>(null);
+  const [visualResults, setVisualResults] = useState<VisualResultProduct[]>([]);
+  const [visualKeywords, setVisualKeywords] = useState("");
+  const [visualResultsLoading, setVisualResultsLoading] = useState(false);
   const visualAbortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -93,11 +96,14 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
     cameraInputRef.current?.click();
   };
 
-  // إغلاق overlay وتنظيف الموارد
+  // إغلاق overlay وتنظيف كل الموارد والحالات
   const closeVisualOverlay = () => {
     if (visualPreviewUrl) URL.revokeObjectURL(visualPreviewUrl);
     setVisualPreviewUrl(null);
     setVisualLoading(false);
+    setVisualResults([]);
+    setVisualKeywords("");
+    setVisualResultsLoading(false);
   };
 
   // تنظيف URL.createObjectURL عند unmount لمنع تسرب الذاكرة
@@ -115,6 +121,14 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
     closeVisualOverlay();
   };
 
+  // عند ضغط بطاقة منتج من نتائج البحث المرئي
+  const handleSelectVisualProduct = (id: number | string) => {
+    closeVisualOverlay();
+    setOpen(false);
+    onClose?.();
+    navigate(`/product/${id}`);
+  };
+
   const handleImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -129,10 +143,12 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
       return;
     }
 
-    // اعرض overlay شاشة كاملة بنمط SHEIN
+    // اعرض overlay فوراً مع الماسح المتحرّك
     const previewUrl = URL.createObjectURL(file);
     setVisualPreviewUrl(previewUrl);
     setVisualLoading(true);
+    setVisualResults([]);
+    setVisualKeywords("");
 
     // controller لإلغاء الطلب عند ضغط "إلغاء"
     const controller = new AbortController();
@@ -159,22 +175,36 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
         });
         return;
       }
-      // احفظ صورة البحث في sessionStorage لعرضها في صفحة النتائج (مثل SHEIN)
-      try {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          if (typeof reader.result === "string") {
-            sessionStorage.setItem("visualSearchImage", reader.result);
-            sessionStorage.setItem("visualSearchKeywords", data.keywords);
-          }
-        };
-        reader.readAsDataURL(file);
-      } catch { /* sessionStorage قد يكون ممتلئاً */ }
 
-      closeVisualOverlay();
-      setOpen(false);
-      onClose?.();
-      navigate(`/products?search=${encodeURIComponent(data.keywords)}&visual=1`);
+      // ✅ تم استخراج الكلمات — انتقل لمرحلة عرض النتائج داخل overlay
+      setVisualKeywords(data.keywords);
+      setVisualLoading(false);          // يخفي الماسح ويُظهر الدرج
+      setVisualResultsLoading(true);    // يعرض skeleton داخل الدرج
+
+      // جلب المنتجات (يستخدم نفس الـ controller للإلغاء)
+      try {
+        const productsRes = await fetch(
+          `/api/products?search=${encodeURIComponent(data.keywords)}&limit=40`,
+          { credentials: "include", signal: controller.signal },
+        );
+        const productsData = await productsRes.json();
+        const list: VisualResultProduct[] = (Array.isArray(productsData) ? productsData : productsData?.products || [])
+          .map((p: any) => ({
+            id: p.id,
+            name: p.name || p.nameAr || "منتج",
+            image: p.image || p.imageUrl || (Array.isArray(p.images) ? p.images[0] : null),
+            price: p.price ?? p.unitPrice ?? null,
+            originalPrice: p.originalPrice ?? null,
+            discount: p.discount ?? null,
+          }));
+        setVisualResults(list);
+      } catch (err: any) {
+        if (err?.name !== "AbortError") {
+          setVisualResults([]);
+        }
+      } finally {
+        setVisualResultsLoading(false);
+      }
     } catch (err: any) {
       // تجاهل خطأ الإلغاء (المستخدم ضغط إلغاء بنفسه)
       if (err?.name === "AbortError") return;
@@ -247,11 +277,15 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
         data-testid="input-camera-file"
       />
 
-      {/* شاشة التحميل بنمط SHEIN — تظهر فوق كل شيء أثناء التحليل */}
+      {/* شاشة البحث بالكاميرا بنمط SHEIN — ماسح أثناء التحليل + درج نتائج بعده */}
       <VisualSearchOverlay
         imageUrl={visualPreviewUrl}
-        isLoading={visualLoading}
+        isAnalyzing={visualLoading}
+        isLoadingResults={visualResultsLoading}
+        results={visualResults}
+        keywords={visualKeywords}
         onCancel={handleCancelVisualSearch}
+        onSelectProduct={handleSelectVisualProduct}
       />
 
       {open && (
