@@ -3,7 +3,7 @@ import {
   Settings, Printer, Wallet, LayoutDashboard, UserCog, MessageSquareWarning,
   Users, Receipt, Handshake, SplitSquareVertical, TrendingUp, ShieldAlert,
   Star, Layers, BadgeCheck, ClipboardCheck, ChevronDown, ChevronUp,
-  FileText, HardDrive, PrinterCheck, Megaphone
+  FileText, HardDrive, PrinterCheck, Megaphone, Trophy
 } from "lucide-react";
 import { useState } from "react";
 
@@ -77,6 +77,7 @@ const navGroups: AdminNavGroup[] = [
       { id: "financial", label: "المركز المالي", icon: <Wallet className="h-6 w-6" />, color: "from-red-400 to-red-600" },
       { id: "installments", label: "التقسيط", icon: <SplitSquareVertical className="h-6 w-6" />, color: "from-amber-400 to-orange-600" },
       { id: "pricing", label: "التسعير الذكي", icon: <TrendingUp className="h-6 w-6" />, color: "from-emerald-400 to-teal-600" },
+      { id: "credit-tiers", label: "الائتمان والفئات", icon: <Trophy className="h-6 w-6" />, color: "from-amber-400 to-orange-600", badge: "جديد" },
       { id: "invoice-settings", label: "إعدادات الفاتورة", icon: <Receipt className="h-6 w-6" />, color: "from-teal-400 to-teal-600" },
     ],
   },

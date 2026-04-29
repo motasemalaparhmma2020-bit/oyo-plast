@@ -1168,3 +1168,107 @@ export const digitalContracts = pgTable("digital_contracts", {
 
 export type DigitalContract = typeof digitalContracts.$inferSelect;
 export const insertDigitalContractSchema = createInsertSchema(digitalContracts).omit({ id: true, createdAt: true, acceptedAt: true, adminSignedAt: true });
+
+// ════════════════════════════════════════════════════════════════════════════════
+// ═══ نظام الائتمان والفئات (المرحلة 1) ════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════════
+
+// ── إعدادات الفئات الأربع — يتحكم بها الأدمن يدوياً من لوحة التحكم ──────────
+export const customerCreditTiers = pgTable("customer_credit_tiers", {
+  id: serial("id").primaryKey(),
+  tierKey: text("tier_key").notNull().unique(),     // vip | silver | bronze | blocked
+  tierNameAr: text("tier_name_ar").notNull(),       // VIP | فضي | برونزي | محظور
+  tierIcon: text("tier_icon").default(""),          // emoji أو رمز
+  tierColor: text("tier_color").default("#6b7280"), // لون البادج في الواجهة
+  // ── الحدود المالية ──
+  creditLimit: numeric("credit_limit").notNull().default("0"),                  // السقف الائتماني (ر.ي)
+  paymentTermDays: integer("payment_term_days").notNull().default(0),           // مدة السداد بالأيام
+  downPaymentPercent: numeric("down_payment_percent").notNull().default("100"), // % الدفعة المقدمة
+  cashDiscountPercent: numeric("cash_discount_percent").notNull().default("0"), // % خصم الكاش
+  // ── شروط الترقية والتخفيض ──
+  minOrdersToReach: integer("min_orders_to_reach").default(0),     // أقل عدد طلبات للوصول
+  minMonthsToReach: integer("min_months_to_reach").default(0),     // أقل عدد أشهر للوصول
+  maxLateDaysAllowed: integer("max_late_days_allowed").default(0), // أقصى تأخير قبل التخفيض
+  // ── العرض ──
+  description: text("description"),       // وصف الفئة
+  benefits: text("benefits").array(),     // قائمة المزايا (للعرض في "حسابي")
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ── سجل ائتمان كل عميل ───────────────────────────────────────────────────────
+export const customerCredit = pgTable("customer_credit", {
+  id: serial("id").primaryKey(),
+  customerId: varchar("customer_id").references(() => users.id).notNull().unique(),
+  tier: text("tier").notNull().default("bronze"), // vip | silver | bronze | blocked
+  // ── التجاوز اليدوي (تتحكم به أنت من الأدمن) ──
+  manualOverride: boolean("manual_override").default(false).notNull(),
+  creditLimitOverride: numeric("credit_limit_override"),     // سقف خاص يتجاوز الفئة
+  discountOverride: numeric("discount_override"),            // خصم خاص دائم %
+  paymentTermOverride: integer("payment_term_override"),     // مدة سداد خاصة بالأيام
+  downPaymentOverride: numeric("down_payment_override"),     // دفعة مقدمة خاصة %
+  // ── الرصيد المالي ──
+  openingBalance: numeric("opening_balance").default("0").notNull(), // الرصيد الافتتاحي (ديون من النظام القديم)
+  currentBalance: numeric("current_balance").default("0").notNull(), // إجمالي الديون الحالية
+  // ── إحصائيات السلوك ──
+  totalOrders: integer("total_orders").default(0).notNull(),
+  totalPaidAmount: numeric("total_paid_amount").default("0").notNull(),
+  onTimePayments: integer("on_time_payments").default(0).notNull(),
+  latePayments: integer("late_payments").default(0).notNull(),
+  maxLateDays: integer("max_late_days").default(0).notNull(),
+  lastOrderAt: timestamp("last_order_at"),
+  lastPaymentAt: timestamp("last_payment_at"),
+  // ── التجميد ──
+  isFrozen: boolean("is_frozen").default(false).notNull(),
+  frozenUntil: timestamp("frozen_until"),
+  frozenReason: text("frozen_reason"),
+  // ── ملاحظات الأدمن ──
+  adminNotes: text("admin_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ── قواعد التسعير الخاصة لكل منتج (اختيارية — تتجاوز الافتراضي) ─────────────
+export const productPricingRules = pgTable("product_pricing_rules", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").references(() => products.id).notNull().unique(),
+  // ── حماية الربح ──
+  minProfitAmount: numeric("min_profit_amount"),       // الحد الأدنى للربح بالريال
+  maxDiscountPercent: numeric("max_discount_percent"), // أقصى خصم مسموح %
+  // ── ضوابط الأجل ──
+  creditEligible: boolean("credit_eligible").default(true).notNull(), // هل متاح أجل؟
+  allowedTiers: text("allowed_tiers").array(),         // ['vip','silver'] - الفئات المسموح لها بالأجل
+  // ── ملاحظة للزبون ──
+  noteForCustomer: text("note_for_customer"),          // مثلاً "سعر ثابت — كاش فقط"
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ── سجل تغيير فئة العميل (للتدقيق والتاريخ) ──────────────────────────────────
+export const customerTierHistory = pgTable("customer_tier_history", {
+  id: serial("id").primaryKey(),
+  customerId: varchar("customer_id").references(() => users.id).notNull(),
+  fromTier: text("from_tier"),
+  toTier: text("to_tier").notNull(),
+  reason: text("reason"),                // automatic | manual_admin | promotion | downgrade | freeze | unfreeze
+  changedBy: text("changed_by"),         // admin user id أو 'system'
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ── Insert schemas + Types ──
+export const insertCustomerCreditTierSchema = createInsertSchema(customerCreditTiers).omit({ id: true, updatedAt: true });
+export type InsertCustomerCreditTier = z.infer<typeof insertCustomerCreditTierSchema>;
+export type CustomerCreditTier = typeof customerCreditTiers.$inferSelect;
+
+export const insertCustomerCreditSchema = createInsertSchema(customerCredit).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertCustomerCredit = z.infer<typeof insertCustomerCreditSchema>;
+export type CustomerCredit = typeof customerCredit.$inferSelect;
+
+export const insertProductPricingRuleSchema = createInsertSchema(productPricingRules).omit({ id: true, updatedAt: true });
+export type InsertProductPricingRule = z.infer<typeof insertProductPricingRuleSchema>;
+export type ProductPricingRule = typeof productPricingRules.$inferSelect;
+
+export const insertCustomerTierHistorySchema = createInsertSchema(customerTierHistory).omit({ id: true, createdAt: true });
+export type InsertCustomerTierHistory = z.infer<typeof insertCustomerTierHistorySchema>;
+export type CustomerTierHistory = typeof customerTierHistory.$inferSelect;

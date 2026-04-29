@@ -147,6 +147,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const { registerMessagingRoutes } = await import("./routes/messages-routes");
   registerMessagingRoutes(app, requireAdmin);
 
+  // ─── نظام الائتمان والفئات (المرحلة 1) ─────────────────────────
+  const { registerCreditRoutes } = await import("./routes/credit-routes");
+  registerCreditRoutes(app, requireAdmin);
+
   // ─── Google Search Console Verification ──────────────────────────
   app.get("/google2bec18c5e7a1da83.html", (_req, res) => {
     res.setHeader("Content-Type", "text/html");

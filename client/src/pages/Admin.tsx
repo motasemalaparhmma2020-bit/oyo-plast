@@ -18,6 +18,7 @@ import AdminAISales from "@/components/AdminAISales";
 import AdminSectionSettings from "@/components/AdminSectionSettings";
 import AdminPDPLayout from "@/components/AdminPDPLayout";
 import { AdminSubcategories } from "@/components/AdminSubcategories";
+import AdminCreditTiers from "@/components/AdminCreditTiers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8110,6 +8111,11 @@ export default function Admin() {
           {/* ─── AI Sales Agent Tab ─────────────────────────────────────── */}
           <TabsContent value="ai-sales">
             <AdminAISales adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── نظام الائتمان والفئات (المرحلة 1) ─────────────────────── */}
+          <TabsContent value="credit-tiers">
+            <AdminCreditTiers adminToken={adminToken} />
           </TabsContent>
 
         </Tabs>
