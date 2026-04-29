@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Save, Pencil, Settings2, Trophy, Power } from "lucide-react";
+import { Loader2, Save, Pencil, Settings2, Trophy, Power, RefreshCw, AlertCircle } from "lucide-react";
 
 interface Tier {
   id: number;
@@ -56,17 +56,23 @@ export default function AdminCreditTiers({ adminToken }: { adminToken: string | 
   const [settings, setSettings] = useState<CreditSettings | null>(null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
-  // ── جلب الفئات ──
+  // ── جلب الفئات (بدون cache لتجنّب الحالات القديمة) ──
   const tiersQuery = useQuery<Tier[]>({
     queryKey: ["/api/admin/credit/tiers"],
     queryFn: async () => {
       const r = await fetch("/api/admin/credit/tiers", {
         headers: { "x-admin-token": adminToken || "" },
+        cache: "no-store",
       });
-      if (!r.ok) throw new Error("فشل تحميل الفئات");
+      if (!r.ok) {
+        const text = await r.text().catch(() => "");
+        throw new Error(`HTTP ${r.status}: ${text || "فشل تحميل الفئات"}`);
+      }
       return r.json();
     },
     enabled: !!adminToken,
+    staleTime: 0,
+    retry: 2,
   });
 
   // ── جلب الإعدادات ──
@@ -75,11 +81,17 @@ export default function AdminCreditTiers({ adminToken }: { adminToken: string | 
     queryFn: async () => {
       const r = await fetch("/api/admin/credit/settings", {
         headers: { "x-admin-token": adminToken || "" },
+        cache: "no-store",
       });
-      if (!r.ok) throw new Error("فشل تحميل الإعدادات");
+      if (!r.ok) {
+        const text = await r.text().catch(() => "");
+        throw new Error(`HTTP ${r.status}: ${text || "فشل تحميل الإعدادات"}`);
+      }
       return r.json();
     },
     enabled: !!adminToken,
+    staleTime: 0,
+    retry: 2,
   });
 
   useEffect(() => {
@@ -158,11 +170,81 @@ export default function AdminCreditTiers({ adminToken }: { adminToken: string | 
     );
   }
 
+  // عرض الأخطاء بوضوح
+  const tiersError = tiersQuery.error as Error | null;
+  const settingsError = settingsQuery.error as Error | null;
+  const hasError = !!tiersError || !!settingsError;
+
   const tiers = tiersQuery.data || [];
   const isSystemOn = settings?.credit_system_enabled === "true";
 
   return (
     <div className="space-y-6" dir="rtl" data-testid="admin-credit-tiers">
+      {/* رأس الصفحة مع زر التحديث */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Trophy className="h-6 w-6 text-amber-500" />
+            نظام الائتمان والفئات
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            إدارة فئات العملاء والإعدادات المالية العامة
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            qc.invalidateQueries({ queryKey: ["/api/admin/credit/tiers"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/credit/settings"] });
+            tiersQuery.refetch();
+            settingsQuery.refetch();
+          }}
+          data-testid="button-refresh"
+        >
+          <RefreshCw className="h-4 w-4 ms-2" />
+          تحديث
+        </Button>
+      </div>
+
+      {/* تنبيه خطأ إن وجد */}
+      {hasError && (
+        <Card className="border-2 border-red-300 bg-red-50 dark:bg-red-950/30">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-bold text-red-800 dark:text-red-300 mb-2">
+                  ⚠️ تعذّر تحميل البيانات
+                </h3>
+                {tiersError && (
+                  <p className="text-sm text-red-700 dark:text-red-400 mb-1">
+                    <strong>الفئات:</strong> {tiersError.message}
+                  </p>
+                )}
+                {settingsError && (
+                  <p className="text-sm text-red-700 dark:text-red-400">
+                    <strong>الإعدادات:</strong> {settingsError.message}
+                  </p>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => {
+                    tiersQuery.refetch();
+                    settingsQuery.refetch();
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4 ms-2" />
+                  إعادة المحاولة
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ═══════════════════════════════════════════════════════════════ */}
       {/* الإعدادات العامة                                                */}
       {/* ═══════════════════════════════════════════════════════════════ */}
