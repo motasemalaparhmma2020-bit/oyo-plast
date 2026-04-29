@@ -42,12 +42,15 @@ import { useLogoSettings } from "@/hooks/use-logo-settings";
 import { useCategories } from "@/hooks/use-products";
 import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
 import { NotificationBell } from "@/components/NotificationBell";
+import { VisualSearchOverlay } from "@/components/VisualSearchOverlay";
 
 // ─── Search Bar Component ────────────────────────────────────────
 function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: () => void; glassy?: boolean }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [visualLoading, setVisualLoading] = useState(false);
+  const [visualPreviewUrl, setVisualPreviewUrl] = useState<string | null>(null);
+  const visualAbortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -90,6 +93,28 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
     cameraInputRef.current?.click();
   };
 
+  // إغلاق overlay وتنظيف الموارد
+  const closeVisualOverlay = () => {
+    if (visualPreviewUrl) URL.revokeObjectURL(visualPreviewUrl);
+    setVisualPreviewUrl(null);
+    setVisualLoading(false);
+  };
+
+  // تنظيف URL.createObjectURL عند unmount لمنع تسرب الذاكرة
+  useEffect(() => {
+    return () => {
+      if (visualPreviewUrl) URL.revokeObjectURL(visualPreviewUrl);
+      visualAbortRef.current?.abort();
+    };
+  }, [visualPreviewUrl]);
+
+  // إلغاء البحث (يقطع الطلب الحالي ويغلق overlay)
+  const handleCancelVisualSearch = () => {
+    visualAbortRef.current?.abort();
+    visualAbortRef.current = null;
+    closeVisualOverlay();
+  };
+
   const handleImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -104,11 +129,15 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
       return;
     }
 
+    // اعرض overlay شاشة كاملة بنمط SHEIN
+    const previewUrl = URL.createObjectURL(file);
+    setVisualPreviewUrl(previewUrl);
     setVisualLoading(true);
-    toast({
-      title: "🔍 جاري تحليل الصورة...",
-      description: "الذكاء الاصطناعي يبحث عن منتج مماثل، لحظة من فضلك",
-    });
+
+    // controller لإلغاء الطلب عند ضغط "إلغاء"
+    const controller = new AbortController();
+    visualAbortRef.current = controller;
+
     try {
       const formData = new FormData();
       formData.append("image", file);
@@ -116,33 +145,47 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
         method: "POST",
         body: formData,
         credentials: "include",
+        signal: controller.signal,
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data?.message || "فشل تحليل الصورة");
       }
       if (!data.recognized || !data.keywords) {
+        closeVisualOverlay();
         toast({
           title: "لم نتعرّف على المنتج",
           description: data?.message || "جرّب صورة أوضح أو اكتب اسم المنتج يدوياً",
         });
         return;
       }
-      toast({
-        title: "🔍 تم التعرّف",
-        description: `نبحث عن: ${data.keywords}`,
-      });
+      // احفظ صورة البحث في sessionStorage لعرضها في صفحة النتائج (مثل SHEIN)
+      try {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === "string") {
+            sessionStorage.setItem("visualSearchImage", reader.result);
+            sessionStorage.setItem("visualSearchKeywords", data.keywords);
+          }
+        };
+        reader.readAsDataURL(file);
+      } catch { /* sessionStorage قد يكون ممتلئاً */ }
+
+      closeVisualOverlay();
       setOpen(false);
       onClose?.();
-      navigate(`/products?search=${encodeURIComponent(data.keywords)}`);
+      navigate(`/products?search=${encodeURIComponent(data.keywords)}&visual=1`);
     } catch (err: any) {
+      // تجاهل خطأ الإلغاء (المستخدم ضغط إلغاء بنفسه)
+      if (err?.name === "AbortError") return;
+      closeVisualOverlay();
       toast({
         title: "تعذّر البحث بالصورة",
         description: err?.message || "حاول مرة أخرى",
         variant: "destructive",
       });
     } finally {
-      setVisualLoading(false);
+      visualAbortRef.current = null;
     }
   };
 
@@ -202,6 +245,13 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
         onChange={handleImageSelected}
         className="hidden"
         data-testid="input-camera-file"
+      />
+
+      {/* شاشة التحميل بنمط SHEIN — تظهر فوق كل شيء أثناء التحليل */}
+      <VisualSearchOverlay
+        imageUrl={visualPreviewUrl}
+        isLoading={visualLoading}
+        onCancel={handleCancelVisualSearch}
       />
 
       {open && (

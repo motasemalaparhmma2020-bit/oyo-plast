@@ -1,7 +1,7 @@
 import { useCategoriesAndProducts, useCategories } from "@/hooks/use-products";
 import { ProductCard } from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
-import { Search, ShoppingBag, Package, Truck, Zap, ArrowRight } from "lucide-react";
+import { Search, ShoppingBag, Package, Truck, Zap, ArrowRight, X, Camera } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { useSEO } from "@/hooks/use-seo";
@@ -45,6 +45,33 @@ export default function Products() {
   const [selectedCategory, setSelectedCategory] = useState<string>(urlCategory);
   const [search, setSearch] = useState(urlSearch);
   const [searchTerm, setSearchTerm] = useState(urlSearch);
+
+  // ── شريط البحث المرئي (visual=1): يعرض الصورة المُستخدمة في البحث ──
+  const isVisualSearch = searchParams.get("visual") === "1";
+  const [visualImage, setVisualImage] = useState<string | null>(null);
+  useEffect(() => {
+    if (isVisualSearch) {
+      const img = sessionStorage.getItem("visualSearchImage");
+      if (img) setVisualImage(img);
+    } else {
+      setVisualImage(null);
+    }
+  }, [isVisualSearch, urlSearch]);
+
+  // عند مغادرة الصفحة كلياً (unmount)، نُنظّف sessionStorage لتجنّب امتلاء الحصة
+  useEffect(() => {
+    return () => {
+      sessionStorage.removeItem("visualSearchImage");
+      sessionStorage.removeItem("visualSearchKeywords");
+    };
+  }, []);
+
+  const closeVisualBanner = () => {
+    sessionStorage.removeItem("visualSearchImage");
+    sessionStorage.removeItem("visualSearchKeywords");
+    setVisualImage(null);
+    navigate("/products");
+  };
 
   useEffect(() => {
     setSelectedCategory(urlCategory);
@@ -96,6 +123,44 @@ export default function Products() {
 
   return (
     <div className="pb-20 bg-white dark:bg-background min-h-screen">
+      {/* ── شريط البحث المرئي بنمط SHEIN (الصورة الأصلية فوق النتائج) ── */}
+      {visualImage && (
+        <div
+          className="sticky top-0 z-50 bg-gradient-to-l from-orange-50 to-pink-50 dark:from-orange-900/20 dark:to-pink-900/20 border-b border-orange-200 dark:border-orange-800 px-3 py-2"
+          data-testid="visual-search-banner"
+        >
+          <div className="flex items-center gap-3 max-w-3xl mx-auto">
+            <div className="relative flex-shrink-0">
+              <img
+                src={visualImage}
+                alt="صورة البحث"
+                className="w-14 h-14 object-cover rounded-lg border-2 border-white dark:border-gray-700 shadow-md"
+                data-testid="img-visual-search-thumbnail"
+              />
+              <div className="absolute -bottom-1 -right-1 bg-orange-500 rounded-full p-1 shadow-md">
+                <Camera className="h-3 w-3 text-white" />
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-orange-700 dark:text-orange-300 font-medium">
+                نتائج البحث بالصورة
+              </p>
+              <p className="text-sm text-gray-800 dark:text-gray-200 truncate font-semibold">
+                {urlSearch}
+              </p>
+            </div>
+            <button
+              onClick={closeVisualBanner}
+              aria-label="إغلاق البحث بالصورة"
+              className="flex-shrink-0 w-8 h-8 rounded-full bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center transition-colors shadow-sm"
+              data-testid="button-close-visual-banner"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Header البنر الخاص (شحن مجاني / عروض سريعة) ─────────── */}
       {isBannerFilter ? (
         <header className="sticky top-0 z-40 bg-white dark:bg-card border-b">
