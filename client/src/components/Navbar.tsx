@@ -194,12 +194,11 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
           )}
         </button>
       </form>
-      {/* مدخل الصورة المخفي — يفتح الكاميرا الخلفية على الجوال */}
+      {/* مدخل الصورة المخفي — على الجوال يعرض خياري "التقاط" أو "من الألبوم" تلقائياً */}
       <input
         ref={cameraInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         onChange={handleImageSelected}
         className="hidden"
         data-testid="input-camera-file"
