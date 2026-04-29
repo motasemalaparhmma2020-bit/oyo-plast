@@ -5,7 +5,7 @@ import {
   Star, Layers, BadgeCheck, ClipboardCheck, ChevronDown, ChevronUp,
   FileText, HardDrive, PrinterCheck, Megaphone, Trophy
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface AdminNavItem {
   id: string;
@@ -143,16 +143,38 @@ interface AdminNavProps {
 }
 
 export function AdminNav({ activeSection, onSelectSection }: AdminNavProps) {
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // افتراضياً: كل المجموعات مغلقة، عدا المجموعة التي تحوي القسم النشط
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    for (const g of navGroups) {
+      if (g.items.some(i => i.id === activeSection)) {
+        init[g.groupLabel] = true;
+      }
+    }
+    return init;
+  });
+
+  // عند تغيير القسم النشط (مثلاً من رابط خارجي) افتح مجموعته تلقائياً
+  useEffect(() => {
+    setOpenGroups(prev => {
+      const next = { ...prev };
+      for (const g of navGroups) {
+        if (g.items.some(i => i.id === activeSection)) {
+          next[g.groupLabel] = true;
+        }
+      }
+      return next;
+    });
+  }, [activeSection]);
 
   const toggleGroup = (label: string) => {
-    setCollapsed(prev => ({ ...prev, [label]: !prev[label] }));
+    setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
   };
 
   return (
     <div className="space-y-4 mb-8" dir="rtl">
       {navGroups.map((group) => {
-        const isOpen = !collapsed[group.groupLabel];
+        const isOpen = !!openGroups[group.groupLabel];
         const hasActive = group.items.some(i => i.id === activeSection);
         return (
           <div
