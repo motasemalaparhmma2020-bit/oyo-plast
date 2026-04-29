@@ -38,13 +38,47 @@ export function registerCreditRoutes(
   // إدارة الفئات (لوحة الأدمن)
   // ════════════════════════════════════════════════════════════════════════════
 
-  // قائمة جميع الفئات
+  // قائمة جميع الفئات (مع زرع الفئات الأربع تلقائياً إذا كان الجدول فارغاً)
   app.get("/api/admin/credit/tiers", requireAdmin, async (req, res) => {
     try {
-      const r = await pool.query(
+      let r = await pool.query(
         `SELECT * FROM customer_credit_tiers ORDER BY sort_order ASC, id ASC`,
       );
-      console.log(`[CREDIT] GET /tiers → returning ${r.rows.length} tiers (UA: ${req.headers['user-agent']?.substring(0, 50)})`);
+
+      // ── زرع الفئات الافتراضية إذا الجدول فارغ ──
+      if (r.rows.length === 0) {
+        console.log("[CREDIT] Seeding 4 default tiers (table was empty)");
+        await pool.query(`
+          INSERT INTO customer_credit_tiers
+            (tier_key, tier_name_ar, tier_icon, tier_color, credit_limit, payment_term_days,
+             down_payment_percent, cash_discount_percent, min_orders_to_reach, min_months_to_reach,
+             max_late_days_allowed, description, benefits, is_active, sort_order)
+          VALUES
+            ('vip', 'VIP', '🥇', '#fbbf24', 500000, 30, 0, 5, 20, 6, 5,
+             'فئة العملاء المميزين - أعلى المزايا والثقة',
+             ARRAY['سقف ائتماني عالي', 'خصم 5% على الكاش', 'مهلة سداد 30 يوم', 'أولوية في التوصيل', 'دعم خاص'],
+             true, 1),
+            ('silver', 'فضي', '🥈', '#9ca3af', 200000, 14, 0, 3, 10, 3, 7,
+             'عملاء موثوقون مع تاريخ دفع جيد',
+             ARRAY['سقف 200 ألف', 'خصم 3% كاش', 'مهلة 14 يوم'],
+             true, 2),
+            ('bronze', 'برونزي', '🥉', '#a16207', 50000, 7, 0, 0, 0, 0, 14,
+             'الفئة الافتراضية لجميع العملاء الجدد',
+             ARRAY['سقف 50 ألف', 'مهلة 7 أيام', 'بدون خصم كاش'],
+             true, 3),
+            ('blocked', 'محظور', '⛔', '#dc2626', 0, 0, 0, 0, 0, 0, 0,
+             'العميل محظور من الشراء بالأجل',
+             ARRAY['كاش فقط', 'ممنوع من الائتمان'],
+             true, 4)
+          ON CONFLICT (tier_key) DO NOTHING
+        `);
+        r = await pool.query(
+          `SELECT * FROM customer_credit_tiers ORDER BY sort_order ASC, id ASC`,
+        );
+        console.log(`[CREDIT] Seeded successfully — ${r.rows.length} tiers now exist`);
+      }
+
+      console.log(`[CREDIT] GET /tiers → returning ${r.rows.length} tiers`);
       res.json(r.rows);
     } catch (e: any) {
       console.error("[CREDIT] GET /tiers error:", e);
