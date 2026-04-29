@@ -16,6 +16,7 @@ OYO PLAST is a comprehensive e-commerce platform for plastic printing and suppli
 I want iterative development. Ask before making major changes. I prefer detailed explanations. Do not make changes to the folder `Z`. Do not make changes to the file `Y`.
 
 ## Recent Changes (April 2026 — pre-launch hardening)
+- **Visual Search by Camera** (April 29, 2026). New endpoint `POST /api/visual-search` in `server/routes.ts` accepts an image upload, compresses it via `sharp` (800px max, JPEG q80), then sends it to Gemini Vision (`gemini-2.5-flash` with fallback to 2.0/1.5-flash) with an Arabic prompt tuned for packaging products. Returns `{ keywords, recognized }` where keywords are 2-4 Arabic search terms or `recognized: false` if the image isn't a packaging product. Frontend: camera button (📷) added inside `SearchBar` in `client/src/components/Navbar.tsx` next to the search input. Hidden `<input type="file" accept="image/*" capture="environment">` triggers the rear camera on mobile. Loading state with spinner during Gemini call. On success, navigates to `/products?search=<keywords>` reusing the existing search system. Cost: ~$0.0002/image via Gemini.
 - **OTP channel default → WhatsApp** (`client/src/pages/Auth.tsx`). Twilio US trial number cannot deliver SMS to Yemen carriers; UltraMSG WhatsApp is the only working path.
 - **Auto-fallback to WhatsApp on SMS failure** (`server/lib/otp-sender.ts`).
 - **Lightweight payload** for `/api/printing-products` (matches existing `/api/products` pattern). Solves the slow/empty printing section.

@@ -22,7 +22,10 @@ import {
   Star,
   LayoutDashboard,
   Truck,
+  Camera,
+  Loader2,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,9 +47,12 @@ import { NotificationBell } from "@/components/NotificationBell";
 function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: () => void; glassy?: boolean }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [visualLoading, setVisualLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [, navigate] = useLocation();
+  const { toast } = useToast();
 
   const { data: results = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/products", "search", query],
@@ -79,6 +85,67 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
     setQuery("");
   };
 
+  // ─── البحث بالكاميرا (Visual Search) ─────────────────────────────
+  const handleCameraClick = () => {
+    cameraInputRef.current?.click();
+  };
+
+  const handleImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = ""; // إعادة تعيين للسماح برفع نفس الصورة لاحقاً
+
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "ملف غير صالح", description: "يرجى اختيار صورة فقط", variant: "destructive" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "الصورة كبيرة", description: "الحد الأقصى 5 ميجابايت", variant: "destructive" });
+      return;
+    }
+
+    setVisualLoading(true);
+    toast({
+      title: "🔍 جاري تحليل الصورة...",
+      description: "الذكاء الاصطناعي يبحث عن منتج مماثل، لحظة من فضلك",
+    });
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const res = await fetch("/api/visual-search", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.message || "فشل تحليل الصورة");
+      }
+      if (!data.recognized || !data.keywords) {
+        toast({
+          title: "لم نتعرّف على المنتج",
+          description: data?.message || "جرّب صورة أوضح أو اكتب اسم المنتج يدوياً",
+        });
+        return;
+      }
+      toast({
+        title: "🔍 تم التعرّف",
+        description: `نبحث عن: ${data.keywords}`,
+      });
+      setOpen(false);
+      onClose?.();
+      navigate(`/products?search=${encodeURIComponent(data.keywords)}`);
+    } catch (err: any) {
+      toast({
+        title: "تعذّر البحث بالصورة",
+        description: err?.message || "حاول مرة أخرى",
+        variant: "destructive",
+      });
+    } finally {
+      setVisualLoading(false);
+    }
+  };
+
   const h = compact ? 36 : 40;
   return (
     <div ref={containerRef} className="relative w-full" data-testid="search-container">
@@ -105,7 +172,38 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
             <X className="h-3.5 w-3.5" />
           </button>
         )}
+        {/* زر البحث بالكاميرا */}
+        <button
+          type="button"
+          onClick={handleCameraClick}
+          disabled={visualLoading}
+          aria-label="البحث بالكاميرا"
+          title="البحث بالكاميرا — صوّر منتجاً للعثور على مثله"
+          className={`flex-shrink-0 flex items-center justify-center transition-colors ${
+            glassy
+              ? "text-white/90 hover:text-white"
+              : "text-[#1a3a4a] hover:text-[#0f2b3a]"
+          } ${visualLoading ? "opacity-50" : ""}`}
+          style={{ width: h, height: h }}
+          data-testid="button-visual-search"
+        >
+          {visualLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Camera className="h-4 w-4" />
+          )}
+        </button>
       </form>
+      {/* مدخل الصورة المخفي — يفتح الكاميرا الخلفية على الجوال */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleImageSelected}
+        className="hidden"
+        data-testid="input-camera-file"
+      />
 
       {open && (
         <div className="absolute top-full right-0 left-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-100 z-[200] overflow-hidden">

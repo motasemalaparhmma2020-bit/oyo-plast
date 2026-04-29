@@ -388,6 +388,119 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Visual Search (Camera) — Gemini Vision ───────────────────────
+  // العميل يرفع صورة منتج، Gemini يحلّلها ويُخرج كلمات بحث عربية
+  // حماية معدّل بسيطة بالذاكرة: 6 طلبات / IP / دقيقة (لمنع استنزاف Gemini)
+  const visualSearchLimits = new Map<string, { count: number; reset: number }>();
+  const VS_WINDOW_MS = 60_000;
+  const VS_MAX = 6;
+  app.post("/api/visual-search", upload.single("image"), async (req, res) => {
+    // فحص معدّل بسيط بالـ IP
+    const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
+            || req.socket.remoteAddress
+            || "unknown";
+    const now = Date.now();
+    const rec = visualSearchLimits.get(ip);
+    if (rec && now < rec.reset) {
+      if (rec.count >= VS_MAX) {
+        return res.status(429).json({
+          message: "حاولت كثيراً. يرجى الانتظار دقيقة قبل البحث بصورة جديدة",
+        });
+      }
+      rec.count++;
+    } else {
+      visualSearchLimits.set(ip, { count: 1, reset: now + VS_WINDOW_MS });
+    }
+    // تنظيف دوري للسجلات المنتهية (كل 100 طلب)
+    if (visualSearchLimits.size > 200) {
+      for (const [k, v] of visualSearchLimits.entries()) {
+        if (v.reset < now) visualSearchLimits.delete(k);
+      }
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "لم يتم رفع صورة" });
+    }
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({ message: "خدمة البحث بالكاميرا غير متاحة حالياً" });
+    }
+    try {
+      const { GoogleGenAI } = await import("@google/genai");
+      const ai = new GoogleGenAI({ apiKey });
+
+      // ضغط الصورة قبل الإرسال (توفير في الباندويث)
+      const sharp = (await import("sharp")).default;
+      const compressed = await sharp(req.file.buffer)
+        .resize(800, 800, { fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+      const base64 = compressed.toString("base64");
+
+      const prompt = `أنت مساعد بحث في متجر "أويو بلاست" المتخصص بمواد التغليف والطباعة في اليمن (أكياس بلاستيك، ورقية، شنط، تغليف، علاقات، أقمشة، أدوات طباعة).
+
+حلّل هذه الصورة وأخرج كلمات بحث عربية قصيرة تصف المنتج الظاهر، تشمل:
+- نوع المنتج (مثل: كيس، شنطة، علاقة، رول)
+- المادة إن أمكن (بلاستيك، ورق، قماش)
+- اللون الأبرز
+- أي خاصية مميزة (شفاف، مقاوم، كبير، صغير)
+
+قواعد صارمة:
+1. أرجع فقط ٢-٤ كلمات عربية مفصولة بمسافة (بدون شرح، بدون علامات ترقيم)
+2. لا تكتب جمل، فقط كلمات مفتاحية للبحث
+3. إذا لم تتعرّف على منتج تغليف/طباعة، أرجع كلمة واحدة "غير_معروف"
+
+مثال على الإخراج المطلوب: "كيس بلاستيك شفاف كبير"`;
+
+      let result: any;
+      const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest"];
+      let lastError: any = null;
+      for (const model of models) {
+        try {
+          result = await ai.models.generateContent({
+            model,
+            contents: [{
+              role: "user",
+              parts: [
+                { text: prompt },
+                { inlineData: { mimeType: "image/jpeg", data: base64 } },
+              ],
+            }],
+            config: { temperature: 0.2, maxOutputTokens: 50 },
+          });
+          break;
+        } catch (e: any) {
+          lastError = e;
+          console.warn(`[visual-search] فشل ${model}: ${String(e?.message || e).slice(0, 120)}`);
+        }
+      }
+      if (!result) throw lastError;
+
+      const raw = (result.text || "").trim();
+      const keywords = raw
+        .replace(/[`"'.,!؟?،:;()\[\]{}]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (!keywords || keywords.includes("غير_معروف") || keywords.includes("غير معروف")) {
+        return res.json({
+          keywords: "",
+          recognized: false,
+          message: "لم نتمكن من التعرّف على المنتج في الصورة",
+        });
+      }
+
+      console.log(`[visual-search] ✅ keywords: "${keywords}"`);
+      res.json({ keywords, recognized: true });
+    } catch (e: any) {
+      console.error("[visual-search] خطأ:", e?.message);
+      res.status(500).json({
+        message: "تعذّر تحليل الصورة، حاول مرة أخرى",
+        error: e?.message,
+      });
+    }
+  });
+
   // ─── Invoice Settings ─────────────────────────────────────────────
   app.get("/api/admin/invoice-settings", requireAdmin, async (_req, res) => {
     try {
