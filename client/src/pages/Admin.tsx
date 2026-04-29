@@ -19,6 +19,7 @@ import AdminSectionSettings from "@/components/AdminSectionSettings";
 import AdminPDPLayout from "@/components/AdminPDPLayout";
 import { AdminSubcategories } from "@/components/AdminSubcategories";
 import AdminCreditTiers from "@/components/AdminCreditTiers";
+import AdminCreditCustomers from "@/components/AdminCreditCustomers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8116,6 +8117,11 @@ export default function Admin() {
           {/* ─── نظام الائتمان والفئات (المرحلة 1) ─────────────────────── */}
           <TabsContent value="credit-tiers">
             <AdminCreditTiers adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── العملاء والائتمان (المرحلة 1) ──────────────────────────── */}
+          <TabsContent value="credit-customers">
+            <AdminCreditCustomers adminToken={adminToken} />
           </TabsContent>
 
         </Tabs>

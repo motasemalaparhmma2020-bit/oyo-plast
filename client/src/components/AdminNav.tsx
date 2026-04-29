@@ -78,6 +78,7 @@ const navGroups: AdminNavGroup[] = [
       { id: "installments", label: "التقسيط", icon: <SplitSquareVertical className="h-6 w-6" />, color: "from-amber-400 to-orange-600" },
       { id: "pricing", label: "التسعير الذكي", icon: <TrendingUp className="h-6 w-6" />, color: "from-emerald-400 to-teal-600" },
       { id: "credit-tiers", label: "الائتمان والفئات", icon: <Trophy className="h-6 w-6" />, color: "from-amber-400 to-orange-600", badge: "جديد" },
+      { id: "credit-customers", label: "العملاء والائتمان", icon: <Users className="h-6 w-6" />, color: "from-purple-400 to-purple-600", badge: "جديد" },
       { id: "invoice-settings", label: "إعدادات الفاتورة", icon: <Receipt className="h-6 w-6" />, color: "from-teal-400 to-teal-600" },
     ],
   },

@@ -78,7 +78,6 @@ export function registerCreditRoutes(
         console.log(`[CREDIT] Seeded successfully — ${r.rows.length} tiers now exist`);
       }
 
-      console.log(`[CREDIT] GET /tiers → returning ${r.rows.length} tiers`);
       res.json(r.rows);
     } catch (e: any) {
       console.error("[CREDIT] GET /tiers error:", e);
@@ -191,7 +190,11 @@ export function registerCreditRoutes(
   app.get("/api/admin/credit/customers", requireAdmin, async (req, res) => {
     try {
       const { tier, frozen, hasDebt, search, limit = "100" } = req.query as any;
-      const wheres: string[] = ["1=1"];
+      // قَصْر النتائج على العملاء فقط (لا مسوّقين ولا مسؤولين)
+      const wheres: string[] = [
+        "(u.account_type = 'customer' OR u.account_type IS NULL)",
+        "(u.role = 'customer' OR u.role IS NULL)",
+      ];
       const vals: any[] = [];
       let i = 1;
 
@@ -262,7 +265,9 @@ export function registerCreditRoutes(
          FROM users u
          LEFT JOIN customer_credit cc ON cc.customer_id = u.id
          LEFT JOIN customer_credit_tiers t ON t.tier_key = COALESCE(cc.tier, 'bronze')
-         WHERE u.id = $1`,
+         WHERE u.id = $1
+           AND (u.account_type = 'customer' OR u.account_type IS NULL)
+           AND (u.role = 'customer' OR u.role IS NULL)`,
         [userId],
       );
       if (r.rows.length === 0) return res.status(404).json({ message: "العميل غير موجود" });
