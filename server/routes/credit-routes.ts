@@ -27,7 +27,226 @@ const CREDIT_SETTING_KEYS = [
 // ──────────────────────────────────────────────────────────────────────────────
 function getUserIdFromReq(req: any): string | undefined {
   const user = (req as any).user;
-  return user?.claims?.sub ?? undefined;
+  return user?.claims?.sub ?? user?.id ?? undefined;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// واجهة معلومات الائتمان الفعّالة لعميل
+// ──────────────────────────────────────────────────────────────────────────────
+export interface CustomerCreditInfo {
+  userId: string;
+  tier: string;
+  tierNameAr: string;
+  tierIcon: string;
+  tierColor: string;
+  effectiveCreditLimit: number;
+  currentBalance: number;
+  availableCredit: number;
+  paymentTermDays: number;
+  downPaymentPercent: number;
+  cashDiscountPercent: number;
+  isFrozen: boolean;
+  frozenReason: string | null;
+  manualOverride: boolean;
+}
+
+// جلب معلومات الائتمان الفعّالة (مع تطبيق التجاوز اليدوي)
+export async function getEffectiveCreditInfo(userId: string): Promise<CustomerCreditInfo | null> {
+  const r = await pool.query(
+    `SELECT
+       cc.customer_id, cc.tier as cc_tier, cc.manual_override,
+       cc.credit_limit_override, cc.discount_override, cc.payment_term_override,
+       cc.down_payment_override, cc.current_balance, cc.is_frozen, cc.frozen_reason,
+       t.tier_key, t.tier_name_ar, t.tier_icon, t.tier_color,
+       t.credit_limit as tier_credit_limit,
+       t.payment_term_days as tier_payment_term_days,
+       t.down_payment_percent as tier_down_payment_percent,
+       t.cash_discount_percent as tier_cash_discount_percent
+     FROM customer_credit_tiers t
+     LEFT JOIN customer_credit cc ON cc.customer_id = $1 AND t.tier_key = COALESCE(cc.tier, 'bronze')
+     WHERE t.tier_key = COALESCE((SELECT tier FROM customer_credit WHERE customer_id = $1), 'bronze')
+     LIMIT 1`,
+    [userId],
+  );
+  if (r.rows.length === 0) return null;
+  const row = r.rows[0];
+  const manual = !!row.manual_override;
+  const limit = manual && row.credit_limit_override
+    ? Number(row.credit_limit_override)
+    : Number(row.tier_credit_limit || 0);
+  const discount = manual && row.discount_override !== null
+    ? Number(row.discount_override)
+    : Number(row.tier_cash_discount_percent || 0);
+  const term = manual && row.payment_term_override
+    ? Number(row.payment_term_override)
+    : Number(row.tier_payment_term_days || 0);
+  const down = manual && row.down_payment_override !== null
+    ? Number(row.down_payment_override)
+    : Number(row.tier_down_payment_percent || 0);
+  const balance = Number(row.current_balance || 0);
+  return {
+    userId,
+    tier: row.tier_key,
+    tierNameAr: row.tier_name_ar,
+    tierIcon: row.tier_icon,
+    tierColor: row.tier_color,
+    effectiveCreditLimit: limit,
+    currentBalance: balance,
+    availableCredit: Math.max(0, limit - balance),
+    paymentTermDays: term,
+    downPaymentPercent: down,
+    cashDiscountPercent: discount,
+    isFrozen: !!row.is_frozen,
+    frozenReason: row.frozen_reason,
+    manualOverride: manual,
+  };
+}
+
+// التحقق من إمكانية شراء بالأجل بمبلغ محدد
+export interface CreditPrecheckResult {
+  allowed: boolean;
+  reason?: string;
+  info?: CustomerCreditInfo;
+  requiredDownPayment?: number;
+  amountOnCredit?: number;
+  dueDate?: string;
+}
+
+// قائمة العملات المسموح بها للائتمان (السقف بالريال اليمني فقط حالياً)
+const CREDIT_SUPPORTED_CURRENCIES = ["YER", "ر.ي", undefined, null, ""];
+
+export async function precheckCreditPurchase(
+  userId: string,
+  amount: number,
+  currency?: string | null,
+): Promise<CreditPrecheckResult> {
+  // تحقق من صلاحية المبلغ
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { allowed: false, reason: "المبلغ غير صالح" };
+  }
+  // تحقق من العملة (الائتمان مدعوم بالريال اليمني فقط حالياً)
+  if (currency && !CREDIT_SUPPORTED_CURRENCIES.includes(currency)) {
+    return {
+      allowed: false,
+      reason: `الشراء بالأجل متاح بالريال اليمني فقط حالياً (طلبك بـ ${currency})`,
+    };
+  }
+  const info = await getEffectiveCreditInfo(userId);
+  if (!info) {
+    return { allowed: false, reason: "تعذّر تحميل معلومات الائتمان" };
+  }
+  if (info.tier === "blocked" || info.effectiveCreditLimit <= 0) {
+    return { allowed: false, reason: "حسابك غير مؤهّل للشراء بالأجل حالياً", info };
+  }
+  if (info.isFrozen) {
+    return {
+      allowed: false,
+      reason: info.frozenReason || "حسابك مجمَّد مؤقتاً، يرجى التواصل مع الإدارة",
+      info,
+    };
+  }
+  if (amount > info.availableCredit) {
+    return {
+      allowed: false,
+      reason: `المبلغ المطلوب (${amount.toLocaleString()}) يتجاوز الرصيد المتاح (${info.availableCredit.toLocaleString()})`,
+      info,
+    };
+  }
+  const requiredDownPayment = Math.ceil((amount * info.downPaymentPercent) / 100);
+  const amountOnCredit = amount - requiredDownPayment;
+  const due = new Date();
+  due.setDate(due.getDate() + info.paymentTermDays);
+  return {
+    allowed: true,
+    info,
+    requiredDownPayment,
+    amountOnCredit,
+    dueDate: due.toISOString().slice(0, 10),
+  };
+}
+
+/**
+ * حجز ذرّي للائتمان قبل إنشاء الطلب — يحلّ سباق الطلبات المتزامنة.
+ * يُجري UPDATE شرطي يعطل تجاوز السقف. يُرجع true عند النجاح.
+ */
+export async function reserveCreditAtomic(
+  userId: string,
+  amount: number,
+): Promise<{ ok: boolean; reason?: string }> {
+  // تأكد من وجود سجل ائتمان (insert with ON CONFLICT DO NOTHING)
+  await pool.query(
+    `INSERT INTO customer_credit (customer_id, current_balance, total_orders)
+     VALUES ($1, '0', 0)
+     ON CONFLICT (customer_id) DO NOTHING`,
+    [userId],
+  );
+
+  // UPDATE شرطي ذرّي:
+  // - غير مجمَّد
+  // - الرصيد الجديد ≤ السقف الفعلي (مع احترام تجاوز السقف اليدوي)
+  // - الفئة ليست "محظور"
+  const r = await pool.query(
+    `UPDATE customer_credit cc
+     SET current_balance = (COALESCE(cc.current_balance::numeric, 0) + $2)::text,
+         total_orders = COALESCE(cc.total_orders, 0) + 1,
+         last_order_at = NOW(),
+         updated_at = NOW()
+     FROM customer_credit_tiers t
+     WHERE cc.customer_id = $1
+       AND t.tier_key = COALESCE(cc.tier, 'bronze')
+       AND COALESCE(cc.is_frozen, false) = false
+       AND t.tier_key <> 'blocked'
+       AND (
+         COALESCE(cc.current_balance::numeric, 0) + $2
+       ) <= (
+         CASE
+           WHEN cc.manual_override = true AND cc.credit_limit_override IS NOT NULL
+             THEN cc.credit_limit_override::numeric
+           ELSE t.credit_limit::numeric
+         END
+       )
+     RETURNING cc.id`,
+    [userId, amount],
+  );
+  if (r.rowCount === 0) {
+    // إعادة الفحص لاكتشاف السبب الدقيق
+    const info = await getEffectiveCreditInfo(userId);
+    if (!info) return { ok: false, reason: "تعذّر تحميل معلومات الائتمان" };
+    if (info.isFrozen) return { ok: false, reason: info.frozenReason || "حسابك مجمَّد" };
+    if (info.tier === "blocked") return { ok: false, reason: "حسابك غير مؤهّل" };
+    return {
+      ok: false,
+      reason: `المبلغ يتجاوز الرصيد المتاح (المتبقي: ${info.availableCredit.toLocaleString()})`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * استرجاع رصيد محجوز (يُستدعى عند فشل إنشاء الطلب — Compensating action).
+ */
+export async function refundCreditReservation(
+  userId: string,
+  amount: number,
+): Promise<void> {
+  await pool.query(
+    `UPDATE customer_credit SET
+       current_balance = GREATEST(0, COALESCE(current_balance::numeric, 0) - $2)::text,
+       total_orders = GREATEST(0, COALESCE(total_orders, 0) - 1),
+       updated_at = NOW()
+     WHERE customer_id = $1`,
+    [userId, amount],
+  );
+}
+
+// شحن رصيد ائتمان (للتوافق مع نقاط الاستدعاء القديمة) — يستخدم الحجز الذرّي
+export async function chargeCustomerCredit(
+  userId: string,
+  amount: number,
+  _orderId: number,
+): Promise<void> {
+  const r = await reserveCreditAtomic(userId, amount);
+  if (!r.ok) throw new Error(r.reason || "تعذّر شحن الرصيد");
 }
 
 export function registerCreditRoutes(
@@ -566,6 +785,26 @@ export function registerCreditRoutes(
       });
     } catch (e: any) {
       res.status(500).json({ message: e.message });
+    }
+  });
+
+  // ── فحص قبل الشراء بالأجل (precheck) ──
+  // POST /api/credit/precheck { amount: number, currency?: string }
+  app.post("/api/credit/precheck", async (req, res) => {
+    try {
+      const userId = getUserIdFromReq(req);
+      if (!userId) {
+        return res.status(401).json({ allowed: false, reason: "يجب تسجيل الدخول للشراء بالأجل" });
+      }
+      const amount = Number(req.body?.amount);
+      const currency = (req.body?.currency || "YER") as string;
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ allowed: false, reason: "المبلغ غير صالح" });
+      }
+      const result = await precheckCreditPurchase(userId, amount, currency);
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ allowed: false, reason: e.message });
     }
   });
 }

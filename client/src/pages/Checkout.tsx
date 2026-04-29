@@ -8,7 +8,8 @@ import {
   ArrowRight, Upload, Check, Loader2, Banknote,
   MapPin, Smartphone, Copy, ChevronDown, ChevronUp,
   Clock, MessageSquare, Wallet, Tag, X, CheckCircle,
-  SplitSquareVertical, Users, Phone, FileText, ChevronRight, Building2
+  SplitSquareVertical, Users, Phone, FileText, ChevronRight, Building2,
+  CreditCard, Snowflake, AlertTriangle
 } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -115,6 +116,32 @@ export default function Checkout() {
     queryKey: ["/api/public/suppliers-list"],
     staleTime: 300000,
   });
+
+  // ── جلب بيانات الائتمان للمستخدم المسجّل (للشراء بالأجل) ─────────
+  const { data: creditInfo } = useQuery<any>({
+    queryKey: ["/api/my/credit"],
+    enabled: isAuthenticated,
+    staleTime: 30000,
+  });
+  const creditAvailable = Number(creditInfo?.available_credit ?? 0);
+  const creditLimit = Number(creditInfo?.effective_credit_limit ?? 0);
+  const creditBalance = Number(creditInfo?.current_balance ?? 0);
+  const creditPaymentTerm = Number(creditInfo?.tier_payment_term_days ?? 0);
+  const creditDownPercent = Number(
+    (creditInfo?.manual_override && creditInfo?.down_payment_override !== null
+      ? creditInfo?.down_payment_override
+      : creditInfo?.tier_down_payment_percent) ?? 0
+  );
+  const creditFrozen = !!creditInfo?.is_frozen;
+  const creditTierName = creditInfo?.tier_name_ar || "";
+  const creditTierIcon = creditInfo?.tier_icon || "";
+  const creditTierColor = creditInfo?.tier_color || "#666";
+  const creditEnabled =
+    isAuthenticated &&
+    !!creditInfo &&
+    !creditFrozen &&
+    creditLimit > 0 &&
+    creditInfo?.tier !== "blocked";
 
   // تهيئة نسبة المقدّم من الإعدادات عند تحميلها
   useEffect(() => {
@@ -512,6 +539,8 @@ export default function Checkout() {
     ? `مقدّم ${depositPercent}% + باقي عند التسليم`
     : installmentType === "supplier_guaranteed"
     ? "تقسيط بكفيل مورد"
+    : formData.paymentMethod === "credit"
+    ? `شراء بالأجل (${creditTierName})`
     : isWalletPayment
     ? (selectedWallet?.name ?? "محفظة إلكترونية")
     : isBankTransfer
@@ -856,6 +885,116 @@ export default function Checkout() {
                     <CheckCircle className="h-4 w-4 text-primary mr-auto shrink-0" />
                   )}
                 </button>
+              )}
+
+              {/* ─── الشراء بالأجل (الائتمان) ──────────────────────────── */}
+              {creditEnabled && (
+                <button
+                  type="button"
+                  className={`w-full flex items-center gap-3 px-4 py-3 transition-colors ${
+                    formData.paymentMethod === "credit" ? "bg-primary/5" : "hover:bg-muted/50"
+                  }`}
+                  onClick={() => {
+                    setFormData({ ...formData, paymentMethod: "credit", purchaseCode: "" });
+                    setReceiptFile(null);
+                  }}
+                  data-testid="payment-method-credit"
+                >
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                    formData.paymentMethod === "credit" ? "border-primary" : "border-muted-foreground"
+                  }`}>
+                    {formData.paymentMethod === "credit" && (
+                      <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+                    )}
+                  </div>
+                  <div
+                    className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ background: `${creditTierColor}25` }}
+                  >
+                    <CreditCard className="h-4 w-4" style={{ color: creditTierColor }} />
+                  </div>
+                  <div className="flex-1 text-right">
+                    <p className="text-sm font-medium flex items-center gap-1">
+                      <span>{creditTierIcon}</span>
+                      شراء بالأجل ({creditTierName})
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      المتاح: {creditAvailable.toLocaleString()} ر.ي · مدة {creditPaymentTerm} يوم
+                    </p>
+                  </div>
+                  {formData.paymentMethod === "credit" && (
+                    <CheckCircle className="h-4 w-4 text-primary shrink-0" />
+                  )}
+                </button>
+              )}
+
+              {/* لوحة تفاصيل الائتمان عند اختياره */}
+              {formData.paymentMethod === "credit" && creditEnabled && (
+                <div className="mx-4 mb-3 rounded-xl border-2 overflow-hidden"
+                  style={{ borderColor: creditTierColor }}>
+                  <div
+                    className="p-3 flex items-center gap-3"
+                    style={{ background: `${creditTierColor}15` }}
+                  >
+                    <span className="text-3xl">{creditTierIcon}</span>
+                    <div className="flex-1 text-right">
+                      <p className="text-xs text-muted-foreground">فئتك الائتمانية</p>
+                      <p className="font-bold" style={{ color: creditTierColor }}>
+                        {creditTierName}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="p-3 grid grid-cols-2 gap-3 text-sm border-t">
+                    <div>
+                      <p className="text-xs text-muted-foreground">السقف الكلي</p>
+                      <p className="font-bold">{creditLimit.toLocaleString()} ر.ي</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">رصيد مستحق</p>
+                      <p className="font-bold text-amber-600">{creditBalance.toLocaleString()} ر.ي</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">المتاح للشراء</p>
+                      <p className="font-bold text-green-600">{creditAvailable.toLocaleString()} ر.ي</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">مدة السداد</p>
+                      <p className="font-bold">{creditPaymentTerm} يوم</p>
+                    </div>
+                    {creditDownPercent > 0 && (
+                      <div className="col-span-2 p-2 rounded bg-amber-50 dark:bg-amber-950/30 text-xs">
+                        <span className="font-bold">⚠️ دفعة مقدمة مطلوبة:</span>{" "}
+                        {creditDownPercent}% من قيمة الطلب
+                      </div>
+                    )}
+                  </div>
+                  {finalTotal > creditAvailable && (
+                    <div className="p-3 bg-red-50 dark:bg-red-950/30 border-t text-sm flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold text-red-700 dark:text-red-400">
+                          المبلغ يتجاوز الرصيد المتاح
+                        </p>
+                        <p className="text-xs text-red-600 mt-1">
+                          تحتاج {(finalTotal - creditAvailable).toLocaleString()} ر.ي إضافية أو اختر طريقة دفع أخرى
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* تنبيه التجميد إن كان حساب العميل مجمَّداً */}
+              {isAuthenticated && creditFrozen && (
+                <div className="mx-4 mb-3 rounded-xl border border-cyan-300 bg-cyan-50 dark:bg-cyan-950/30 p-3 flex items-start gap-2">
+                  <Snowflake className="h-5 w-5 text-cyan-600 shrink-0" />
+                  <div className="text-sm">
+                    <p className="font-bold text-cyan-800 dark:text-cyan-300">حسابك مجمَّد مؤقتاً</p>
+                    <p className="text-xs text-cyan-700 dark:text-cyan-400 mt-1">
+                      {creditInfo?.frozen_reason || "يرجى التواصل مع الإدارة"}
+                    </p>
+                  </div>
+                </div>
               )}
 
               {/* Digital Wallets */}

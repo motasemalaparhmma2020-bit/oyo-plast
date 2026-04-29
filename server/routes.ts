@@ -2385,24 +2385,81 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         customerLat, customerLng, locationAccuracy, locationMethod,
       } = req.body;
       const user = (req as any).user;
+      const userId = getUserId(user);
 
-      const order = await storage.createOrder({
-        customerName,
-        customerEmail,
-        customerPhone,
-        shippingCity,
-        shippingAddress,
-        shippingOption,
-        shippingCost,
-        notes,
-        total,
-        items,
-        paymentMethod,
-        couponCode: couponCode || null,
-        discountAmount: discountAmount || null,
-        subtotalBeforeDiscount: subtotalBeforeDiscount || null,
-        userId: getUserId(user),
-      });
+      // ─── فحص + حجز ائتمان ذرّي قبل إنشاء الطلب (إن كان الدفع بالأجل) ──────────
+      let creditPrecheck: any = null;
+      let creditNoteAddon = "";
+      let creditReserved = false;
+      let creditChargeAmount = 0;
+      if (paymentMethod === "credit") {
+        if (!userId) {
+          return res.status(401).json({ message: "يجب تسجيل الدخول للشراء بالأجل" });
+        }
+        const orderCurrency = (req.body as any).currency || "YER";
+        const orderTotalNum = Number(total);
+        const { precheckCreditPurchase, reserveCreditAtomic } =
+          await import("./routes/credit-routes");
+
+        // 1) فحص لتوليد رسالة واضحة + احتساب الخصم/المقدّم
+        creditPrecheck = await precheckCreditPurchase(userId, orderTotalNum, orderCurrency);
+        if (!creditPrecheck.allowed) {
+          return res.status(400).json({
+            message: creditPrecheck.reason || "تعذّر الشراء بالأجل",
+            creditBlocked: true,
+          });
+        }
+
+        // 2) المبلغ المخصوم من الائتمان (إجمالي - الدفعة المقدمة)
+        creditChargeAmount = creditPrecheck.amountOnCredit ?? orderTotalNum;
+
+        // 3) حجز ذرّي يمنع سباق الطلبات المتزامنة
+        const reservation = await reserveCreditAtomic(userId, creditChargeAmount);
+        if (!reservation.ok) {
+          return res.status(409).json({
+            message: reservation.reason || "تعذّر حجز الائتمان",
+            creditBlocked: true,
+          });
+        }
+        creditReserved = true;
+
+        creditNoteAddon = `\n[شراء بالأجل: فئة ${creditPrecheck.info?.tierNameAr || ''} · مستحق بتاريخ ${creditPrecheck.dueDate} · مدة ${creditPrecheck.info?.paymentTermDays || 0} يوم${
+          creditPrecheck.requiredDownPayment ? ` · دفعة مقدمة ${creditPrecheck.requiredDownPayment.toLocaleString()}` : ""
+        } · المُحمَّل على الأجل ${creditChargeAmount.toLocaleString()}]`;
+      }
+
+      let order;
+      try {
+        order = await storage.createOrder({
+          customerName,
+          customerEmail,
+          customerPhone,
+          shippingCity,
+          shippingAddress,
+          shippingOption,
+          shippingCost,
+          notes: (notes || "") + creditNoteAddon,
+          total,
+          items,
+          paymentMethod,
+          couponCode: couponCode || null,
+          discountAmount: discountAmount || null,
+          subtotalBeforeDiscount: subtotalBeforeDiscount || null,
+          userId,
+        });
+      } catch (orderErr: any) {
+        // فشل إنشاء الطلب → استرجاع الحجز الائتماني (compensating action)
+        if (creditReserved && userId) {
+          try {
+            const { refundCreditReservation } = await import("./routes/credit-routes");
+            await refundCreditReservation(userId, creditChargeAmount);
+            console.log(`[CREDIT] Refunded ${creditChargeAmount} after order creation failed`);
+          } catch (refundErr: any) {
+            console.error("[CREDIT] CRITICAL: Failed to refund credit reservation:", refundErr.message);
+          }
+        }
+        throw orderErr;
+      }
 
       // حفظ إحداثيات GPS في الطلب
       if (customerLat != null && customerLng != null) {
