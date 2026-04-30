@@ -596,8 +596,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // هذا يُخفّض الذاكرة من ~140MB لكل بحث إلى ~50KB
       const { pool: dbPool } = await import("./db");
       const lite = await dbPool.query(`
-        SELECT id, name, description, tags, price, original_price AS "originalPrice",
-               discount, stock, sold_count AS "soldCount"
+        SELECT id, name, description, tags, price,
+               original_price AS "originalPrice",
+               discount_percent AS "discount",
+               stock, sold_count AS "soldCount"
         FROM products
         WHERE is_active IS NOT FALSE
         ORDER BY id
