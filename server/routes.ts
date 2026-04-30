@@ -787,22 +787,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
       };
 
-      // ── Products: batches من id واحد لتقليل استهلاك الذاكرة ─────
-      // (بدلاً من تحميل 142MB دفعة واحدة، نجلب 1 منتج كامل حسب الحاجة)
+      // ── Products: نجلب IDs فقط (استعلام خفيف جداً)، ثم نفحص كل واحد ─
+      // ⚠️ تجنّبنا EXISTS على unnest(image_urls) لأنه يقرأ 142MB في scan واحد!
+      // الحل: نجلب 5 chars فقط من image_url عبر LEFT() لفلترة سريعة
       send("phase", { name: "products", msg: "بدء معالجة المنتجات..." });
       const idsToProcess = await dbPool.query(`
         SELECT id, name FROM products
-        WHERE image_url LIKE 'data:%'
-           OR EXISTS (SELECT 1 FROM unnest(COALESCE(image_urls, ARRAY[]::text[])) u WHERE u LIKE 'data:%')
+        WHERE LEFT(COALESCE(image_url, ''), 5) = 'data:'
+           OR (image_urls IS NOT NULL AND array_length(image_urls, 1) > 0)
         ORDER BY id
       `);
       let pIdx = 0;
       const totalP = idsToProcess.rows.length;
-      send("phase", { name: "products", msg: `وُجد ${totalP} منتج للترحيل` });
+      send("phase", { name: "products", msg: `وُجد ${totalP} منتج للفحص` });
       for (const idRow of idsToProcess.rows) {
         if (aborted) { send("warn", { msg: "تم إيقاف العملية من العميل" }); break; }
         pIdx++;
-        // اجلب الصف كاملاً فقط الآن، ثم حرّره من الذاكرة بعد المعالجة
+        // نقسم القراءة: image_url + image_urls كل واحد لوحده
+        // (بدلاً من جلب كل شيء معاً = ضغط ذاكرة)
         const r = await dbPool.query(
           `SELECT image_url, image_urls FROM products WHERE id = $1`, [idRow.id]
         );
