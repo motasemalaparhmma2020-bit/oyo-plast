@@ -165,3 +165,86 @@ Major upgrade to the visual search UX after user reported missing results:
 4. **رسالة toast أوضح** — "الاتصال بطيء، حاول مرة أخرى" بدل "تأكد من اتصالك بالإنترنت" (يبدو خطأً للمستخدم لما الإنترنت موجود)
 5. **منع toast الزائف** عند ضغط "إلغاء" يدوياً — نتحقق من `visualAbortRef.current` للتمييز بين timeout والإلغاء اليدوي
 6. **fallback آمن** عند فشل الضغط — نرفع الأصلية بدل توقف العملية
+
+## Visual Search v5 — حل المشكلة الجذرية: حجم الـ Response (April 30, 2026)
+
+### المشكلة الفعلية المكتشفة من production logs
+- العداد كان يصل لـ 92% ثم يتجمد، ثم يظهر "Unexpected end of JSON input"
+- السبب الحقيقي (ليس Gemini ولا الشبكة!): الـ backend كان يُرسل **5MB+ JSON response** يحتوي صور المنتجات كـ base64 inline
+- الـ response استغرق 30 ثانية للتحميل، ثم proxy النشر قطع الاتصال → JSON ناقص
+- الإثبات في logs: `POST /api/visual-search 200 in 30295ms :: {"image":"data:image/jpeg;base64,iVBOR..."}`
+
+### الإصلاحات في `server/routes.ts`
+1. **`searchProductsByArabicTokens`**: helper جديد `lightImage()` يحوّل أي `imageUrl` يبدأ بـ `data:` إلى رابط خفيف `/api/products/image/{id}?v=hash`
+2. تقليل عدد المنتجات المُرجعة من 30 → **6 منتجات** (يكفي للعرض الأولي، تجربة أفضل من 30 منتج مكدّس)
+3. لوغ حجم الـ response: `[visual-search] 📦 response: 6 منتج، حجم 1.1KB`
+
+**النتيجة المقاسة:**
+- قبل: 5,000+ KB في 30,000 ms (يفشل)
+- بعد: 1.1 KB في 1,077 ms (نجاح فوري)
+- **تحسّن: حجم أصغر 4,500× وأسرع 28×**
+
+### الإصلاحات في `client/src/components/Navbar.tsx`
+- استبدال `await res.json()` المباشر بـ **parsing دفاعي**: نقرأ النص أولاً ثم try/catch
+- إذا فشل: نُميّز بين "لم نستلم رد" و "الاتصال انقطع" برسائل عربية واضحة
+- يمنع نهائياً ظهور خطأ "Unexpected end of JSON input" المربك للمستخدم
+
+### endpoint جديد للترحيل الكامل: `/api/admin/migrate-base64-images`
+- محمي بـ `requireAdmin` (`x-admin-token` header)
+- يقرأ كل صورة `data:image/...` من DB → يرفعها لـ Cloudinary → يحدّث الـ URL في DB
+- يغطّي: products (image_url + image_urls[]), categories (image + icon), subcategories, banners, offers
+- يبث Server-Sent Events للـ progress (مفيد لـ 125 منتج × 2-3 ثانية = ~5 دقائق)
+- **آمن للتشغيل عدة مرات** (idempotent: يتخطى ما هو ليس base64)
+- للتشغيل على النشر:
+  ```bash
+  curl -N -X POST https://YOUR-DOMAIN/api/admin/migrate-base64-images \
+       -H "x-admin-token: YOUR_ADMIN_TOKEN"
+  ```
+- بعد الانتهاء: `VACUUM FULL products;` يدوياً لاسترداد ~140MB من المساحة
+
+### الفائدة من ترحيل Cloudinary (production فقط)
+- **DB**: من 325MB → ~10MB (98% تخفيف)
+- **سرعة الصور**: CDN عالمي يخدم اليمن مباشرة (بدلاً من Replit US)
+- **Auto-format**: WebP/AVIF تلقائياً (50% حجم أقل)
+- **Auto-quality**: ضغط ذكي بدون فقدان جودة محسوس
+
+### المعمارية الصحيحة (موجودة بالفعل في 95% من الـ endpoints)
+- `mapProductRow()` + `proxyImg()` يحوّلان base64 → URL خفيف
+- `/api/products/image/:id` يخدم الصور بكاش 7 أيام
+- بعد إصلاح visual-search، **لا يوجد أي endpoint عام يُرسل base64 ضخم للعميل**
+
+## v5.1 — تحسينات ما بعد code review (April 30, 2026)
+
+### مشاكل تم اكتشافها وحلّها (من architect review)
+
+**1. lightImage كان يستخدم hash ضعيف (50 char من بداية data URL)**
+- المشكلة: header `data:image/jpeg;base64,` ثابت بين الصور → نفس الـ hash لصور مختلفة → cache لا يتحدّث عند تعديل الصورة!
+- الحل: استبدال بـ `proxyImg("products", id, url)` الموجود — يستخدم `imgVer()` (MD5 حقيقي للمحتوى)
+
+**2. clearTimeout قبل قراءة الـ body** 
+- المشكلة: لو الـ headers وصلت بسرعة لكن proxy قطع الـ body في المنتصف، الـ timeout لا يحمي القراءة
+- الحل: نقل `clearTimeout(timeoutId)` لما **بعد** `await res.text()`
+
+**3. searchProductsByArabicTokens يحمّل 140MB لكل بحث**
+- المشكلة: `storage.getProducts()` يجلب كل الأعمدة بما فيها base64 → ضغط شديد على الذاكرة
+- الحل: SQL خفيف بأعمدة scoring فقط (id, name, description, tags, price, stock, soldCount) — بدون `image_url`/`image_urls`
+- ثم نجلب الصور **فقط للـ 6 المختارة** عبر `WHERE id = ANY($1)`
+- النتيجة: ~140MB → ~50KB لكل بحث (تحسّن **2800×**)
+
+**4. Migration endpoint: advisory lock مكسور (potential dead lock!)**
+- المشكلة: `dbPool.query()` يستخدم اتصال مختلف لكل استدعاء → الـ unlock قد يصل لـ connection غير صاحب القفل → القفل **عالق للأبد** حتى إعادة تشغيل التطبيق
+- الحل: `dbPool.connect()` للحصول على dedicated client، تشغيل lock+unlock على نفس الاتصال، release في `finally`
+
+**5. Migration endpoint: تحسينات SSE وأمان**
+- ✅ heartbeat كل 15ث (`: ping`) يمنع proxy من قطع الاتصال
+- ✅ `X-Accel-Buffering: no` header يمنع nginx buffering
+- ✅ `res.on('close')` → flag `aborted=true` يوقف العملية لو العميل قطع
+- ✅ Batches: نجلب IDs أولاً ثم كل صف على حدة (لا 142MB في الذاكرة)
+- ✅ `WHERE image_url LIKE 'data:%'` يتخطى الصور المُرحّلة مسبقاً
+
+### الأرقام النهائية المُقاسة (3 طلبات متتالية)
+| المقياس | قبل v5 | بعد v5 | بعد v5.1 |
+|---|---|---|---|
+| الوقت | 30,000ms+ (يفشل) | 1,077ms | ~990ms |
+| حجم Response | 5,000KB+ | 1.1KB | 1.1KB |
+| ذاكرة السيرفر/بحث | ~140MB | ~140MB | ~50KB |

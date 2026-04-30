@@ -216,8 +216,27 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
         credentials: "include",
         signal: controller.signal,
       });
+
+      // 🛡️ parsing دفاعي: نقرأ النص أولاً ثم نحاول تحويله JSON
+      // هذا يحمينا من خطأ "Unexpected end of JSON input" عند انقطاع الـ response
+      // ⚠️ الـ timeout يبقى نشطاً حتى نُكمل قراءة الجسم — لأن proxy قد يقطع
+      // الـ body بعد وصول headers مباشرة، فنحتاج timeout يحمي القراءة كذلك
+      const rawText = await res.text();
       clearTimeout(timeoutId);
-      const data = await res.json();
+
+      let data: any;
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch (parseErr) {
+        // الـ response وصل لكن JSON غير مكتمل (تم قطعه من proxy/شبكة بطيئة)
+        console.warn("[visual-search] JSON parse failed, raw length:", rawText.length);
+        throw new Error(
+          rawText.length === 0
+            ? "لم نستلم ردًا من الخادم، حاول مرة أخرى"
+            : "الاتصال انقطع أثناء تحميل النتائج، حاول مرة أخرى",
+        );
+      }
+
       if (!res.ok) {
         throw new Error(data?.message || "فشل تحليل الصورة");
       }

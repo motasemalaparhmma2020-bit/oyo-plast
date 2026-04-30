@@ -567,12 +567,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // نوفّر round-trip كامل بدمج Gemini + بحث المنتجات في طلب واحد
       const matchedProducts = await searchProductsByArabicTokens(keywords);
 
-      res.json({
+      const payload = {
         keywords,
         recognized: true,
         products: matchedProducts,
         productsCount: matchedProducts.length,
-      });
+      };
+      // 📏 لوغ حجم الـ response — يجب أن يكون < 5KB (بدلاً من 5MB قبل الإصلاح)
+      const sizeKb = (Buffer.byteLength(JSON.stringify(payload), "utf8") / 1024).toFixed(1);
+      console.log(`[visual-search] 📦 response: ${matchedProducts.length} منتج، حجم ${sizeKb}KB`);
+      res.json(payload);
     } catch (e: any) {
       console.error("[visual-search] خطأ:", e?.message);
       res.status(500).json({
@@ -587,8 +591,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   async function searchProductsByArabicTokens(keywords: string): Promise<any[]> {
     // ملاحظة: keywords فارغة = نُريد top sellers (fallback path) — لا نرفض!
     try {
-      const { storage } = await import("./storage");
-      const allProducts = await storage.getProducts();
+      // ⚡ نستخدم SQL خفيف: نجلب فقط الأعمدة الضرورية للـ scoring
+      // (بدون image_url/image_urls الثقيلين — نحضرهما لاحقاً للـ 6 المختارة فقط)
+      // هذا يُخفّض الذاكرة من ~140MB لكل بحث إلى ~50KB
+      const { pool: dbPool } = await import("./db");
+      const lite = await dbPool.query(`
+        SELECT id, name, description, tags, price, original_price AS "originalPrice",
+               discount, stock, sold_count AS "soldCount"
+        FROM products
+        WHERE is_active IS NOT FALSE
+        ORDER BY id
+      `);
+      const allProducts: any[] = lite.rows;
 
       // تطبيع نص عربي: إزالة الهمزات + حركات + "ال" التعريف + المسافات الزائدة
       const normalize = (s: string) => (s || "")
@@ -611,17 +625,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         .split(" ")
         .filter(t => t.length >= 2 && !STOP.has(t));
 
-      // إذا ما فيه keywords (fallback) → نرجع الأعلى مبيعاً
-      if (tokens.length === 0) {
-        const topSellers = [...allProducts].sort((a: any, b: any) => (b.soldCount || 0) - (a.soldCount || 0));
-        return topSellers.slice(0, 12).map((p: any) => ({
-          id: p.id, name: p.name, image: p.imageUrl, price: p.price,
+      // ⚡ نجلب image_url فقط للـ IDs المختارة (6 منتجات) → استعلام واحد خفيف
+      const fetchImagesFor = async (ids: number[]): Promise<Map<number, string>> => {
+        if (ids.length === 0) return new Map();
+        const r = await dbPool.query(
+          `SELECT id, image_url FROM products WHERE id = ANY($1::int[])`,
+          [ids]
+        );
+        const map = new Map<number, string>();
+        for (const row of r.rows) {
+          const url = row.image_url || "";
+          // base64 → رابط خفيف عبر proxyImg الموجود (يستخدم imgVer/MD5)
+          map.set(row.id, typeof url === "string" && url.startsWith("data:")
+            ? proxyImg("products", row.id, url)
+            : url);
+        }
+        return map;
+      };
+
+      const finalize = async (list: any[]) => {
+        const top = list.slice(0, 6);
+        const imgs = await fetchImagesFor(top.map(p => p.id));
+        return top.map(p => ({
+          id: p.id, name: p.name, image: imgs.get(p.id) || "", price: p.price,
           originalPrice: p.originalPrice ?? null, discount: p.discount ?? null, stock: p.stock,
         }));
+      };
+
+      // إذا ما فيه keywords (fallback) → نرجع الأعلى مبيعاً
+      if (tokens.length === 0) {
+        const topSellers = [...allProducts].sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0));
+        return await finalize(topSellers);
       }
 
       // نسجّل كل منتج بعدد tokens المتطابقة → نرتّب تنازلياً
-      const scored = allProducts.map((p: any) => {
+      const scored = allProducts.map((p) => {
         const haystack = normalize([
           p.name,
           p.description,
@@ -645,7 +683,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const broadTokens = ["كيس","اكياس","شنطه","شنطة","علاقي","علاق","تغليف","ورق","بلاستيك","قماش"];
         const found = broadTokens.find(bt => normalize(keywords).includes(normalize(bt)));
         if (found) {
-          matched = allProducts.filter((p: any) => {
+          matched = allProducts.filter((p) => {
             const h = normalize([p.name, p.description, ...(Array.isArray(p.tags) ? p.tags : [])].filter(Boolean).join(" "));
             return h.includes(normalize(found));
           });
@@ -654,24 +692,227 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // Fallback 2: لا يزال 0 → نرجع الأعلى مبيعاً كاقتراحات
       if (matched.length === 0) {
-        matched = [...allProducts].sort((a: any, b: any) => (b.soldCount || 0) - (a.soldCount || 0));
+        matched = [...allProducts].sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0));
       }
 
-      // قص الحقول الثقيلة (بعض الحقول غير ضرورية للعرض)
-      return matched.slice(0, 30).map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        image: p.imageUrl,
-        price: p.price,
-        originalPrice: p.originalPrice ?? null,
-        discount: p.discount ?? null,
-        stock: p.stock,
-      }));
+      // ✅ نجلب الصور فقط للـ 6 المختارة (لا 125 منتج!) ثم نُرجع response خفيف
+      return await finalize(matched);
     } catch (e) {
       console.error("[visual-search] search err:", (e as any)?.message);
       return [];
     }
   }
+
+  // ─── ترحيل صور base64 من DB إلى Cloudinary (admin only) ─────────────
+  // لتشغيلها مرة واحدة على بيئة النشر:
+  //   curl -X POST https://YOUR-DOMAIN/api/admin/migrate-base64-images \
+  //        -H "x-admin-token: YOUR_TOKEN"
+  // ترسل الـ progress عبر Server-Sent Events ثم ملخصاً نهائياً.
+  // آمن للتشغيل عدة مرات (idempotent: يتخطى الصور التي ليست base64).
+  app.post("/api/admin/migrate-base64-images", requireAdmin, async (_req, res) => {
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    if (!cloudName || !apiKey || !apiSecret) {
+      return res.status(503).json({ message: "Cloudinary غير مضبوط في environment" });
+    }
+
+    // SSE setup — منع الـ buffering من proxies (nginx, replit deploy)
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders?.();
+    const send = (event: string, data: any) => {
+      try {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      } catch { /* socket مغلق */ }
+    };
+    // heartbeat كل 15ث يمنع proxy من قطع الاتصال أثناء uploads البطيئة
+    const heartbeat = setInterval(() => {
+      try { res.write(`: ping\n\n`); } catch { /* مغلق */ }
+    }, 15000);
+    // detect client disconnect → نوقف العملية
+    let aborted = false;
+    const onClose = () => { aborted = true; };
+    res.on("close", onClose);
+    const cleanup = () => {
+      clearInterval(heartbeat);
+      res.off("close", onClose);
+    };
+
+    const { pool: dbPool } = await import("./db");
+    // 🔒 PostgreSQL advisory lock — يجب أن يكون على نفس الاتصال (session-level)
+    // وإلا الـ unlock قد يصل لـ connection آخر فيبقى القفل عالقاً للأبد!
+    // لذا نأخذ client مخصص من الـ pool ونحرّره في finally
+    const LOCK_KEY = 4242042042;
+    const lockClient = await dbPool.connect();
+    let gotLock = false;
+    try {
+      const lockResult = await lockClient.query(`SELECT pg_try_advisory_lock($1) AS got`, [LOCK_KEY]);
+      gotLock = !!lockResult.rows[0]?.got;
+    } catch (e: any) {
+      send("error", { msg: "تعذّر فحص القفل: " + e?.message });
+      lockClient.release();
+      cleanup();
+      return res.end();
+    }
+    if (!gotLock) {
+      send("error", { msg: "ترحيل آخر قيد التشغيل، انتظر انتهاءه أو أعد التشغيل لاحقاً" });
+      lockClient.release();
+      cleanup();
+      return res.end();
+    }
+
+    try {
+      const cloudinary = (await import("cloudinary")).v2;
+      cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret, secure: true });
+
+      const stats = { products: 0, productImageUrls: 0, categories: 0, categoryIcons: 0, subcategories: 0, banners: 0, offers: 0, failed: 0 };
+
+      const uploadDataUrl = async (dataUrl: string, folder: string): Promise<string | null> => {
+        try {
+          const r = await cloudinary.uploader.upload(dataUrl, {
+            folder: `oyoplast/${folder}`,
+            resource_type: "image",
+            quality: "auto:good",
+            fetch_format: "auto",
+          });
+          return r.secure_url;
+        } catch (e: any) {
+          send("warn", { msg: `فشل رفع: ${e?.message?.slice(0, 100)}` });
+          return null;
+        }
+      };
+
+      // ── Products: batches من id واحد لتقليل استهلاك الذاكرة ─────
+      // (بدلاً من تحميل 142MB دفعة واحدة، نجلب 1 منتج كامل حسب الحاجة)
+      send("phase", { name: "products", msg: "بدء معالجة المنتجات..." });
+      const idsToProcess = await dbPool.query(`
+        SELECT id, name FROM products
+        WHERE image_url LIKE 'data:%'
+           OR EXISTS (SELECT 1 FROM unnest(COALESCE(image_urls, ARRAY[]::text[])) u WHERE u LIKE 'data:%')
+        ORDER BY id
+      `);
+      let pIdx = 0;
+      const totalP = idsToProcess.rows.length;
+      send("phase", { name: "products", msg: `وُجد ${totalP} منتج للترحيل` });
+      for (const idRow of idsToProcess.rows) {
+        if (aborted) { send("warn", { msg: "تم إيقاف العملية من العميل" }); break; }
+        pIdx++;
+        // اجلب الصف كاملاً فقط الآن، ثم حرّره من الذاكرة بعد المعالجة
+        const r = await dbPool.query(
+          `SELECT image_url, image_urls FROM products WHERE id = $1`, [idRow.id]
+        );
+        if (!r.rows.length) continue;
+        const row = r.rows[0];
+
+        if (typeof row.image_url === "string" && row.image_url.startsWith("data:")) {
+          const url = await uploadDataUrl(row.image_url, "products");
+          if (url) {
+            await dbPool.query(`UPDATE products SET image_url = $1 WHERE id = $2`, [url, idRow.id]);
+            stats.products++;
+            send("progress", { phase: "products", current: pIdx, total: totalP, item: idRow.name, action: "main" });
+          } else stats.failed++;
+        }
+        if (Array.isArray(row.image_urls) && row.image_urls.length) {
+          const next: string[] = [];
+          let changed = false;
+          for (const u of row.image_urls) {
+            if (aborted) break;
+            if (typeof u === "string" && u.startsWith("data:")) {
+              changed = true;
+              const url = await uploadDataUrl(u, "products");
+              if (url) { next.push(url); stats.productImageUrls++; }
+              else { next.push(u); stats.failed++; }
+            } else next.push(u);
+          }
+          if (changed && !aborted) {
+            await dbPool.query(`UPDATE products SET image_urls = $1 WHERE id = $2`, [next, idRow.id]);
+            send("progress", { phase: "products", current: pIdx, total: totalP, item: idRow.name, action: "extras" });
+          }
+        }
+      }
+
+      // ── Categories ──────────────────────────────────────────────
+      if (!aborted) {
+        send("phase", { name: "categories", msg: "بدء معالجة الأقسام..." });
+        const cats = await dbPool.query(`
+          SELECT id, name, image_url, icon_url FROM categories
+          WHERE image_url LIKE 'data:%' OR icon_url LIKE 'data:%' ORDER BY id
+        `);
+        for (const row of cats.rows) {
+          if (aborted) break;
+          if (typeof row.image_url === "string" && row.image_url.startsWith("data:")) {
+            const url = await uploadDataUrl(row.image_url, "categories");
+            if (url) { await dbPool.query(`UPDATE categories SET image_url = $1 WHERE id = $2`, [url, row.id]); stats.categories++; }
+            else stats.failed++;
+          }
+          if (typeof row.icon_url === "string" && row.icon_url.startsWith("data:")) {
+            const url = await uploadDataUrl(row.icon_url, "categories/icons");
+            if (url) { await dbPool.query(`UPDATE categories SET icon_url = $1 WHERE id = $2`, [url, row.id]); stats.categoryIcons++; }
+            else stats.failed++;
+          }
+        }
+      }
+
+      // ── Subcategories ───────────────────────────────────────────
+      if (!aborted) {
+        send("phase", { name: "subcategories", msg: "بدء معالجة الأقسام الفرعية..." });
+        try {
+          const subs = await dbPool.query(`
+            SELECT id, name, image_url FROM subcategories
+            WHERE image_url LIKE 'data:%' ORDER BY id
+          `);
+          for (const row of subs.rows) {
+            if (aborted) break;
+            const url = await uploadDataUrl(row.image_url, "subcategories");
+            if (url) { await dbPool.query(`UPDATE subcategories SET image_url = $1 WHERE id = $2`, [url, row.id]); stats.subcategories++; }
+            else stats.failed++;
+          }
+        } catch (e: any) { send("warn", { msg: "تخطّي subcategories: " + e?.message?.slice(0, 80) }); }
+      }
+
+      // ── Banners + Offers (إن وُجدت) ─────────────────────────────
+      for (const tableName of ["banners", "offers"] as const) {
+        if (aborted) break;
+        send("phase", { name: tableName, msg: `بدء معالجة ${tableName}...` });
+        try {
+          const exists = await dbPool.query(`SELECT to_regclass($1) as t`, [`public.${tableName}`]);
+          if (!exists.rows[0]?.t) continue;
+          const items = await dbPool.query(`
+            SELECT id, image_url FROM ${tableName}
+            WHERE image_url LIKE 'data:%' ORDER BY id
+          `);
+          for (const row of items.rows) {
+            if (aborted) break;
+            const url = await uploadDataUrl(row.image_url, tableName);
+            if (url) {
+              await dbPool.query(`UPDATE ${tableName} SET image_url = $1 WHERE id = $2`, [url, row.id]);
+              if (tableName === "banners") stats.banners++; else stats.offers++;
+            } else stats.failed++;
+          }
+        } catch (e: any) { send("warn", { msg: `تخطّي ${tableName}: ${e?.message?.slice(0, 80)}` }); }
+      }
+
+      // ── ملخص نهائي ───────────────────────────────────────────────
+      const dbSize = await dbPool.query(`SELECT pg_size_pretty(pg_total_relation_size('products')) AS sz`);
+      send("done", {
+        stats,
+        aborted,
+        hint: "شغّل: VACUUM FULL products; لاسترداد المساحة بعد التأكد",
+        currentDbSize: dbSize.rows[0]?.sz,
+      });
+    } catch (e: any) {
+      send("error", { msg: e?.message || "خطأ غير معروف" });
+    } finally {
+      // تحرير الـ advisory lock على نفس الاتصال (إجباري وإلا يبقى عالقاً)
+      try { await lockClient.query(`SELECT pg_advisory_unlock($1)`, [LOCK_KEY]); } catch {}
+      try { lockClient.release(); } catch {}
+      cleanup();
+      try { res.end(); } catch {}
+    }
+  });
 
   // ─── Invoice Settings ─────────────────────────────────────────────
   app.get("/api/admin/invoice-settings", requireAdmin, async (_req, res) => {
