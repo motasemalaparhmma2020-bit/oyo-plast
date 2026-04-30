@@ -129,6 +129,39 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
     navigate(`/product/${id}`);
   };
 
+  // ─── ضغط الصورة في المتصفح قبل الرفع ─────────────────────────
+  // 🎯 على شبكة 4G يمنية: صورة كاميرا 5MB = 30-50 ثانية رفع
+  //    بعد الضغط لـ 800px JPEG ~85% = ~120KB = 1-2 ثانية رفع
+  // Gemini يحلّل بنفس الدقة (السيرفر يعيد ضغطها لـ 512px أصلاً)
+  const compressImageInBrowser = (file: File, maxSize = 800, quality = 0.82): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          let { width, height } = img;
+          if (width > maxSize || height > maxSize) {
+            const ratio = Math.min(maxSize / width, maxSize / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("canvas غير مدعوم");
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => (blob ? resolve(blob) : reject(new Error("فشل الضغط"))),
+            "image/jpeg",
+            quality
+          );
+        } catch (e) { reject(e); }
+      };
+      img.onerror = () => reject(new Error("فشل تحميل الصورة"));
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   const handleImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -138,8 +171,9 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
       toast({ title: "ملف غير صالح", description: "يرجى اختيار صورة فقط", variant: "destructive" });
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "الصورة كبيرة", description: "الحد الأقصى 5 ميجابايت", variant: "destructive" });
+    if (file.size > 20 * 1024 * 1024) {
+      // رفعنا الحد لـ 20MB لأننا سنضغطها قبل الرفع
+      toast({ title: "الصورة كبيرة جداً", description: "الحد الأقصى 20 ميجابايت", variant: "destructive" });
       return;
     }
 
@@ -150,19 +184,32 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
     setVisualResults([]);
     setVisualKeywords("");
 
+    // 🎯 ضغط الصورة في المتصفح أولاً (يقلّل الحجم 30-50× على شبكات بطيئة)
+    let uploadBlob: Blob = file;
+    try {
+      const compressed = await compressImageInBrowser(file, 800, 0.82);
+      // استخدم المضغوطة فقط إذا كانت أصغر فعلاً
+      if (compressed.size < file.size) {
+        uploadBlob = compressed;
+      }
+    } catch (compressErr) {
+      console.warn("فشل ضغط الصورة في المتصفح، نرفع الأصلية:", compressErr);
+      // نكمل بالأصلية - ليست نهاية العالم
+    }
+
     // controller لإلغاء الطلب عند ضغط "إلغاء" أو timeout
     const controller = new AbortController();
     visualAbortRef.current = controller;
 
-    // ⏱ timeout صارم على المتصفح (15 ثانية) - بحال شبكة المستخدم بطيئة
-    // أكبر من timeout الـ backend (16ث) بهامش بسيط
+    // ⏱ timeout كريم على المتصفح (45 ثانية) - يكفي لشبكات اليمن البطيئة
+    // الـ backend سيرد عادة في 1-3 ثوانٍ، لكن الرفع نفسه قد يأخذ وقتاً
     const timeoutId = setTimeout(() => {
       controller.abort();
-    }, 15000);
+    }, 45000);
 
     try {
       const formData = new FormData();
-      formData.append("image", file);
+      formData.append("image", uploadBlob, "image.jpg");
       const res = await fetch("/api/visual-search", {
         method: "POST",
         body: formData,
@@ -214,11 +261,15 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
       // تجاهل خطأ الإلغاء (المستخدم ضغط إلغاء أو timeout)
       if (err?.name === "AbortError") {
         closeVisualOverlay();
-        toast({
-          title: "انتهت مهلة الاتصال",
-          description: "تأكد من اتصالك بالإنترنت وحاول مرة أخرى",
-          variant: "destructive",
-        });
+        // لا نعرض toast إن المستخدم ضغط إلغاء بنفسه (visualAbortRef = null حينها)
+        // فقط نعرض إذا الـ timeout هو من ألغى (visualAbortRef ما زال موجوداً)
+        if (visualAbortRef.current) {
+          toast({
+            title: "الاتصال بطيء",
+            description: "الشبكة بطيئة، حاول مرة أخرى أو استخدم البحث النصي",
+            variant: "destructive",
+          });
+        }
         return;
       }
       closeVisualOverlay();
