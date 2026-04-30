@@ -471,11 +471,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         .toBuffer();
       const base64 = compressed.toString("base64");
 
-      // prompt مختصر = استجابة أسرع
-      const prompt = `متجر تغليف يمني (أكياس، شنط، علاقات، تغليف، طباعة).
-أخرج 2-4 كلمات عربية فقط تصف المنتج (نوع + مادة + لون).
-لا جمل ولا ترقيم. إن لم تعرف: "غير_معروف".
-مثال: "كيس بلاستيك شفاف"`;
+      // prompt واضح ومحدد = استجابة دقيقة
+      const prompt = `أنت محلل صور لمتجر تغليف يمني (أكياس، شنط بلاستيك/قماش/ورق، علاقي، تغليف، طباعة).
+انظر إلى الصورة وأرجع وصفاً مختصراً جداً (2 إلى 4 كلمات عربية) يحدّد:
+- نوع المنتج (كيس / شنطة / علاقي / لفافة / علبة …)
+- المادة (بلاستيك / قماش / ورق / كرتون …) إن أمكن
+- اللون أو الميزة الأبرز إن أمكن
+أرجع الكلمات فقط بدون جمل أو ترقيم أو شرح.
+إن كانت الصورة لا تحتوي منتج تغليف، أرجع: غير_معروف
+أمثلة صحيحة: "كيس بلاستيك شفاف" — "شنطة قماش حمراء" — "علاقي بلاستيك"`;
 
       // gemini-2.0-flash هو الأسرع (1-3 ثوان عادة)
       let result: any;
@@ -492,7 +496,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
                 { inlineData: { mimeType: "image/jpeg", data: base64 } },
               ],
             }],
-            config: { temperature: 0.1, maxOutputTokens: 25 },
+            // maxOutputTokens مرفوع إلى 80 (كل حرف عربي = ~1 token غالباً)
+            config: { temperature: 0.2, maxOutputTokens: 80 },
           });
           break;
         } catch (e: any) {
@@ -508,7 +513,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         .replace(/\s+/g, " ")
         .trim();
 
-      if (!keywords || keywords.includes("غير_معروف") || keywords.includes("غير معروف")) {
+      // فحص "غير معروف" أو إجابات مقطوعة تبدأ بـ "غير" (Gemini أحياناً يقص الإجابة)
+      const isUnknown =
+        !keywords ||
+        keywords.length < 3 ||
+        /^غير[_\s]?(معروف)?$/u.test(keywords) ||
+        keywords.includes("غير_معروف") ||
+        keywords.includes("غير معروف");
+
+      if (isUnknown) {
         return res.json({
           keywords: "",
           recognized: false,
@@ -517,7 +530,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
 
       console.log(`[visual-search] ✅ keywords: "${keywords}"`);
-      res.json({ keywords, recognized: true });
+
+      // ─── بحث ذكي token-based عربي يُرجع المنتجات في نفس الاستجابة ───
+      // نوفّر round-trip كامل بدمج Gemini + بحث المنتجات في طلب واحد
+      const matchedProducts = await searchProductsByArabicTokens(keywords);
+
+      res.json({
+        keywords,
+        recognized: true,
+        products: matchedProducts,
+        productsCount: matchedProducts.length,
+      });
     } catch (e: any) {
       console.error("[visual-search] خطأ:", e?.message);
       res.status(500).json({
@@ -526,6 +549,92 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
     }
   });
+
+  // ─── بحث عربي ذكي: token-based + تطبيع + fallback ─────────────────
+  // يُرجع منتجات تطابق أي token (ليس كلها) + إذا 0 نتائج يرجع الأعلى مبيعاً
+  async function searchProductsByArabicTokens(keywords: string): Promise<any[]> {
+    if (!keywords) return [];
+    try {
+      const { storage } = await import("./storage");
+      const allProducts = await storage.getProducts();
+
+      // تطبيع نص عربي: إزالة الهمزات + حركات + "ال" التعريف + المسافات الزائدة
+      const normalize = (s: string) => (s || "")
+        .toLowerCase()
+        .replace(/[\u064B-\u065F\u0670]/g, "")  // إزالة الحركات
+        .replace(/[إأآا]/g, "ا")                // توحيد الألف
+        .replace(/[ى]/g, "ي")                   // ى → ي
+        .replace(/[ؤ]/g, "و")                   // ؤ → و
+        .replace(/[ئ]/g, "ي")                   // ئ → ي
+        .replace(/[ة]/g, "ه")                   // ة → ه
+        .replace(/^ال|\sال/g, " ")              // إزالة "ال" التعريف
+        .replace(/[^\w\u0600-\u06FF\s]/g, " ")  // إزالة الرموز
+        .replace(/\s+/g, " ")
+        .trim();
+
+      // Stop words عربية لا تفيد البحث
+      const STOP = new Set(["و","في","من","على","عن","الى","إلى","ال","هذا","هذه","ذلك","تلك"]);
+
+      const tokens = normalize(keywords)
+        .split(" ")
+        .filter(t => t.length >= 2 && !STOP.has(t));
+
+      if (tokens.length === 0) {
+        return allProducts.slice(0, 12);
+      }
+
+      // نسجّل كل منتج بعدد tokens المتطابقة → نرتّب تنازلياً
+      const scored = allProducts.map((p: any) => {
+        const haystack = normalize([
+          p.name,
+          p.description,
+          ...(Array.isArray(p.tags) ? p.tags : []),
+        ].filter(Boolean).join(" "));
+
+        let score = 0;
+        for (const tok of tokens) {
+          if (haystack.includes(tok)) score++;
+        }
+        return { product: p, score };
+      });
+
+      let matched = scored
+        .filter(x => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(x => x.product);
+
+      // Fallback 1: إذا 0 نتائج، نُجرّب البحث في نفس الفئة (إن وُجدت كلمة "كيس" نرجع كل الأكياس)
+      if (matched.length === 0) {
+        const broadTokens = ["كيس","اكياس","شنطه","شنطة","علاقي","علاق","تغليف","ورق","بلاستيك","قماش"];
+        const found = broadTokens.find(bt => normalize(keywords).includes(normalize(bt)));
+        if (found) {
+          matched = allProducts.filter((p: any) => {
+            const h = normalize([p.name, p.description, ...(Array.isArray(p.tags) ? p.tags : [])].filter(Boolean).join(" "));
+            return h.includes(normalize(found));
+          });
+        }
+      }
+
+      // Fallback 2: لا يزال 0 → نرجع الأعلى مبيعاً كاقتراحات
+      if (matched.length === 0) {
+        matched = [...allProducts].sort((a: any, b: any) => (b.soldCount || 0) - (a.soldCount || 0));
+      }
+
+      // قص الحقول الثقيلة (بعض الحقول غير ضرورية للعرض)
+      return matched.slice(0, 30).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        image: p.imageUrl,
+        price: p.price,
+        originalPrice: p.originalPrice ?? null,
+        discount: p.discount ?? null,
+        stock: p.stock,
+      }));
+    } catch (e) {
+      console.error("[visual-search] search err:", (e as any)?.message);
+      return [];
+    }
+  }
 
   // ─── Invoice Settings ─────────────────────────────────────────────
   app.get("/api/admin/invoice-settings", requireAdmin, async (_req, res) => {

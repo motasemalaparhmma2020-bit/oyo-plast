@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, ImageIcon } from "lucide-react";
 
 // ──────────────────────────────────────────────────────────────────
-// شاشة البحث بالكاميرا — بنمط SHEIN الفعلي
-// المرحلة 1 (analyzing): الصورة كاملة + خط ماسح يتحرك من فوق لتحت
+// شاشة البحث بالكاميرا — بنمط SHEIN 100%
+// المرحلة 1 (analyzing): الصورة في الخلفية + خط ماسح + دائرة %0→%100 في المنتصف
 // المرحلة 2 (results): الصورة تنكمش للأعلى + درج نتائج من الأسفل
 // ──────────────────────────────────────────────────────────────────
 
@@ -43,12 +43,45 @@ export function VisualSearchOverlay({
   onCancel,
   onSelectProduct,
 }: VisualSearchOverlayProps) {
-  // عند انتهاء التحليل، اعرض الدرج بحركة انزلاق
+  // ────── عداد النسبة المئوية المتحرك (0% → 100%) ──────
+  // يتزايد بشكل لوغاريتمي (سريع في البداية ثم يبطئ) ليعطي إحساس واقعي بالتقدم
+  const [percent, setPercent] = useState(0);
+  const rafRef = useRef<number | null>(null);
+  const startRef = useRef<number>(0);
+  const targetCapRef = useRef<number>(92); // لا نتجاوز 92% حتى تصل النتائج فعلياً
+
+  useEffect(() => {
+    if (isAnalyzing && imageUrl) {
+      setPercent(0);
+      startRef.current = performance.now();
+      targetCapRef.current = 92;
+      const tick = () => {
+        const elapsed = (performance.now() - startRef.current) / 1000; // بالثواني
+        // منحنى لوغاريتمي: يصل لـ 50% خلال ثانية، 80% خلال 2 ثانية، يقترب من 92% خلال 3 ثوانٍ
+        const target = Math.min(targetCapRef.current, Math.round(92 * (1 - Math.exp(-elapsed / 1.2))));
+        setPercent(target);
+        if (target < targetCapRef.current) {
+          rafRef.current = requestAnimationFrame(tick);
+        }
+      };
+      rafRef.current = requestAnimationFrame(tick);
+      return () => {
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      };
+    } else if (!isAnalyzing && imageUrl) {
+      // عند انتهاء التحليل → قفز سريع إلى 100% ثم نُظهر الدرج
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      setPercent(100);
+    } else {
+      setPercent(0);
+    }
+  }, [isAnalyzing, imageUrl]);
+
+  // عند انتهاء التحليل، اعرض الدرج بعد لحظة قصيرة (ليرى المستخدم 100% أولاً)
   const [drawerOpen, setDrawerOpen] = useState(false);
   useEffect(() => {
     if (!isAnalyzing && imageUrl) {
-      // إعطاء فرصة قصيرة للانتقال السلس
-      const t = setTimeout(() => setDrawerOpen(true), 50);
+      const t = setTimeout(() => setDrawerOpen(true), 350);
       return () => clearTimeout(t);
     } else {
       setDrawerOpen(false);
@@ -58,6 +91,12 @@ export function VisualSearchOverlay({
   if (!imageUrl) return null;
 
   const showResults = !isAnalyzing;
+
+  // حساب محيط الدائرة لرسم الـ progress ring
+  const RADIUS = 54;
+  const STROKE = 4;
+  const CIRC = 2 * Math.PI * RADIUS;
+  const dashOffset = CIRC * (1 - percent / 100);
 
   return (
     <div
@@ -83,32 +122,75 @@ export function VisualSearchOverlay({
         <img
           src={imageUrl}
           alt="صورة البحث"
-          className="w-full h-full object-contain transition-all duration-500"
+          className={`w-full h-full object-contain transition-all duration-500 ${
+            isAnalyzing ? "opacity-90" : "opacity-100"
+          }`}
           data-testid="img-visual-search-preview"
         />
 
-        {/* ─── الماسح الضوئي بنمط SHEIN: خط أفقي يتحرك من فوق لتحت بلا توقف ─── */}
+        {/* ─── طبقة التحليل: ماسح SHEIN + دائرة %0→%100 ─── */}
         {isAnalyzing && (
           <>
             {/* أطر الزوايا الأربع (مثل ماسح QR) */}
-            <div className="pointer-events-none absolute inset-6 sm:inset-10">
+            <div className="pointer-events-none absolute inset-6 sm:inset-10 z-10">
               <div className="absolute top-0 right-0 w-8 h-8 border-t-[3px] border-r-[3px] border-cyan-300 rounded-tr-lg" />
               <div className="absolute top-0 left-0 w-8 h-8 border-t-[3px] border-l-[3px] border-cyan-300 rounded-tl-lg" />
               <div className="absolute bottom-0 right-0 w-8 h-8 border-b-[3px] border-r-[3px] border-cyan-300 rounded-br-lg" />
               <div className="absolute bottom-0 left-0 w-8 h-8 border-b-[3px] border-l-[3px] border-cyan-300 rounded-bl-lg" />
             </div>
 
-            {/* الخط الماسح المتحرك */}
-            <div className="pointer-events-none absolute inset-x-6 sm:inset-x-10 top-6 sm:top-10 bottom-6 sm:bottom-10 overflow-hidden">
+            {/* الخط الماسح المتحرك (من فوق لتحت بلا توقف) */}
+            <div className="pointer-events-none absolute inset-x-6 sm:inset-x-10 top-6 sm:top-10 bottom-6 sm:bottom-10 overflow-hidden z-10">
               <div className="visual-scanner-line" />
             </div>
 
-            {/* نص "جاري البحث" أسفل الصورة */}
-            <div className="absolute bottom-6 inset-x-0 flex flex-col items-center gap-2 z-10">
-              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-black/60 backdrop-blur text-white text-sm font-medium shadow-lg">
-                <span className="inline-block w-2 h-2 rounded-full bg-cyan-300 animate-pulse" />
-                <span>جاري البحث بالصورة…</span>
+            {/* ─── الدائرة المركزية بنمط SHEIN: %22 + نص ─── */}
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center z-20">
+              <div className="relative w-32 h-32 flex items-center justify-center">
+                {/* SVG progress ring */}
+                <svg className="absolute inset-0 -rotate-90" viewBox="0 0 120 120">
+                  {/* خلفية الدائرة */}
+                  <circle
+                    cx="60"
+                    cy="60"
+                    r={RADIUS}
+                    stroke="rgba(255,255,255,0.15)"
+                    strokeWidth={STROKE}
+                    fill="none"
+                  />
+                  {/* الدائرة المتقدمة */}
+                  <circle
+                    cx="60"
+                    cy="60"
+                    r={RADIUS}
+                    stroke="#ffffff"
+                    strokeWidth={STROKE}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray={CIRC}
+                    strokeDashoffset={dashOffset}
+                    style={{ transition: "stroke-dashoffset 200ms ease-out" }}
+                  />
+                </svg>
+                {/* الرقم المركزي */}
+                <span
+                  className="text-white font-black text-4xl tabular-nums drop-shadow-lg"
+                  data-testid="text-progress-percent"
+                >
+                  {percent}%
+                </span>
               </div>
+              {/* نص "تستغرق هذه الميزة بضع ثوانٍ تقريباً" */}
+              <p className="mt-5 text-white/95 text-sm font-medium px-6 text-center drop-shadow-lg max-w-[260px]">
+                تستغرق هذه الميزة بضع ثوانٍ تقريباً
+              </p>
+              <button
+                onClick={onCancel}
+                className="mt-5 px-7 py-1.5 rounded-full bg-black/40 backdrop-blur border border-white/30 text-white text-sm font-medium hover:bg-black/60 transition-colors pointer-events-auto"
+                data-testid="button-cancel-progress"
+              >
+                إلغاء
+              </button>
             </div>
           </>
         )}

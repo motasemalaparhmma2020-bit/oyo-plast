@@ -176,35 +176,22 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
         return;
       }
 
-      // ✅ تم استخراج الكلمات — انتقل لمرحلة عرض النتائج داخل overlay
+      // ✅ تم استخراج الكلمات والمنتجات في نفس الاستجابة (لا حاجة لطلب ثانٍ)
       setVisualKeywords(data.keywords);
-      setVisualLoading(false);          // يخفي الماسح ويُظهر الدرج
-      setVisualResultsLoading(true);    // يعرض skeleton داخل الدرج
 
-      // جلب المنتجات (يستخدم نفس الـ controller للإلغاء)
-      try {
-        const productsRes = await fetch(
-          `/api/products?search=${encodeURIComponent(data.keywords)}&limit=40`,
-          { credentials: "include", signal: controller.signal },
-        );
-        const productsData = await productsRes.json();
-        const list: VisualResultProduct[] = (Array.isArray(productsData) ? productsData : productsData?.products || [])
-          .map((p: any) => ({
-            id: p.id,
-            name: p.name || p.nameAr || "منتج",
-            image: p.image || p.imageUrl || (Array.isArray(p.images) ? p.images[0] : null),
-            price: p.price ?? p.unitPrice ?? null,
-            originalPrice: p.originalPrice ?? null,
-            discount: p.discount ?? null,
-          }));
-        setVisualResults(list);
-      } catch (err: any) {
-        if (err?.name !== "AbortError") {
-          setVisualResults([]);
-        }
-      } finally {
-        setVisualResultsLoading(false);
-      }
+      // المنتجات أصبحت ضمن استجابة /api/visual-search مباشرةً
+      const list: VisualResultProduct[] = (Array.isArray(data.products) ? data.products : [])
+        .map((p: any) => ({
+          id: p.id,
+          name: p.name || p.nameAr || "منتج",
+          image: p.image || p.imageUrl || (Array.isArray(p.images) ? p.images[0] : null),
+          price: p.price ?? p.unitPrice ?? null,
+          originalPrice: p.originalPrice ?? null,
+          discount: p.discount ?? null,
+        }));
+      setVisualResults(list);
+      setVisualResultsLoading(false);
+      setVisualLoading(false);          // يخفي الماسح ويُظهر الدرج فوراً مع النتائج
     } catch (err: any) {
       // تجاهل خطأ الإلغاء (المستخدم ضغط إلغاء بنفسه)
       if (err?.name === "AbortError") return;
