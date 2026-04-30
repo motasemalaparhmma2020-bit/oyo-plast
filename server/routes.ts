@@ -5906,6 +5906,17 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         return res.status(400).json({ message: "Missing required fields" });
       }
 
+      // تنظيف الحقول النصية وتحديد طول معقول لمنع البيانات المسيئة
+      const trim = (v: any, max: number) =>
+        typeof v === "string" ? v.trim().slice(0, max) : "";
+      const cleanName    = trim(name, 60);
+      const cleanCity    = trim(city, 60);
+      const cleanAddress = trim(address, 500);
+      const cleanPhone   = trim(phone, 25);
+      if (!cleanName || !cleanCity || !cleanAddress || !cleanPhone) {
+        return res.status(400).json({ message: "Invalid field values" });
+      }
+
       const { db: dbInstance } = await import("./db");
       const { userAddresses: addressTable } = await import("@shared/schema");
       const { eq: eqFn } = await import("drizzle-orm");
@@ -5917,7 +5928,14 @@ h1{font-size:18px;color:#222;margin:4px 0;}
 
       const [newAddress] = await dbInstance
         .insert(addressTable)
-        .values({ userId: uid, name, city, address, phone, isDefault: isDefault || false })
+        .values({
+          userId: uid,
+          name: cleanName,
+          city: cleanCity,
+          address: cleanAddress,
+          phone: cleanPhone,
+          isDefault: !!isDefault,
+        })
         .returning();
 
       res.status(201).json(newAddress);
@@ -5984,18 +6002,44 @@ h1{font-size:18px;color:#222;margin:4px 0;}
 
       const { db: dbInstance } = await import("./db");
       const { userAddresses: addressTable } = await import("@shared/schema");
-      const { eq: eqFn } = await import("drizzle-orm");
+      const { eq: eqFn, and: andFn } = await import("drizzle-orm");
+
+      const addressId = parseInt(req.params.id);
+      if (isNaN(addressId)) return res.status(400).json({ message: "Invalid address id" });
+
+      const uid = getUserId(user) as string;
+
+      // التحقق من الملكية أولاً قبل أي تعديل
+      const existing = await dbInstance
+        .select()
+        .from(addressTable)
+        .where(andFn(eqFn(addressTable.id, addressId), eqFn(addressTable.userId, uid)))
+        .limit(1);
+      if (existing.length === 0) {
+        return res.status(404).json({ message: "Address not found" });
+      }
 
       const { name, city, address, phone, isDefault } = req.body;
-      const uid = getUserId(user) as string;
+
+      // تنظيف وقصر الحقول النصية لمنع البيانات المسيئة
+      const sanitize = (v: any, max: number) =>
+        typeof v === "string" ? v.trim().slice(0, max) : v;
+
+      const updateSet: any = { updatedAt: new Date() };
+      if (name !== undefined)    updateSet.name = sanitize(name, 60);
+      if (city !== undefined)    updateSet.city = sanitize(city, 60);
+      if (address !== undefined) updateSet.address = sanitize(address, 500);
+      if (phone !== undefined)   updateSet.phone = sanitize(phone, 25);
+      if (isDefault !== undefined) updateSet.isDefault = !!isDefault;
+
       if (isDefault) {
         await dbInstance.update(addressTable).set({ isDefault: false }).where(eqFn(addressTable.userId, uid));
       }
 
       const [updated] = await dbInstance
         .update(addressTable)
-        .set({ name, city, address, phone, isDefault: isDefault || false, updatedAt: new Date() })
-        .where(eqFn(addressTable.id, parseInt(req.params.id)))
+        .set(updateSet)
+        .where(andFn(eqFn(addressTable.id, addressId), eqFn(addressTable.userId, uid)))
         .returning();
 
       res.json(updated);
@@ -6011,11 +6055,45 @@ h1{font-size:18px;color:#222;margin:4px 0;}
 
       const { db: dbInstance } = await import("./db");
       const { userAddresses: addressTable } = await import("@shared/schema");
-      const { eq: eqFn } = await import("drizzle-orm");
+      const { eq: eqFn, and: andFn } = await import("drizzle-orm");
 
-      await dbInstance.delete(addressTable).where(eqFn(addressTable.id, parseInt(req.params.id)));
+      const addressId = parseInt(req.params.id);
+      if (isNaN(addressId)) return res.status(400).json({ message: "Invalid address id" });
 
-      res.json({ success: true });
+      const uid = getUserId(user) as string;
+
+      // التحقق من الملكية ومعرفة هل هذا هو الافتراضي
+      const existing = await dbInstance
+        .select()
+        .from(addressTable)
+        .where(andFn(eqFn(addressTable.id, addressId), eqFn(addressTable.userId, uid)))
+        .limit(1);
+      if (existing.length === 0) {
+        return res.status(404).json({ message: "Address not found" });
+      }
+
+      const deleted = await dbInstance
+        .delete(addressTable)
+        .where(andFn(eqFn(addressTable.id, addressId), eqFn(addressTable.userId, uid)))
+        .returning();
+
+      // إذا كان المحذوف هو العنوان الافتراضي، نُعيّن أقدم عنوان متبقٍ كعنوان افتراضي تلقائياً
+      if (existing[0].isDefault) {
+        const remaining = await dbInstance
+          .select()
+          .from(addressTable)
+          .where(eqFn(addressTable.userId, uid))
+          .orderBy(addressTable.id)
+          .limit(1);
+        if (remaining.length > 0) {
+          await dbInstance
+            .update(addressTable)
+            .set({ isDefault: true, updatedAt: new Date() })
+            .where(eqFn(addressTable.id, remaining[0].id));
+        }
+      }
+
+      res.json({ success: true, deletedCount: deleted.length });
     } catch (e: any) {
       res.status(500).json({ message: "Failed to delete address", details: e.message });
     }

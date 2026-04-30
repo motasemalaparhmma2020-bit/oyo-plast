@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Order } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +26,7 @@ const statusSteps = [
   { key: 'processing', label: 'قيد التجهيز', icon: Package },
   { key: 'shipped', label: 'تم الشحن', icon: TrendingUp },
   { key: 'delivered', label: 'تم التوصيل', icon: CheckCircle },
+  { key: 'completed', label: 'مكتمل', icon: CheckCircle },
 ];
 
 const statusColors: Record<string, string> = {
@@ -70,10 +71,44 @@ export default function Orders() {
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
   const [orderItems, setOrderItems] = useState<OrderItemWithName[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
-  
-  const { data: orders, isLoading } = useQuery<Order[]>({
+
+  // فلتر الحالة من URL (?status=pending|processing|shipped|delivered|completed|cancelled|all)
+  const initialStatus = (() => {
+    if (typeof window === "undefined") return "all";
+    const s = new URLSearchParams(window.location.search).get("status") || "all";
+    return s;
+  })();
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
+
+  // مزامنة فلتر الحالة مع URL
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const current = url.searchParams.get("status") || "all";
+    if (current !== statusFilter) {
+      if (statusFilter === "all") url.searchParams.delete("status");
+      else url.searchParams.set("status", statusFilter);
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, [statusFilter]);
+
+  const { data: allOrders, isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders'],
   });
+
+  // تصفية الطلبات حسب الحالة المحددة
+  const orders = (() => {
+    if (!allOrders) return undefined;
+    if (statusFilter === "all") return allOrders;
+    return allOrders.filter(o => o.status === statusFilter);
+  })();
+
+  // إحصاء عدد الطلبات لكل حالة (لعرضه في تبويبات الفلتر)
+  const statusCounts = (allOrders || []).reduce<Record<string, number>>((acc, o) => {
+    acc[o.status] = (acc[o.status] || 0) + 1;
+    acc.all = (acc.all || 0) + 1;
+    return acc;
+  }, {});
 
   const handlePrintInvoice = async (order: Order) => {
     setLoadingItems(true);
@@ -127,10 +162,56 @@ export default function Orders() {
     );
   }
 
+  // تبويبات الفلتر مرتّبة بالحالات الأكثر استخداماً
+  const filterTabs = [
+    { key: "all", label: "الكل" },
+    { key: "pending", label: "قيد الانتظار" },
+    { key: "processing", label: "قيد التجهيز" },
+    { key: "shipped", label: "تم الشحن" },
+    { key: "delivered", label: "تم التوصيل" },
+    { key: "completed", label: "مكتمل" },
+    { key: "cancelled", label: "ملغي" },
+  ];
+
   return (
     <div className="container mx-auto px-4 py-6 pb-24">
-      <h1 className="text-2xl font-bold mb-6">طلباتي</h1>
-      
+      <h1 className="text-2xl font-bold mb-4 dark:text-foreground">طلباتي</h1>
+
+      {/* شريط الفلترة الأفقي القابل للتمرير */}
+      <div className="mb-5 -mx-4 px-4 overflow-x-auto scrollbar-hide" data-testid="orders-filter-bar">
+        <div className="flex gap-2 min-w-max pb-1">
+          {filterTabs.map(tab => {
+            const count = statusCounts[tab.key] || 0;
+            const active = statusFilter === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setStatusFilter(tab.key)}
+                className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-bold transition-all border ${
+                  active
+                    ? "bg-[#1a3a4a] text-white border-[#1a3a4a] shadow-md"
+                    : "bg-white dark:bg-card text-gray-700 dark:text-foreground border-gray-200 dark:border-border hover:border-gray-300"
+                }`}
+                data-testid={`filter-status-${tab.key}`}
+              >
+                {tab.label}
+                {count > 0 && (
+                  <span
+                    className={`mr-1.5 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold ${
+                      active
+                        ? "bg-white/25 text-white"
+                        : "bg-gray-100 dark:bg-muted text-gray-600 dark:text-muted-foreground"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="space-y-6">
         {orders.map((order) => {
           const currentStatusIndex = getStatusIndex(order.status);

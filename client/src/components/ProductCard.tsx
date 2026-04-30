@@ -62,12 +62,11 @@ export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSiz
     >
       <Link href={`/product/${product.id}`}>
         <div
-          className="relative overflow-hidden bg-white dark:from-gray-800 dark:to-gray-900 cursor-pointer flex items-center justify-center flex-shrink-0"
+          className="product-card-img-bg relative overflow-hidden cursor-pointer flex items-center justify-center flex-shrink-0"
           style={{
             aspectRatio: '1 / 1',
             padding: 'var(--card-margin, 8px)',
             borderRadius: 'var(--card-border-radius, 16px) var(--card-border-radius, 16px) 0 0',
-            background: 'var(--card-img-bg, #ffffff)',
           }}
         >
           <img

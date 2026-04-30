@@ -128,3 +128,11 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* خلفية صورة بطاقة المنتج: تحترم الوضع الداكن + متغير CSS قابل للتخصيص من الإدارة */
+.product-card-img-bg {
+  background: var(--card-img-bg, #ffffff);
+}
+.dark .product-card-img-bg {
+  background: var(--card-img-bg-dark, #1f2937);
+}

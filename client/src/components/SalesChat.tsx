@@ -157,10 +157,11 @@ export function SalesChatProvider({ children }: { children: ReactNode }) {
     });
     setProductName(newPname);
 
-    let saved: ChatMode = "compact";
+    // افتراضياً يبدأ مطوياً (فقاعة صغيرة) — يحترم اختيار المستخدم السابق
+    let saved: ChatMode = "bubble";
     try {
       const s = localStorage.getItem(MODE_KEY);
-      if (s === "expanded" || s === "compact") saved = s;
+      if (s === "expanded" || s === "compact" || s === "bubble") saved = s as ChatMode;
     } catch {}
     setMode(saved);
   // eslint-disable-next-line react-hooks/exhaustive-deps

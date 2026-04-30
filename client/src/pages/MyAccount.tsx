@@ -170,8 +170,24 @@ function OrderItemsRow({ orderId }: { orderId: number }) {
 
 export default function MyAccount() {
   const { isAuthenticated } = useAuth();
-  const [activeTab, setActiveTab] = useState("orders");
+  // قراءة التبويب من URL (?tab=wallet|orders|points)
+  const initialTab = (() => {
+    if (typeof window === "undefined") return "orders";
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t === "wallet" || t === "points" || t === "orders" ? t : "orders";
+  })();
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
+
+  // مزامنة التبويب مع URL عند التغيير (دون إعادة تحميل)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("tab") !== activeTab) {
+      url.searchParams.set("tab", activeTab);
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, [activeTab]);
 
   const { data: marketerAccount } = useQuery<any>({
     queryKey: ["/api/marketer/linked-account"],
