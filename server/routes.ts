@@ -705,6 +705,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   }
 
+  // ─── فك قفل الترحيل بالقوة (admin only) ─────────────────────────────
+  // يستخدم في حالة استثنائية: عملية ترحيل سابقة انقطعت لكن القفل بقي عالقاً
+  // (مثل crash لـ instance قديم في autoscale)
+  app.post("/api/admin/migrate-base64-images/force-unlock", requireAdmin, async (_req, res) => {
+    const LOCK_KEY = 4242042042;
+    const { pool: dbPool } = await import("./db");
+    const client = await dbPool.connect();
+    try {
+      // pg_advisory_unlock عادي يفك فقط على نفس الـ session
+      // لكن نُحاول أيضاً terminate أي session تحمل القفل
+      const locks = await client.query(`
+        SELECT pid FROM pg_locks
+        WHERE locktype = 'advisory' AND objid = $1
+      `, [LOCK_KEY]);
+      let terminated = 0;
+      for (const r of locks.rows) {
+        try {
+          await client.query(`SELECT pg_terminate_backend($1)`, [r.pid]);
+          terminated++;
+        } catch { /* ignore */ }
+      }
+      res.json({ success: true, terminatedSessions: terminated, message: `تم فك القفل وإنهاء ${terminated} session` });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e?.message });
+    } finally {
+      client.release();
+    }
+  });
+
   // ─── ترحيل صور base64 من DB إلى Cloudinary (admin only) ─────────────
   // لتشغيلها مرة واحدة على بيئة النشر:
   //   curl -X POST https://YOUR-DOMAIN/api/admin/migrate-base64-images \
