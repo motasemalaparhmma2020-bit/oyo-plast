@@ -150,9 +150,15 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
     setVisualResults([]);
     setVisualKeywords("");
 
-    // controller لإلغاء الطلب عند ضغط "إلغاء"
+    // controller لإلغاء الطلب عند ضغط "إلغاء" أو timeout
     const controller = new AbortController();
     visualAbortRef.current = controller;
+
+    // ⏱ timeout صارم على المتصفح (15 ثانية) - بحال شبكة المستخدم بطيئة
+    // أكبر من timeout الـ backend (16ث) بهامش بسيط
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 15000);
 
     try {
       const formData = new FormData();
@@ -163,11 +169,15 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
         credentials: "include",
         signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data?.message || "فشل تحليل الصورة");
       }
-      if (!data.recognized || !data.keywords) {
+
+      // الباك-إند الآن يضمن recognized=true دائماً مع products (حتى عند الفشل: top sellers)
+      // إلا في حالات نادرة جداً
+      if (!data.recognized) {
         closeVisualOverlay();
         toast({
           title: "لم نتعرّف على المنتج",
@@ -176,10 +186,9 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
         return;
       }
 
-      // ✅ تم استخراج الكلمات والمنتجات في نفس الاستجابة (لا حاجة لطلب ثانٍ)
-      setVisualKeywords(data.keywords);
+      setVisualKeywords(data.keywords || "اقتراحات");
 
-      // المنتجات أصبحت ضمن استجابة /api/visual-search مباشرةً
+      // المنتجات ضمن استجابة /api/visual-search مباشرةً
       const list: VisualResultProduct[] = (Array.isArray(data.products) ? data.products : [])
         .map((p: any) => ({
           id: p.id,
@@ -191,10 +200,27 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
         }));
       setVisualResults(list);
       setVisualResultsLoading(false);
-      setVisualLoading(false);          // يخفي الماسح ويُظهر الدرج فوراً مع النتائج
+      setVisualLoading(false);
+
+      // إذا كان fallback (لم نعرف المنتج بدقة) → نخبر المستخدم بصمت
+      if (data.fallback && list.length > 0) {
+        toast({
+          title: "اقتراحات قد تعجبك",
+          description: "لم نتعرّف على المنتج بدقة، إليك الأعلى مبيعاً",
+        });
+      }
     } catch (err: any) {
-      // تجاهل خطأ الإلغاء (المستخدم ضغط إلغاء بنفسه)
-      if (err?.name === "AbortError") return;
+      clearTimeout(timeoutId);
+      // تجاهل خطأ الإلغاء (المستخدم ضغط إلغاء أو timeout)
+      if (err?.name === "AbortError") {
+        closeVisualOverlay();
+        toast({
+          title: "انتهت مهلة الاتصال",
+          description: "تأكد من اتصالك بالإنترنت وحاول مرة أخرى",
+          variant: "destructive",
+        });
+        return;
+      }
       closeVisualOverlay();
       toast({
         title: "تعذّر البحث بالصورة",

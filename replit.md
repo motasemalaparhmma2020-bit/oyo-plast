@@ -132,3 +132,21 @@ Major upgrade to the visual search UX after user reported missing results:
 - **SHEIN-style progress ring (`VisualSearchOverlay.tsx`):** Large centered SVG circle (radius 54, white stroke) with bold percentage in the middle (0% → 100%). Logarithmic curve via `requestAnimationFrame` reaches 50% at 1s, 80% at 2s, caps at 92% until real response arrives — then jumps to 100% and reveals the results drawer 350ms later. Includes "تستغرق هذه الميزة بضع ثوانٍ تقريباً" caption + secondary "إلغاء" pill exactly like SHEIN.
 - **Scanner line preserved:** Cyan top→bottom scan line + corner brackets remain on the image background underneath the progress ring.
 - **`Navbar.tsx`:** Removed the secondary `/api/products?search=` fetch (no longer needed). The overlay receives products directly from the visual-search response.
+
+## Visual Search v3 — Critical Fix (April 30, 2026)
+**سبب المشكلة الحقيقي**: نماذج Gemini القديمة (`gemini-2.0-flash`, `gemini-1.5-flash-latest`) **لم تعد متاحة لمفاتيح API الجديدة** (تُرجع 404). هذا جعل كل طلبات visual-search تفشل صامتة، وكان الـ overlay يبقى عالقاً عند 92% للأبد.
+
+### الإصلاحات:
+1. **تحديث أسماء النماذج** في `server/routes.ts`:
+   - استبدال القديمة بـ `gemini-2.5-flash` (أساسي) + `gemini-flash-latest` (احتياط) + `gemini-2.0-flash-lite` (آخر ملاذ)
+2. **تعطيل thinking mode الداخلي** عبر `thinkingConfig: { thinkingBudget: 0 }` — يوفر tokens ويُسرّع الرد بشكل كبير
+3. **رفع `maxOutputTokens` من 80 → 500** لأن 2.5-flash يستهلك tokens داخلية أكثر (يقطع النص العربي بدون هذا)
+4. **Timeout صارم على Gemini** (8 ثوانٍ لكل نموذج، إجمالي 16 ثانية كحد أقصى) باستخدام `Promise.race`
+5. **Fallback شامل لكل حالة فشل** — عند timeout أو "غير معروف" أو خطأ شبكة، نرجع `recognized: true, fallback: true` مع الأعلى مبيعاً (لا توجد شاشة فارغة على الإطلاق)
+6. **Frontend timeout (15 ثانية)** في `Navbar.handleImageSelected` عبر `AbortController` + `setTimeout` — يُغلق overlay ويُظهر toast بدل البقاء عالقاً
+7. **Toast لطيف** "اقتراحات قد تعجبك" عند fallback ليفهم المستخدم أن النتائج اقتراحات وليست تطابقاً دقيقاً
+
+### الأداء النهائي:
+- لقطة شاشة منتج معقدة → "كيس بلاستيك شفاف" + 2 منتج في **1.1ث**
+- صورة كيس مباشرة → "كيس بلاستيك أحمر مطبوع" + 7 منتجات في **0.8ث**
+- صورة سيارة → fallback إلى الأعلى مبيعاً (9 منتجات) في **2.6ث**

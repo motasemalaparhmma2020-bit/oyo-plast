@@ -471,41 +471,68 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         .toBuffer();
       const base64 = compressed.toString("base64");
 
-      // prompt واضح ومحدد = استجابة دقيقة
-      const prompt = `أنت محلل صور لمتجر تغليف يمني (أكياس، شنط بلاستيك/قماش/ورق، علاقي، تغليف، طباعة).
-انظر إلى الصورة وأرجع وصفاً مختصراً جداً (2 إلى 4 كلمات عربية) يحدّد:
-- نوع المنتج (كيس / شنطة / علاقي / لفافة / علبة …)
-- المادة (بلاستيك / قماش / ورق / كرتون …) إن أمكن
+      // prompt واضح ومحدد = استجابة دقيقة + يتعامل مع لقطات الشاشة
+      const prompt = `أنت محلل صور لمتجر تغليف يمني (أكياس، شنط بلاستيك/قماش/ورق، علاقي، تغليف، طباعة، آلات إغلاق).
+انظر إلى الصورة (حتى لو كانت لقطة شاشة من تطبيق آخر) وركّز على المنتج الرئيسي فيها.
+أرجع وصفاً مختصراً جداً (2 إلى 4 كلمات عربية) يحدّد:
+- نوع المنتج (كيس / شنطة / علاقي / لفافة / علبة / آلة …)
+- المادة (بلاستيك / قماش / ورق / كرتون / نايلون …) إن أمكن
 - اللون أو الميزة الأبرز إن أمكن
-أرجع الكلمات فقط بدون جمل أو ترقيم أو شرح.
-إن كانت الصورة لا تحتوي منتج تغليف، أرجع: غير_معروف
-أمثلة صحيحة: "كيس بلاستيك شفاف" — "شنطة قماش حمراء" — "علاقي بلاستيك"`;
+أرجع الكلمات فقط بدون جمل أو ترقيم أو شرح أو أكواد.
+إن كانت الصورة لا تحتوي أي منتج تغليف على الإطلاق (مثل سيارة، شخص، طبيعة)، أرجع: غير_معروف
+أمثلة: "كيس بلاستيك شفاف" — "شنطة قماش حمراء" — "علاقي بلاستيك" — "كيس مكسرات شفاف" — "آلة إغلاق أكياس"`;
 
-      // gemini-2.0-flash هو الأسرع (1-3 ثوان عادة)
+      // ✅ نماذج Gemini الحديثة (يناير 2026): القديمة gemini-2.0-flash و gemini-1.5-flash-latest
+      // لم تعد متاحة لمفاتيح API الجديدة. نستخدم 2.5-flash كأساس + flash-latest كاحتياط.
+      // ⏱ timeout صارم لكل محاولة: 8 ثوانٍ، إجمالاً لا يتجاوز 16 ثانية
       let result: any;
-      const models = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-2.5-flash"];
+      const models = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash-lite"];
       let lastError: any = null;
+      const MODEL_TIMEOUT_MS = 8000;
       for (const model of models) {
         try {
-          result = await ai.models.generateContent({
-            model,
-            contents: [{
-              role: "user",
-              parts: [
-                { text: prompt },
-                { inlineData: { mimeType: "image/jpeg", data: base64 } },
-              ],
-            }],
-            // maxOutputTokens مرفوع إلى 80 (كل حرف عربي = ~1 token غالباً)
-            config: { temperature: 0.2, maxOutputTokens: 80 },
-          });
+          result = await Promise.race([
+            ai.models.generateContent({
+              model,
+              contents: [{
+                role: "user",
+                parts: [
+                  { text: prompt },
+                  { inlineData: { mimeType: "image/jpeg", data: base64 } },
+                ],
+              }],
+              // maxOutputTokens=500 لأن 2.5-flash يستهلك tokens أكثر (thinking mode داخلي)
+              // thinkingConfig.thinkingBudget=0 يُعطّل التفكير الداخلي → أسرع وأقل استهلاكاً
+              config: {
+                temperature: 0.2,
+                maxOutputTokens: 500,
+                thinkingConfig: { thinkingBudget: 0 },
+              },
+            }),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error(`Gemini ${model} timeout بعد ${MODEL_TIMEOUT_MS}ms`)), MODEL_TIMEOUT_MS)
+            ),
+          ]);
           break;
         } catch (e: any) {
           lastError = e;
           console.warn(`[visual-search] فشل ${model}: ${String(e?.message || e).slice(0, 120)}`);
         }
       }
-      if (!result) throw lastError;
+
+      // إذا فشل كل النماذج (timeout أو خطأ شبكة) → نرجع الأعلى مبيعاً كـ fallback
+      // بدل ما نترك المستخدم على شاشة بيضاء
+      if (!result) {
+        console.warn("[visual-search] جميع النماذج فشلت، أرجع top-sellers");
+        const fallback = await searchProductsByArabicTokens("");
+        return res.json({
+          keywords: "اقتراحات",
+          recognized: true,
+          fallback: true,
+          products: fallback,
+          productsCount: fallback.length,
+        });
+      }
 
       const raw = (result.text || "").trim();
       const keywords = raw
@@ -522,10 +549,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         keywords.includes("غير معروف");
 
       if (isUnknown) {
+        // بدل ما نعرض شاشة فارغة، نُرجع الأعلى مبيعاً كـ "اقتراحات قد تعجبك"
+        const suggestions = await searchProductsByArabicTokens("");
         return res.json({
-          keywords: "",
-          recognized: false,
-          message: "لم نتمكن من التعرّف على المنتج في الصورة",
+          keywords: "اقتراحات",
+          recognized: true,
+          fallback: true,
+          message: "لم نتعرّف على المنتج بدقة، إليك اقتراحات",
+          products: suggestions,
+          productsCount: suggestions.length,
         });
       }
 
@@ -553,7 +585,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ─── بحث عربي ذكي: token-based + تطبيع + fallback ─────────────────
   // يُرجع منتجات تطابق أي token (ليس كلها) + إذا 0 نتائج يرجع الأعلى مبيعاً
   async function searchProductsByArabicTokens(keywords: string): Promise<any[]> {
-    if (!keywords) return [];
+    // ملاحظة: keywords فارغة = نُريد top sellers (fallback path) — لا نرفض!
     try {
       const { storage } = await import("./storage");
       const allProducts = await storage.getProducts();
@@ -579,8 +611,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         .split(" ")
         .filter(t => t.length >= 2 && !STOP.has(t));
 
+      // إذا ما فيه keywords (fallback) → نرجع الأعلى مبيعاً
       if (tokens.length === 0) {
-        return allProducts.slice(0, 12);
+        const topSellers = [...allProducts].sort((a: any, b: any) => (b.soldCount || 0) - (a.soldCount || 0));
+        return topSellers.slice(0, 12).map((p: any) => ({
+          id: p.id, name: p.name, image: p.imageUrl, price: p.price,
+          originalPrice: p.originalPrice ?? null, discount: p.discount ?? null, stock: p.stock,
+        }));
       }
 
       // نسجّل كل منتج بعدد tokens المتطابقة → نرتّب تنازلياً
