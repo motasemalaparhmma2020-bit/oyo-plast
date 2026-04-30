@@ -819,16 +819,41 @@ export default function ProductDetail() {
               {isMarketerLink && (
                 <Badge className="text-xs px-2 py-0.5 bg-purple-600 text-white rounded-md">-{sadeemMarketerDiscount}%</Badge>
               )}
-              {hasDiscount && (
-                <span className="text-muted-foreground line-through text-sm" data-testid="text-original-price">
-                  {formatPrice(currentPrice)} {currLabel}
-                </span>
-              )}
-              {selectedSmartV && Number(selectedSmartV.discount || 0) > 0 && sadeemShowOldPrice && (
-                <span className="text-sm line-through text-muted-foreground">
-                  {formatPrice(Math.round(Number(currentPrice) / (1 - Number(selectedSmartV.discount) / 100)))} {currLabel}
-                </span>
-              )}
+              {(() => {
+                // ✅ المنطق الصحيح للسعر المشطوب (السعر قبل الخصم)
+                // المشكلة السابقة: كان يعرض currentPrice (السعر بعد الخصم) كسعر أصلي مشطوب
+                let oldPrice: number | null = null;
+
+                // أ) رابط مسوّق: السعر المشطوب هو السعر العادي قبل خصم المسوّق
+                if (isMarketerLink) {
+                  oldPrice = Number(currentPrice);
+                }
+                // ب) خيار ذكي مختار له خصم خاص → احسب السعر الأصلي رياضياً
+                else if (selectedSmartV && Number(selectedSmartV.discount || 0) > 0 && sadeemShowOldPrice) {
+                  const d = Number(selectedSmartV.discount);
+                  if (d > 0 && d < 100) {
+                    oldPrice = Math.round(Number(currentPrice) / (1 - d / 100));
+                  }
+                }
+                // ج) منتج عادي بخصم → استخدم originalPrice إن وُجد، وإلا احسب من نسبة الخصم
+                else if (sadeemShowOldPrice && effectiveDiscount > 0) {
+                  const op = (product as any)?.originalPrice;
+                  const opSar = (product as any)?.originalPriceSar;
+                  if (op && Number(op) > Number(currentPrice)) {
+                    oldPrice = currency === 'SAR' && opSar ? Number(opSar) : Number(op);
+                  } else if (effectiveDiscount > 0 && effectiveDiscount < 100) {
+                    oldPrice = Math.round(Number(currentPrice) / (1 - effectiveDiscount / 100));
+                  }
+                }
+
+                // تأكّد أن السعر القديم أعلى فعلاً من السعر المعروض (تجنّب عرض خاطئ)
+                if (!oldPrice || oldPrice <= Number(displayedPrice)) return null;
+                return (
+                  <span className="text-muted-foreground line-through text-sm" data-testid="text-original-price">
+                    {formatPrice(oldPrice)} {currLabel}
+                  </span>
+                );
+              })()}
             </div>
             {/* كوبون */}
             {showCoupon && (
