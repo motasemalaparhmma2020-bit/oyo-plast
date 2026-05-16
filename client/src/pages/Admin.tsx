@@ -10,6 +10,7 @@ import { AdminMarketers } from "@/components/AdminMarketers";
 import AdminPricing from "@/components/AdminPricing";
 import AdminSecurityLogs from "@/components/AdminSecurityLogs";
 import AdminSupplierProducts from "@/components/AdminSupplierProducts";
+import AdminSupplierApplications from "@/components/AdminSupplierApplications";
 import { AdminReviews } from "@/components/AdminReviews";
 import AdminPayroll from "@/components/AdminPayroll";
 import AdminContracts from "@/components/AdminContracts";
@@ -8180,6 +8181,11 @@ export default function Admin() {
           <TabsContent value="suppliers">
             <SupplierManagement adminToken={adminToken} />
             <AdminServiceAreas adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── Supplier Applications Tab (Self-Signup Review) ────── */}
+          <TabsContent value="supplier-applications">
+            <AdminSupplierApplications adminToken={adminToken} />
           </TabsContent>
 
           {/* ─── Marketers Tab ─────────────────────────────────────────── */}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { WhyUsSection, StatsSection, FaqSection } from "@/components/HomeSections";
 import { Link } from "wouter";
@@ -6,8 +6,10 @@ import {
   ShoppingBag, Wallet, Award, ChevronLeft, Package, Clock, 
   CheckCircle2, Truck, XCircle, Loader2, Eye, ArrowUpRight, ArrowDownLeft,
   UserPlus, LogIn, ChevronDown, ChevronUp, Megaphone, TrendingUp, Tag, ExternalLink,
-  CreditCard, Bell
+  CreditCard, Bell, Heart, MapPin, Settings, MessageCircle, Handshake,
+  RefreshCcw
 } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -169,7 +171,7 @@ function OrderItemsRow({ orderId }: { orderId: number }) {
 }
 
 export default function MyAccount() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   // قراءة التبويب من URL (?tab=wallet|orders|points)
   const initialTab = (() => {
     if (typeof window === "undefined") return "orders";
@@ -227,6 +229,35 @@ export default function MyAccount() {
   const { data: pointsTransactions = [], isLoading: pointsTxLoading } = useQuery<PointsTransaction[]>({
     queryKey: ["/api/points/transactions"],
   });
+
+  const { data: wishlistItems = [] } = useQuery<any[]>({
+    queryKey: ["/api/wishlist"],
+    enabled: isAuthenticated,
+  });
+
+  const { data: credit } = useQuery<any>({
+    queryKey: ["/api/my/credit"],
+    enabled: isAuthenticated,
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  // عدّ الطلبات حسب الحالة
+  const orderCounts = {
+    pending: orders.filter(o => o.status === "pending" || o.status === "deposit_paid").length,
+    processing: orders.filter(o => o.status === "processing").length,
+    shipped: orders.filter(o => o.status === "shipped").length,
+    delivered: orders.filter(o => o.status === "delivered" || o.status === "completed").length,
+    cancelled: orders.filter(o => o.status === "cancelled").length,
+  };
+
+  const tierName = credit?.tier_name_ar || "برونزي";
+  const tierIcon = credit?.tier_icon || "🥉";
+  const tierColor = credit?.tier_color || "#cd7f32";
+  const displayName = (user as any)?.fullName || (user as any)?.firstName || "عميلنا الكريم";
+  const userInitial = displayName.charAt(0);
+  const creditAvailable = Number(credit?.available_credit ?? 0);
+  const showPartnership = isAuthenticated && (user as any)?.accountType !== "marketer" && !marketerAccount;
 
   const formatCurrency = (amount: string | number, currency: string) => {
     const num = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -332,65 +363,222 @@ export default function MyAccount() {
   }
 
   return (
-    <div className="container max-w-4xl mx-auto px-4 py-6 pb-24">
-      <div className="flex items-center justify-between gap-3 mb-6">
-        <div className="flex items-center gap-3">
-          <Link href="/">
-            <Button variant="ghost" size="icon" data-testid="button-back-home">
-              <ChevronLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <h1 className="text-2xl font-bold">حسابي</h1>
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 pb-24" dir="rtl">
+      {/* ────────────────  Hero Header  ──────────────── */}
+      <div className="bg-gradient-to-br from-[#1976D2] via-[#2196F3] to-[#42A5F5] text-white">
+        <div className="container max-w-4xl mx-auto px-4 pt-5 pb-20 relative">
+          <div className="flex items-center justify-between mb-4">
+            <Link href="/">
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" data-testid="button-back-home">
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+            </Link>
+            <h1 className="text-lg font-bold">حسابي</h1>
+            <Link href="/notification-settings">
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" data-testid="button-notification-settings">
+                <Bell className="h-5 w-5" />
+              </Button>
+            </Link>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <Avatar className="w-16 h-16 ring-2 ring-white/40 shadow-lg">
+              <AvatarImage src={(user as any)?.profileImageUrl || undefined} alt={displayName} />
+              <AvatarFallback className="bg-white text-[#1976D2] text-2xl font-bold">
+                {userInitial}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl font-bold mb-1 truncate" data-testid="text-user-name">{displayName}</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  className="text-xs font-bold border-0 px-2 py-0.5"
+                  style={{ background: tierColor, color: "white" }}
+                  data-testid="badge-tier"
+                >
+                  {tierIcon} {tierName}
+                </Badge>
+                {(user as any)?.city && (
+                  <span className="text-xs text-white/80 flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />
+                    {(user as any).city}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-        <Link href="/notification-settings">
-          <Button variant="outline" size="sm" className="gap-2" data-testid="button-notification-settings">
-            <Bell className="h-4 w-4" />
-            <span className="hidden sm:inline">إعدادات الإشعارات</span>
-          </Button>
-        </Link>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <Card 
-          className={`cursor-pointer transition-all ${activeTab === 'orders' ? 'ring-2 ring-primary' : ''}`}
-          onClick={() => setActiveTab('orders')}
-          data-testid="card-orders-summary"
-        >
-          <CardContent className="p-4 text-center">
-            <ShoppingBag className="h-6 w-6 mx-auto mb-2 text-primary" />
-            <p className="text-2xl font-bold">{accountSummary?.orders.total || 0}</p>
-            <p className="text-xs text-muted-foreground">طلباتي</p>
+      {/* ────────────────  Balance Cards (overlapping)  ──────────────── */}
+      <div className="container max-w-4xl mx-auto px-4 -mt-14 relative z-10">
+        <div className="grid grid-cols-4 gap-2 md:gap-3 mb-4">
+          <Link href="/wishlist">
+            <Card className="hover-elevate cursor-pointer h-full" data-testid="card-wishlist">
+              <CardContent className="p-3 text-center">
+                <div className="w-10 h-10 rounded-full bg-pink-100 dark:bg-pink-950/50 flex items-center justify-center mx-auto mb-1.5">
+                  <Heart className="h-5 w-5 text-pink-500 fill-pink-500" />
+                </div>
+                <p className="text-lg font-bold text-pink-600 dark:text-pink-400" data-testid="text-wishlist-count">
+                  {wishlistItems.length}
+                </p>
+                <p className="text-[10px] text-muted-foreground">المفضلة</p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/account/credit">
+            <Card className="hover-elevate cursor-pointer h-full" data-testid="card-credit-mini">
+              <CardContent className="p-3 text-center">
+                <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-950/50 flex items-center justify-center mx-auto mb-1.5">
+                  <CreditCard className="h-5 w-5 text-orange-500" />
+                </div>
+                <p className="text-base font-bold text-orange-600 dark:text-orange-400 truncate" data-testid="text-credit-available">
+                  {creditAvailable > 0 ? creditAvailable.toLocaleString('ar-YE') : "—"}
+                </p>
+                <p className="text-[10px] text-muted-foreground">ائتمان متاح</p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Card
+            className={`hover-elevate cursor-pointer h-full ${activeTab === 'points' ? 'ring-2 ring-primary' : ''}`}
+            onClick={() => setActiveTab('points')}
+            data-testid="card-points-summary"
+          >
+            <CardContent className="p-3 text-center">
+              <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-950/50 flex items-center justify-center mx-auto mb-1.5">
+                <Award className="h-5 w-5 text-yellow-500" />
+              </div>
+              <p className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
+                {accountSummary?.points.current || 0}
+              </p>
+              <p className="text-[10px] text-muted-foreground">نقاطي</p>
+            </CardContent>
+          </Card>
+
+          <Card
+            className={`hover-elevate cursor-pointer h-full ${activeTab === 'wallet' ? 'ring-2 ring-primary' : ''}`}
+            onClick={() => setActiveTab('wallet')}
+            data-testid="card-wallet-summary"
+          >
+            <CardContent className="p-3 text-center">
+              <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-950/50 flex items-center justify-center mx-auto mb-1.5">
+                <Wallet className="h-5 w-5 text-green-500" />
+              </div>
+              <p className="text-base font-bold text-green-600 dark:text-green-400 truncate">
+                {parseFloat(accountSummary?.wallet.balanceYer || '0').toLocaleString('ar-YE')}
+              </p>
+              <p className="text-[10px] text-muted-foreground">المحفظة</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ────────────────  Orders Status Strip  ──────────────── */}
+        <Card className="mb-4" data-testid="card-orders-strip">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-sm flex items-center gap-1.5">
+                <ShoppingBag className="h-4 w-4 text-primary" />
+                طلباتي
+                {accountSummary?.orders.total ? (
+                  <span className="text-xs text-muted-foreground">({accountSummary.orders.total})</span>
+                ) : null}
+              </h3>
+              <Link href="/orders">
+                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" data-testid="button-all-orders">
+                  الكل
+                  <ChevronLeft className="h-3 w-3" />
+                </Button>
+              </Link>
+            </div>
+            <div className="grid grid-cols-5 gap-1">
+              {[
+                { key: "pending", label: "غير مدفوع", icon: Clock, color: "text-yellow-600", count: orderCounts.pending },
+                { key: "processing", label: "تجهيز", icon: Package, color: "text-orange-600", count: orderCounts.processing },
+                { key: "shipped", label: "شحن", icon: Truck, color: "text-purple-600", count: orderCounts.shipped },
+                { key: "delivered", label: "تم", icon: CheckCircle2, color: "text-green-600", count: orderCounts.delivered },
+                { key: "cancelled", label: "ملغي", icon: RefreshCcw, color: "text-red-600", count: orderCounts.cancelled },
+              ].map(s => {
+                const Icon = s.icon;
+                return (
+                  <button
+                    key={s.key}
+                    onClick={() => setActiveTab('orders')}
+                    className="relative flex flex-col items-center gap-1 py-2 rounded-lg hover-elevate transition"
+                    data-testid={`status-${s.key}`}
+                  >
+                    <div className="relative">
+                      <Icon className={`h-5 w-5 ${s.color}`} />
+                      {s.count > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                          {s.count}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">{s.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
 
-        <Card 
-          className={`cursor-pointer transition-all ${activeTab === 'wallet' ? 'ring-2 ring-primary' : ''}`}
-          onClick={() => setActiveTab('wallet')}
-          data-testid="card-wallet-summary"
-        >
-          <CardContent className="p-4 text-center">
-            <Wallet className="h-6 w-6 mx-auto mb-2 text-green-500" />
-            <p className="text-lg font-bold">{parseFloat(accountSummary?.wallet.balanceYer || '0').toLocaleString('ar-YE')}</p>
-            <p className="text-xs text-muted-foreground">محفظتي (ر.ي)</p>
+        {/* ────────────────  Tools Grid  ──────────────── */}
+        <Card className="mb-4" data-testid="card-tools">
+          <CardContent className="p-3">
+            <h3 className="font-bold text-sm mb-3">أدواتي</h3>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { icon: MapPin, label: "العناوين", href: "/addresses", color: "text-blue-600", bg: "bg-blue-100 dark:bg-blue-950/50" },
+                { icon: Bell, label: "الإشعارات", href: "/notifications", color: "text-purple-600", bg: "bg-purple-100 dark:bg-purple-950/50" },
+                { icon: Settings, label: "الإعدادات", href: "/notification-settings", color: "text-gray-600", bg: "bg-gray-100 dark:bg-gray-800" },
+                { icon: MessageCircle, label: "تواصل", href: "https://wa.me/967773111110?text=مرحباً، أحتاج للمساعدة", color: "text-emerald-600", bg: "bg-emerald-100 dark:bg-emerald-950/50", external: true },
+              ].map(t => {
+                const Icon = t.icon;
+                const inner = (
+                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg hover-elevate transition cursor-pointer">
+                    <div className={`w-11 h-11 rounded-full ${t.bg} flex items-center justify-center`}>
+                      <Icon className={`h-5 w-5 ${t.color}`} />
+                    </div>
+                    <span className="text-xs">{t.label}</span>
+                  </div>
+                );
+                return t.external ? (
+                  <a key={t.label} href={t.href} target="_blank" rel="noopener noreferrer" data-testid={`tool-${t.label}`}>
+                    {inner}
+                  </a>
+                ) : (
+                  <Link key={t.label} href={t.href} data-testid={`tool-${t.label}`}>
+                    {inner}
+                  </Link>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
 
-        <Card 
-          className={`cursor-pointer transition-all ${activeTab === 'points' ? 'ring-2 ring-primary' : ''}`}
-          onClick={() => setActiveTab('points')}
-          data-testid="card-points-summary"
-        >
-          <CardContent className="p-4 text-center">
-            <Award className="h-6 w-6 mx-auto mb-2 text-yellow-500" />
-            <p className="text-2xl font-bold">{accountSummary?.points.current || 0}</p>
-            <p className="text-xs text-muted-foreground">نقاطي</p>
-          </CardContent>
-        </Card>
-      </div>
+        {/* ──────────────── Partnership Invitation (small line) ──────────────── */}
+        {showPartnership && (
+          <Link href="/partnership">
+            <div
+              className="mb-4 p-3 rounded-xl bg-gradient-to-l from-amber-50 via-white to-emerald-50 dark:from-amber-950/30 dark:via-card dark:to-emerald-950/30 border border-amber-200 dark:border-amber-900/50 flex items-center gap-3 hover-elevate cursor-pointer"
+              data-testid="banner-partnership"
+            >
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-emerald-500 flex items-center justify-center shrink-0 shadow-md">
+                <Handshake className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm">هل تريد كسب دخل إضافي معنا؟</p>
+                <p className="text-xs text-muted-foreground">تعرّف على برامج الشراكة (مسوّق / مورّد)</p>
+              </div>
+              <ChevronLeft className="h-5 w-5 text-muted-foreground shrink-0" />
+            </div>
+          </Link>
+        )}
 
-      {/* بطاقة "حسابي المالي" — الشراء بالأجل والائتمان */}
-      <CreditAccountCard />
+        {/* بطاقة "حسابي المالي" — تعرض فقط إذا كان لديه ائتمان فعلي */}
+        <CreditAccountCard />
 
       {/* بطاقة حساب المسوق — تظهر إذا كان المستخدم مسوقاً مرتبطاً */}
       {marketerAccount && (
@@ -695,6 +883,7 @@ export default function MyAccount() {
       {displaySettings?.showFaq && displaySettings?.faqOnAccount && (
         <FaqSection size={displaySettings.faqSize ?? "medium"} />
       )}
+      </div>
     </div>
   );
 }

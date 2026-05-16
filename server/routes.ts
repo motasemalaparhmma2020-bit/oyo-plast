@@ -5027,6 +5027,106 @@ h1{font-size:18px;color:#222;margin:4px 0;}
     }
   });
 
+  // ─────────────────────────────────────────────────────────────────
+  // ── Supplier Self-Signup (Partnership Portal, May 2026) ─────────
+  // ─────────────────────────────────────────────────────────────────
+  app.post("/api/partnership/supplier/apply", async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const {
+        companyName, ownerName, phone, city, address,
+        businessType, productCategories, message, documentsUrls,
+        contractAccepted
+      } = req.body || {};
+
+      if (!companyName || !ownerName || !phone || !city)
+        return res.status(400).json({ message: "اسم الشركة، اسم المالك، الهاتف، والمدينة مطلوبة" });
+      if (!contractAccepted)
+        return res.status(400).json({ message: "يجب الموافقة على عقد الشراكة" });
+
+      const dup = await dbPool.query(
+        "SELECT id FROM supplier_applications WHERE phone=$1 AND status='pending'",
+        [phone.trim()]
+      );
+      if (dup.rows.length)
+        return res.status(409).json({ message: "يوجد طلب مسبق بهذا الهاتف قيد المراجعة" });
+
+      const result = await dbPool.query(
+        `INSERT INTO supplier_applications
+         (company_name, owner_name, phone, city, address, business_type, product_categories, message, documents_urls, contract_accepted_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, NOW())
+         RETURNING id`,
+        [
+          companyName.trim(), ownerName.trim(), phone.trim(), city.trim(),
+          address || null, businessType || null,
+          Array.isArray(productCategories) ? productCategories : null,
+          message || null,
+          Array.isArray(documentsUrls) ? documentsUrls : null,
+        ]
+      );
+      res.json({
+        success: true,
+        id: result.rows[0].id,
+        message: "تم إرسال طلبك بنجاح! سيتواصل معك فريقنا خلال 24-72 ساعة"
+      });
+    } catch (e: any) {
+      console.error("[supplier-apply]", e);
+      res.status(500).json({ message: "فشل إرسال الطلب" });
+    }
+  });
+
+  app.get("/api/admin/supplier-applications", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(
+        "SELECT * FROM supplier_applications ORDER BY created_at DESC"
+      );
+      res.json(r.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  app.patch("/api/admin/supplier-applications/:id/status", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const { status, rejectionReason, commissionRate } = req.body || {};
+      const id = parseInt(req.params.id);
+      if (!["approved", "rejected"].includes(status))
+        return res.status(400).json({ message: "حالة غير صالحة" });
+
+      const appRes = await dbPool.query("SELECT * FROM supplier_applications WHERE id=$1", [id]);
+      if (!appRes.rows.length) return res.status(404).json({ message: "الطلب غير موجود" });
+      const app_ = appRes.rows[0];
+
+      if (status === "approved") {
+        const dup = await dbPool.query("SELECT id FROM suppliers WHERE phone=$1", [app_.phone]);
+        if (!dup.rows.length) {
+          await dbPool.query(
+            `INSERT INTO suppliers (name, phone, cities, commission_rate, is_active, notes)
+             VALUES ($1, $2, $3, $4, true, $5)`,
+            [
+              app_.company_name,
+              app_.phone,
+              [app_.city],
+              commissionRate || 10,
+              `مورد جديد - تم قبوله من الطلب #${id}. المالك: ${app_.owner_name}`
+            ]
+          );
+        }
+      }
+
+      await dbPool.query(
+        "UPDATE supplier_applications SET status=$1, rejection_reason=$2, processed_at=NOW() WHERE id=$3",
+        [status, rejectionReason || null, id]
+      );
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error("[supplier-app-update]", e);
+      res.status(500).json({ message: e.message || "فشل" });
+    }
+  });
+
   // ── Admin: المسوقون ───────────────────────────────────────────────
   app.get("/api/admin/marketers", requireAdmin, async (_req, res) => {
     try {

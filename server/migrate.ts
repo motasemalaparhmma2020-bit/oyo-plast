@@ -580,6 +580,33 @@ export async function runMigrations(): Promise<void> {
       console.warn("[WARN] receipts migration:", e instanceof Error ? e.message : e);
     }
 
+    // ─── Supplier Applications (Self-Service Signup, May 2026) ───
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS supplier_applications (
+          id SERIAL PRIMARY KEY,
+          company_name TEXT NOT NULL,
+          owner_name TEXT NOT NULL,
+          phone TEXT NOT NULL,
+          city TEXT NOT NULL,
+          address TEXT,
+          business_type TEXT,
+          product_categories TEXT[],
+          message TEXT,
+          documents_urls TEXT[],
+          contract_accepted_at TIMESTAMP,
+          status TEXT NOT NULL DEFAULT 'pending',
+          rejection_reason TEXT,
+          processed_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW()
+        );
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_supplier_apps_status ON supplier_applications(status)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_supplier_apps_phone ON supplier_applications(phone)`);
+    } catch (e) {
+      console.warn("[WARN] supplier_applications migration:", e instanceof Error ? e.message : e);
+    }
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

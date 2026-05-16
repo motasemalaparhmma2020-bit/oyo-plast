@@ -76,6 +76,8 @@ import MarketerLogin from "@/pages/MarketerLogin";
 import MarketerDashboard from "@/pages/MarketerDashboard";
 import MarketerOrders from "@/pages/MarketerOrders";
 import MarketerWallet from "@/pages/MarketerWallet";
+import Partnership from "@/pages/Partnership";
+import SupplierApply from "@/pages/SupplierApply";
 import ContractView from "@/pages/ContractView";
 import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
@@ -576,6 +578,8 @@ function Router() {
             <Route path="/marketer/dashboard" component={MarketerDashboard} />
             <Route path="/marketer/orders" component={MarketerOrders} />
             <Route path="/marketer/wallet" component={MarketerWallet} />
+            <Route path="/partnership" component={Partnership} />
+            <Route path="/partnership/supplier/apply" component={SupplierApply} />
             <Route path="/contract/:id" component={ContractView} />
             <Route path="/orders">
               <RequireAccountType><Orders /></RequireAccountType>

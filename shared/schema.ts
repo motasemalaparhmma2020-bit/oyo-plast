@@ -790,6 +790,25 @@ export const standaloneMarketers = pgTable("standalone_marketers", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// طلبات تسجيل الموردين الجدد (التسجيل الذاتي)
+export const supplierApplications = pgTable("supplier_applications", {
+  id: serial("id").primaryKey(),
+  companyName: text("company_name").notNull(),
+  ownerName: text("owner_name").notNull(),
+  phone: text("phone").notNull(),
+  city: text("city").notNull(),
+  address: text("address"),
+  businessType: text("business_type"),       // إنتاج / تجارة / استيراد / متجر
+  productCategories: text("product_categories").array(),
+  message: text("message"),
+  documentsUrls: text("documents_urls").array(),
+  contractAcceptedAt: timestamp("contract_accepted_at"),
+  status: text("status").default("pending").notNull(), // pending | approved | rejected
+  rejectionReason: text("rejection_reason"),
+  processedAt: timestamp("processed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // طلبات سحب الأرباح
 export const marketerWithdrawalRequests = pgTable("marketer_withdrawal_requests", {
   id: serial("id").primaryKey(),
@@ -935,6 +954,7 @@ export const insertEndCustomerContactSchema = createInsertSchema(endCustomerCont
 export const insertMarketerCommissionSchema = createInsertSchema(marketerCommissions).omit({ id: true, createdAt: true });
 export const insertCouponSchema = createInsertSchema(coupons).omit({ id: true, createdAt: true, usageCount: true });
 export const insertMarketerApplicationSchema = createInsertSchema(marketerApplications).omit({ id: true, createdAt: true, processedAt: true, status: true });
+export const insertSupplierApplicationSchema = createInsertSchema(supplierApplications).omit({ id: true, createdAt: true, processedAt: true, status: true });
 export const insertStandaloneMarketerSchema = createInsertSchema(standaloneMarketers).omit({ id: true, createdAt: true, token: true });
 export const insertMarketerWithdrawalSchema = createInsertSchema(marketerWithdrawalRequests).omit({ id: true, requestedAt: true, processedAt: true, status: true, adminNotes: true });
 export const insertInstallmentPlanSchema = createInsertSchema(installmentPlans).omit({ id: true, createdAt: true });
@@ -1086,6 +1106,8 @@ export type MarketerCommission = typeof marketerCommissions.$inferSelect;
 export type ProductView = typeof productViews.$inferSelect;
 export type Coupon = typeof coupons.$inferSelect;
 export type MarketerApplication = typeof marketerApplications.$inferSelect;
+export type SupplierApplication = typeof supplierApplications.$inferSelect;
+export type InsertSupplierApplication = z.infer<typeof insertSupplierApplicationSchema>;
 export type StandaloneMarketer = typeof standaloneMarketers.$inferSelect;
 export type MarketerWithdrawalRequest = typeof marketerWithdrawalRequests.$inferSelect;
 export type NavigationSettings = typeof navigationSettings.$inferSelect;

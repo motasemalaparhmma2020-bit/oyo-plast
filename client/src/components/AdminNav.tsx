@@ -38,6 +38,7 @@ export const adminNavItems: AdminNavItem[] = [
   { id: "login-management", label: "إدارة الدخول", icon: <UserCog />, color: "from-violet-400 to-violet-600" },
   { id: "sms-test", label: "فحص الرسائل SMS", icon: <MessageSquareWarning />, color: "from-sky-400 to-sky-600" },
   { id: "suppliers", label: "الموردون والموزعون", icon: <Handshake />, color: "from-cyan-400 to-cyan-600" },
+  { id: "supplier-applications", label: "طلبات الموردين الجدد", icon: <ClipboardCheck />, color: "from-sky-400 to-blue-600" },
   { id: "marketers", label: "المسوّقون", icon: <Megaphone />, color: "from-emerald-400 to-teal-600" },
   { id: "supplier-products", label: "منتجات الموردين", icon: <ClipboardCheck />, color: "from-lime-500 to-green-600" },
   { id: "installments", label: "التقسيط والمدفوعات", icon: <SplitSquareVertical />, color: "from-amber-400 to-orange-600" },
