@@ -358,15 +358,15 @@ export default function Cart() {
       <div className="flex items-center mb-4 gap-2">
         <button
           onClick={() => {
-            // زر عودة ذكي: لا نرجع لصفحات ما بعد الشراء (Checkout/تأكيد الطلب)
+            // زر عودة ذكي: نستخدم آخر صفحة "آمنة" مخزّنة (يتتبعها Router في App.tsx)
+            // هذا يضمن أن المستخدم يرجع لصفحة المنتج وليس لـ checkout/order-confirmation
             try {
-              const ref = document.referrer || "";
-              const fromForbidden = /\/(checkout|order-confirmation|orders)(\/|$|\?)/.test(ref);
-              if (!ref || fromForbidden || window.history.length <= 1) {
-                setLocation("/");
+              const safe = sessionStorage.getItem("lastSafePath");
+              if (safe && safe !== "/cart") {
+                setLocation(safe);
                 return;
               }
-              window.history.back();
+              setLocation("/");
             } catch {
               setLocation("/");
             }

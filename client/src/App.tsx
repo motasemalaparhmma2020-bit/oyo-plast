@@ -468,6 +468,15 @@ function Router() {
     }
   }, [location]);
 
+  // تتبع آخر صفحة "آمنة" زارها المستخدم — تُستخدم لزر الرجوع الذكي في السلة
+  // نتجاهل صفحات ما بعد الشراء (cart/checkout/order-confirmation/orders) حتى لا يرجع لها
+  useEffect(() => {
+    const isPostPurchasePage = /^\/(cart|checkout|order-confirmation|orders)(\/|$|\?)/.test(location);
+    if (!isPostPurchasePage) {
+      try { sessionStorage.setItem('lastSafePath', location); } catch {}
+    }
+  }, [location]);
+
   // ⚠️ جميع hooks يجب أن تكون قبل أي return مشروط (قواعد React Hooks)
   // قراءة إعدادات العرض لإخفاء شريط التنقل السفلي على صفحة المنتج
   const { data: displaySettingsForNav } = useQuery<any>({
