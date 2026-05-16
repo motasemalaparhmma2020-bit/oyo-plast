@@ -70,6 +70,14 @@ OYO PLAST is a comprehensive e-commerce platform for plastic printing and suppli
 - **Admin Panel:** password-protected; manages products/categories/orders/users/marketers/suppliers/display settings. Banners/fonts/payment/shipping configurable.
 - **General:** shopping cart, wishlist, internal notifications, PWA, legal pages, dynamic `/sitemap.xml` from DB.
 
+### Unified Pricing (May 16, 2026)
+- **Smart Variants هي المصدر الوحيد للأسعار والخصم.** الخادم يحسب `price/priceSar/originalPrice/originalPriceSar/discountPercent` تلقائياً من **أرخص خيار ذكي** في POST/PATCH `/api/admin/products` (يتجاهل أي قيم يرسلها العميل).
+- **Helpers (`server/routes.ts` ~145-210):** `getExchangeRate()` يقرأ من `settings.exchange_rate` مع كاش 60 ثانية + `invalidateExchangeRateCache()` يُستدعى من POST `/api/admin/settings` عند تغيير سعر الصرف. `computeBaseFromSmartVariants(json, rate)` يُرجع أرخص سعر + خصم.
+- **Dynamic SAR على القراءة:** `mapProductRow()` و GET `/api/cart` يُعيدان `priceSar = price / cachedRate` ديناميكياً — تغيير سعر الصرف في الأدمن ينعكس فوراً.
+- **Admin form (`Admin.tsx`):** حقول السعر اليمني/السعودي الأساسية + originalPrice/originalPriceSar/discountPercent **مخفية** واستُبدلت بشريط معلومات أزرق. التصنيفات الترويجية + شحن مجاني + إظهار التقييمات تبقى.
+- **ProductDetail.tsx:** الافتراضي عند فتح المنتج = **أرخص متغيّر من كل نوع** (بدلاً من الأول).
+- **Migration (`server/migrate.ts` ~505-550):** ترحيل additive أعاد حساب أسعار جميع المنتجات الموجودة من أرخص خيار ذكي عند الإقلاع.
+
 ### Image Architecture
 - All product/category/banner images served via lightweight proxy URLs (`/api/products/image/:id` with 7-day cache).
 - Source of truth: Cloudinary CDN (after migration). Base64 data URLs no longer sent in any public list endpoint.

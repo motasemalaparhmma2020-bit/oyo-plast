@@ -139,6 +139,87 @@ function getUserId(user: any): string | undefined {
   return user.claims?.sub ?? undefined;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 💰 Pricing Helpers — السعر يُحسب من الخيارات الذكية + سعر صرف ديناميكي
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _cachedExchangeRate = 140;
+let _lastExchangeRateFetch = 0;
+
+/**
+ * يقرأ سعر صرف الريال السعودي مقابل اليمني من جدول settings (key='exchange_rate')
+ * مع تخزين مؤقت لمدة 60 ثانية لتقليل ضغط DB.
+ */
+export async function getExchangeRate(): Promise<number> {
+  const now = Date.now();
+  if (now - _lastExchangeRateFetch < 60_000) return _cachedExchangeRate;
+  try {
+    const { pool: dbPool } = await import("./db");
+    const r = await dbPool.query(
+      `SELECT value FROM settings WHERE key = 'exchange_rate' LIMIT 1`
+    );
+    if (r.rows.length && r.rows[0].value) {
+      const v = parseFloat(String(r.rows[0].value));
+      if (!isNaN(v) && v > 0) _cachedExchangeRate = v;
+    }
+  } catch { /* keep last cached value */ }
+  _lastExchangeRateFetch = now;
+  return _cachedExchangeRate;
+}
+export function getExchangeRateCached(): number { return _cachedExchangeRate; }
+/** يُبطل الكاش ليُعاد جلب سعر الصرف من DB في الاستدعاء التالي */
+export function invalidateExchangeRateCache(): void { _lastExchangeRateFetch = 0; }
+
+/**
+ * يحسب السعر/الخصم الأساسي من أرخص خيار ذكي.
+ * مدخل: smartVariants كـ JSON string أو object بشكل { activeTypes, variants }.
+ * مخرج: { price, priceSar, originalPrice, originalPriceSar, discountPercent } أو null إن فشل.
+ */
+export function computeBaseFromSmartVariants(
+  smartVariants: any,
+  exchangeRate: number
+): { price: string; priceSar: string; originalPrice: string | null; originalPriceSar: string | null; discountPercent: number | null } | null {
+  try {
+    const data = typeof smartVariants === "string" ? JSON.parse(smartVariants) : smartVariants;
+    if (!data || !Array.isArray(data.variants) || data.variants.length === 0) return null;
+    // فلترة المتغيّرات ذات السعر الصالح فقط
+    const priced = data.variants
+      .map((v: any) => {
+        const p = parseFloat(String(v.price ?? "0"));
+        const disc = v.discount != null ? parseFloat(String(v.discount)) : 0;
+        return { ...v, _price: p, _discount: isNaN(disc) ? 0 : disc };
+      })
+      .filter((v: any) => !isNaN(v._price) && v._price > 0);
+    if (priced.length === 0) return null;
+    // الأرخص يحدّد السعر الأساسي
+    priced.sort((a: any, b: any) => a._price - b._price);
+    const cheapest = priced[0];
+    const finalPrice = cheapest._price;
+    const rate = exchangeRate > 0 ? exchangeRate : 140;
+    const priceSar = (finalPrice / rate).toFixed(2);
+
+    // الخصم على الـ variant الأرخص → السعر الأصلي = السعر / (1 - discount/100)
+    let originalPrice: string | null = null;
+    let originalPriceSar: string | null = null;
+    let discountPercent: number | null = null;
+    if (cheapest._discount > 0 && cheapest._discount < 100) {
+      const orig = finalPrice / (1 - cheapest._discount / 100);
+      originalPrice = orig.toFixed(2);
+      originalPriceSar = (orig / rate).toFixed(2);
+      discountPercent = Math.round(cheapest._discount);
+    }
+    return {
+      price: String(finalPrice),
+      priceSar,
+      originalPrice,
+      originalPriceSar,
+      discountPercent,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<void> {
   await setupAuth(app);
   registerAuthRoutes(app);
@@ -1719,6 +1800,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     original_price, original_price_sar, discount_percent, promotional_tags,
     has_free_shipping, enable_smart_variants, smart_variants`;
 
+  // عند أوّل تحميل، نُسخّن الكاش حتّى mapProductRow يستخدم السعر الصحيح
+  getExchangeRate().catch(() => {});
+
   function mapProductRow(r: any) {
     const rawImg: string = r.image_url || "";
     // حساب نسبة الخصم الفعلية
@@ -1732,12 +1816,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         effectiveDiscount = Math.round(((orig - curr) / orig) * 100);
       }
     }
+    // 💱 السعر السعودي ديناميكي — يُحسب من السعر اليمني وسعر الصرف الحالي
+    const _rate = getExchangeRateCached();
+    const _priceNum = parseFloat(String(r.price ?? "0"));
+    const dynPriceSar = (_rate > 0 && !isNaN(_priceNum) && _priceNum > 0)
+      ? (_priceNum / _rate).toFixed(2)
+      : r.price_sar;
+    let dynOriginalPriceSar: any = r.original_price_sar;
+    if (r.original_price != null) {
+      const _origNum = parseFloat(String(r.original_price));
+      if (_rate > 0 && !isNaN(_origNum) && _origNum > 0) {
+        dynOriginalPriceSar = (_origNum / _rate).toFixed(2);
+      }
+    }
     return {
       id: r.id,
       name: r.name,
       description: r.description,
       price: r.price,
-      priceSar: r.price_sar,
+      priceSar: dynPriceSar,
       categoryId: r.category_id,
       subcategoryId: r.subcategory_id ?? null,
       isActive: r.is_active !== false,
@@ -1766,7 +1863,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     enableVariantUI: r.enable_variant_ui ?? false,
     colorImages: r.color_images ?? null,
       originalPrice: r.original_price ?? null,
-      originalPriceSar: r.original_price_sar ?? null,
+      originalPriceSar: dynOriginalPriceSar ?? null,
       discountPercent: r.discount_percent ?? null,
       effectiveDiscount,
       promotionalTags: r.promotional_tags ?? [],
@@ -2095,16 +2192,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/admin/products", requireAdmin, async (req, res) => {
     try {
       const data = req.body;
-      if (!data.name || !data.price || !data.categoryId || !data.imageUrl) {
-        return res.status(400).json({ message: "البيانات المطلوبة: name, price, categoryId, imageUrl" });
+      if (!data.name || !data.categoryId || !data.imageUrl) {
+        return res.status(400).json({ message: "البيانات المطلوبة: name, categoryId, imageUrl" });
       }
-      // ─── Defensive: الخيارات الذكية مطلوبة لتجنب اختلاف الأسعار بين الصفحات ───
-      // (كل المنتجات الحالية تستخدمها — هذه حماية إضافية للمنتجات الجديدة)
+      // ─── الخيارات الذكية هي المصدر الوحيد للأسعار والخصم ───
       if (!data.enableSmartVariants || !data.smartVariants) {
         return res.status(422).json({
-          message: "⛔ يجب تفعيل الخيارات الذكية (Smart Variants) لكل منتج جديد. أنشئ متغيراً واحداً على الأقل (لون/مقاس/وزن/باقة).",
+          message: "⛔ يجب تفعيل الخيارات الذكية (Smart Variants) وإضافة خيار واحد على الأقل بسعر (لون/مقاس/وزن/شدة).",
         });
       }
+      // ─── حساب السعر الأساسي والخصم تلقائياً من أرخص خيار ذكي ───
+      const computed = computeBaseFromSmartVariants(data.smartVariants, await getExchangeRate());
+      if (!computed) {
+        return res.status(422).json({
+          message: "⛔ لم نتمكن من قراءة سعر صالح من الخيارات الذكية. تأكد من وجود متغيّر واحد على الأقل بسعر > 0.",
+        });
+      }
+      data.price = computed.price;
+      data.priceSar = computed.priceSar;
+      data.originalPrice = computed.originalPrice;
+      data.originalPriceSar = computed.originalPriceSar;
+      data.discountPercent = computed.discountPercent;
       const product = await storage.createProduct({
         name: data.name,
         description: data.description || "",
@@ -2161,6 +2269,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         });
       }
 
+      // ─── إعادة حساب السعر/الخصم تلقائياً عند تحديث الخيارات الذكية ───
+      if (data.smartVariants !== undefined && data.smartVariants !== null) {
+        const computed = computeBaseFromSmartVariants(data.smartVariants, await getExchangeRate());
+        if (!computed) {
+          return res.status(422).json({
+            message: "⛔ الخيارات الذكية يجب أن تحتوي على متغيّر واحد على الأقل بسعر > 0.",
+          });
+        }
+        data.price = computed.price;
+        data.priceSar = computed.priceSar;
+        data.originalPrice = computed.originalPrice;
+        data.originalPriceSar = computed.originalPriceSar;
+        data.discountPercent = computed.discountPercent;
+      }
+
       // ── Safety Net: رفض أي سعر أقل من الحد الأحمر ──────────────────
       if (data.price !== undefined) {
         const { pool: dbPool } = await import("./db");
@@ -2181,17 +2304,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       // ─────────────────────────────────────────────────────────────────
 
-      const fields = [
-        "name", "description", "price", "priceSar", "categoryId", "subcategoryId", "isActive",
+      // ⚠️ السعر/السعر بالريال السعودي/السعر الأصلي/نسبة الخصم تُحسب server-side فقط من smartVariants.
+      // نسمح فقط بمرور هذه الحقول إن كانت data.smartVariants موجوداً (أعيد حسابها أعلاه)،
+      // وإلا نُسقطها لمنع تلاعب العميل.
+      const allowPricingFields = data.smartVariants !== undefined && data.smartVariants !== null;
+      const baseFields = [
+        "name", "description", "categoryId", "subcategoryId", "isActive",
         "imageUrl", "imageUrls", "stock", "colors", "sizes",
         "allowDesignUpload", "printingPricePerUnit", "hasPrintingOptions",
         "baseBagPrice", "singleColorPrintPrice", "availableBagColors", "tags",
         "bulkPricing", "sizePricing", "showReviews", "showInPrinting",
         "printingCategoryId", "supplierId",
         "enableVariantUI", "colorImages",
-        "originalPrice", "originalPriceSar", "discountPercent", "promotionalTags",
+        "promotionalTags",
         "hasFreeShipping", "enableSmartVariants", "smartVariants"
       ];
+      const fields = allowPricingFields
+        ? [...baseFields, "price", "priceSar", "originalPrice", "originalPriceSar", "discountPercent"]
+        : baseFields;
       const update = pickFields(data as Record<string, unknown>, fields);
       // ⚠️ تنظيف روابط البروكسي قبل الحفظ (لئلا تطمس الصور الأصلية)
       // قاعدة: الـ imageUrl الذي يبدأ بـ /api/products/image/ يعني "نفس الصورة القديمة" — نحلّه إلى الحقيقي.
@@ -6234,6 +6364,11 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         .values({ key, value })
         .onConflictDoUpdate({ target: settings.key, set: { value } })
         .returning();
+      // 💱 عند تغيير سعر الصرف، أبطل الكاش حتى تنعكس الأسعار فوراً على كل المتجر
+      if (key === "exchange_rate") {
+        invalidateExchangeRateCache();
+        getExchangeRate().catch(() => {});
+      }
       res.json(row);
     } catch (e: any) {
       res.status(500).json({ message: "فشل حفظ الإعداد", details: e.message });
@@ -6291,7 +6426,16 @@ h1{font-size:18px;color:#222;margin:4px 0;}
          WHERE ci.user_id = $1`,
         [uid]
       );
-      res.json(result.rows);
+      // 💱 السعر السعودي ديناميكي على كل عناصر السلة
+      const rate = getExchangeRateCached();
+      const items = result.rows.map((row: any) => {
+        if (row.product && row.product.price && rate > 0) {
+          const yer = parseFloat(String(row.product.price));
+          if (!isNaN(yer) && yer > 0) row.product.priceSar = (yer / rate).toFixed(2);
+        }
+        return row;
+      });
+      res.json(items);
     } catch (e: any) {
       res.status(500).json({ message: "فشل جلب السلة", details: e.message });
     }

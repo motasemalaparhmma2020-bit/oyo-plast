@@ -499,6 +499,53 @@ export async function runMigrations(): Promise<void> {
       console.warn("[WARN] smartVariants migration:", e instanceof Error ? e.message : e);
     }
 
+    // ─── إعادة حساب أسعار المنتجات من أرخص متغيّر ذكي (May 2026) ───
+    // يضمن أن السعر الأساسي = أرخص خيار، ويُحدّث ر.س ديناميكياً من سعر الصرف.
+    try {
+      const rateRow = await client.query(`SELECT value FROM settings WHERE key = 'exchange_rate' LIMIT 1`);
+      const rate = rateRow.rows[0]?.value ? parseFloat(String(rateRow.rows[0].value)) : 140;
+      const safeRate = rate > 0 ? rate : 140;
+      const allSV = await client.query(
+        `SELECT id, smart_variants FROM products WHERE enable_smart_variants = true AND smart_variants IS NOT NULL AND smart_variants <> ''`
+      );
+      let recomputed = 0;
+      for (const p of allSV.rows) {
+        try {
+          const sv = typeof p.smart_variants === 'string' ? JSON.parse(p.smart_variants) : p.smart_variants;
+          if (!sv || !Array.isArray(sv.variants)) continue;
+          const priced = sv.variants
+            .map((v: any) => {
+              const pr = parseFloat(String(v.price ?? '0'));
+              const ds = v.discount != null ? parseFloat(String(v.discount)) : 0;
+              return { _p: pr, _d: isNaN(ds) ? 0 : ds };
+            })
+            .filter((v: any) => !isNaN(v._p) && v._p > 0)
+            .sort((a: any, b: any) => a._p - b._p);
+          if (priced.length === 0) continue;
+          const cheapest = priced[0];
+          const newPrice = cheapest._p;
+          const newPriceSar = (newPrice / safeRate).toFixed(2);
+          let origPrice: string | null = null;
+          let origSar: string | null = null;
+          let disc: number | null = null;
+          if (cheapest._d > 0 && cheapest._d < 100) {
+            const orig = newPrice / (1 - cheapest._d / 100);
+            origPrice = orig.toFixed(2);
+            origSar = (orig / safeRate).toFixed(2);
+            disc = Math.round(cheapest._d);
+          }
+          await client.query(
+            `UPDATE products SET price=$1, price_sar=$2, original_price=$3, original_price_sar=$4, discount_percent=$5 WHERE id=$6`,
+            [String(newPrice), newPriceSar, origPrice, origSar, disc, p.id]
+          );
+          recomputed++;
+        } catch { /* skip invalid */ }
+      }
+      if (recomputed > 0) console.log(`[INFO] Recomputed prices for ${recomputed} product(s) from cheapest smart variant`);
+    } catch (e) {
+      console.warn("[WARN] price recompute migration:", e instanceof Error ? e.message : e);
+    }
+
     // ─── Notifications: add new columns + preferences table (Phase 1, May 2026) ──
     try {
       await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal'`);

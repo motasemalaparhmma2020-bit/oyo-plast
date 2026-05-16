@@ -6778,38 +6778,30 @@ export default function Admin() {
                               </Select>
                               <p className="text-xs text-muted-foreground mt-0.5">إذا تركته فارغاً، يُعيَّن المورد تلقائياً حسب مدينة الشحن</p>
                             </div>
-                            <div className="grid md:grid-cols-3 gap-4">
-                              <div>
-                                <Label htmlFor="product-price">السعر بالريال اليمني *</Label>
-                                <Input
-                                  id="product-price"
-                                  type="number"
-                                  value={productForm.price}
-                                  onChange={(e) => {
-                                    const yer = e.target.value;
-                                    const rate = parseFloat(exchangeRate) || 140;
-                                    const autoSar = yer ? (parseFloat(yer) / rate).toFixed(2) : "";
-                                    setProductForm({...productForm, price: yer, priceSar: autoSar});
-                                  }}
-                                  placeholder="5000"
-                                  required
-                                  data-testid="input-product-price"
-                                />
+                            {/* ── 💰 السعر يُحدَّد من الخيارات الذكية فقط ── */}
+                            <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-900/15 dark:border-blue-800 p-3 text-sm">
+                              <div className="flex items-start gap-2">
+                                <span className="text-blue-600 dark:text-blue-300 mt-0.5">ℹ️</span>
+                                <div className="flex-1">
+                                  <p className="font-bold text-blue-900 dark:text-blue-100 mb-1">
+                                    السعر يُحدَّد عبر «الخيارات الذكية» أدناه
+                                  </p>
+                                  <p className="text-blue-800 dark:text-blue-200 text-xs leading-relaxed">
+                                    أضف خياراً واحداً على الأقل (مقاس · لون · وزن · شدة) وأدخل سعره بالريال اليمني.
+                                    سيُحسب السعر السعودي تلقائياً من سعر الصرف الحالي
+                                    (<span className="font-mono font-bold">1 ر.س = {exchangeRate || "140"} ر.ي</span>).
+                                  </p>
+                                  {productForm.price && Number(productForm.price) > 0 && (
+                                    <p className="mt-1.5 text-xs text-blue-700 dark:text-blue-300">
+                                      <span className="opacity-70">السعر الأساسي الحالي (محسوب تلقائياً):</span>
+                                      <span className="font-bold mx-1">{Number(productForm.price).toLocaleString()} ر.ي</span>
+                                      {productForm.priceSar && <>· <span className="font-bold">{productForm.priceSar} ر.س</span></>}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
-                              <div>
-                                <Label htmlFor="product-price-sar">
-                                  السعر بالريال السعودي
-                                  <span className="text-xs text-muted-foreground mr-1">(تلقائي)</span>
-                                </Label>
-                                <Input
-                                  id="product-price-sar"
-                                  type="number"
-                                  value={productForm.priceSar}
-                                  onChange={(e) => setProductForm({...productForm, priceSar: e.target.value})}
-                                  placeholder="35"
-                                  data-testid="input-product-price-sar"
-                                />
-                              </div>
+                            </div>
+                            <div className="grid md:grid-cols-2 gap-4">
                               <div>
                                 <Label htmlFor="product-stock">المخزون</Label>
                                 <Input
@@ -6946,64 +6938,23 @@ export default function Admin() {
                         </button>
                         {formSections.discount && (
                         <div className="p-4 space-y-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded font-bold">خصم</span>
-                          <Label className="font-bold text-base">إعدادات الخصم والتصنيفات الترويجية</Label>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <Label htmlFor="original-price" className="text-xs">السعر الأصلي قبل الخصم (ر.ي)</Label>
-                            <Input
-                              id="original-price"
-                              type="number"
-                              value={productForm.originalPrice}
-                              onChange={(e) => {
-                                const newOrig = e.target.value;
-                                setProductForm(prev => {
-                                  let disc = prev.discountPercent;
-                                  if (newOrig && prev.price) {
-                                    const orig = Number(newOrig);
-                                    const curr = Number(prev.price);
-                                    if (orig > curr && orig > 0) disc = String(Math.round(((orig - curr) / orig) * 100));
-                                  }
-                                  return {...prev, originalPrice: newOrig, discountPercent: disc};
-                                });
-                              }}
-                              placeholder="مثال: 5000"
-                              data-testid="input-original-price"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="original-price-sar" className="text-xs">السعر الأصلي (ر.س)</Label>
-                            <Input
-                              id="original-price-sar"
-                              type="number"
-                              value={productForm.originalPriceSar}
-                              onChange={(e) => setProductForm({...productForm, originalPriceSar: e.target.value})}
-                              placeholder="مثال: 35"
-                              data-testid="input-original-price-sar"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-xs">نسبة الخصم % (تُحسب تلقائياً أو أدخلها يدوياً)</Label>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Input
-                              type="number"
-                              min="0"
-                              max="99"
-                              value={productForm.discountPercent}
-                              onChange={(e) => setProductForm({...productForm, discountPercent: e.target.value})}
-                              placeholder="0"
-                              className="w-24"
-                              data-testid="input-discount-percent"
-                            />
-                            <span className="text-sm font-bold text-red-600">%</span>
-                            {productForm.discountPercent && Number(productForm.discountPercent) > 0 && (
-                              <span className="text-xs bg-red-500 text-white px-2 py-1 rounded font-bold">
-                                -{productForm.discountPercent}%
-                              </span>
-                            )}
+                        {/* ── 💡 الخصم يُدار من الخيارات الذكية ── */}
+                        <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-900/15 dark:border-blue-800 p-3 text-sm">
+                          <div className="flex items-start gap-2">
+                            <span className="text-blue-600 dark:text-blue-300 mt-0.5">ℹ️</span>
+                            <div className="flex-1">
+                              <p className="font-bold text-blue-900 dark:text-blue-100 mb-1">
+                                الخصم يُدار داخل كل خيار ذكي
+                              </p>
+                              <p className="text-blue-800 dark:text-blue-200 text-xs leading-relaxed">
+                                للحصول على خصم على المنتج، أدخل نسبة الخصم في حقل «% خصم» داخل قسم «الخيارات الذكية» لكل متغيّر (مقاس/لون/وزن/شدة).
+                                {productForm.discountPercent && Number(productForm.discountPercent) > 0 && (
+                                  <span className="block mt-1 font-bold text-emerald-700 dark:text-emerald-300">
+                                    ✓ الخصم الفعلي على هذا المنتج (من أرخص خيار ذكي): {productForm.discountPercent}%
+                                  </span>
+                                )}
+                              </p>
+                            </div>
                           </div>
                         </div>
                         <div>

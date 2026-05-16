@@ -431,15 +431,21 @@ export default function ProductDetail() {
     }
   }, [selectedSize, availableColors, selectedColor]);
 
-  // ── تحديد افتراضي للمتغيرات الذكية (أول متغير من كل نوع) ──
+  // ── تحديد افتراضي للمتغيرات الذكية (أرخص متغيّر من كل نوع لجذب العميل) ──
   useEffect(() => {
     if (!smartVariantsData || !showSmartVariants) return;
     smartVariantsData.activeTypes.forEach(type => {
       if (!selectedSmartVariant[type]) {
-        const first = smartVariantsData.variants.find(v => v.type === type && v.label);
-        if (first) {
-          setSelectedSmartVariant(p => ({ ...p, [type]: first.id }));
-          if (first.imageUrl) setVariantActiveImg(first.imageUrl);
+        // اختيار الأرخص في هذا النوع كافتراضي
+        const ofType = smartVariantsData.variants
+          .filter(v => v.type === type && v.label)
+          .map(v => ({ ...v, _p: parseFloat(String(v.price ?? "0")) }))
+          .filter(v => !isNaN(v._p) && v._p > 0)
+          .sort((a, b) => a._p - b._p);
+        const cheapest = ofType[0] || smartVariantsData.variants.find(v => v.type === type && v.label);
+        if (cheapest) {
+          setSelectedSmartVariant(p => ({ ...p, [type]: cheapest.id }));
+          if (cheapest.imageUrl) setVariantActiveImg(cheapest.imageUrl);
         }
       }
     });
