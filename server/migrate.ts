@@ -499,6 +499,32 @@ export async function runMigrations(): Promise<void> {
       console.warn("[WARN] smartVariants migration:", e instanceof Error ? e.message : e);
     }
 
+    // ─── Notifications: add new columns + preferences table (Phase 1, May 2026) ──
+    try {
+      await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal'`);
+      await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS action_url TEXT`);
+      await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS group_key TEXT`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_notifications_group ON notifications(user_id, group_key, created_at DESC) WHERE group_key IS NOT NULL`);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS notification_preferences (
+          id SERIAL PRIMARY KEY,
+          user_id VARCHAR NOT NULL REFERENCES users(id),
+          type TEXT NOT NULL,
+          in_app_enabled BOOLEAN NOT NULL DEFAULT true,
+          telegram_enabled BOOLEAN NOT NULL DEFAULT false,
+          muted_until TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(user_id, type)
+        );
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_notif_prefs_user ON notification_preferences(user_id)`);
+    } catch (e) {
+      console.warn("[WARN] notifications migration:", e instanceof Error ? e.message : e);
+    }
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

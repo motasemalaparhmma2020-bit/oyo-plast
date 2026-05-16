@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, Package, CheckCheck, Wallet } from "lucide-react";
+import { Bell, Package, CheckCheck, Wallet, MessageCircle, Megaphone, Settings, AlertCircle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
@@ -11,8 +11,34 @@ import {
 } from "@/components/ui/popover";
 import { formatDistanceToNow } from "date-fns";
 import { ar } from "date-fns/locale";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import type { Notification } from "@shared/schema";
+
+function iconForType(type: string) {
+  switch (type) {
+    case "new_message": return MessageCircle;
+    case "commission":
+    case "wallet_credit":
+    case "payment":
+    case "payment_due": return Wallet;
+    case "promo": return Megaphone;
+    case "system": return AlertCircle;
+    default: return Package;
+  }
+}
+
+function colorForType(type: string) {
+  switch (type) {
+    case "new_message": return "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400";
+    case "commission":
+    case "wallet_credit":
+    case "payment":
+    case "payment_due": return "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400";
+    case "promo": return "bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400";
+    case "system": return "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300";
+    default: return "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400";
+  }
+}
 
 // Short pleasant beep — base64 WAV (~10kb) so we don't ship an asset file.
 const BEEP_DATA_URL =
@@ -21,6 +47,7 @@ const BEEP_DATA_URL =
 export function NotificationBell() {
   const { isAuthenticated, user } = useAuth();
   const qc = useQueryClient();
+  const [, setLocation] = useLocation();
   const [open, setOpen] = useState(false);
   const lastCountRef = useRef<number>(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -31,7 +58,7 @@ export function NotificationBell() {
   const { data: countData } = useQuery<{ count: number }>({
     queryKey: ["/api/notifications/unread-count"],
     enabled: isAuthenticated,
-    refetchInterval: 15000,
+    refetchInterval: 30000,
   });
 
   const { data: notifications = [] } = useQuery<Notification[]>({
@@ -106,19 +133,33 @@ export function NotificationBell() {
               </span>
             )}
           </div>
-          {unreadCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => markAllRead.mutate()}
-              disabled={markAllRead.isPending}
-              data-testid="button-bell-mark-all-read"
-            >
-              <CheckCheck className="h-3 w-3 ml-1" />
-              قراءة الكل
-            </Button>
-          )}
+          <div className="flex items-center gap-1">
+            {unreadCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => markAllRead.mutate()}
+                disabled={markAllRead.isPending}
+                data-testid="button-bell-mark-all-read"
+              >
+                <CheckCheck className="h-3 w-3 ml-1" />
+                قراءة الكل
+              </Button>
+            )}
+            <Link href="/notification-settings">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setOpen(false)}
+                data-testid="button-bell-settings"
+                title="إعدادات الإشعارات"
+              >
+                <Settings className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -129,36 +170,48 @@ export function NotificationBell() {
             </div>
           ) : (
             <div className="divide-y">
-              {notifications.slice(0, 20).map((n) => (
-                <button
-                  key={n.id}
-                  data-testid={`bell-item-${n.id}`}
-                  className={`w-full text-right p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex items-start gap-2 ${
-                    !n.isRead ? "bg-blue-50/50 dark:bg-blue-950/20" : ""
-                  }`}
-                  onClick={() => {
-                    if (!n.isRead) markOneRead.mutate(n.id);
-                  }}
-                >
-                  <div className={`shrink-0 p-1.5 rounded-full ${
-                    n.type === "payment"
-                      ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
-                      : "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                  }`}>
-                    {n.type === "payment" ? <Wallet className="h-3.5 w-3.5" /> : <Package className="h-3.5 w-3.5" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-bold truncate">{n.title}</p>
-                      {!n.isRead && <span className="w-1.5 h-1.5 bg-[#2196F3] rounded-full shrink-0" />}
+              {notifications.slice(0, 20).map((n) => {
+                const Icon = iconForType(n.type);
+                const colorClass = colorForType(n.type);
+                const actionUrl = (n as any).actionUrl as string | undefined;
+                const priority = (n as any).priority as string | undefined;
+                return (
+                  <button
+                    key={n.id}
+                    data-testid={`bell-item-${n.id}`}
+                    className={`w-full text-right p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex items-start gap-2 ${
+                      !n.isRead ? "bg-blue-50/50 dark:bg-blue-950/20" : ""
+                    }`}
+                    onClick={() => {
+                      if (!n.isRead) markOneRead.mutate(n.id);
+                      if (actionUrl) {
+                        setOpen(false);
+                        setLocation(actionUrl);
+                      } else if (n.orderId) {
+                        setOpen(false);
+                        setLocation("/orders");
+                      }
+                    }}
+                  >
+                    <div className={`shrink-0 p-1.5 rounded-full ${colorClass}`}>
+                      <Icon className="h-3.5 w-3.5" />
                     </div>
-                    <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">{n.message}</p>
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      {n.createdAt && formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: ar })}
-                    </p>
-                  </div>
-                </button>
-              ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-bold truncate">{n.title}</p>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {priority === "high" && <span className="w-1.5 h-1.5 bg-red-500 rounded-full" />}
+                          {!n.isRead && <span className="w-1.5 h-1.5 bg-[#2196F3] rounded-full" />}
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">{n.message}</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        {n.createdAt && formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: ar })}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

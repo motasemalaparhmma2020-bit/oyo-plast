@@ -3156,6 +3156,15 @@ h1{font-size:18px;color:#222;margin:4px 0;}
             }
           } catch { /* non-fatal */ }
         })(),
+        // ── إشعار داخلي للعميل (in-app) ───────────────────────────────
+        (async () => {
+          try {
+            if (userId) {
+              const { notifyOrderCreated } = await import("./lib/notifications");
+              await notifyOrderCreated(userId, order.id, Number(total), req.body.currency || "ر.ي");
+            }
+          } catch { /* non-fatal */ }
+        })(),
       ]);
 
       res.json(order);
@@ -3420,8 +3429,9 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       if (!userId) return res.json([]);
       const { pool: dbPool } = await import("./db");
       const r = await dbPool.query(
-        `SELECT id, user_id as "userId", title, message, type, is_read as "isRead",
-                order_id as "orderId", created_at as "createdAt"
+        `SELECT id, user_id as "userId", title, message, type,
+                priority, action_url as "actionUrl", group_key as "groupKey",
+                is_read as "isRead", order_id as "orderId", created_at as "createdAt"
          FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100`,
         [userId]
       );
@@ -3473,6 +3483,97 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       res.json({ ok: true });
     } catch {
       res.status(500).json({ message: "فشل التحديث" });
+    }
+  });
+
+  // ─── Notification Preferences (per user) ────────────────────────────────────
+  app.get("/api/notification-preferences", async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user) || req.session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(
+        `SELECT type, in_app_enabled AS "inAppEnabled", telegram_enabled AS "telegramEnabled",
+                muted_until AS "mutedUntil"
+           FROM notification_preferences WHERE user_id=$1`,
+        [userId]
+      );
+      res.json(r.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الإعدادات" });
+    }
+  });
+
+  app.put("/api/notification-preferences", async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user) || req.session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
+      const { type, inAppEnabled, telegramEnabled, mutedUntil } = req.body || {};
+      if (!type || typeof type !== "string") return res.status(400).json({ message: "النوع مطلوب" });
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query(
+        `INSERT INTO notification_preferences (user_id, type, in_app_enabled, telegram_enabled, muted_until, updated_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())
+         ON CONFLICT (user_id, type) DO UPDATE
+         SET in_app_enabled = EXCLUDED.in_app_enabled,
+             telegram_enabled = EXCLUDED.telegram_enabled,
+             muted_until = EXCLUDED.muted_until,
+             updated_at = NOW()`,
+        [
+          userId,
+          type,
+          inAppEnabled !== false,
+          telegramEnabled === true,
+          mutedUntil ? new Date(mutedUntil) : null,
+        ]
+      );
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حفظ الإعدادات", details: e.message });
+    }
+  });
+
+  // Snooze all notifications for N hours (DND)
+  app.post("/api/notification-preferences/snooze", async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user) || req.session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
+      const hours = Math.max(1, Math.min(168, Number(req.body?.hours) || 24));
+      const until = new Date(Date.now() + hours * 3600 * 1000);
+      const { pool: dbPool } = await import("./db");
+      const types = ["order_created","order_status","new_message","commission","low_stock","payment_due","wallet_credit","delivery_assigned","promo"];
+      for (const t of types) {
+        await dbPool.query(
+          `INSERT INTO notification_preferences (user_id, type, muted_until, updated_at)
+           VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (user_id, type) DO UPDATE
+           SET muted_until = EXCLUDED.muted_until, updated_at = NOW()`,
+          [userId, t, until]
+        );
+      }
+      res.json({ ok: true, mutedUntil: until });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل الإيقاف المؤقت" });
+    }
+  });
+
+  // ─── Admin: Broadcast promo notification ────────────────────────────────────
+  app.post("/api/admin/notifications/broadcast", requireAdmin, async (req, res) => {
+    try {
+      const { title, message, actionUrl, mode, roles } = req.body || {};
+      if (!title?.trim() || !message?.trim()) return res.status(400).json({ message: "العنوان والمحتوى مطلوبان" });
+      if (!["opt_in", "bypass"].includes(mode)) return res.status(400).json({ message: "وضع غير صحيح (opt_in أو bypass)" });
+      const { broadcastPromo } = await import("./lib/notifications");
+      const r = await broadcastPromo({
+        title: title.trim(),
+        message: message.trim(),
+        actionUrl: actionUrl?.trim() || undefined,
+        mode,
+        roles: Array.isArray(roles) ? roles : undefined,
+      });
+      res.json({ ok: true, recipients: r.recipients, mode });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل البث", details: e.message });
     }
   });
 
@@ -4017,6 +4118,24 @@ h1{font-size:18px;color:#222;margin:4px 0;}
           trackingNumber: order.trackingNumber || undefined,
           expectedShippingDate: (order as any).expectedShippingDate || undefined,
         });
+      }
+      // إشعار داخلي in-app للعميل (إن كان مسجلاً) ──────────────────
+      if (order?.userId && newStatus) {
+        try {
+          const statusMap: Record<string, string> = {
+            pending: "طلبك قيد المراجعة",
+            confirmed: "تم تأكيد طلبك ✅",
+            processing: "طلبك قيد التجهيز",
+            shipped: "تم شحن طلبك 🚚",
+            out_for_delivery: "طلبك خرج للتوصيل",
+            delivered: "تم توصيل طلبك بنجاح ✅",
+            completed: "اكتمل طلبك. شكراً لتسوقك معنا",
+            cancelled: "تم إلغاء طلبك",
+          };
+          const label = statusMap[newStatus] || `تحديث الحالة: ${newStatus}`;
+          const { notifyOrderStatus } = await import("./lib/notifications");
+          await notifyOrderStatus(String(order.userId), order.id, label);
+        } catch { /* non-fatal */ }
       }
       // منح نقاط الولاء عند تسليم الطلب
       if (newStatus === "delivered" && order?.userId && order?.total) {

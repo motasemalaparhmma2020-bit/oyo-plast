@@ -74,6 +74,22 @@ export function registerMessagingRoutes(app: Express, requireAdmin: any) {
         content: content.trim(), attachments,
       });
       res.json(msg);
+      // إشعار in-app للعميل (إذا كان لديه حساب)
+      (async () => {
+        try {
+          const conv = await getConversation(id);
+          if (!conv?.customerPhone) return;
+          const { pool: dbPool } = await import("../db");
+          const u = await dbPool.query(
+            `SELECT id FROM users WHERE phone=$1 OR phone_number=$1 LIMIT 1`,
+            [conv.customerPhone],
+          );
+          const uid = u.rows[0]?.id;
+          if (!uid) return;
+          const { notifyNewMessage } = await import("../lib/notifications");
+          await notifyNewMessage(String(uid), "الدعم الفني", content.trim(), id);
+        } catch { /* non-fatal */ }
+      })();
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

@@ -59,8 +59,10 @@ import Auth from "@/pages/Auth";
 import Register from "@/pages/Register";
 import Admin from "@/pages/Admin";
 import AdminInbox from "@/pages/AdminInbox";
+import AdminBroadcastNotifications from "@/pages/AdminBroadcastNotifications";
 import Wishlist from "@/pages/Wishlist";
 import Notifications from "@/pages/Notifications";
+import NotificationSettings from "@/pages/NotificationSettings";
 import MyAccount from "@/pages/MyAccount";
 import MyCredit from "@/pages/MyCredit";
 import MarketerCoupons from "@/pages/MarketerCoupons";
@@ -533,6 +535,7 @@ function Router() {
             <Route path="/onboarding" component={OnboardingPage} />
             <Route path="/admin" component={Admin} />
             <Route path="/admin/inbox" component={AdminInbox} />
+            <Route path="/admin/broadcast" component={AdminBroadcastNotifications} />
             <Route path="/about" component={About} />
             <Route path="/privacy" component={Privacy} />
             <Route path="/terms" component={Terms} />
@@ -586,6 +589,9 @@ function Router() {
             </Route>
             <Route path="/notifications">
               <RequireAccountType><Notifications /></RequireAccountType>
+            </Route>
+            <Route path="/notification-settings">
+              <RequireAccountType><NotificationSettings /></RequireAccountType>
             </Route>
             <Route path="/account">
               <RequireAccountType><MyAccount /></RequireAccountType>

@@ -282,10 +282,25 @@ export const notifications = pgTable("notifications", {
   userId: varchar("user_id").references(() => users.id).notNull(),
   title: text("title").notNull(),
   message: text("message").notNull(),
-  type: text("type").default("order").notNull(), // order, promo, system
+  type: text("type").default("order").notNull(), // order_created|order_status|new_message|commission|low_stock|payment_due|wallet_credit|delivery_assigned|promo|system|order|payment
+  priority: text("priority").default("normal").notNull(), // low|normal|high
+  actionUrl: text("action_url"), // optional deep link
+  groupKey: text("group_key"), // for grouping similar notifications
   isRead: boolean("is_read").default(false).notNull(),
   orderId: integer("order_id").references(() => orders.id),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Notification Preferences (per user, per type)
+export const notificationPreferences = pgTable("notification_preferences", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  type: text("type").notNull(), // matches notification.type
+  inAppEnabled: boolean("in_app_enabled").default(true).notNull(),
+  telegramEnabled: boolean("telegram_enabled").default(false).notNull(),
+  mutedUntil: timestamp("muted_until"), // DND - mute all until this time
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Customer Wallet
@@ -1055,6 +1070,9 @@ export type Setting = typeof settings.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
 export type WishlistItem = typeof wishlist.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+export const insertNotificationPreferenceSchema = createInsertSchema(notificationPreferences).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertNotificationPreference = z.infer<typeof insertNotificationPreferenceSchema>;
+export type NotificationPreference = typeof notificationPreferences.$inferSelect;
 export type Wallet = typeof wallets.$inferSelect;
 export type WalletTransaction = typeof walletTransactions.$inferSelect;
 export type RewardPoints = typeof rewardPoints.$inferSelect;

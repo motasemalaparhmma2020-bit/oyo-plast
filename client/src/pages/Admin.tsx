@@ -76,6 +76,7 @@ import {
   Phone,
   AlertTriangle,
   ShieldCheck,
+  Megaphone,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
@@ -6154,11 +6155,18 @@ export default function Admin() {
             <h1 className="text-lg font-bold">لوحة تحكم OYO PLAST</h1>
             <p className="text-primary-foreground/80 text-xs">إدارة الطلبات والمنتجات</p>
           </div>
-          <Link href="/admin/inbox">
-            <Button size="sm" variant="secondary" className="gap-1.5" data-testid="button-open-inbox">
-              <MessageSquare className="h-4 w-4" /> صندوق الرسائل
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/admin/broadcast">
+              <Button size="sm" variant="secondary" className="gap-1.5" data-testid="button-open-broadcast">
+                <Megaphone className="h-4 w-4" /> بث إشعار
+              </Button>
+            </Link>
+            <Link href="/admin/inbox">
+              <Button size="sm" variant="secondary" className="gap-1.5" data-testid="button-open-inbox">
+                <MessageSquare className="h-4 w-4" /> صندوق الرسائل
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 

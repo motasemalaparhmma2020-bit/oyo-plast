@@ -6,7 +6,7 @@ import {
   ShoppingBag, Wallet, Award, ChevronLeft, Package, Clock, 
   CheckCircle2, Truck, XCircle, Loader2, Eye, ArrowUpRight, ArrowDownLeft,
   UserPlus, LogIn, ChevronDown, ChevronUp, Megaphone, TrendingUp, Tag, ExternalLink,
-  CreditCard
+  CreditCard, Bell
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -333,13 +333,21 @@ export default function MyAccount() {
 
   return (
     <div className="container max-w-4xl mx-auto px-4 py-6 pb-24">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/">
-          <Button variant="ghost" size="icon" data-testid="button-back-home">
-            <ChevronLeft className="h-5 w-5" />
+      <div className="flex items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-3">
+          <Link href="/">
+            <Button variant="ghost" size="icon" data-testid="button-back-home">
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+          </Link>
+          <h1 className="text-2xl font-bold">حسابي</h1>
+        </div>
+        <Link href="/notification-settings">
+          <Button variant="outline" size="sm" className="gap-2" data-testid="button-notification-settings">
+            <Bell className="h-4 w-4" />
+            <span className="hidden sm:inline">إعدادات الإشعارات</span>
           </Button>
         </Link>
-        <h1 className="text-2xl font-bold">حسابي</h1>
       </div>
 
       {/* Summary Cards */}

@@ -46,6 +46,15 @@ OYO PLAST is a comprehensive e-commerce platform for plastic printing and suppli
 - Alert banner shows count of unconfirmed orders >1h old (`GET /api/admin/orders/unconfirmed-count`).
 - DB migration in `server/migrate.ts` adds the three columns idempotently.
 
+### In-App Notifications (Phase 1 — May 2026)
+- **Library:** `server/lib/notifications.ts` — `createNotification()` يحترم `notification_preferences`، dedup عبر `groupKey` (30 دقيقة)، اختياري Telegram forward.
+- **Triggers:** `notifyOrderCreated` (POST `/api/orders/create`), `notifyOrderStatus` (PATCH `/api/admin/orders/:id/status` مع `statusMap` عربي), `notifyNewMessage` (POST `/api/admin/conversations/:id/messages`).
+- **DB:** جدول `notifications` موسّع بـ `priority/action_url/group_key`، جدول جديد `notification_preferences (userId, type, in_app_enabled, telegram_enabled, muted_until)`. كلها additive migrations في `server/migrate.ts`.
+- **Promo policy:** `promo` defaults to OFF (opt-in). `broadcastPromo(mode)` يدعم `opt_in` (موافقين فقط) أو `bypass` (الجميع — للحالات الحرجة).
+- **APIs:** `GET/PUT /api/notification-preferences`, `POST /api/notification-preferences/snooze`, `POST /api/admin/notifications/broadcast`.
+- **UI:** `NotificationBell.tsx` polling 30s + actionUrl navigation + أيقونات/ألوان لكل نوع. صفحة `client/src/pages/NotificationSettings.tsx` (`/notification-settings`) — toggles + DND. صفحة `AdminBroadcastNotifications.tsx` (`/admin/broadcast`) — زرّان أخضر/أحمر (موافقة/تجاوز) مع تأكيد قبل التجاوز.
+- **Staff:** نظام `staff-notify.ts` (Telegram + DB) باقٍ كما هو — لم يُكسر.
+
 ### Key Features
 - **Product Management:** dynamic pricing, multiple images carousel, custom printing (PDF/PNG/AI/PSD uploads + design notes), `hasFreeShipping`.
 - **Smart Variants** (`enableSmartVariants` per product): types = color/size/weight/image/bundle. Bundle type has `count` field and shows customer savings vs base price. Bundle has pricing priority right after `lastClickedType`, before weight/size.
