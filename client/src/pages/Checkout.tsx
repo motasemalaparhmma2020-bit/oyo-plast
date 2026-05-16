@@ -480,7 +480,8 @@ export default function Checkout() {
 
       clearGuestCart();
       await queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
-      setLocation(`/order-confirmation/${orderId}`);
+      // replace: true → نحذف /checkout من history لمنع رجوع المستخدم له بعد إنشاء الطلب
+      setLocation(`/order-confirmation/${orderId}`, { replace: true });
     } catch (err: any) {
       toast({ title: "خطأ", description: err.message || "حدث خطأ أثناء إنشاء الطلب", variant: "destructive" });
     } finally {

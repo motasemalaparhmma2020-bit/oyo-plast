@@ -359,16 +359,17 @@ export default function Cart() {
         <button
           onClick={() => {
             // زر عودة ذكي: نستخدم آخر صفحة "آمنة" مخزّنة (يتتبعها Router في App.tsx)
-            // هذا يضمن أن المستخدم يرجع لصفحة المنتج وليس لـ checkout/order-confirmation
+            // replace: true → نستبدل /cart في history بـ safe path
+            // بهذا أي ضغط لاحق على زر back في الجهاز لن يُعيد المستخدم لـ /cart أو /order-confirmation
             try {
               const safe = sessionStorage.getItem("lastSafePath");
-              if (safe && safe !== "/cart") {
-                setLocation(safe);
+              if (safe && safe !== "/cart" && !safe.startsWith("/checkout") && !safe.startsWith("/order-confirmation")) {
+                setLocation(safe, { replace: true });
                 return;
               }
-              setLocation("/");
+              setLocation("/", { replace: true });
             } catch {
-              setLocation("/");
+              setLocation("/", { replace: true });
             }
           }}
           className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-muted transition-colors flex-shrink-0"

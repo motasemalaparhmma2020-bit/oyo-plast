@@ -13,8 +13,20 @@ export default function OrderConfirmation() {
   useEffect(() => {
     const matches = window.location.pathname.match(/\/order-confirmation\/(\d+)/);
     if (matches) setOrderId(parseInt(matches[1]));
-    else navigate("/");
+    else navigate("/", { replace: true });
   }, [navigate]);
+
+  // زر رجوع ذكي: يأخذنا لآخر صفحة آمنة (المنتج/الرئيسية) ويُنظّف history
+  const goBackSmart = () => {
+    let target = "/";
+    try {
+      const safe = sessionStorage.getItem("lastSafePath");
+      if (safe && !safe.startsWith("/cart") && !safe.startsWith("/checkout") && !safe.startsWith("/order-confirmation")) {
+        target = safe;
+      }
+    } catch {}
+    navigate(target, { replace: true });
+  };
 
   const { data: order, isLoading } = useQuery({
     queryKey: [`/api/orders/${orderId}`],
@@ -51,7 +63,7 @@ export default function OrderConfirmation() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen pb-20 gap-4">
         <p className="text-red-500 font-bold">الطلب غير موجود</p>
-        <Button onClick={() => navigate("/")} variant="outline">العودة للمتجر</Button>
+        <Button onClick={() => navigate("/", { replace: true })} variant="outline">العودة للمتجر</Button>
       </div>
     );
   }
@@ -64,7 +76,7 @@ export default function OrderConfirmation() {
     <div className="min-h-screen bg-muted/20 dark:bg-background pb-28" dir="rtl">
       {/* Header */}
       <div className="sticky top-0 z-40 bg-background border-b flex items-center justify-between px-4 py-3">
-        <button onClick={() => navigate("/")} className="p-1 text-muted-foreground" data-testid="button-home">
+        <button onClick={goBackSmart} className="p-1 text-muted-foreground" data-testid="button-home" aria-label="رجوع">
           <ArrowRight className="w-5 h-5" />
         </button>
         <h1 className="font-bold text-base">تأكيد الطلب</h1>
@@ -221,7 +233,7 @@ export default function OrderConfirmation() {
       <div className="app-fixed-bar fixed bottom-0 left-0 right-0 z-50 bg-background border-t px-4 py-3 flex gap-3 shadow-lg" data-testid="section-actions">
         <Button
           className="flex-1 h-12 font-bold rounded-xl"
-          onClick={() => navigate("/")}
+          onClick={goBackSmart}
           data-testid="button-return-store"
         >
           متابعة التسوق
@@ -229,7 +241,7 @@ export default function OrderConfirmation() {
         <Button
           variant="outline"
           className="flex-1 h-12 font-bold rounded-xl"
-          onClick={() => navigate(`/track/${order.id}`)}
+          onClick={() => navigate(`/track/${order.id}`, { replace: true })}
           data-testid="button-track-order"
         >
           تتبع الطلب
