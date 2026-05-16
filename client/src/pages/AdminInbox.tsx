@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -7,14 +8,27 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { MessageSquare, Send, Search, X, Archive, RefreshCw, Loader2, User, Truck, Users } from "lucide-react";
+import { MessageSquare, Send, Search, X, Archive, RefreshCw, Loader2, User, Truck, Users, ArrowRight } from "lucide-react";
 import type { Conversation, Message } from "@shared/schema";
 
 type Tab = "customer" | "supplier" | "internal";
 
 export default function AdminInbox() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [tab, setTab] = useState<Tab>("customer");
+
+  // زر الرجوع: يعود لآخر صفحة آمنة (لوحة التحكم افتراضياً)
+  const handleBack = () => {
+    try {
+      const ref = document.referrer;
+      if (ref && new URL(ref).origin === window.location.origin && !ref.includes("/admin/inbox")) {
+        window.history.back();
+        return;
+      }
+    } catch {}
+    setLocation("/admin");
+  };
   const [statusFilter, setStatusFilter] = useState<"open" | "closed" | "archived">("open");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -91,11 +105,24 @@ export default function AdminInbox() {
           <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
             <MessageSquare className="h-6 w-6" /> صندوق الرسائل
           </h1>
-          <Button size="sm" variant="outline" onClick={() => {
-            queryClient.invalidateQueries({ queryKey: ["/api/admin/conversations"] });
-          }} data-testid="button-refresh-inbox">
-            <RefreshCw className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ["/api/admin/conversations"] });
+            }} data-testid="button-refresh-inbox">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBack}
+              className="gap-1.5"
+              aria-label="رجوع"
+              data-testid="button-back-inbox"
+            >
+              <ArrowRight className="h-4 w-4" />
+              <span className="hidden sm:inline">رجوع</span>
+            </Button>
+          </div>
         </div>
 
         {/* الألسنة */}
