@@ -2,7 +2,7 @@ import { useCart, useUpdateCartItem, useRemoveFromCart } from "@/hooks/use-cart"
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Trash2, Plus, Minus, ShoppingBag, Loader2, Paperclip, CheckCircle2, ArrowRight } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -167,6 +167,7 @@ function CartRow({
 
 /* ─── الصفحة الرئيسية ─── */
 export default function Cart() {
+  const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { data: cartItems, isLoading: cartLoading } = useCart();
   const { mutate: updateItem } = useUpdateCartItem();
@@ -356,7 +357,20 @@ export default function Cart() {
       {/* رأس الصفحة */}
       <div className="flex items-center mb-4 gap-2">
         <button
-          onClick={() => window.history.back()}
+          onClick={() => {
+            // زر عودة ذكي: لا نرجع لصفحات ما بعد الشراء (Checkout/تأكيد الطلب)
+            try {
+              const ref = document.referrer || "";
+              const fromForbidden = /\/(checkout|order-confirmation|orders)(\/|$|\?)/.test(ref);
+              if (!ref || fromForbidden || window.history.length <= 1) {
+                setLocation("/");
+                return;
+              }
+              window.history.back();
+            } catch {
+              setLocation("/");
+            }
+          }}
           className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-muted transition-colors flex-shrink-0"
           data-testid="btn-cart-back"
           aria-label="رجوع"

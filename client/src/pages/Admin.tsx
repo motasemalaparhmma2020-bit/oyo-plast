@@ -167,7 +167,7 @@ interface ColorImageEntry {
   imageUrl: string;
 }
 
-type SmartVariantType = "color" | "size" | "weight" | "image";
+type SmartVariantType = "color" | "size" | "weight" | "image" | "bundle";
 interface SmartVariant {
   id: string;
   type: SmartVariantType;
@@ -177,18 +177,21 @@ interface SmartVariant {
   discount: string;
   hex: string;
   imageUrl: string;
+  count?: number; // عدد القطع في الشدّة (للنوع bundle فقط)
 }
 const SMART_VARIANT_TYPE_LABELS: Record<SmartVariantType, string> = {
   color: "لون",
   size: "مقاس",
   weight: "وزن",
   image: "صورة",
+  bundle: "شدة",
 };
 const SMART_VARIANT_TYPE_ICONS: Record<SmartVariantType, string> = {
   color: "🎨",
   size: "📐",
   weight: "⚖️",
   image: "🖼️",
+  bundle: "🎁",
 };
 
 interface ProductFormData {
@@ -7124,11 +7127,20 @@ export default function Admin() {
 
                         {productForm.enableSmartVariants && (
                           <div className="space-y-4">
+                            {/* تنبيه: الخيارات الذكية تتجاوز التسعير القديم */}
+                            <div className="bg-blue-50 dark:bg-blue-950/30 border-r-4 border-blue-500 rounded p-2.5 text-xs space-y-1">
+                              <p className="font-bold text-blue-900 dark:text-blue-200">ℹ️ معلومة هامة</p>
+                              <p className="text-blue-800 dark:text-blue-300 leading-relaxed">
+                                عند تفعيل الخيارات الذكية، أسعارها <b>تتجاوز السعر الأساسي للمنتج</b>. السعر الموحد (في الأعلى)
+                                يبقى كسعر افتراضي يُستخدم فقط عندما لا يختار العميل أي خيار ذكي بسعر.
+                                ننصح بإدخال السعر الكامل لكل خيار (مقاس/وزن/شدة) لتجنب أي تداخل.
+                              </p>
+                            </div>
                             {/* أزرار أنواع الخيارات */}
                             <div>
                               <Label className="text-sm font-semibold mb-2 block">أنواع الخيارات المفعّلة</Label>
                               <div className="flex gap-2 flex-wrap">
-                                {(["size", "weight", "color", "image"] as SmartVariantType[]).map(type => (
+                                {(["size", "weight", "color", "image", "bundle"] as SmartVariantType[]).map(type => (
                                   <button
                                     key={type}
                                     type="button"
@@ -7174,6 +7186,7 @@ export default function Admin() {
                                             discount: "",
                                             hex: "#000000",
                                             imageUrl: "",
+                                            ...(type === 'bundle' ? { count: 0 } : {}),
                                           };
                                           setSmartVariantsList(prev => [...prev, newItem]);
                                           setProductForm(prev => ({ ...prev, enableSmartVariants: true }));
@@ -7207,6 +7220,7 @@ export default function Admin() {
                                             v.type === 'size' ? 'مثال: 50 جرام' :
                                             v.type === 'weight' ? 'مثال: 1 كجم' :
                                             v.type === 'color' ? 'مثال: أحمر' :
+                                            v.type === 'bundle' ? 'مثال: شدّة 5 قطع' :
                                             'اسم الصورة'
                                           }
                                           value={v.label}
@@ -7292,6 +7306,49 @@ export default function Admin() {
                                           />
                                         </div>
                                       </div>
+                                      {/* عدد القطع داخل الشدّة + حساب توفير العميل */}
+                                      {v.type === 'bundle' && (
+                                        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded p-2 space-y-1.5">
+                                          <Label className="text-[11px] text-amber-700 dark:text-amber-300 font-semibold block">
+                                            🎁 عدد القطع داخل الشدّة
+                                          </Label>
+                                          <Input
+                                            type="number"
+                                            min="1"
+                                            placeholder="مثال: 5"
+                                            value={v.count ?? ""}
+                                            onChange={(e) => {
+                                              const updated = [...smartVariantsList];
+                                              updated[idx] = { ...updated[idx], count: e.target.value ? parseInt(e.target.value, 10) : undefined };
+                                              setSmartVariantsList(updated);
+                                            }}
+                                            className="h-8 text-sm"
+                                            data-testid={`input-variant-count-${idx}`}
+                                          />
+                                          {(() => {
+                                            const base = parseFloat(productForm.price || "0");
+                                            const bundlePrice = parseFloat(v.price || "0");
+                                            const count = v.count || 0;
+                                            if (base > 0 && bundlePrice > 0 && count > 1) {
+                                              const fullPrice = base * count;
+                                              const save = fullPrice - bundlePrice;
+                                              const perPiece = bundlePrice / count;
+                                              if (save > 0) {
+                                                return (
+                                                  <div className="text-[11px] text-emerald-700 dark:text-emerald-300 font-semibold">
+                                                    ✅ يوفّر العميل {save.toLocaleString()} ر.ي · سعر القطعة في الشدّة: {Math.round(perPiece).toLocaleString()} ر.ي
+                                                  </div>
+                                                );
+                                              }
+                                            }
+                                            return (
+                                              <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                                                مثال: 5 شدّات بسعر 9,500 ر.ي بدلاً من 10,000 ر.ي (سعر القطعة × 5)
+                                              </p>
+                                            );
+                                          })()}
+                                        </div>
+                                      )}
                                       {/* رابط الصورة للصورة واللون */}
                                       {(v.type === 'image' || v.type === 'color') && (
                                         <div className="flex items-center gap-2">

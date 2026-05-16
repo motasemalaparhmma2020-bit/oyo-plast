@@ -3147,6 +3147,15 @@ h1{font-size:18px;color:#222;margin:4px 0;}
             });
           } catch { /* non-fatal */ }
         })(),
+        // ── مسح سلة المستخدم تلقائياً بعد إنشاء الطلب ──────────────────
+        (async () => {
+          try {
+            if (userId) {
+              const { pool: pp } = await import("./db");
+              await pp.query(`DELETE FROM cart_items WHERE user_id = $1`, [userId]);
+            }
+          } catch { /* non-fatal */ }
+        })(),
       ]);
 
       res.json(order);

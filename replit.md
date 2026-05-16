@@ -213,6 +213,30 @@ Major upgrade to the visual search UX after user reported missing results:
 - `/api/products/image/:id` يخدم الصور بكاش 7 أيام
 - بعد إصلاح visual-search، **لا يوجد أي endpoint عام يُرسل base64 ضخم للعميل**
 
+## Session May 16, 2026 — UX & Bundle Variant
+خمس مهام مُنفّذة بترتيب:
+
+1. **تصفير الكمية والسلة بعد العملية**
+   - `ProductDetail.tsx`: `useEffect` على `numericId` يصفّر الكمية + كل الخيارات (مقاس/لون/خيارات ذكية/طباعة/تصميم) عند الانتقال لمنتج آخر.
+   - `handleAddToCart` مع `onSuccess` يُصفّر الكمية و `selectedSmartVariant` و `lastClickedType` بعد كل إضافة ناجحة.
+   - `server/routes.ts` `/api/orders/create`: مسح تلقائي `DELETE FROM cart_items WHERE user_id=$1` بعد إنشاء الطلب (non-fatal).
+
+2. **زر العودة الذكي في `Cart.tsx`**: لا يرجع لصفحات Checkout/order-confirmation/orders (لمنع الالتفاف بعد الشراء). يعود لـ `/` لو الـ referrer منها أو غير موجود.
+
+3. **تنبيه في Admin** أعلى قسم الخيارات الذكية يوضّح أن أسعار الخيارات الذكية تتجاوز السعر الأساسي، ويُشجّع على إدخال السعر الكامل لكل خيار لتجنب التداخل.
+
+4. **نوع جديد "شدة" (bundle)** ضمن الخيارات الذكية في Admin + ProductDetail:
+   - `SmartVariantType` إضافة `"bundle"` (🎁) + حقل `count?: number` للقطع في الشدّة.
+   - UI Admin: زرّ إضافة + حقل عدد القطع داخل صندوق عنبري + حساب تلقائي "✅ يوفّر العميل X ر.ي · سعر القطعة في الشدّة: Y ر.ي" مقارنة بـ `price_base × count`.
+   - أولوية تسعير: في `ProductDetail.smartVariantPrice`، الـ bundle يحلّ مباشرة بعد `lastClickedType` وقبل weight/size — يضمن ظهور سعر الشدّة في الواجهة.
+   - cartPayload لا يحتاج تغييراً: `unitPrice = totalPrice/quantity` يلتقط تسعير الشدّة تلقائياً.
+
+5. **توثيق**: هذا القسم في replit.md (المهمة 5).
+
+**Files touched:** `client/src/pages/ProductDetail.tsx`, `client/src/pages/Admin.tsx`, `client/src/pages/Cart.tsx`, `server/routes.ts`.
+
+> ⚠️ ملاحظة: replit.md أصبح كبيراً جداً (300+ سطر). يُنصح بنقل أقسام Visual Search v1-v5.1 و"Recent Changes (April 2026)" إلى `docs/CHANGELOG.md` والإبقاء على لمحة عامة + Session الحالية فقط.
+
 ## v5.1 — تحسينات ما بعد code review (April 30, 2026)
 
 ### مشاكل تم اكتشافها وحلّها (من architect review)

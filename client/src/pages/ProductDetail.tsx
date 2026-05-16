@@ -67,10 +67,10 @@ const LazyImage = ({ src, alt, className, style }: { src: string; alt: string; c
 interface BulkPricing { minQty: number; price: string; }
 interface SizePricing { size: string; price: string; priceSar?: string; colors?: string[]; stock?: number; }
 interface ColorImageEntry { color: string; hex: string; imageUrl: string; }
-type SmartVType = "color" | "size" | "weight" | "image";
-interface SmartV { id: string; type: SmartVType; label: string; price: string; priceSar: string; discount: string; hex: string; imageUrl: string; }
+type SmartVType = "color" | "size" | "weight" | "image" | "bundle";
+interface SmartV { id: string; type: SmartVType; label: string; price: string; priceSar: string; discount: string; hex: string; imageUrl: string; count?: number; }
 interface SmartVData { activeTypes: SmartVType[]; variants: SmartV[]; }
-const SMART_V_LABELS: Record<SmartVType, string> = { color: "اللون", size: "المقاس", weight: "الوزن", image: "الصورة" };
+const SMART_V_LABELS: Record<SmartVType, string> = { color: "اللون", size: "المقاس", weight: "الوزن", image: "الصورة", bundle: "الشدة" };
 
 interface PdpSection {
   id: string; visible: boolean; height?: number; thumbSize?: number; mode?: string;
@@ -316,6 +316,29 @@ export default function ProductDetail() {
     return () => window.removeEventListener('currencyChange', fn);
   }, []);
 
+  // ── تصفير الحالة عند تغيير المنتج ────────────────────────────────────────
+  // يحلّ مشكلة: انتقال لمنتج آخر مع بقاء الكمية/الخيارات السابقة
+  useEffect(() => {
+    setQuantity(1);
+    setSelectedColor(null);
+    setSelectedSize(null);
+    setSelectedSmartVariant({});
+    setLastClickedType(null);
+    setUploadedFile(null);
+    setUploadedDesignUrl(null);
+    setDesignNotes("");
+    setEnableCustomPrinting(false);
+    setEnableBagPrinting(false);
+    setSelectedBagColor(null);
+    setPrintColors([""]);
+    setPrintWidth("");
+    setPrintHeight("");
+    setPrintFinish("");
+    setPrintColorSeparation(false);
+    setVariantActiveImg(null);
+    setCurrentImageIndex(0);
+  }, [numericId]);
+
   // ── Derived Data ─────────────────────────────────────────────────────────
   // ── دمج كل الصور: المنتج + متغيرات ذكية + صور الألوان ──
   const allImages = useMemo(() => {
@@ -450,7 +473,11 @@ export default function ProductDetail() {
       const lastP = pick(lastV);
       if (lastP) return { price: lastP, label: lastV?.label || '', type: lastClickedType };
     }
-    // 2) الوزن — أولوية تلقائية (بندل/كرتون)
+    // 2) الشدّة/البندل — أولوية عُليا تلقائية (تسعير الجملة)
+    const bundleV = getV('bundle');
+    const bundleP = pick(bundleV);
+    if (bundleP) return { price: bundleP, label: bundleV?.label || '', type: 'bundle' };
+    // 3) الوزن — أولوية تلقائية
     const weightV = getV('weight');
     const weightP = pick(weightV);
     if (weightP) return { price: weightP, label: weightV?.label || '', type: 'weight' };
@@ -572,7 +599,7 @@ export default function ProductDetail() {
   }, [product?.id, quantity, selectedSize, selectedColor, enableCustomPrinting, designNotes, uploadedDesignUrl,
       enableBagPrinting, selectedBagColor, printColors,
       productPrintingCat, printWidth, printHeight, printFinish, printColorSeparation, professionalPrintingUnitPrice,
-      totalPrice]);
+      totalPrice, selectedSmartVariant, smartVariantsData, showSmartVariants]);
 
   // ── التحقق من اختيار المقاس قبل الإضافة للسلة ──
   const validateSelection = (): string | null => {
@@ -608,7 +635,16 @@ export default function ProductDetail() {
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    addToCartMutation.mutate(cartPayload);
+    addToCartMutation.mutate(cartPayload, {
+      onSuccess: () => {
+        // تصفير الكمية والخيارات بعد الإضافة الناجحة
+        setQuantity(1);
+        setSelectedSmartVariant({});
+        setLastClickedType(null);
+        setSelectedColor(null);
+        setSelectedSize(null);
+      },
+    });
   };
 
   const handleBuyNow = async () => {
