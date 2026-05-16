@@ -2098,6 +2098,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!data.name || !data.price || !data.categoryId || !data.imageUrl) {
         return res.status(400).json({ message: "البيانات المطلوبة: name, price, categoryId, imageUrl" });
       }
+      // ─── Defensive: الخيارات الذكية مطلوبة لتجنب اختلاف الأسعار بين الصفحات ───
+      // (كل المنتجات الحالية تستخدمها — هذه حماية إضافية للمنتجات الجديدة)
+      if (!data.enableSmartVariants || !data.smartVariants) {
+        return res.status(422).json({
+          message: "⛔ يجب تفعيل الخيارات الذكية (Smart Variants) لكل منتج جديد. أنشئ متغيراً واحداً على الأقل (لون/مقاس/وزن/باقة).",
+        });
+      }
       const product = await storage.createProduct({
         name: data.name,
         description: data.description || "",
@@ -2146,6 +2153,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const id = parseInt(req.params.id);
       const data = req.body;
+
+      // ─── Defensive: لا يُسمح بإطفاء الخيارات الذكية إن كانت مُفعّلة ───
+      if (data.enableSmartVariants === false) {
+        return res.status(422).json({
+          message: "⛔ لا يمكن تعطيل الخيارات الذكية بعد تفعيلها. أنشئ منتجاً جديداً بدلاً من ذلك.",
+        });
+      }
 
       // ── Safety Net: رفض أي سعر أقل من الحد الأحمر ──────────────────
       if (data.price !== undefined) {
@@ -3238,11 +3252,94 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const { pool: dbPool } = await import("./db");
       const orderId = parseInt(req.params.id);
       if (!req.file) return res.status(400).json({ message: "لم يتم إرفاق صورة" });
-      const base64 = req.file.buffer.toString("base64");
-      const dataUrl = `data:${req.file.mimetype};base64,${base64}`;
+
+      // ─── Kill-switch: إغلاق طارئ لاستقبال الإيصالات (للأدمن) ───
+      try {
+        const ks = await dbPool.query(`SELECT receipts_enabled FROM display_settings ORDER BY id LIMIT 1`);
+        if (ks.rows.length && ks.rows[0].receipts_enabled === false) {
+          return res.status(503).json({
+            message: "نظام رفع الإيصالات متوقف مؤقتاً للصيانة. يرجى التواصل مع الإدارة.",
+          });
+        }
+      } catch (ksErr: any) {
+        // إذا فشل التحقق لأي سبب غير "عمود غير موجود" → نمنع الرفع احتياطاً (fail-safe)
+        const msg = String(ksErr?.message || "");
+        const isMissingColumn = /column.*receipts_enabled.*does not exist/i.test(msg)
+          || /relation.*display_settings.*does not exist/i.test(msg);
+        if (!isMissingColumn) {
+          console.error("[receipt] kill-switch check failed unexpectedly:", msg);
+          return res.status(503).json({ message: "نظام الإيصالات غير متوفر مؤقتاً. حاول لاحقاً." });
+        }
+      }
+
+      // ─── Authorization: منع الاستيلاء على إيصال طلب آخر ───
+      // - لا يُسمح برفع إيصال إلا مرة واحدة (إذا كان NULL)
+      // - إذا كان للطلب user_id فيجب أن يتطابق مع الجلسة (للمسجّلين)
+      try {
+        const ownerCheck = await dbPool.query(
+          `SELECT user_id, receipt_image_url FROM orders WHERE id=$1`, [orderId]
+        );
+        if (!ownerCheck.rows.length) {
+          return res.status(404).json({ message: "الطلب غير موجود" });
+        }
+        const row = ownerCheck.rows[0];
+        if (row.receipt_image_url) {
+          return res.status(409).json({
+            message: "تم رفع إيصال لهذا الطلب مسبقاً. للتعديل تواصل مع الإدارة.",
+          });
+        }
+        const sessionUserId = (req as any)?.user?.claims?.sub || (req as any)?.session?.passport?.user?.claims?.sub || null;
+        if (row.user_id && sessionUserId && String(row.user_id) !== String(sessionUserId)) {
+          return res.status(403).json({ message: "غير مصرح" });
+        }
+      } catch { /* defensive */ }
+
+      // ─── المبلغ المُدّعى دفعه (لكشف الاحتيال) ───
+      const amountClaimedRaw = req.body?.amountClaimed;
+      const amountClaimed = amountClaimedRaw !== undefined && amountClaimedRaw !== ""
+        ? Number(amountClaimedRaw)
+        : null;
+
+      // ─── رفع الصورة إلى Cloudinary (بدل base64) ───
+      let receiptUrl: string;
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+      const apiKey = process.env.CLOUDINARY_API_KEY;
+      const apiSecret = process.env.CLOUDINARY_API_SECRET;
+      if (cloudName && apiKey && apiSecret) {
+        try {
+          const { v2: cloudinary } = await import("cloudinary");
+          cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
+          const uploadRes: any = await new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+              {
+                folder: "oyo_receipts",
+                public_id: `receipt_${orderId}_${Date.now()}`,
+                resource_type: "image",
+                overwrite: true,
+              },
+              (err, result) => err ? reject(err) : resolve(result)
+            );
+            stream.end(req.file!.buffer);
+          });
+          receiptUrl = uploadRes.secure_url;
+        } catch (uploadErr: any) {
+          console.error("[receipt] Cloudinary upload failed, falling back to base64:", uploadErr?.message);
+          const base64 = req.file.buffer.toString("base64");
+          receiptUrl = `data:${req.file.mimetype};base64,${base64}`;
+        }
+      } else {
+        // fallback إذا لم تُعدّ Cloudinary
+        const base64 = req.file.buffer.toString("base64");
+        receiptUrl = `data:${req.file.mimetype};base64,${base64}`;
+      }
+
       await dbPool.query(
-        `UPDATE orders SET receipt_image_url=$1, payment_status='pending_verification' WHERE id=$2`,
-        [dataUrl, orderId]
+        `UPDATE orders
+           SET receipt_image_url=$1,
+               payment_status='pending_verification',
+               amount_claimed = COALESCE($3, amount_claimed)
+         WHERE id=$2`,
+        [receiptUrl, orderId, amountClaimed]
       );
 
       // إشعار المشرف بواتساب عند رفع إيصال جديد
@@ -3295,19 +3392,41 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         }
       } catch { /* non-fatal */ }
 
-      res.json({ message: "تم رفع الإيصال بنجاح", receiptUrl: dataUrl });
+      res.json({ message: "تم رفع الإيصال بنجاح", receiptUrl });
     } catch (e: any) {
       res.status(500).json({ message: "فشل رفع الإيصال", error: e.message });
     }
   });
 
   // ─── الأدمن: التحقق من إيصال الدفع ──────────────────────────────────────────
+  // ─── Kill-switch: تشغيل/إيقاف استقبال الإيصالات (للأدمن فقط) ───
+  app.get("/api/admin/receipts-enabled", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`SELECT receipts_enabled FROM display_settings ORDER BY id LIMIT 1`);
+      res.json({ enabled: r.rows[0]?.receipts_enabled !== false });
+    } catch (e: any) {
+      res.json({ enabled: true });
+    }
+  });
+
+  app.put("/api/admin/receipts-enabled", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const enabled = req.body?.enabled !== false;
+      await dbPool.query(`UPDATE display_settings SET receipts_enabled=$1 WHERE id = (SELECT id FROM display_settings ORDER BY id LIMIT 1)`, [enabled]);
+      res.json({ success: true, enabled });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
   app.get("/api/admin/payment-verifications", requireAdmin, async (req, res) => {
     try {
       const { pool: dbPool } = await import("./db");
       const result = await dbPool.query(`
         SELECT id, customer_name, customer_phone, total, payment_method, payment_status,
-               receipt_image_url, notes, created_at, shipping_city
+               receipt_image_url, notes, created_at, shipping_city, amount_claimed
         FROM orders
         WHERE payment_method IN ('bank_transfer','digital_wallet','installment_deposit_cod')
           AND payment_status IN ('pending_verification','unpaid','partial')
@@ -3329,10 +3448,19 @@ h1{font-size:18px;color:#222;margin:4px 0;}
 
       // جلب بيانات الطلب قبل التحديث (لإرسال الإشعار)
       const orderRow = await dbPool.query(
-        `SELECT customer_name, customer_phone, total, payment_method FROM orders WHERE id=$1`,
+        `SELECT user_id, customer_name, customer_phone, total, payment_method FROM orders WHERE id=$1`,
         [orderId]
       );
       const orderData = orderRow.rows[0];
+
+      // إشعار داخلي للعميل عبر نظام Phase 1
+      try {
+        if (orderData?.user_id) {
+          const { notifyOrderStatus } = await import("./lib/notifications");
+          const label = action === "approve" ? "تم تأكيد الدفع ✅" : "تعذّر التحقق من الدفع ❌";
+          await notifyOrderStatus(String(orderData.user_id), orderId, label);
+        }
+      } catch { /* non-fatal */ }
 
       if (action === "approve") {
         if (expectedShippingDate) {
@@ -3642,6 +3770,26 @@ h1{font-size:18px;color:#222;margin:4px 0;}
     res.json({ id: supplier.id, name: supplier.name, phone: supplier.phone, cities: supplier.cities, commissionRate: supplier.commission_rate, balanceDue: supplier.balance_due, totalSales: supplier.total_sales });
   });
 
+  // ─── حماية خصوصية العميل: إخفاء الهاتف والعنوان التفصيلي قبل أن يستلم المورد الطلب ───
+  // يظهر الاسم الأول + المدينة فقط حتى يضع المورد الطلب في "picked_up"
+  // (Time-bound disclosure pattern — Amazon FBA style)
+  function maskOrderForSupplier(order: any): any {
+    if (!order) return order;
+    const ds = order.delivery_status;
+    const revealFull = ds === "picked_up" || ds === "shipped" || ds === "delivered" || ds === "failed";
+    if (revealFull) return order;
+    const name = (order.customer_name || "").trim();
+    const parts = name.split(/\s+/);
+    const maskedName = parts.length >= 2 ? `${parts[0]} ${parts[1][0]}.` : (parts[0] || "");
+    return {
+      ...order,
+      customer_name: maskedName,
+      customer_phone: null,        // مخفي حتى الالتزام بالتوصيل
+      shipping_address: null,      // مخفي — تظهر المدينة فقط
+      _masked: true,               // علامة للواجهة لإظهار رسالة "تظهر التفاصيل عند الاستلام"
+    };
+  }
+
   app.get("/api/supplier/orders", requireSupplier, async (req, res) => {
     try {
       const { pool: dbPool } = await import("./db");
@@ -3650,9 +3798,67 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         `SELECT * FROM orders WHERE supplier_id=$1 AND status NOT IN ('cancelled') ORDER BY created_at DESC LIMIT 100`,
         [supplier.id]
       );
-      res.json(result.rows);
+      res.json(result.rows.map(maskOrderForSupplier));
     } catch (e: any) {
       res.status(500).json({ message: "فشل جلب الطلبات" });
+    }
+  });
+
+  // ─── بوابة المالية للمورد ──────────────────────────────────────────────────────
+  app.get("/api/supplier/finance", requireSupplier, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const supplier = (req as any).supplier;
+      const t = await dbPool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE delivery_status = 'delivered')::int AS delivered_count,
+          COUNT(*) FILTER (WHERE status NOT IN ('cancelled')
+                       AND (delivery_status IS NULL OR delivery_status NOT IN ('delivered','failed')))::int AS pending_count,
+          COALESCE(SUM(supplier_amount) FILTER (WHERE delivery_status = 'delivered'), 0) AS earned_total,
+          COALESCE(SUM(supplier_amount) FILTER (WHERE delivery_status = 'delivered' AND supplier_paid = false), 0) AS unpaid_total,
+          COALESCE(SUM(total) FILTER (WHERE delivery_status = 'delivered'), 0) AS gross_sales,
+          COALESCE(SUM(platform_commission) FILTER (WHERE delivery_status = 'delivered'), 0) AS commission_total,
+          COALESCE(SUM(supplier_amount) FILTER (WHERE delivery_status = 'delivered'
+                                            AND created_at >= date_trunc('month', NOW())), 0) AS this_month
+        FROM orders WHERE supplier_id = $1
+      `, [supplier.id]);
+      res.json({
+        ...t.rows[0],
+        commissionRate: Number(supplier.commission_rate || 0),
+        totalPaid: Number(supplier.total_paid || 0),
+        balanceDue: Number(supplier.balance_due || 0),
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
+    }
+  });
+
+  // ─── بدء التجهيز (المورد يلتزم بالطلب) ─────────────────────────────────────────
+  app.put("/api/supplier/orders/:id/start-preparing", requireSupplier, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const supplier = (req as any).supplier;
+      const orderId = parseInt(req.params.id);
+      const orderCheck = await dbPool.query(
+        "SELECT id, user_id, status FROM orders WHERE id=$1 AND supplier_id=$2",
+        [orderId, supplier.id]
+      );
+      if (!orderCheck.rows.length) return res.status(403).json({ message: "غير مصرح" });
+      const order = orderCheck.rows[0];
+      if (!["pending", "confirmed"].includes(order.status)) {
+        return res.status(400).json({ message: "لا يمكن بدء تجهيز الطلب في حالته الحالية" });
+      }
+      await dbPool.query("UPDATE orders SET status='processing' WHERE id=$1", [orderId]);
+      // إشعار العميل عبر نظام Phase 1
+      if (order.user_id) {
+        try {
+          const { notifyOrderStatus } = await import("./lib/notifications");
+          await notifyOrderStatus(String(order.user_id), orderId, "قيد التجهيز");
+        } catch { /* non-fatal */ }
+      }
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل" });
     }
   });
 
@@ -3661,8 +3867,14 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const { pool: dbPool } = await import("./db");
       const supplier = (req as any).supplier;
       const orderId = parseInt(req.params.id);
-      const orderCheck = await dbPool.query("SELECT id FROM orders WHERE id=$1 AND supplier_id=$2", [orderId, supplier.id]);
+      const orderCheck = await dbPool.query(
+        "SELECT id, delivery_status FROM orders WHERE id=$1 AND supplier_id=$2",
+        [orderId, supplier.id]
+      );
       if (!orderCheck.rows.length) return res.status(403).json({ message: "غير مصرح" });
+      // ملاحظات التصميم وملفاته قد تحتوي على معلومات شخصية للعميل
+      const ds = orderCheck.rows[0].delivery_status;
+      const revealFull = ds === "picked_up" || ds === "shipped" || ds === "delivered" || ds === "failed";
       const result = await dbPool.query(
         `SELECT
            oi.id,
@@ -3688,7 +3900,13 @@ h1{font-size:18px;color:#222;margin:4px 0;}
          ORDER BY oi.id`,
         [orderId]
       );
-      res.json(result.rows);
+      // إخفاء ملاحظات/ملفات التصميم قبل الالتزام بالتوصيل (قد تكشف بيانات العميل)
+      const rows = revealFull ? result.rows : result.rows.map((it: any) => ({
+        ...it,
+        designNotes: it.designNotes ? "🔒 يظهر عند الاستلام" : null,
+        designFileUrl: null,
+      }));
+      res.json(rows);
     } catch (e: any) {
       res.status(500).json({ message: "فشل" });
     }

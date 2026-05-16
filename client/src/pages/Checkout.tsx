@@ -83,6 +83,7 @@ export default function Checkout() {
   });
 
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptAmountClaimed, setReceiptAmountClaimed] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deliveryTime, setDeliveryTime] = useState<"now" | "later">("now");
   const [currency] = useState<"YER" | "SAR">(() =>
@@ -456,6 +457,9 @@ export default function Checkout() {
         try {
           const receiptForm = new FormData();
           receiptForm.append("receipt", receiptFile);
+          if (receiptAmountClaimed) {
+            receiptForm.append("amountClaimed", String(receiptAmountClaimed));
+          }
           await fetch(`/api/orders/${orderId}/upload-receipt`, {
             method: "POST",
             body: receiptForm,
@@ -867,7 +871,7 @@ export default function Checkout() {
                   }`}
                   onClick={() => {
                     setFormData({ ...formData, paymentMethod: "cash_on_delivery", purchaseCode: "" });
-                    setReceiptFile(null);
+                    setReceiptFile(null); setReceiptAmountClaimed("");
                   }}
                   data-testid="payment-method-cash_on_delivery"
                 >
@@ -897,7 +901,7 @@ export default function Checkout() {
                   }`}
                   onClick={() => {
                     setFormData({ ...formData, paymentMethod: "credit", purchaseCode: "" });
-                    setReceiptFile(null);
+                    setReceiptFile(null); setReceiptAmountClaimed("");
                   }}
                   data-testid="payment-method-credit"
                 >
@@ -1011,7 +1015,7 @@ export default function Checkout() {
                       }`}
                       onClick={() => {
                         setFormData({ ...formData, paymentMethod: wId, purchaseCode: "" });
-                        setReceiptFile(null);
+                        setReceiptFile(null); setReceiptAmountClaimed("");
                       }}
                       data-testid={`payment-method-${wId}`}
                     >
@@ -1102,6 +1106,26 @@ export default function Checkout() {
                                   </div>
                                 )}
                               </div>
+                              {/* المبلغ المُدّعى دفعه */}
+                              {receiptFile && (
+                                <div className="mt-2">
+                                  <p className="text-xs font-semibold mb-1">المبلغ الذي حوّلته (ر.ي) *</p>
+                                  <Input
+                                    type="number"
+                                    inputMode="numeric"
+                                    value={receiptAmountClaimed}
+                                    onChange={e => setReceiptAmountClaimed(e.target.value)}
+                                    placeholder={`المبلغ المطلوب: ${Math.round(finalTotal).toLocaleString()}`}
+                                    className="h-9 text-sm"
+                                    data-testid="input-amount-claimed-wallet"
+                                  />
+                                  {receiptAmountClaimed && Number(receiptAmountClaimed) > 0 && Number(receiptAmountClaimed) < finalTotal && (
+                                    <p className="text-[11px] text-red-600 mt-1 font-medium">
+                                      ⚠️ المبلغ أقل من قيمة الطلب ({Math.round(finalTotal).toLocaleString()} ر.ي)
+                                    </p>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1132,7 +1156,7 @@ export default function Checkout() {
                           }`}
                           onClick={() => {
                             setFormData({ ...formData, paymentMethod: bId, purchaseCode: "" });
-                            setReceiptFile(null);
+                            setReceiptFile(null); setReceiptAmountClaimed("");
                             setInstallmentType(null);
                           }}
                           data-testid={`payment-method-${bId}`}
@@ -1226,6 +1250,26 @@ export default function Checkout() {
                                   )}
                                 </div>
                               </div>
+                              {/* المبلغ المُدّعى دفعه */}
+                              {receiptFile && (
+                                <div>
+                                  <p className="text-xs font-semibold mb-1">المبلغ الذي حوّلته (ر.ي) *</p>
+                                  <Input
+                                    type="number"
+                                    inputMode="numeric"
+                                    value={receiptAmountClaimed}
+                                    onChange={e => setReceiptAmountClaimed(e.target.value)}
+                                    placeholder={`المبلغ المطلوب: ${Math.round(finalTotal).toLocaleString()}`}
+                                    className="h-9 text-sm"
+                                    data-testid="input-amount-claimed-bank"
+                                  />
+                                  {receiptAmountClaimed && Number(receiptAmountClaimed) > 0 && Number(receiptAmountClaimed) < finalTotal && (
+                                    <p className="text-[11px] text-red-600 mt-1 font-medium">
+                                      ⚠️ المبلغ أقل من قيمة الطلب ({Math.round(finalTotal).toLocaleString()} ر.ي)
+                                    </p>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
@@ -1254,7 +1298,7 @@ export default function Checkout() {
                     onClick={() => {
                       setInstallmentType(installmentType === "deposit_cod" ? null : "deposit_cod");
                       setFormData(f => ({ ...f, paymentMethod: "cash_on_delivery" }));
-                      setReceiptFile(null);
+                      setReceiptFile(null); setReceiptAmountClaimed("");
                     }}
                     data-testid="payment-method-deposit_cod"
                   >
@@ -1282,7 +1326,7 @@ export default function Checkout() {
                     onClick={() => {
                       setInstallmentType(installmentType === "supplier_guaranteed" ? null : "supplier_guaranteed");
                       setFormData(f => ({ ...f, paymentMethod: "cash_on_delivery", purchaseCode: "" }));
-                      setReceiptFile(null);
+                      setReceiptFile(null); setReceiptAmountClaimed("");
                     }}
                     data-testid="payment-method-supplier_guaranteed"
                   >

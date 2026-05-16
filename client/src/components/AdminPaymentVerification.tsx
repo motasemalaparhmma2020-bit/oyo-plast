@@ -27,6 +27,7 @@ interface PendingPayment {
   notes: string | null;
   created_at: string;
   shipping_city: string;
+  amount_claimed: string | number | null;
 }
 
 const methodLabel = (m: string) => {
@@ -103,6 +104,33 @@ function ReceiptCard({
               <p className="text-xs text-muted-foreground">{new Date(payment.created_at).toLocaleDateString("ar-YE")}</p>
             </div>
           </div>
+
+          {/* المبلغ المُدّعى دفعه من العميل + تحذير عند عدم التطابق */}
+          {payment.amount_claimed != null && (() => {
+            const claimed = Number(payment.amount_claimed);
+            const expected = Number(payment.total);
+            const diff = claimed - expected;
+            const mismatch = Math.abs(diff) > 0.5;
+            return (
+              <div
+                className={`rounded-md border p-2 text-xs flex items-center justify-between ${
+                  mismatch
+                    ? "bg-red-50 border-red-300 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300"
+                    : "bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-700 dark:text-emerald-300"
+                }`}
+                data-testid={`amount-claimed-${payment.id}`}
+              >
+                <span>
+                  المبلغ المُدّعى دفعه: <span className="font-bold">{fmt(claimed)} ر.ي</span>
+                </span>
+                {mismatch && (
+                  <span className="font-bold">
+                    {diff > 0 ? `+${fmt(diff)}` : `${fmt(diff)}`} فرق
+                  </span>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Badges */}
           <div className="flex flex-wrap gap-2">
@@ -228,6 +256,81 @@ function ReceiptCard({
   );
 }
 
+// ── Kill-switch: تشغيل/إيقاف استقبال الإيصالات ────────────────────────────────
+function ReceiptsKillSwitch({ adminToken }: { adminToken: string | null }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [confirmOff, setConfirmOff] = useState(false);
+
+  const { data } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/admin/receipts-enabled"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/receipts-enabled", {
+        headers: { "x-admin-token": adminToken || "" },
+      });
+      if (!res.ok) return { enabled: true };
+      return res.json();
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const res = await fetch("/api/admin/receipts-enabled", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-admin-token": adminToken || "" },
+        body: JSON.stringify({ enabled }),
+      });
+      if (!res.ok) throw new Error("فشل");
+      return res.json();
+    },
+    onSuccess: (_, enabled) => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/receipts-enabled"] });
+      toast({
+        title: enabled ? "✅ تم تشغيل استقبال الإيصالات" : "⛔ تم إيقاف استقبال الإيصالات",
+      });
+      setConfirmOff(false);
+    },
+  });
+
+  const enabled = data?.enabled !== false;
+
+  return (
+    <Card className={enabled ? "border-emerald-300 bg-emerald-50/50 dark:bg-emerald-900/10" : "border-red-400 bg-red-50/50 dark:bg-red-900/10"}>
+      <CardContent className="p-4 flex items-center justify-between gap-3">
+        <div className="flex-1">
+          <p className="font-bold text-sm flex items-center gap-2">
+            <span className={`inline-block w-2 h-2 rounded-full ${enabled ? "bg-emerald-500" : "bg-red-500 animate-pulse"}`} />
+            استقبال إيصالات الدفع: {enabled ? "مفعّل" : "متوقف ⛔"}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {enabled
+              ? "العملاء يستطيعون رفع إيصالات الدفع"
+              : "زر الرفع موقوف. العملاء يرون رسالة صيانة"}
+          </p>
+        </div>
+        {enabled ? (
+          confirmOff ? (
+            <div className="flex gap-2">
+              <Button size="sm" variant="destructive" onClick={() => toggleMutation.mutate(false)} disabled={toggleMutation.isPending} data-testid="btn-confirm-kill-receipts">
+                تأكيد الإيقاف
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setConfirmOff(false)}>إلغاء</Button>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => setConfirmOff(true)} data-testid="btn-kill-receipts">
+              إيقاف طارئ
+            </Button>
+          )
+        ) : (
+          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => toggleMutation.mutate(true)} disabled={toggleMutation.isPending} data-testid="btn-enable-receipts">
+            إعادة التشغيل
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AdminPaymentVerification({ adminToken }: { adminToken: string | null }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -266,6 +369,9 @@ export default function AdminPaymentVerification({ adminToken }: { adminToken: s
           تحديث
         </Button>
       </div>
+
+      {/* Kill-switch */}
+      <ReceiptsKillSwitch adminToken={adminToken} />
 
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

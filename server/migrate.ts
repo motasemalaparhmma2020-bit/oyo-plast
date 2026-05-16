@@ -525,6 +525,14 @@ export async function runMigrations(): Promise<void> {
       console.warn("[WARN] notifications migration:", e instanceof Error ? e.message : e);
     }
 
+    // ─── Payment Receipts hardening (May 2026) ───
+    try {
+      await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS amount_claimed NUMERIC(12,2)`);
+      await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS receipts_enabled BOOLEAN NOT NULL DEFAULT true`);
+    } catch (e) {
+      console.warn("[WARN] receipts migration:", e instanceof Error ? e.message : e);
+    }
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

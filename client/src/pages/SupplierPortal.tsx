@@ -18,7 +18,8 @@ import {
   Loader2, LogOut, Package, Truck, CheckCircle2,
   MapPin, Phone, DollarSign, ChevronLeft, User,
   Clock, AlertCircle, RefreshCw, Plus, ImageIcon,
-  Pencil, Trash2, ShoppingBag, ClipboardList,
+  Pencil, Trash2, ShoppingBag, ClipboardList, Wallet,
+  Lock, PlayCircle, TrendingUp, Receipt,
 } from "lucide-react";
 
 const STORAGE_KEY = "supplier_session";
@@ -224,15 +225,22 @@ function OrderDetailDialog({
             <CardContent className="p-4 space-y-2">
               <div className="flex items-center gap-2">
                 <User className="h-4 w-4 text-gray-500" />
-                <span className="font-medium text-sm">{order.customer_name}</span>
+                <span className="font-medium text-sm">{order.customer_name || "—"}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-gray-500" />
-                <a href={`tel:${order.customer_phone}`} className="text-sm text-primary font-medium">{order.customer_phone}</a>
-              </div>
+              {order.customer_phone ? (
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-gray-500" />
+                  <a href={`tel:${order.customer_phone}`} className="text-sm text-primary font-medium">{order.customer_phone}</a>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                  <Lock className="h-4 w-4" />
+                  <span className="text-xs">رقم العميل وعنوانه الكامل يظهران بعد تغيير الحالة إلى "استلمته"</span>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-gray-500" />
-                <span className="text-sm">{order.shipping_city} — {order.shipping_address}</span>
+                <span className="text-sm">{order.shipping_city}{order.shipping_address ? ` — ${order.shipping_address}` : ""}</span>
               </div>
             </CardContent>
           </Card>
@@ -583,10 +591,165 @@ function SupplierProductsTab({ session }: { session: SupplierSession }) {
   );
 }
 
+// ── زر "بدء التجهيز" (يلتزم المورد بالطلب ويُعلم العميل) ──────────────────────
+function StartPreparingButton({
+  orderId, session, onDone,
+}: { orderId: number; session: SupplierSession; onDone: () => void }) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+
+  async function handleClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/supplier/orders/${orderId}/start-preparing`, {
+        method: "PUT",
+        headers: getAuthHeaders(session),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({ title: data.message || "فشل", variant: "destructive" });
+        return;
+      }
+      toast({ title: "✅ بدأت تجهيز الطلب — تم إعلام العميل" });
+      onDone();
+    } catch {
+      toast({ title: "خطأ في الشبكة", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Button
+      onClick={handleClick}
+      disabled={loading}
+      className="w-full mt-3 h-9 bg-green-600 hover:bg-green-700 text-white font-bold text-xs"
+      data-testid={`button-start-preparing-${orderId}`}
+    >
+      {loading
+        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        : <><PlayCircle className="h-3.5 w-3.5 ml-1" /> بدء التجهيز</>}
+    </Button>
+  );
+}
+
+// ── تبويب المالية للمورد ──────────────────────────────────────────────────────
+function SupplierFinanceTab({ session }: { session: SupplierSession }) {
+  const { data, isLoading } = useQuery<any>({
+    queryKey: ["/api/supplier/finance"],
+    queryFn: async () => {
+      const res = await fetch("/api/supplier/finance", { headers: getAuthHeaders(session) });
+      if (!res.ok) throw new Error("فشل");
+      return res.json();
+    },
+    refetchInterval: 60000,
+  });
+
+  if (isLoading) {
+    return <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
+
+  const fmt = (n: any) => Number(n || 0).toLocaleString("ar-YE");
+  const commissionRate = Number(data?.commissionRate || 0);
+
+  return (
+    <div className="space-y-4">
+      {/* صافي المستحق + هذا الشهر */}
+      <Card className="border-0 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
+        <CardContent className="p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <Wallet className="h-4 w-4" />
+            <p className="text-xs opacity-90">الرصيد المستحق لك</p>
+          </div>
+          <p className="text-3xl font-extrabold" data-testid="text-balance-due">{fmt(data?.balanceDue)}</p>
+          <p className="text-xs opacity-80 mt-1">ر.ي · سيُسوّى عبر إدارة المنصة</p>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-3 text-center">
+            <div className="flex items-center justify-center gap-1 mb-1 text-gray-500">
+              <TrendingUp className="h-3.5 w-3.5" />
+              <p className="text-xs">هذا الشهر</p>
+            </div>
+            <p className="text-lg font-bold text-primary" data-testid="text-this-month">{fmt(data?.this_month)}</p>
+            <p className="text-[10px] text-gray-400">ر.ي</p>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-3 text-center">
+            <div className="flex items-center justify-center gap-1 mb-1 text-gray-500">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <p className="text-xs">إجمالي مُسلَّم</p>
+            </div>
+            <p className="text-lg font-bold text-green-600" data-testid="text-delivered-count">{data?.delivered_count || 0}</p>
+            <p className="text-[10px] text-gray-400">طلب</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* تفاصيل الحسابات */}
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center gap-2 pb-2 border-b">
+            <Receipt className="h-4 w-4 text-primary" />
+            <p className="font-bold text-sm">تفاصيل التسوية</p>
+          </div>
+
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">إجمالي المبيعات (مُسلَّمة)</span>
+            <span className="font-bold" data-testid="text-gross-sales">{fmt(data?.gross_sales)} ر.ي</span>
+          </div>
+
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">عمولة المنصة ({commissionRate}%)</span>
+            <span className="font-bold text-red-600" data-testid="text-commission-total">− {fmt(data?.commission_total)} ر.ي</span>
+          </div>
+
+          <div className="h-px bg-gray-100" />
+
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">إجمالي مستحقاتك</span>
+            <span className="font-bold text-emerald-700" data-testid="text-earned-total">{fmt(data?.earned_total)} ر.ي</span>
+          </div>
+
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">تم دفعه إليك</span>
+            <span className="font-bold" data-testid="text-total-paid">{fmt(data?.totalPaid)} ر.ي</span>
+          </div>
+
+          <div className="flex justify-between text-base bg-emerald-50 rounded-lg px-3 py-2 -mx-1">
+            <span className="font-bold text-emerald-800">الرصيد المتبقي</span>
+            <span className="font-extrabold text-emerald-700">{fmt(data?.balanceDue)} ر.ي</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* الطلبات المعلّقة */}
+      <Card className="border-0 shadow-sm bg-amber-50">
+        <CardContent className="p-3 flex items-center gap-3">
+          <Clock className="h-5 w-5 text-amber-600 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-xs text-amber-800">طلبات قيد التوصيل</p>
+            <p className="text-sm font-bold text-amber-900">{data?.pending_count || 0} طلب — تُحتسب بعد التسليم</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <p className="text-[11px] text-center text-gray-400 pt-2">
+        التسوية تتم يدوياً عبر إدارة المنصة. للاستفسار اتصل بالدعم.
+      </p>
+    </div>
+  );
+}
+
 function Dashboard({ session, onLogout }: { session: SupplierSession; onLogout: () => void }) {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [filter, setFilter] = useState<"all" | "active" | "delivered">("active");
-  const [activeTab, setActiveTab] = useState<"orders" | "products">("orders");
+  const [activeTab, setActiveTab] = useState<"orders" | "products" | "finance">("orders");
   const queryClient = useQueryClient();
 
   const { data: supplierInfo } = useQuery<any>({
@@ -661,6 +824,15 @@ function Dashboard({ session, onLogout }: { session: SupplierSession; onLogout: 
             <ShoppingBag className="h-4 w-4" />
             منتجاتي
           </button>
+          <button
+            onClick={() => setActiveTab("finance")}
+            data-testid="tab-finance"
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors
+              ${activeTab === "finance" ? "text-primary border-b-2 border-primary bg-primary/5" : "text-gray-500 hover:text-gray-700"}`}
+          >
+            <Wallet className="h-4 w-4" />
+            المالية
+          </button>
         </div>
       </header>
 
@@ -668,6 +840,9 @@ function Dashboard({ session, onLogout }: { session: SupplierSession; onLogout: 
 
         {/* ─── تبويب المنتجات ─── */}
         {activeTab === "products" && <SupplierProductsTab session={session} />}
+
+        {/* ─── تبويب المالية ─── */}
+        {activeTab === "finance" && <SupplierFinanceTab session={session} />}
 
         {/* ─── تبويب الطلبات ─── */}
         {activeTab === "orders" && <>
@@ -727,6 +902,8 @@ function Dashboard({ session, onLogout }: { session: SupplierSession; onLogout: 
           <div className="space-y-3">
             {filteredOrders.map((order: any) => {
               const ds = order.delivery_status || "pending";
+              const masked = !!order._masked;
+              const canStart = (order.status === "pending" || order.status === "confirmed");
               return (
                 <Card
                   key={order.id}
@@ -742,11 +919,19 @@ function Dashboard({ session, onLogout }: { session: SupplierSession; onLogout: 
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${DELIVERY_BADGE[ds] || "bg-gray-100 text-gray-600"}`}>
                             {DELIVERY_LABEL[ds] || ds}
                           </span>
+                          {masked && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-0.5" title="تظهر التفاصيل عند الاستلام">
+                              <Lock className="h-2.5 w-2.5" />
+                              مقفل
+                            </span>
+                          )}
                         </div>
-                        <p className="font-medium text-sm truncate">{order.customer_name}</p>
+                        <p className="font-medium text-sm truncate">{order.customer_name || "—"}</p>
                         <div className="flex items-center gap-1 mt-0.5">
                           <MapPin className="h-3 w-3 text-gray-400" />
-                          <span className="text-xs text-gray-500 truncate">{order.shipping_city} — {order.shipping_address}</span>
+                          <span className="text-xs text-gray-500 truncate">
+                            {order.shipping_city}{order.shipping_address ? ` — ${order.shipping_address}` : ""}
+                          </span>
                         </div>
                       </div>
                       <div className="text-left flex-shrink-0">
@@ -755,17 +940,35 @@ function Dashboard({ session, onLogout }: { session: SupplierSession; onLogout: 
                         <p className="text-xs text-gray-400 mt-1">{formatDate(order.created_at)}</p>
                       </div>
                     </div>
+
+                    {/* زر بدء التجهيز (يظهر فقط للطلبات الجديدة/المؤكدة) */}
+                    {canStart && (
+                      <StartPreparingButton
+                        orderId={order.id}
+                        session={session}
+                        onDone={() => queryClient.invalidateQueries({ queryKey: ["/api/supplier/orders"] })}
+                      />
+                    )}
+
                     <div className="flex items-center justify-between mt-3 pt-2 border-t">
-                      <div className="flex items-center gap-1.5">
-                        <Phone className="h-3.5 w-3.5 text-gray-400" />
-                        <a
-                          href={`tel:${order.customer_phone}`}
-                          className="text-xs text-primary font-medium"
-                          onClick={e => e.stopPropagation()}
-                        >
-                          {order.customer_phone}
-                        </a>
-                      </div>
+                      {order.customer_phone ? (
+                        <div className="flex items-center gap-1.5">
+                          <Phone className="h-3.5 w-3.5 text-gray-400" />
+                          <a
+                            href={`tel:${order.customer_phone}`}
+                            className="text-xs text-primary font-medium"
+                            onClick={e => e.stopPropagation()}
+                            data-testid={`link-phone-${order.id}`}
+                          >
+                            {order.customer_phone}
+                          </a>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                          <Lock className="h-3 w-3" />
+                          <span>الهاتف يظهر عند الاستلام</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-1 text-xs text-gray-500">
                         <span>التفاصيل</span>
                         <ChevronLeft className="h-3 w-3" />
