@@ -477,12 +477,13 @@ export class DatabaseStorage implements IStorage {
           price = prod?.price ?? "0";
         }
 
-        // جلب اسم المنتج وصورته من قاعدة البيانات لحفظها مع الطلب
+        // جلب اسم المنتج وصورته من قاعدة البيانات لحفظها مع الطلب + التكلفة (COGS)
         let productName: string | null = item.productName ?? (item as any).product_name ?? item.name ?? null;
         let productImage: string | null = item.productImage ?? (item as any).product_image ?? null;
-        if (!productName || !productImage) {
+        let productSmartVariants: string | null = null;
+        if (!productName || !productImage || true) {
           const [prodInfo] = await tx
-            .select({ name: products.name, imageUrls: products.imageUrls })
+            .select({ name: products.name, imageUrls: products.imageUrls, smartVariants: products.smartVariants })
             .from(products)
             .where(eq(products.id, pid))
             .limit(1);
@@ -491,7 +492,21 @@ export class DatabaseStorage implements IStorage {
             if (!productImage && prodInfo.imageUrls && prodInfo.imageUrls.length > 0) {
               productImage = prodInfo.imageUrls[0];
             }
+            productSmartVariants = prodInfo.smartVariants ?? null;
           }
+        }
+
+        // 💰 COGS Snapshot: تكلفة الشراء من smartVariants وقت إنشاء الطلب
+        const selectedSize = item.selectedSize ?? (item as any).selected_size ?? null;
+        const selectedColor = item.selectedColor ?? (item as any).selected_color ?? null;
+        const selectedBagColor = item.selectedBagColor ?? (item as any).selected_bag_color ?? null;
+        let costPriceAtOrder: string | null = null;
+        if (productSmartVariants) {
+          try {
+            const { pickCostFromSmartVariants } = await import("./routes");
+            const c = pickCostFromSmartVariants(productSmartVariants, { selectedSize, selectedColor, selectedBagColor });
+            if (c != null && c > 0) costPriceAtOrder = String(c);
+          } catch { /* non-fatal */ }
         }
 
         await tx.insert(orderItems).values({
@@ -499,9 +514,9 @@ export class DatabaseStorage implements IStorage {
           productId: pid,
           quantity: item.quantity,
           price,
-          selectedSize: item.selectedSize ?? (item as any).selected_size ?? null,
-          selectedColor: item.selectedColor ?? (item as any).selected_color ?? null,
-          selectedBagColor: item.selectedBagColor ?? (item as any).selected_bag_color ?? null,
+          selectedSize,
+          selectedColor,
+          selectedBagColor,
           printColorCount: item.printColorCount ?? (item as any).print_color_count ?? 0,
           printColor1: item.printColor1 ?? (item as any).print_color_1 ?? null,
           printColor2: item.printColor2 ?? (item as any).print_color_2 ?? null,
@@ -511,6 +526,7 @@ export class DatabaseStorage implements IStorage {
           designFileUrl: item.designFileUrl ?? (item as any).design_file_url ?? null,
           productName,
           productImage,
+          costPriceAtOrder,
         });
       }
 

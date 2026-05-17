@@ -607,6 +607,17 @@ export async function runMigrations(): Promise<void> {
       console.warn("[WARN] supplier_applications migration:", e instanceof Error ? e.message : e);
     }
 
+    // ─── COGS Snapshot column on order_items (Phase 1 — May 2026) ──────────
+    // يحفظ تكلفة الشراء وقت إنشاء الطلب → تقارير ربحية تاريخية دقيقة حتى لو تغيّرت التكلفة لاحقاً
+    try {
+      await client.query(`
+        ALTER TABLE order_items
+          ADD COLUMN IF NOT EXISTS cost_price_at_order NUMERIC
+      `);
+    } catch (e) {
+      console.warn("[WARN] order_items.cost_price_at_order migration:", e instanceof Error ? e.message : e);
+    }
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

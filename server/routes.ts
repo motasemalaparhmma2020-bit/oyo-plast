@@ -178,7 +178,12 @@ export function invalidateExchangeRateCache(): void { _lastExchangeRateFetch = 0
 export function computeBaseFromSmartVariants(
   smartVariants: any,
   exchangeRate: number
-): { price: string; priceSar: string; originalPrice: string | null; originalPriceSar: string | null; discountPercent: number | null } | null {
+): {
+  price: string; priceSar: string;
+  originalPrice: string | null; originalPriceSar: string | null;
+  discountPercent: number | null;
+  costPriceY: string | null; costPriceSar: string | null;
+} | null {
   try {
     const data = typeof smartVariants === "string" ? JSON.parse(smartVariants) : smartVariants;
     if (!data || !Array.isArray(data.variants) || data.variants.length === 0) return null;
@@ -187,7 +192,8 @@ export function computeBaseFromSmartVariants(
       .map((v: any) => {
         const p = parseFloat(String(v.price ?? "0"));
         const disc = v.discount != null ? parseFloat(String(v.discount)) : 0;
-        return { ...v, _price: p, _discount: isNaN(disc) ? 0 : disc };
+        const cost = v.costPriceY != null ? parseFloat(String(v.costPriceY)) : NaN;
+        return { ...v, _price: p, _discount: isNaN(disc) ? 0 : disc, _cost: cost };
       })
       .filter((v: any) => !isNaN(v._price) && v._price > 0);
     if (priced.length === 0) return null;
@@ -208,13 +214,67 @@ export function computeBaseFromSmartVariants(
       originalPriceSar = (orig / rate).toFixed(2);
       discountPercent = Math.round(cheapest._discount);
     }
+
+    // 💰 تكلفة الـ variant الأرخص (إذا أدخلها الأدمن)
+    let costPriceY: string | null = null;
+    let costPriceSar: string | null = null;
+    if (!isNaN(cheapest._cost) && cheapest._cost > 0) {
+      costPriceY = String(cheapest._cost);
+      costPriceSar = (cheapest._cost / rate).toFixed(2);
+    }
+
     return {
       price: String(finalPrice),
       priceSar,
       originalPrice,
       originalPriceSar,
       discountPercent,
+      costPriceY,
+      costPriceSar,
     };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * يستخرج تكلفة الشراء (costPriceY) لـ variant معيّن من smartVariants بناءً على
+ * المقاس/اللون/لون الكيس المختار، أو يرجع تكلفة أرخص variant كاحتياط.
+ * يُستخدم في snapshot التكلفة وقت إنشاء الطلب.
+ */
+export function pickCostFromSmartVariants(
+  smartVariants: any,
+  selected: { selectedSize?: string | null; selectedColor?: string | null; selectedBagColor?: string | null }
+): number | null {
+  try {
+    const data = typeof smartVariants === "string" ? JSON.parse(smartVariants) : smartVariants;
+    if (!data || !Array.isArray(data.variants) || data.variants.length === 0) return null;
+
+    const wanted = [selected.selectedSize, selected.selectedColor, selected.selectedBagColor]
+      .filter(Boolean)
+      .map(s => String(s).trim().toLowerCase());
+
+    // محاولة المطابقة الدقيقة (label يطابق أي خيار مختار)
+    if (wanted.length > 0) {
+      for (const v of data.variants) {
+        const lbl = String(v.label || "").trim().toLowerCase();
+        if (lbl && wanted.includes(lbl)) {
+          const c = parseFloat(String(v.costPriceY ?? ""));
+          if (!isNaN(c) && c > 0) return c;
+        }
+      }
+    }
+
+    // احتياط: أرخص variant بسعر بيع موجب وله تكلفة
+    const priced = data.variants
+      .map((v: any) => ({
+        price: parseFloat(String(v.price ?? "0")),
+        cost: parseFloat(String(v.costPriceY ?? "")),
+      }))
+      .filter((v: any) => !isNaN(v.price) && v.price > 0 && !isNaN(v.cost) && v.cost > 0);
+    if (priced.length === 0) return null;
+    priced.sort((a: any, b: any) => a.price - b.price);
+    return priced[0].cost;
   } catch {
     return null;
   }
@@ -1803,7 +1863,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // عند أوّل تحميل، نُسخّن الكاش حتّى mapProductRow يستخدم السعر الصحيح
   getExchangeRate().catch(() => {});
 
-  function mapProductRow(r: any) {
+  function mapProductRow(r: any, opts?: { includeCogs?: boolean }) {
     const rawImg: string = r.image_url || "";
     // حساب نسبة الخصم الفعلية
     let effectiveDiscount: number | null = null;
@@ -1870,6 +1930,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       hasFreeShipping: r.has_free_shipping ?? false,
       enableSmartVariants: r.enable_smart_variants ?? false,
       smartVariants: r.smart_variants ?? null,
+      // 💰 COGS — يُكشف فقط لمسارات الأدمن (opts.includeCogs=true). البيانات سرّية ولا تُرسل في الـ API العام.
+      ...(opts?.includeCogs ? (() => {
+        if (!r.smart_variants) return { costPriceY: null, costPriceSar: null, profitMarginY: null, profitPercent: null };
+        const computed = computeBaseFromSmartVariants(r.smart_variants, _rate);
+        if (!computed || !computed.costPriceY) return { costPriceY: null, costPriceSar: null, profitMarginY: null, profitPercent: null };
+        const sellY = parseFloat(String(r.price ?? "0"));
+        const costY = parseFloat(computed.costPriceY);
+        const margin = !isNaN(sellY) && !isNaN(costY) ? sellY - costY : null;
+        const percent = margin != null && sellY > 0 ? Math.round((margin / sellY) * 100) : null;
+        return {
+          costPriceY: computed.costPriceY,
+          costPriceSar: computed.costPriceSar,
+          profitMarginY: margin != null ? margin.toFixed(2) : null,
+          profitPercent: percent,
+        };
+      })() : {}),
     };
   }
 
@@ -1923,7 +1999,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       query += ` ORDER BY id DESC`;
 
       const result = await dbPool.query(query, params);
-      let rows = result.rows.map(mapProductRow);
+      let rows = result.rows.map((r: any) => mapProductRow(r));
 
       if (search && search.trim()) {
         const q = search.trim().toLowerCase();
@@ -1950,7 +2026,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         `SELECT ${LITE_COLS} FROM products WHERE (product_status IS NULL OR product_status = 'approved') AND is_active IS NOT FALSE ORDER BY sold_count DESC NULLS LAST LIMIT $1`,
         [limit]
       );
-      res.json(result.rows.map(mapProductRow));
+      res.json(result.rows.map((r: any) => mapProductRow(r)));
     } catch (error: any) {
       console.error("خطأ في جلب الأكثر مبيعاً:", error);
       res.status(500).json({ message: "فشل في جلب الأكثر مبيعاً", details: error.message });
@@ -2177,7 +2253,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const rows = result.rows.map((r: any) => {
         const rawUrls: string[] = Array.isArray(r.image_urls) ? r.image_urls : [];
         return {
-          ...mapProductRow(r),
+          ...mapProductRow(r, { includeCogs: true }),
           imageUrls: rawUrls.map((url: string, i: number) =>
             url.startsWith("data:") ? proxyImg("products", r.id, url, i) : url
           ),
@@ -2423,23 +2499,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const result = await dbPool.query(
           `SELECT ${LITE_COLS} FROM products ORDER BY sold_count DESC NULLS LAST LIMIT $1`, [limit]
         );
-        rows = result.rows.map(mapProductRow);
+        rows = result.rows.map((r: any) => mapProductRow(r));
       } else if (tag === "new") {
         const result = await dbPool.query(
           `SELECT ${LITE_COLS} FROM products ORDER BY id DESC LIMIT $1`, [limit]
         );
-        rows = result.rows.map(mapProductRow);
+        rows = result.rows.map((r: any) => mapProductRow(r));
       } else if (tag === "discounts") {
         const result = await dbPool.query(
           `SELECT ${LITE_COLS} FROM products WHERE original_price IS NOT NULL OR discount_percent IS NOT NULL ORDER BY id DESC LIMIT $1`, [limit]
         );
-        rows = result.rows.map(mapProductRow);
+        rows = result.rows.map((r: any) => mapProductRow(r));
       } else {
         const result = await dbPool.query(
           `SELECT ${LITE_COLS} FROM products WHERE $1 = ANY(promotional_tags) ORDER BY id DESC LIMIT $2`,
           [tag, limit]
         );
-        rows = result.rows.map(mapProductRow);
+        rows = result.rows.map((r: any) => mapProductRow(r));
       }
       res.json(rows);
     } catch (e: any) {
@@ -4207,7 +4283,15 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       }
       query += ` ORDER BY p.id DESC`;
       const result = await dbPool.query(query, params);
-      res.json(result.rows);
+      // 💰 إثراء كل صف بـ costPriceY/Sar محسوبة من smart_variants (لعرض هامش ربح المنصة)
+      const rate = getExchangeRateCached();
+      const enriched = result.rows.map((r: any) => {
+        if (!r.smart_variants) return r;
+        const computed = computeBaseFromSmartVariants(r.smart_variants, rate);
+        if (!computed || !computed.costPriceY) return r;
+        return { ...r, costPriceY: computed.costPriceY, costPriceSar: computed.costPriceSar };
+      });
+      res.json(enriched);
     } catch (e: any) {
       res.status(500).json({ message: "فشل جلب المنتجات" });
     }

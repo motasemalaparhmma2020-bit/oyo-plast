@@ -351,6 +351,31 @@ export default function AdminSupplierProducts({ adminToken }: Props) {
                     <span className="text-gray-500">السعر:</span>
                     <span className="font-bold text-primary">{formatPrice(selected.price)} ر.ي</span>
                   </div>
+                  {/* 💰 تكلفة الشراء + هامش ربح المنصة (يظهر فقط إذا أُدخلت التكلفة في smartVariants) */}
+                  {selected.costPriceY != null && Number(selected.costPriceY) > 0 && (() => {
+                    const sell = parseFloat(String(selected.price || "0"));
+                    const cost = parseFloat(String(selected.costPriceY));
+                    if (!(sell > 0) || !(cost > 0)) return null;
+                    const margin = sell - cost;
+                    const percent = Math.round((margin / sell) * 100);
+                    const loss = margin < 0;
+                    return (
+                      <>
+                        <div className="flex justify-between" data-testid="row-cost-price">
+                          <span className="text-gray-500">تكلفتي (المورد):</span>
+                          <span className="font-bold text-sky-700 dark:text-sky-300">{formatPrice(cost)} ر.ي</span>
+                        </div>
+                        <div className={`flex justify-between rounded px-2 py-1 ${loss ? "bg-red-50 dark:bg-red-950/30" : "bg-emerald-50 dark:bg-emerald-950/30"}`} data-testid="row-platform-margin">
+                          <span className={`font-semibold ${loss ? "text-red-700 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300"}`}>
+                            {loss ? "⚠️ خسارة المنصة:" : "✅ هامش ربح المنصة:"}
+                          </span>
+                          <span className={`font-bold ${loss ? "text-red-700 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300"}`}>
+                            {Math.abs(margin).toLocaleString()} ر.ي ({percent}%)
+                          </span>
+                        </div>
+                      </>
+                    );
+                  })()}
                   <div className="flex justify-between">
                     <span className="text-gray-500">المخزون:</span>
                     <span>{selected.stock ?? 0}</span>

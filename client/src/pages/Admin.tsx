@@ -180,6 +180,10 @@ interface SmartVariant {
   hex: string;
   imageUrl: string;
   count?: number; // عدد القطع في الشدّة (للنوع bundle فقط)
+  // ── COGS (Phase 1 — May 2026) ──────────────────────────────────────────
+  costPriceY?: string; // سعر التكلفة (ريال يمني) — تكلفة الشراء من المورد
+  costPriceSar?: string; // سعر التكلفة (ريال سعودي) — اختياري
+  minOrderQty?: number; // أقل كمية شراء من المورد
 }
 const SMART_VARIANT_TYPE_LABELS: Record<SmartVariantType, string> = {
   color: "لون",
@@ -7265,6 +7269,90 @@ export default function Admin() {
                                             data-testid={`input-variant-discount-${idx}`}
                                           />
                                         </div>
+                                      </div>
+                                      {/* 💰 الصف الثالث: تكلفة الشراء (COGS) + هامش الربح */}
+                                      <div className="bg-sky-50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-800 rounded p-2 space-y-1.5">
+                                        <Label className="text-[11px] text-sky-700 dark:text-sky-300 font-semibold block">
+                                          💰 تكلفة الشراء من المورد (سرّية — للأدمن فقط)
+                                        </Label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                          <div>
+                                            <Label className="text-[10px] text-gray-500 mb-0.5 block">تكلفة YER</Label>
+                                            <Input
+                                              placeholder="مثال: 7000"
+                                              value={v.costPriceY || ""}
+                                              onChange={(e) => {
+                                                const updated = [...smartVariantsList];
+                                                updated[idx] = { ...updated[idx], costPriceY: e.target.value };
+                                                setSmartVariantsList(updated);
+                                              }}
+                                              type="number"
+                                              min="0"
+                                              className="h-8 text-sm"
+                                              data-testid={`input-variant-cost-${idx}`}
+                                            />
+                                          </div>
+                                          <div>
+                                            <Label className="text-[10px] text-gray-500 mb-0.5 block">تكلفة SAR</Label>
+                                            <Input
+                                              placeholder="اختياري"
+                                              value={v.costPriceSar || ""}
+                                              onChange={(e) => {
+                                                const updated = [...smartVariantsList];
+                                                updated[idx] = { ...updated[idx], costPriceSar: e.target.value };
+                                                setSmartVariantsList(updated);
+                                              }}
+                                              type="number"
+                                              min="0"
+                                              className="h-8 text-sm"
+                                              data-testid={`input-variant-cost-sar-${idx}`}
+                                            />
+                                          </div>
+                                          <div>
+                                            <Label className="text-[10px] text-gray-500 mb-0.5 block">أقل كمية</Label>
+                                            <Input
+                                              placeholder="1"
+                                              value={v.minOrderQty ?? ""}
+                                              onChange={(e) => {
+                                                const updated = [...smartVariantsList];
+                                                updated[idx] = { ...updated[idx], minOrderQty: e.target.value ? parseInt(e.target.value, 10) : undefined };
+                                                setSmartVariantsList(updated);
+                                              }}
+                                              type="number"
+                                              min="1"
+                                              className="h-8 text-sm"
+                                              data-testid={`input-variant-min-qty-${idx}`}
+                                            />
+                                          </div>
+                                        </div>
+                                        {(() => {
+                                          const sell = parseFloat(v.price || "0");
+                                          const cost = parseFloat(v.costPriceY || "0");
+                                          if (!(sell > 0) || !(cost > 0)) {
+                                            return (
+                                              <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                                                أدخل سعر التكلفة لحساب هامش الربح تلقائياً.
+                                              </p>
+                                            );
+                                          }
+                                          if (sell < cost) {
+                                            return (
+                                              <div className="bg-red-100 dark:bg-red-950/40 border border-red-300 rounded px-2 py-1 text-[11px] text-red-800 dark:text-red-300 font-bold" data-testid={`warning-loss-${idx}`}>
+                                                ⚠️ تحذير: هذا الخيار يُباع بخسارة قدرها {(cost - sell).toLocaleString()} ر.ي!
+                                              </div>
+                                            );
+                                          }
+                                          const margin = sell - cost;
+                                          const percent = Math.round((margin / sell) * 100);
+                                          const color = percent < 10 ? "text-orange-700 dark:text-orange-400"
+                                            : percent < 25 ? "text-amber-700 dark:text-amber-400"
+                                            : "text-emerald-700 dark:text-emerald-400";
+                                          return (
+                                            <div className={`text-[11px] font-bold ${color}`} data-testid={`profit-margin-${idx}`}>
+                                              ✅ هامش الربح: {margin.toLocaleString()} ر.ي ({percent}%)
+                                            </div>
+                                          );
+                                        })()}
                                       </div>
                                       {/* عدد القطع داخل الشدّة + حساب توفير العميل */}
                                       {v.type === 'bundle' && (

@@ -242,6 +242,8 @@ export const orderItems = pgTable("order_items", {
   printingUnitPrice: numeric("printing_unit_price"),
   productName: text("product_name"), // اسم المنتج وقت الطلب
   productImage: text("product_image"), // صورة المنتج وقت الطلب
+  // ── COGS Snapshot (Phase 1 — May 2026) ────────────────────────────────────
+  costPriceAtOrder: numeric("cost_price_at_order"), // تكلفة الشراء المرجعية وقت الطلب (للأرباح التاريخية الدقيقة)
 });
 
 // Product Reviews
