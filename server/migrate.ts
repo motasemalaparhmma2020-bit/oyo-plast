@@ -832,6 +832,27 @@ export async function runMigrations(): Promise<void> {
       console.warn("[WARN] users.phone unique index migration:", e instanceof Error ? e.message : e);
     }
 
+    // ─── UNIQUE (product_id, user_id) على reviews — منع التقييم المكرر (Task 5) ─────
+    try {
+      await client.query(`
+        DELETE FROM reviews
+        WHERE id IN (
+          SELECT id FROM (
+            SELECT id, ROW_NUMBER() OVER (PARTITION BY product_id, user_id ORDER BY created_at NULLS LAST, id) AS rn
+            FROM reviews
+          ) t
+          WHERE t.rn > 1
+        )
+      `);
+      await client.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_product_user_unique
+        ON reviews(product_id, user_id)
+      `);
+      console.log("[INFO] reviews(product_id, user_id) unique index ready");
+    } catch (e) {
+      console.warn("[WARN] reviews unique index migration:", e instanceof Error ? e.message : e);
+    }
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

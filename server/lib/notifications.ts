@@ -233,16 +233,29 @@ export async function notifyOrderCreated(userId: string, orderId: number, total:
   });
 }
 
-export async function notifyOrderStatus(userId: string, orderId: number, statusLabel: string) {
+export async function notifyOrderStatus(userId: string, orderId: number, statusLabel: string, actionUrl?: string) {
   return createNotification({
     userId,
     type: "order_status",
     priority: "normal",
     title: `تحديث طلبك #${orderId}`,
     message: statusLabel,
-    actionUrl: `/orders/${orderId}`,
+    actionUrl: actionUrl || `/orders/${orderId}`,
     orderId,
     groupKey: `order_status:${orderId}:${statusLabel}`,
+  });
+}
+
+export async function notifyOrderDelivered(userId: string, orderId: number) {
+  return createNotification({
+    userId,
+    type: "order_status",
+    priority: "high",
+    title: `🎉 تم توصيل طلبك #${orderId}`,
+    message: "كيف كانت تجربتك؟ شاركنا تقييمك للمنتجات",
+    actionUrl: `/rate-order/${orderId}`,
+    orderId,
+    groupKey: `order_delivered:${orderId}`,
   });
 }
 

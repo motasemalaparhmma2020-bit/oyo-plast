@@ -2351,18 +2351,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const userId = req.user?.id || req.session?.userId;
       if (!userId) return res.status(401).json({ message: "غير مصرح" });
 
-      // ── منع التقييم المكرر من نفس المستخدم ──────────────────────────
       const { pool: dbPool } = await import("./db");
-      const existing = await dbPool.query(
-        `SELECT id FROM reviews WHERE product_id=$1 AND user_id=$2 LIMIT 1`,
+
+      // ── يجب أن يكون لدى المستخدم طلب delivered يحتوي هذا المنتج (Task 5) ─────
+      const purchased = await dbPool.query(
+        `SELECT 1 FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+         WHERE oi.product_id = $1
+           AND o.user_id = $2
+           AND (o.status IN ('delivered', 'completed') OR o.delivery_status = 'delivered')
+         LIMIT 1`,
         [productId, userId]
       );
-      if (existing.rows.length > 0) {
-        return res.status(409).json({ message: "لقد قمت بتقييم هذا المنتج مسبقاً", alreadyReviewed: true });
+      if (purchased.rows.length === 0) {
+        return res.status(403).json({
+          message: "يمكنك تقييم المنتج فقط بعد استلام طلب يحتوي هذا المنتج",
+          notPurchased: true,
+        });
       }
 
-      const review = await storage.createReview({ productId, userId, rating: parseInt(rating), comment, imageUrl });
-      res.status(201).json(review);
+      try {
+        const review = await storage.createReview({ productId, userId, rating: parseInt(rating), comment, imageUrl });
+        res.status(201).json(review);
+      } catch (insertErr: any) {
+        // 23505 = duplicate key (UNIQUE INDEX على product_id, user_id)
+        if (insertErr?.code === "23505") {
+          return res.status(409).json({ message: "لقد قمت بتقييم هذا المنتج مسبقاً", alreadyReviewed: true });
+        }
+        throw insertErr;
+      }
     } catch (e: any) {
       res.status(500).json({ message: "فشل إضافة التقييم" });
     }
@@ -2388,7 +2405,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/upload/review", upload.single("image"), async (req: any, res) => {
+    // يتطلب مستخدم مسجل (Task 5 security fix)
+    if (!req.isAuthenticated?.() || !(req.user?.id || req.session?.userId)) {
+      return res.status(401).json({ message: "يجب تسجيل الدخول" });
+    }
     if (!req.file) return res.status(400).json({ message: "لا يوجد ملف" });
+    if (!req.file.mimetype?.startsWith("image/")) {
+      return res.status(400).json({ message: "نوع ملف غير صالح" });
+    }
+    // ملاحظة: multer العام يقيّد الحجم بـ 5MB قبل الوصول إلى هنا
     try {
       const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
       const apiKey = process.env.CLOUDINARY_API_KEY;
@@ -2453,6 +2478,150 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ message: "تم حذف التقييم" });
     } catch (e: any) {
       res.status(500).json({ message: "فشل حذف التقييم" });
+    }
+  });
+
+  // ─── Rate Order (Post-Delivery) ──────────────────────────────────
+  // جلب منتجات الطلب القابلة للتقييم — يستثني المنتجات المُقيَّمة
+  app.get("/api/orders/:id/rateable", async (req: any, res) => {
+    try {
+      if (!req.isAuthenticated?.()) return res.status(401).json({ message: "يجب تسجيل الدخول" });
+      const userId = req.user?.id || req.session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
+      const orderId = parseInt(req.params.id);
+      if (Number.isNaN(orderId)) return res.status(400).json({ message: "معرف غير صحيح" });
+
+      const { pool: dbPool } = await import("./db");
+      const ord = await dbPool.query(
+        `SELECT id, user_id, status, delivery_status FROM orders WHERE id=$1 LIMIT 1`,
+        [orderId]
+      );
+      if (ord.rows.length === 0) return res.status(404).json({ message: "الطلب غير موجود" });
+      const order = ord.rows[0];
+      if (String(order.user_id) !== String(userId)) {
+        return res.status(403).json({ message: "ليس لديك صلاحية" });
+      }
+      const isDelivered = order.status === "delivered" || order.status === "completed" || order.delivery_status === "delivered";
+      if (!isDelivered) {
+        return res.status(400).json({ message: "لا يمكن التقييم قبل التوصيل", notDelivered: true });
+      }
+
+      const items = await dbPool.query(
+        `SELECT oi.id, oi.product_id, COALESCE(oi.product_name, p.name) AS product_name,
+                COALESCE(oi.product_image, p.image_url) AS product_image,
+                p.image_url AS p_image_url,
+                (SELECT r.id FROM reviews r WHERE r.product_id = oi.product_id AND r.user_id = $1 LIMIT 1) AS review_id,
+                (SELECT r.rating FROM reviews r WHERE r.product_id = oi.product_id AND r.user_id = $1 LIMIT 1) AS review_rating
+         FROM order_items oi
+         LEFT JOIN products p ON p.id = oi.product_id
+         WHERE oi.order_id = $2 AND oi.product_id IS NOT NULL`,
+        [userId, orderId]
+      );
+
+      // إزالة التكرار (نفس المنتج مرتين في الطلب)
+      const seen = new Set<number>();
+      const products = items.rows.filter((r: any) => {
+        if (seen.has(r.product_id)) return false;
+        seen.add(r.product_id);
+        return true;
+      }).map((r: any) => {
+        const rawImg = r.product_image || r.p_image_url || "";
+        const image = typeof rawImg === "string" && rawImg.startsWith("data:")
+          ? `/api/products/image/${r.product_id}/0`
+          : rawImg;
+        return {
+          productId: r.product_id,
+          productName: r.product_name || `منتج #${r.product_id}`,
+          productImage: image,
+          alreadyRated: !!r.review_id,
+          previousRating: r.review_rating || null,
+        };
+      });
+
+      res.json({ orderId, products });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب المنتجات" });
+    }
+  });
+
+  // تقديم تقييمات متعددة دفعة واحدة للطلب
+  app.post("/api/orders/:id/rate", async (req: any, res) => {
+    try {
+      if (!req.isAuthenticated?.()) return res.status(401).json({ message: "يجب تسجيل الدخول" });
+      const userId = req.user?.id || req.session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
+      const orderId = parseInt(req.params.id);
+      if (Number.isNaN(orderId)) return res.status(400).json({ message: "معرف غير صحيح" });
+
+      const { ratings } = req.body as { ratings: Array<{ productId: number; rating: number; comment?: string; imageUrl?: string }> };
+      if (!Array.isArray(ratings) || ratings.length === 0) {
+        return res.status(400).json({ message: "لا يوجد تقييمات للحفظ" });
+      }
+
+      const { pool: dbPool } = await import("./db");
+
+      // التحقق من ملكية الطلب وحالة التوصيل
+      const ord = await dbPool.query(
+        `SELECT id, user_id, status, delivery_status FROM orders WHERE id=$1 LIMIT 1`,
+        [orderId]
+      );
+      if (ord.rows.length === 0) return res.status(404).json({ message: "الطلب غير موجود" });
+      const order = ord.rows[0];
+      if (String(order.user_id) !== String(userId)) return res.status(403).json({ message: "ليس لديك صلاحية" });
+      const isDelivered = order.status === "delivered" || order.status === "completed" || order.delivery_status === "delivered";
+      if (!isDelivered) return res.status(400).json({ message: "لا يمكن التقييم قبل التوصيل" });
+
+      // قائمة المنتجات التي يحق للمستخدم تقييمها (تنتمي فعلاً للطلب)
+      const allowedRows = await dbPool.query(
+        `SELECT DISTINCT product_id FROM order_items WHERE order_id=$1 AND product_id IS NOT NULL`,
+        [orderId]
+      );
+      const allowedSet = new Set(allowedRows.rows.map((r: any) => Number(r.product_id)));
+
+      const saved: number[] = [];
+      const skipped: Array<{ productId: number; reason: string }> = [];
+
+      for (const r of ratings) {
+        const pid = Number(r.productId);
+        const rt = Number(r.rating);
+        if (!pid || !rt || rt < 1 || rt > 5) {
+          skipped.push({ productId: pid, reason: "بيانات غير صالحة" });
+          continue;
+        }
+        if (!allowedSet.has(pid)) {
+          skipped.push({ productId: pid, reason: "ليس ضمن منتجات الطلب" });
+          continue;
+        }
+        // منع التكرار
+        const existing = await dbPool.query(
+          `SELECT id FROM reviews WHERE product_id=$1 AND user_id=$2 LIMIT 1`,
+          [pid, userId]
+        );
+        if (existing.rows.length > 0) {
+          skipped.push({ productId: pid, reason: "تم التقييم مسبقاً" });
+          continue;
+        }
+        try {
+          await storage.createReview({
+            productId: pid,
+            userId,
+            rating: rt,
+            comment: r.comment || undefined,
+            imageUrl: r.imageUrl || undefined,
+          });
+          saved.push(pid);
+        } catch (insertErr: any) {
+          if (insertErr?.code === "23505") {
+            skipped.push({ productId: pid, reason: "تم التقييم مسبقاً" });
+          } else {
+            throw insertErr;
+          }
+        }
+      }
+
+      res.json({ ok: true, saved: saved.length, skipped });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حفظ التقييمات" });
     }
   });
 
@@ -4962,8 +5131,12 @@ h1{font-size:18px;color:#222;margin:4px 0;}
             cancelled: "تم إلغاء طلبك",
           };
           const label = statusMap[newStatus] || `تحديث الحالة: ${newStatus}`;
-          const { notifyOrderStatus } = await import("./lib/notifications");
-          await notifyOrderStatus(String(order.userId), order.id, label);
+          const { notifyOrderStatus, notifyOrderDelivered } = await import("./lib/notifications");
+          if (newStatus === "delivered") {
+            await notifyOrderDelivered(String(order.userId), order.id);
+          } else {
+            await notifyOrderStatus(String(order.userId), order.id, label);
+          }
         } catch { /* non-fatal */ }
       }
       // منح نقاط الولاء عند تسليم الطلب
