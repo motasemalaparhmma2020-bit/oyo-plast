@@ -1110,9 +1110,23 @@ export default function ProductDetail() {
           : null;
         const showCoupon = couponPrice && (isMarketerLink || showMarketerCouponToAll);
         const hasDiscount = (sadeemShowOldPrice && effectiveDiscount > 0) || isMarketerLink;
+
+        // ── Rating + Sales (SHEIN-style، يسار السعر) ───────────────────────
+        const ratingVal = Number(product.rating || 5).toFixed(1);
+        const reviewCount = product.reviewCount || 0;
+        const soldCount = (product as any).soldCount || 0;
+        const showRating = sec["rating"]?.visible !== false && sadeemShowRating;
+        const showSold = sec["rating"]?.visible !== false && sadeemShowSoldCount && soldCount > 0;
+        // تنسيق المبيعات بأسلوب SHEIN: 1500 → +1.5k، 12000 → +12k، 1000000 → +1m
+        const formatSold = (n: number) => {
+          if (n >= 1_000_000) return `+${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}m`;
+          if (n >= 1_000) return `+${(n / 1_000).toFixed(n % 1_000 === 0 || n >= 10_000 ? 0 : 1)}k`;
+          return `+${n}`;
+        };
+
         return (
           <div key="price" className="px-4 pt-3" data-testid="section-price">
-            {/* سطر واحد: السعر الجديد + شارة الخصم + السعر القديم مشطوب */}
+            {/* سطر واحد: السعر الجديد + شارة الخصم + السعر القديم مشطوب + التقييم يساراً */}
             <div className="flex items-center gap-2 flex-wrap">
               <span
                 className={`font-extrabold leading-none price-num ${
@@ -1172,8 +1186,37 @@ export default function ProductDetail() {
                   </span>
                 );
               })()}
+              {/* ⭐ التقييم والمبيعات — يسار السعر (SHEIN-style) */}
+              {(showRating || showSold) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    document.getElementById("reviews-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    setOpenReviewsCol(true);
+                  }}
+                  className="mr-auto flex items-center gap-1.5 hover-elevate active-elevate-2 rounded-md px-1.5 py-0.5 transition cursor-pointer"
+                  data-testid="link-rating-summary"
+                >
+                  {showRating && (
+                    <span className="flex items-center gap-1" data-testid="text-product-rating">
+                      <Star className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                      <span className="text-sm font-bold text-foreground">{ratingVal}</span>
+                      {reviewCount > 0 && (
+                        <span className="text-xs text-muted-foreground">({reviewCount})</span>
+                      )}
+                    </span>
+                  )}
+                  {showSold && (
+                    <>
+                      {showRating && <span className="text-muted-foreground text-xs">·</span>}
+                      <span className="text-xs text-muted-foreground font-medium" data-testid="text-product-sold">
+                        {formatSold(soldCount)} مبيعات
+                      </span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
-            {/* كوبون */}
             {showCoupon && (
               <div className="flex items-center gap-2 mt-1.5">
                 <span className="bg-purple-600 text-white text-xs px-2 py-0.5 rounded-md font-bold">مع كوبون</span>
@@ -1224,45 +1267,19 @@ export default function ProductDetail() {
         );
       }
 
-      // ── TITLE (مدمج مع التقييم — أسلوب SHEIN) ──────────────────────────
+      // ── TITLE — الاسم فقط (التقييم انتقل إلى يسار السعر) ──────────────────
       case "title": {
         if (!sec["title"]?.visible) return null;
         const titleFontSize = s.fontSize ?? 15;
-        const ratingVal = Number(product.rating || 5).toFixed(1);
-        const reviewCount = product.reviewCount || 0;
-        const soldCount = (product as any).soldCount || 0;
-        const showRating = sec["rating"]?.visible !== false && sadeemShowRating;
-        const showSold   = sec["rating"]?.visible !== false && sadeemShowSoldCount && soldCount > 0;
         return (
           <div key="title" className="px-4 pt-2" data-testid="section-title">
-            <div className="flex items-start gap-3">
-              {/* الاسم — يمين، حد سطرين */}
-              <h1
-                className="flex-1 font-bold leading-snug text-foreground line-clamp-2"
-                style={{ fontSize: titleFontSize }}
-                data-testid="text-product-name"
-              >
-                {product.name}
-              </h1>
-              {/* التقييم — يسار (أسلوب SHEIN) */}
-              {showRating && (
-                <div className="flex flex-col items-end shrink-0 gap-0.5 min-w-[76px]">
-                  <div className="flex items-center gap-1">
-                    <Star className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" />
-                    <span className="text-sm font-bold">{ratingVal}</span>
-                    <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                  <span className="text-[10px] text-muted-foreground">
-                    ({reviewCount > 0 ? `+${reviewCount}` : '0'})
-                  </span>
-                  {showSold && (
-                    <span className="text-[10px] text-muted-foreground">
-                      {soldCount.toLocaleString('en-US')} مبيع
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
+            <h1
+              className="font-bold leading-snug text-foreground line-clamp-2"
+              style={{ fontSize: titleFontSize }}
+              data-testid="text-product-name"
+            >
+              {product.name}
+            </h1>
           </div>
         );
       }
@@ -2309,7 +2326,7 @@ export default function ProductDetail() {
             )}
 
             {/* ── التقييمات ────────────────────────────────────────── */}
-            <div>
+            <div id="reviews-section">
               <button onClick={() => setOpenReviewsCol(o => !o)} className={sectionBtn} data-testid="button-toggle-reviews">
                 <span className={sectionTitle}>⭐ التقييمات ({reviews.length})</span>
                 {chevron(openReviewsCol)}
