@@ -94,6 +94,7 @@ import { Footer, MobileFooter } from "@/components/Footer";
 import { GlobalBottomNav } from "@/components/GlobalBottomNav";
 import { SplashScreen } from "@/components/SplashScreen";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
+import { FloatingRobot } from "@/components/FloatingRobot";
 import { CompareBar } from "@/components/CompareBar";
 import Compare from "@/pages/Compare";
 import OnboardingFlow from "@/components/OnboardingFlow";
@@ -645,6 +646,7 @@ function Router() {
         <CompareBar />
         <PwaInstallBanner />
         <WhatsAppButton settings={displaySettingsForNav} />
+        <FloatingRobot />
       </div>
     </>
   );
