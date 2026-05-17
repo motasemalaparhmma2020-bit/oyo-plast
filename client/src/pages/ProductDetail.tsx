@@ -389,11 +389,47 @@ export default function ProductDetail() {
   // الصورة الرئيسية الفعلية (مع تطبيق لون ديناميكي إن وُجد)
   const effectiveMainImageUrl = useMemo(() => dynamicColorImageUrl || product?.imageUrl || "", [dynamicColorImageUrl, product?.imageUrl]);
 
+  // ── Phase 3: استقرار صورة Cloudinary — preload قبل العرض لمنع الـ flicker ──
+  // عند تغيير لون الكيس، Cloudinary يولّد URL جديداً يتطلب تحميلاً شبكياً.
+  // نُحمّل الصورة الجديدة في الخلفية أولاً، ثم نستبدل المعروضة فقط عند جاهزيتها.
+  const [stableMainImageUrl, setStableMainImageUrl] = useState<string>("");
+  const [imageTransitioning, setImageTransitioning] = useState(false);
+  // عند تغيير المنتج، صفّر الحالة المستقرة لتجنّب تسرّب صورة المنتج السابق
+  useEffect(() => {
+    setStableMainImageUrl("");
+    setImageTransitioning(false);
+  }, [numericId]);
+  useEffect(() => {
+    if (!effectiveMainImageUrl) return;
+    if (effectiveMainImageUrl === stableMainImageUrl) return;
+    // أول تحميل بدون transition
+    if (!stableMainImageUrl) {
+      setStableMainImageUrl(effectiveMainImageUrl);
+      return;
+    }
+    setImageTransitioning(true);
+    const pre = new window.Image();
+    let cancelled = false;
+    pre.onload = () => {
+      if (cancelled) return;
+      setStableMainImageUrl(effectiveMainImageUrl);
+      setImageTransitioning(false);
+    };
+    pre.onerror = () => {
+      if (cancelled) return;
+      setStableMainImageUrl(effectiveMainImageUrl); // اعرض على أي حال (LazyImage سيتعامل مع الخطأ)
+      setImageTransitioning(false);
+    };
+    pre.src = effectiveMainImageUrl;
+    return () => { cancelled = true; };
+  }, [effectiveMainImageUrl, stableMainImageUrl]);
+
   // ── دمج كل الصور: المنتج + متغيرات ذكية + صور الألوان ──
+  // Phase 3: نستخدم stableMainImageUrl في العنصر الأول لمنع الـ flicker في الكاروسيل
   const allImages = useMemo(() => {
     if (!product) return [];
     const imgs: string[] = [];
-    const mainImg = dynamicColorImageUrl || product.imageUrl;
+    const mainImg = stableMainImageUrl || dynamicColorImageUrl || product.imageUrl;
     if (mainImg) imgs.push(mainImg);
     if (product.imageUrls?.length) product.imageUrls.forEach(u => { if (u && !imgs.includes(u)) imgs.push(u); });
     // صور المتغيرات الذكية (SHEIN-style)
@@ -417,7 +453,7 @@ export default function ProductDetail() {
       }
     } catch {}
     return imgs;
-  }, [product, dynamicColorImageUrl]);
+  }, [product, dynamicColorImageUrl, stableMainImageUrl]);
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ direction: 'rtl' });
   const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
@@ -831,8 +867,8 @@ export default function ProductDetail() {
       ctx.textAlign = "center";
       ctx.fillText("لا يمكن تحميل صورة المنتج", W / 2, H / 2);
     };
-    bg.src = effectiveMainImageUrl;
-  }, [uploadedDesignUrl, logoPosition, effectiveMainImageUrl]);
+    bg.src = stableMainImageUrl || effectiveMainImageUrl;
+  }, [uploadedDesignUrl, logoPosition, stableMainImageUrl, effectiveMainImageUrl]);
 
   // ── Phase 5: handlers للسحب ──────────────────────────────────────────
   const handlePreviewPointerDown = (e: React.PointerEvent) => {
@@ -1196,8 +1232,8 @@ export default function ProductDetail() {
                   aria-label="تكبير الصورة"
                   data-testid="button-zoom-image-single"
                 >
-                  <LazyImage src={effectiveMainImageUrl} alt={product.name}
-                    className={`w-full h-full ${imgMode === 'cover' ? 'object-cover' : 'object-contain'}`} />
+                  <LazyImage src={stableMainImageUrl || effectiveMainImageUrl} alt={product.name}
+                    className={`w-full h-full transition-opacity duration-200 ${imageTransitioning ? 'opacity-70' : 'opacity-100'} ${imgMode === 'cover' ? 'object-cover' : 'object-contain'}`} />
                 </button>
               </div>
             )}
@@ -1213,6 +1249,19 @@ export default function ProductDetail() {
             {effectiveDiscount > 0 && (
               <div className="absolute top-3 left-3 bg-red-500 text-white rounded-full w-10 h-10 flex items-center justify-center font-extrabold text-xs shadow-lg">
                 -{effectiveDiscount}%
+              </div>
+            )}
+            {/* ── Phase 3: مؤشر تحميل لون Cloudinary الجديد (shimmer overlay) ── */}
+            {imageTransitioning && (
+              <div
+                className="absolute left-0 right-0 top-0 z-[6] flex items-center justify-center bg-white/30 dark:bg-black/20 backdrop-blur-[1px] pointer-events-none"
+                style={{ height: imgH }}
+                data-testid="overlay-image-transitioning"
+              >
+                <div className="bg-white/90 dark:bg-gray-900/90 rounded-full px-3 py-1.5 shadow-md flex items-center gap-2">
+                  <div className="w-3 h-3 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-[11px] font-semibold text-sky-700 dark:text-sky-300">جارٍ تطبيق اللون…</span>
+                </div>
               </div>
             )}
             {/* ── Phase 2 UX: عدّاد المعاينة فوق الصورة (مُقيّد بارتفاع الصورة فقط) */}
@@ -3039,7 +3088,7 @@ export default function ProductDetail() {
             onClick={(e) => e.stopPropagation()}
           >
             <img
-              src={allImages[currentImageIndex] || effectiveMainImageUrl}
+              src={allImages[currentImageIndex] || stableMainImageUrl || effectiveMainImageUrl}
               alt={product.name}
               onClick={() => setZoomScale(s => (s >= 2.5 ? 1 : s + 0.5))}
               style={{
