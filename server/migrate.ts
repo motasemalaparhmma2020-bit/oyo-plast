@@ -618,6 +618,52 @@ export async function runMigrations(): Promise<void> {
       console.warn("[WARN] order_items.cost_price_at_order migration:", e instanceof Error ? e.message : e);
     }
 
+    // ─── Purchase Orders (المرحلة 1, مايو 2026) ──────────────────────────
+    try {
+      // 1) إضافة عمود type لـ suppliers (distributor | vendor | both)
+      await client.query(`ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'distributor'`);
+
+      // 2) جدول أوامر الشراء
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS purchase_orders (
+          id SERIAL PRIMARY KEY,
+          po_number TEXT NOT NULL UNIQUE,
+          supplier_id INTEGER REFERENCES suppliers(id),
+          supplier_name_snapshot TEXT,
+          status TEXT NOT NULL DEFAULT 'draft',
+          subtotal NUMERIC NOT NULL DEFAULT 0,
+          shipping_cost NUMERIC NOT NULL DEFAULT 0,
+          total NUMERIC NOT NULL DEFAULT 0,
+          currency TEXT NOT NULL DEFAULT 'YER',
+          notes TEXT,
+          created_by VARCHAR REFERENCES users(id),
+          created_at TIMESTAMP DEFAULT NOW(),
+          received_at TIMESTAMP
+        );
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_po_status ON purchase_orders(status)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_po_supplier ON purchase_orders(supplier_id)`);
+
+      // 3) جدول عناصر أمر الشراء
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS purchase_order_items (
+          id SERIAL PRIMARY KEY,
+          purchase_order_id INTEGER NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
+          product_id INTEGER REFERENCES products(id),
+          product_name_snapshot TEXT,
+          variant_label TEXT,
+          quantity_ordered INTEGER NOT NULL,
+          quantity_received INTEGER NOT NULL DEFAULT 0,
+          unit_cost NUMERIC NOT NULL,
+          line_total NUMERIC NOT NULL
+        );
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_poi_po ON purchase_order_items(purchase_order_id)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_poi_product ON purchase_order_items(product_id)`);
+    } catch (e) {
+      console.warn("[WARN] purchase_orders migration:", e instanceof Error ? e.message : e);
+    }
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

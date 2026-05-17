@@ -194,7 +194,38 @@ export const suppliers = pgTable("suppliers", {
   notes: text("notes"),
   telegramChatId: text("telegram_chat_id"),                    // معرّف دردشة تلجرام للمورد
   telegramLinkCode: text("telegram_link_code"),                // كود ربط مؤقت /start <code>
+  // 🆕 (مايو 2026 - المرحلة 1) نوع الجهة: distributor (يوصّل للعميل) | vendor (نشتري منه البضاعة) | both
+  type: text("type").default("distributor").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ─── أوامر الشراء (Purchase Orders) — المرحلة 1, مايو 2026 ─────────────────
+export const purchaseOrders = pgTable("purchase_orders", {
+  id: serial("id").primaryKey(),
+  poNumber: text("po_number").notNull().unique(),                // PO-2026-001
+  supplierId: integer("supplier_id").references(() => suppliers.id),
+  supplierNameSnapshot: text("supplier_name_snapshot"),           // للأرشيف إن حُذف المورد
+  status: text("status").default("draft").notNull(),              // draft | sent | partial | received | cancelled
+  subtotal: numeric("subtotal").default("0").notNull(),
+  shippingCost: numeric("shipping_cost").default("0").notNull(),
+  total: numeric("total").default("0").notNull(),
+  currency: text("currency").default("YER").notNull(),            // YER | SAR
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  receivedAt: timestamp("received_at"),
+});
+
+export const purchaseOrderItems = pgTable("purchase_order_items", {
+  id: serial("id").primaryKey(),
+  purchaseOrderId: integer("purchase_order_id").references(() => purchaseOrders.id, { onDelete: "cascade" }).notNull(),
+  productId: integer("product_id").references(() => products.id),
+  productNameSnapshot: text("product_name_snapshot"),             // للأرشيف
+  variantLabel: text("variant_label"),                            // اللون/الحجم — يطابق smartVariants.variants[].label
+  quantityOrdered: integer("quantity_ordered").notNull(),
+  quantityReceived: integer("quantity_received").default(0).notNull(),
+  unitCost: numeric("unit_cost").notNull(),                       // تكلفة الشراء للوحدة (بعملة الأمر)
+  lineTotal: numeric("line_total").notNull(),                     // quantityOrdered × unitCost
 });
 
 // سجل دفعات الموردين
@@ -1337,3 +1368,16 @@ export type ProductPricingRule = typeof productPricingRules.$inferSelect;
 export const insertCustomerTierHistorySchema = createInsertSchema(customerTierHistory).omit({ id: true, createdAt: true });
 export type InsertCustomerTierHistory = z.infer<typeof insertCustomerTierHistorySchema>;
 export type CustomerTierHistory = typeof customerTierHistory.$inferSelect;
+
+// ─── Purchase Orders (المرحلة 1, مايو 2026) ──────────────────────────────
+export const insertPurchaseOrderSchema = createInsertSchema(purchaseOrders).omit({
+  id: true, poNumber: true, createdAt: true, receivedAt: true,
+});
+export type InsertPurchaseOrder = z.infer<typeof insertPurchaseOrderSchema>;
+export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
+
+export const insertPurchaseOrderItemSchema = createInsertSchema(purchaseOrderItems).omit({
+  id: true, quantityReceived: true,
+});
+export type InsertPurchaseOrderItem = z.infer<typeof insertPurchaseOrderItemSchema>;
+export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;

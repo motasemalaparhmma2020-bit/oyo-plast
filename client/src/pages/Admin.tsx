@@ -8107,6 +8107,17 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="inventory">
+            <div className="mb-4 p-4 bg-gradient-to-l from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border border-blue-200 rounded-lg flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-sm text-blue-900 dark:text-blue-100">أوامر الشراء (Purchase Orders)</h3>
+                <p className="text-xs text-blue-700 dark:text-blue-300">إنشاء أوامر شراء، تسجيل الاستلام، وحساب متوسط التكلفة (WAC) تلقائياً</p>
+              </div>
+              <a href="/admin/purchase-orders" data-testid="link-purchase-orders">
+                <Button className="gap-1 bg-blue-600 hover:bg-blue-700">
+                  فتح
+                </Button>
+              </a>
+            </div>
             <InventorySection
               productsList={productsList}
               productsLoading={productsLoading}

@@ -92,6 +92,14 @@ OYO PLAST is a comprehensive e-commerce platform for plastic printing and suppli
 - **Gemini API** (visual search + printing assistant)
 - **Jawal Pay** (planned electronic payments)
 
+### Purchase Orders — المرحلة 1 (May 17, 2026)
+- **DB:** `suppliers.type` (distributor/vendor/both, default distributor) + جدولان جديدان `purchase_orders` (po_number auto PO-2026-NNN, supplier_id, status draft/sent/partial/received/cancelled, subtotal/shipping/total/currency, notes, created_by, created_at, received_at) و`purchase_order_items` (purchase_order_id, product_id, product_name_snapshot, variant_label, quantity_ordered/received, unit_cost, line_total). Migration additive في `server/migrate.ts`.
+- **Routes:** `server/routes/purchase-orders.ts` — `GET /api/admin/vendors`, `GET/POST /api/admin/purchase-orders`, `GET/PATCH/DELETE /api/admin/purchase-orders/:id`, `POST /api/admin/purchase-orders/:id/receive`. كلها `requireAdmin`.
+- **WAC على الاستلام:** يُطبَّق على `smartVariants.variants[i].costPriceY` للـ variant المطابق بالـ label. صيغة: `new_avg = (old_stock*old_avg + recv_qty*unit_cost)/(old_stock+recv_qty)`. يستخدم `BEGIN` + `FOR UPDATE OF poi, p` لمنع race على JSON.
+- **حماية:** server-side over-receipt check (يرفض إذا recvQty > remaining). الحالات المسموح حذفها: draft + cancelled فقط.
+- **Limitation MVP:** WAC يُحدَّث فقط للمنتجات التي تستخدم smart_variants ومع `variant_label` معطى. المنتجات بلا variants تحصل على زيادة مخزون فقط (التحذير يظهر في wacReport).
+- **UI:** `/admin/purchase-orders` (`AdminPurchaseOrders.tsx`) — قائمة بفلتر حالة + dialog إنشاء (اختيار vendor من النوع vendor/both، عناصر مع variant selector ديناميكي حسب smart_variants، حساب فوري للإجمالي) + dialog تفاصيل + dialog استلام مع تقرير WAC قبل/بعد. رابط فتح من تبويب "المخزون" في `Admin.tsx`.
+
 ### Critical Fixes (May 17, 2026)
 - **Checkout total miscalculation:** `Checkout.tsx` كان يحسب الإجمالي من `product.price` (أرخص متغيّر) بدل `item.unitPrice` المخزّن لكل عنصر سلة → 3 منتجات × 2,200 بدل 111,700. أُصلح في `subtotal` useMemo وفي render العناصر (مع SAR conversion ديناميكية عبر rate مشتق).
 - **NotificationBell شفافة:** `PopoverContent` كان يفتقد bg صريح → أُضيف `bg-white dark:bg-gray-900 border shadow-2xl`.

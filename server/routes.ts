@@ -292,6 +292,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const { registerCreditRoutes } = await import("./routes/credit-routes");
   registerCreditRoutes(app, requireAdmin);
 
+  // أوامر الشراء (المرحلة 1, مايو 2026)
+  const { registerPurchaseOrderRoutes } = await import("./routes/purchase-orders");
+  registerPurchaseOrderRoutes(app, requireAdmin);
+
   // ─── Google Search Console Verification ──────────────────────────
   app.get("/google2bec18c5e7a1da83.html", (_req, res) => {
     res.setHeader("Content-Type", "text/html");

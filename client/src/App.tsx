@@ -60,6 +60,7 @@ import Register from "@/pages/Register";
 import Admin from "@/pages/Admin";
 import AdminInbox from "@/pages/AdminInbox";
 import AdminBroadcastNotifications from "@/pages/AdminBroadcastNotifications";
+import AdminPurchaseOrders from "@/pages/AdminPurchaseOrders";
 import Wishlist from "@/pages/Wishlist";
 import Notifications from "@/pages/Notifications";
 import NotificationSettings from "@/pages/NotificationSettings";
@@ -538,6 +539,7 @@ function Router() {
             <Route path="/admin" component={Admin} />
             <Route path="/admin/inbox" component={AdminInbox} />
             <Route path="/admin/broadcast" component={AdminBroadcastNotifications} />
+            <Route path="/admin/purchase-orders" component={AdminPurchaseOrders} />
             <Route path="/about" component={About} />
             <Route path="/privacy" component={Privacy} />
             <Route path="/terms" component={Terms} />
