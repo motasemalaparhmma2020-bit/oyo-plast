@@ -562,15 +562,9 @@ export class DatabaseStorage implements IStorage {
       [data.productId, data.userId, data.rating, data.comment || null, data.imageUrl || null]
     );
     const review = result.rows[0];
-    const stats = await dbPool.query(
-      `SELECT AVG(rating)::numeric(3,1) as avg_rating, COUNT(*) as total
-       FROM reviews WHERE product_id = $1`,
-      [data.productId]
-    );
-    await dbPool.query(
-      `UPDATE products SET rating = $1, review_count = $2 WHERE id = $3`,
-      [stats.rows[0].avg_rating || data.rating, stats.rows[0].total, data.productId]
-    );
+    // Task 3: نحسب من التقييمات المعتمدة فقط
+    const { recalcProductRating } = await import("./routes");
+    await recalcProductRating(data.productId);
     return review;
   }
 
@@ -579,15 +573,8 @@ export class DatabaseStorage implements IStorage {
     const rev = await dbPool.query(`SELECT product_id FROM reviews WHERE id = $1`, [id]);
     await dbPool.query(`DELETE FROM reviews WHERE id = $1`, [id]);
     if (rev.rows[0]) {
-      const productId = rev.rows[0].product_id;
-      const stats = await dbPool.query(
-        `SELECT AVG(rating)::numeric(3,1) as avg_rating, COUNT(*) as total FROM reviews WHERE product_id = $1`,
-        [productId]
-      );
-      await dbPool.query(
-        `UPDATE products SET rating = $1, review_count = $2 WHERE id = $3`,
-        [stats.rows[0].avg_rating || 5, stats.rows[0].total, productId]
-      );
+      const { recalcProductRating } = await import("./routes");
+      await recalcProductRating(rev.rows[0].product_id);
     }
   }
 

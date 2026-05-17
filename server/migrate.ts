@@ -681,6 +681,8 @@ export async function runMigrations(): Promise<void> {
       await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS available_colors TEXT`);
       // Task 2: سداد مستحقات الموردين — إضافة طريقة الدفع
       await client.query(`ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS payment_method TEXT`);
+      // Task 3: trigger sold_count عند التسليم — flag لمنع العد المضاعف
+      await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS sold_count_incremented BOOLEAN DEFAULT FALSE`);
     } catch (e) {
       console.warn("[WARN] phase4/5/6 printing migration:", e instanceof Error ? e.message : e);
     }

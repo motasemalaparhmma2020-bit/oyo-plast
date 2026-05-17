@@ -379,6 +379,78 @@ export async function computeServerUnitPrice(
   };
 }
 
+/**
+ * Task 3: تحديث sold_count على المنتجات تلقائياً عند تسليم الطلب.
+ * - direction "inc": يُزيد sold_count لكل عنصر بمقدار quantity ويضع orders.sold_count_incremented = true
+ * - direction "dec": يُنقص sold_count (لإلغاء طلب تم تسليمه) ويُعيد الـflag إلى false
+ * - يحمي من العدّ المضاعف عبر الـflag على الطلب.
+ */
+export async function recalcSoldCountForOrder(
+  orderId: number,
+  direction: "inc" | "dec"
+): Promise<void> {
+  try {
+    const { pool: dbPool } = await import("./db");
+    const orderRes = await dbPool.query(
+      `SELECT sold_count_incremented FROM orders WHERE id=$1`,
+      [orderId]
+    );
+    if (!orderRes.rows.length) return;
+    const incremented = orderRes.rows[0].sold_count_incremented === true;
+    if (direction === "inc" && incremented) return; // already counted
+    if (direction === "dec" && !incremented) return; // nothing to undo
+
+    const items = await dbPool.query(
+      `SELECT product_id, quantity FROM order_items WHERE order_id=$1 AND product_id IS NOT NULL`,
+      [orderId]
+    );
+    const sign = direction === "inc" ? 1 : -1;
+    for (const it of items.rows) {
+      const qty = Number(it.quantity || 0);
+      if (qty <= 0) continue;
+      if (direction === "inc") {
+        await dbPool.query(
+          `UPDATE products SET sold_count = COALESCE(sold_count,0) + $1 WHERE id = $2`,
+          [qty, it.product_id]
+        );
+      } else {
+        await dbPool.query(
+          `UPDATE products SET sold_count = GREATEST(0, COALESCE(sold_count,0) - $1) WHERE id = $2`,
+          [qty, it.product_id]
+        );
+      }
+    }
+    await dbPool.query(
+      `UPDATE orders SET sold_count_incremented = $1 WHERE id = $2`,
+      [direction === "inc", orderId]
+    );
+  } catch (e) {
+    console.warn(`[recalcSoldCountForOrder] failed for order ${orderId}:`, e instanceof Error ? e.message : e);
+  }
+}
+
+/**
+ * Task 3: إعادة حساب rating + review_count من التقييمات المعتمدة فقط.
+ * يُستدعى عند إنشاء/حذف/الموافقة على تقييم.
+ */
+export async function recalcProductRating(productId: number): Promise<void> {
+  try {
+    const { pool: dbPool } = await import("./db");
+    const stats = await dbPool.query(
+      `SELECT COALESCE(AVG(rating)::numeric(3,1), 5) AS avg_rating, COUNT(*) AS total
+       FROM reviews WHERE product_id = $1 AND is_approved = TRUE`,
+      [productId]
+    );
+    const row = stats.rows[0] || { avg_rating: 5, total: 0 };
+    await dbPool.query(
+      `UPDATE products SET rating = $1, review_count = $2 WHERE id = $3`,
+      [row.avg_rating || 5, row.total || 0, productId]
+    );
+  } catch (e) {
+    console.warn(`[recalcProductRating] failed for product ${productId}:`, e instanceof Error ? e.message : e);
+  }
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<void> {
   await setupAuth(app);
   registerAuthRoutes(app);
@@ -1680,6 +1752,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         [status, newOrderStatus, token]
       );
 
+      // Task 3: تحديث sold_count عند تغيير الحالة من قِبل المورد
+      if (status === "delivered") {
+        await recalcSoldCountForOrder(order.id, "inc");
+      } else if (status === "cancelled") {
+        await recalcSoldCountForOrder(order.id, "dec");
+      }
+
       // إشعار العميل تلقائياً عند الشحن والتسليم
       const customerNotifyMap: Record<string, string> = {
         shipped:   "shipped",
@@ -2289,7 +2368,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const { pool: dbPool } = await import("./db");
       const { approved } = req.body;
-      await dbPool.query(`UPDATE reviews SET is_approved=$1 WHERE id=$2`, [approved !== false, req.params.id]);
+      const reviewId = parseInt(req.params.id);
+      await dbPool.query(`UPDATE reviews SET is_approved=$1 WHERE id=$2`, [approved !== false, reviewId]);
+      // Task 3: إعادة حساب التقييم من المعتمدة فقط
+      const rev = await dbPool.query(`SELECT product_id FROM reviews WHERE id=$1`, [reviewId]);
+      if (rev.rows[0]) await recalcProductRating(rev.rows[0].product_id);
       res.json({ ok: true });
     } catch (e: any) {
       res.status(500).json({ message: "فشل تحديث التقييم" });
@@ -4739,6 +4822,14 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       // منح نقاط الولاء عند تسليم الطلب
       if (newStatus === "delivered" && order?.userId && order?.total) {
         await awardOrderPoints(Number(order.userId), order.id, Number(order.total));
+      }
+      // Task 3: تحديث sold_count تلقائياً
+      if (order) {
+        if (newStatus === "delivered" || newStatus === "completed") {
+          await recalcSoldCountForOrder(order.id, "inc");
+        } else if (newStatus === "cancelled" || newStatus === "refunded") {
+          await recalcSoldCountForOrder(order.id, "dec");
+        }
       }
       // تسجيل حدث الطلب فوراً (T4 — حماية لحظية)
       if (order) {
