@@ -687,6 +687,100 @@ export async function runMigrations(): Promise<void> {
       console.warn("[WARN] phase4/5/6 printing migration:", e instanceof Error ? e.message : e);
     }
 
+    // ─── Task 8: نظام وكلاء الذكاء الاصطناعي (AI Agent Team) ────────────────
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS ai_agents (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(100) NOT NULL UNIQUE,
+          display_name VARCHAR(100) NOT NULL,
+          role VARCHAR(150) NOT NULL,
+          model VARCHAR(80) NOT NULL,
+          provider VARCHAR(30) NOT NULL,
+          system_prompt TEXT NOT NULL,
+          avatar_url TEXT,
+          permissions JSONB NOT NULL DEFAULT '{}'::jsonb,
+          is_active BOOLEAN DEFAULT true,
+          last_daily_report DATE,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+      `);
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS ai_agent_actions (
+          id SERIAL PRIMARY KEY,
+          agent_id INTEGER REFERENCES ai_agents(id) ON DELETE CASCADE,
+          action_type VARCHAR(100) NOT NULL,
+          title VARCHAR(255) NOT NULL,
+          description TEXT,
+          input_data JSONB,
+          output_data JSONB,
+          status VARCHAR(50) DEFAULT 'pending',
+          verified_by_ceo BOOLEAN DEFAULT false,
+          verified_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW()
+        );
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_aaa_agent ON ai_agent_actions(agent_id, created_at DESC)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_aaa_status ON ai_agent_actions(status)`);
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS ai_agent_conversations (
+          id SERIAL PRIMARY KEY,
+          agent_id INTEGER REFERENCES ai_agents(id) ON DELETE CASCADE,
+          user_id VARCHAR(100),
+          user_name VARCHAR(150),
+          message TEXT NOT NULL,
+          reply TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        );
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_aic_agent ON ai_agent_conversations(agent_id, created_at DESC)`);
+
+      // Seed default 9 agents (only if table empty)
+      const cnt = await client.query(`SELECT COUNT(*)::int AS n FROM ai_agents`);
+      if ((cnt.rows[0]?.n || 0) === 0) {
+        const agents: Array<[string,string,string,string,string,string,string]> = [
+          ["safar","سفر","مديرة التسعير الذكي","deepseek-chat","deepseek",
+           "أنت سفر، مديرة التسعير الذكي في متجر OYO PLAST. مهمتك تحليل أسعار المنتجات واقتراح تخفيضات/زيادات بناءً على سلوك المبيعات والمخزون. اقترح فقط — لا تنفّذ. تواصل بالعربية باختصار وحرفية.",
+           '{"can_chat":true,"requires_approval":true,"can_view_db":true,"db_scope":["products","order_items","orders"]}'],
+          ["nour","نور","كاتبة المحتوى التسويقي","deepseek-chat","deepseek",
+           "أنت نور، كاتبة محتوى تسويقي في OYO PLAST. تكتبين أوصاف منتجات قصيرة وجذابة بالعربية للطباعة على البلاستيك. النبرة ودودة احترافية. لا تخترعي حقائق.",
+           '{"can_chat":true,"requires_approval":true,"can_view_db":false}'],
+          ["layla","ليلى","مديرة العلاقات مع العملاء","gemini-2.5-flash","gemini",
+           "أنت ليلى، مسؤولة خدمة العملاء في OYO PLAST. تجيبين العملاء بود واحترام بالعربية، تساعدينهم في الطلبات، وتُحوّلين المشاكل المعقّدة للأدمن. كوني مختصرة ومفيدة.",
+           '{"can_chat":true,"requires_approval":false,"can_view_db":true,"db_scope":["orders","conversations","users","messages"]}'],
+          ["huda","هدى","مديرة المتأخرات والائتمان","deepseek-chat","deepseek",
+           "أنت هدى، مديرة المتأخرات في OYO PLAST. تتابعين العملاء الذين عليهم مستحقات، وتقترحين خطط سداد بأسلوب لبق. تتحدّثين بالعربية فقط.",
+           '{"can_chat":true,"requires_approval":true,"can_view_db":true,"db_scope":["customer_credit","orders","users"]}'],
+          ["majed","ماجد","مدير ملفات التصميم","gemini-2.5-flash-lite","gemini",
+           "أنت ماجد، مدير ملفات التصميم في OYO PLAST. تتحقق من ملفات التصميم المرفوعة (PDF/PNG/AI/PSD)، الأبعاد، الألوان، الجودة. ترسل تحذيرات لو الملف غير مناسب للطباعة.",
+           '{"can_chat":true,"requires_approval":false,"can_view_db":true,"db_scope":["order_items"]}'],
+          ["rami","رامي","محلل سلوك العملاء","deepseek-chat","deepseek",
+           "أنت رامي، محلل سلوك العملاء في OYO PLAST. تستخرج رؤى من بيانات الطلبات والتصفّح (المنتجات الأكثر مشاهدة، السلال المتروكة، الزبائن النشطون). تكتب بالعربية تقارير قصيرة عملية.",
+           '{"can_chat":true,"requires_approval":false,"can_view_db":true,"db_scope":["orders","users","cart_items","products"]}'],
+          ["omar","عمر","المصمم الإبداعي","gemini-2.5-flash","gemini",
+           "أنت عمر، مصمم إبداعي في OYO PLAST. تقترح أفكار حملات، عروض، شعارات نصية، وألوان للبانرات. اعمل بحرية وبالعربية.",
+           '{"can_chat":true,"requires_approval":true,"can_view_db":false}'],
+          ["oyo","أوبو","مساعد متابعة الطلبات","gemini-2.5-flash-lite","gemini",
+           "أنت أوبو، روبوت متابعة الطلبات في OYO PLAST. تخبر العميل بحالة طلبه بالعربية بشكل واضح وموجز. لا تختلق معلومات — اعتمد فقط على البيانات الفعلية.",
+           '{"can_chat":true,"requires_approval":false,"can_view_db":true,"db_scope":["orders"]}'],
+          ["rashed","راشد","المدير التنفيذي","deepseek-chat","deepseek",
+           "أنت راشد، المدير التنفيذي لفريق الذكاء الاصطناعي في OYO PLAST. تتفقد عمل الوكلاء، تتحقق من إنجازاتهم بالاطلاع على قاعدة البيانات مباشرة، وتُصدر تقارير يومية للمالك. كن دقيقاً ومحايداً وموجزاً بالعربية.",
+           '{"can_chat":true,"requires_approval":false,"can_view_db":true,"db_scope":["*"],"is_ceo":true}'],
+        ];
+        for (const [name,dn,role,model,provider,prompt,perms] of agents) {
+          await client.query(
+            `INSERT INTO ai_agents (name, display_name, role, model, provider, system_prompt, permissions, is_active)
+             VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,true) ON CONFLICT (name) DO NOTHING`,
+            [name, dn, role, model, provider, prompt, perms]
+          );
+        }
+        console.log("[INFO] Seeded 9 AI agents (Task 8)");
+      }
+    } catch (e) {
+      console.warn("[WARN] ai_agents migration:", e instanceof Error ? e.message : e);
+    }
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

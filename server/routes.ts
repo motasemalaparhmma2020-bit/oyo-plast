@@ -467,6 +467,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const { registerPurchaseOrderRoutes } = await import("./routes/purchase-orders");
   registerPurchaseOrderRoutes(app, requireAdmin);
 
+  // ─── المهمة 8: نظام وكلاء الذكاء الاصطناعي (AI Agent Team) ─────
+  const { registerAIAgentRoutes } = await import("./routes/ai-agents");
+  registerAIAgentRoutes(app, requireAdmin);
+
+  // تقرير راشد التلقائي يومياً الساعة 8:00 صباحاً (تقويم اليمن)
+  try {
+    const cron = await import("node-cron");
+    cron.schedule("0 8 * * *", async () => {
+      try {
+        const { generateCEOReport, getAgent, setLastReport } = await import("./agent-team");
+        const rashed = await getAgent("rashed");
+        if (!rashed) return;
+        const report = await generateCEOReport({ asAgent: rashed });
+        setLastReport(report);
+        console.log(`[CEO Daily Report] ✅ تم توليد تقرير راشد التلقائي لـ ${report.date}`);
+      } catch (e: any) {
+        console.warn("[CEO Daily Report] فشل التوليد التلقائي:", e?.message);
+      }
+    });
+    console.log("[INFO] تم جدولة تقرير راشد اليومي (8:00 صباحاً)");
+  } catch (e) {
+    console.warn("[WARN] تعذّر جدولة cron للتقرير اليومي");
+  }
+
   // ─── Google Search Console Verification ──────────────────────────
   app.get("/google2bec18c5e7a1da83.html", (_req, res) => {
     res.setHeader("Content-Type", "text/html");

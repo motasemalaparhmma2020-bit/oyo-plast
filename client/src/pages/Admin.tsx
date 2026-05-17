@@ -8419,6 +8419,19 @@ export default function Admin() {
                 </Button>
               </a>
             </div>
+            <div className="mb-4 p-4 bg-gradient-to-l from-purple-50 to-pink-50 dark:from-purple-950/40 dark:to-pink-950/40 border border-purple-200 dark:border-purple-800 rounded-lg flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-sm text-purple-900 dark:text-purple-100 flex items-center gap-2">
+                  🤖 فريق الذكاء الاصطناعي
+                </h3>
+                <p className="text-xs text-purple-700 dark:text-purple-300">9 وكلاء (سفر، نور، ليلى، هدى، ماجد، رامي، عمر، أوبو) + المدير التنفيذي راشد الذي يتفقد قاعدة البيانات</p>
+              </div>
+              <a href="/admin/ai-agents" data-testid="link-ai-agents">
+                <Button className="gap-1 bg-purple-600 hover:bg-purple-700">
+                  فتح
+                </Button>
+              </a>
+            </div>
             <InventorySection
               productsList={productsList}
               productsLoading={productsLoading}
