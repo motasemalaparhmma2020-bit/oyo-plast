@@ -282,8 +282,13 @@ export default function ProductDetail() {
   const [designNotes, setDesignNotes]     = useState("");
   const [enableCustomPrinting, setEnableCustomPrinting] = useState(false);
   // ── Phase 4: حاسبة الطباعة الفورية ──────────────────────────────────────
-  const [printingColors, setPrintingColors] = useState<number>(1);
-  const [printingSides, setPrintingSides]   = useState<number>(1);
+  // ── Phase 1 Simplification (May 18, 2026) ─────────────────────────────
+  // ثابت: لون واحد + وجهين دائماً (الأكثر طلباً) — لا UI للتغيير
+  const [printingColors, _setPrintingColors] = useState<number>(1);
+  const [printingSides, _setPrintingSides]   = useState<number>(2);
+  // أبقينا الـ setters للتوافق مع كود قديم لكنها لا تُستخدم في الواجهة
+  const setPrintingColors = _setPrintingColors;
+  const setPrintingSides = _setPrintingSides;
   // ── Phase 5: المعاينة الفورية للطباعة ───────────────────────────────────
   const [logoPosition, setLogoPosition] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [previewImgAspect, setPreviewImgAspect] = useState<number>(1); // عرض / طول صورة المنتج
@@ -2190,7 +2195,8 @@ export default function ProductDetail() {
                     )}
 
                     {/* ── Phase 4: حاسبة الطباعة الفورية ─────────────── */}
-                    {hasPhase4Pricing && (
+                    {/* Phase 1 Simplification: مخفية للعميل — السعر مدمج في إجمالي السلة */}
+                    {false && hasPhase4Pricing && (
                       <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-3 space-y-3 mt-2" data-testid="section-printing-calculator">
                         <div className="font-bold text-sm text-blue-700 dark:text-blue-300 flex items-center gap-1">
                           🖨️ خيارات الطباعة
