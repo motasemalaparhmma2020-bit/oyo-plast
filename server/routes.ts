@@ -4940,6 +4940,60 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   });
 
   // ═══════════════════════════════════════════════════════════════════
+  // ملخص نقاط الولاء (للصفحة /loyalty)
+  // ═══════════════════════════════════════════════════════════════════
+  app.get("/api/loyalty/summary", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(
+        `SELECT points, lifetime_points FROM reward_points WHERE user_id=$1`,
+        [user.id]
+      );
+      const points = Number(r.rows[0]?.points ?? 0);
+      const lifetime = Number(r.rows[0]?.lifetime_points ?? 0);
+      // 100 نقطة = 1000 ر.ي (طبقاً للسياسة الحالية في /api/points/redeem-estimate)
+      const redeemableValue = Math.floor(points / 100) * 1000;
+      res.json({ points, lifetimePoints: lifetime, redeemableValue });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب ملخص النقاط" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // تغيير كلمة المرور (للمستخدم الحالي من /settings)
+  // ═══════════════════════════════════════════════════════════════════
+  app.post("/api/me/change-password", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const { currentPassword, newPassword } = req.body || {};
+      if (!newPassword || String(newPassword).length < 6) {
+        return res.status(400).json({ message: "كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل" });
+      }
+      const { pool: dbPool } = await import("./db");
+      const { hashPassword, verifyPassword } = await import("./auth-utils");
+      const r = await dbPool.query(`SELECT password_hash FROM users WHERE id=$1`, [user.id]);
+      const row = r.rows[0];
+      if (!row) return res.status(404).json({ message: "المستخدم غير موجود" });
+      if (row.password_hash) {
+        if (!currentPassword) {
+          return res.status(400).json({ message: "كلمة المرور الحالية مطلوبة" });
+        }
+        if (!verifyPassword(String(currentPassword), row.password_hash)) {
+          return res.status(400).json({ message: "كلمة المرور الحالية غير صحيحة" });
+        }
+      }
+      const newHash = hashPassword(String(newPassword));
+      await dbPool.query(`UPDATE users SET password_hash=$1 WHERE id=$2`, [newHash, user.id]);
+      res.json({ success: true, message: "تم تحديث كلمة المرور بنجاح" });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحديث كلمة المرور" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
   // منظومة المسوقين المستقلين — تسجيل + لوحة + إدارة
   // ═══════════════════════════════════════════════════════════════════
 

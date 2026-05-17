@@ -159,7 +159,7 @@ export default function MyAccount() {
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 pb-24" dir="rtl">
       {/* ──────── Hero Header ──────── */}
       <div className="bg-gradient-to-br from-[#1976D2] via-[#2196F3] to-[#42A5F5] text-white">
-        <div className="container max-w-2xl mx-auto px-4 pt-4 pb-10 relative">
+        <div className="container max-w-2xl mx-auto px-4 pt-3 pb-8 relative">
           <div className="flex items-center justify-between mb-3">
             <Button
               variant="ghost" size="icon"
@@ -206,7 +206,7 @@ export default function MyAccount() {
         </div>
       </div>
 
-      <div className="container max-w-2xl mx-auto px-4 -mt-6 relative z-10 space-y-3">
+      <div className="container max-w-2xl mx-auto px-4 -mt-5 relative z-10 space-y-3">
         {/* ──────── 4 Finance Cards ──────── */}
         <div className="grid grid-cols-4 gap-2">
           {financeCards.map(c => {
