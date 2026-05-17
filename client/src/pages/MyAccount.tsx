@@ -139,19 +139,16 @@ export default function MyAccount() {
     { key: "wishlist", label: "المفضلة",  value: wishlistItems.length.toLocaleString("ar-YE"), suffix: "منتج", icon: Heart,    bg: "#EC4899", href: "/wishlist" },
   ];
 
-  // 12 tools (4 × 3)
+  // 9 أدوات فريدة (3×3) — أُزيل المكرر مع بطاقات Finance أعلاه (المحفظة/النقاط/الائتمان)
   const tools: Array<{ icon: any; label: string; href?: string; color: string; bg: string; external?: boolean; onClick?: () => void; testid: string }> = [
     { icon: ShoppingBag,  label: "طلباتي",       href: "/orders",            color: "text-blue-600",   bg: "bg-blue-100 dark:bg-blue-950/40",     testid: "tool-orders" },
     { icon: MapPin,       label: "عناويني",      href: "/addresses",         color: "text-indigo-600", bg: "bg-indigo-100 dark:bg-indigo-950/40", testid: "tool-addresses" },
     { icon: User,         label: "ملفي الشخصي",  href: "/profile",           color: "text-cyan-600",   bg: "bg-cyan-100 dark:bg-cyan-950/40",     testid: "tool-profile" },
     { icon: Bell,         label: "إشعاراتي",     href: "/notifications",     color: "text-purple-600", bg: "bg-purple-100 dark:bg-purple-950/40", testid: "tool-notifications" },
     { icon: Ticket,       label: "كوبوناتي",     href: "/my-coupons",        color: "text-rose-600",   bg: "bg-rose-100 dark:bg-rose-950/40",     testid: "tool-coupons" },
-    { icon: Wallet,       label: "محفظتي",       href: "/wallet",            color: "text-emerald-600",bg: "bg-emerald-100 dark:bg-emerald-950/40", testid: "tool-wallet" },
-    { icon: Award,        label: "نقاطي",        href: "/loyalty",           color: "text-amber-600",  bg: "bg-amber-100 dark:bg-amber-950/40",   testid: "tool-loyalty" },
-    { icon: CreditCard,   label: "الائتمان",     href: "/account/credit",    color: "text-orange-600", bg: "bg-orange-100 dark:bg-orange-950/40", testid: "tool-credit" },
     { icon: ShieldCheck,  label: "أمان",         href: "/settings#security", color: "text-teal-600",   bg: "bg-teal-100 dark:bg-teal-950/40",     testid: "tool-security" },
-    { icon: MessageCircle,label: "دعم",          href: "https://wa.me/967774997589?text=مرحباً،%20أحتاج%20للمساعدة", external: true, color: "text-green-600",  bg: "bg-green-100 dark:bg-green-950/40", testid: "tool-support" },
-    { icon: HelpCircle,   label: "مساعدة",       href: "/settings",          color: "text-slate-600",  bg: "bg-slate-100 dark:bg-slate-800",      testid: "tool-help" },
+    { icon: MessageCircle,label: "دعم واتساب",   href: "https://wa.me/967774997589?text=مرحباً،%20أحتاج%20للمساعدة", external: true, color: "text-green-600",  bg: "bg-green-100 dark:bg-green-950/40", testid: "tool-support" },
+    { icon: HelpCircle,   label: "الإعدادات",    href: "/settings",          color: "text-slate-600",  bg: "bg-slate-100 dark:bg-slate-800",      testid: "tool-help" },
     { icon: LogOut,       label: "خروج",         onClick: () => { try { logout(); } catch {} },        color: "text-red-600",    bg: "bg-red-100 dark:bg-red-950/40",       testid: "tool-logout" },
   ];
 
@@ -286,7 +283,7 @@ export default function MyAccount() {
         <Card data-testid="card-tools">
           <CardContent className="p-3">
             <h3 className="font-bold text-sm mb-2">أدواتي</h3>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {tools.map(t => {
                 const Icon = t.icon;
                 const inner = (

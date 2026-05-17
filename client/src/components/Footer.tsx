@@ -46,10 +46,6 @@ export function Footer() {
               أويو بلاست - الوجهة الأولى لمستلزمات التغليف والبلاستيك في اليمن. 
               نقدم منتجات عالية الجودة بأسعار منافسة مع خدمة توصيل لجميع المحافظات اليمنية.
             </p>
-            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-              <FileText className="w-4 h-4 text-primary" />
-              <span>رقم توثيق الاسم التجاري: <strong className="text-foreground">139688</strong></span>
-            </div>
           </div>
 
           {/* تواصل معنا */}
@@ -102,22 +98,28 @@ export function Footer() {
         {/* روابط قانونية */}
         <div className="border-t mt-8 pt-6">
           <div className="flex justify-center items-center gap-6 mb-4 flex-wrap">
-            <Link href="/about" className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors" data-testid="link-about">
-              <Shield className="w-4 h-4" />
-              من نحن
-            </Link>
-              <Link href="/terms" className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors" data-testid="link-terms">
-              <FileText className="w-4 h-4" />
-              {homeSettings?.footerAffiliateText || "التسويق بالعمولة"}
-            </Link>
             <Link href="/privacy" className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors" data-testid="link-privacy">
               <Shield className="w-4 h-4" />
               {homeSettings?.footerPrivacyText || "سياسة الخصوصية"}
+            </Link>
+            <Link href="/terms" className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors" data-testid="link-terms">
+              <FileText className="w-4 h-4" />
+              الشروط والأحكام
             </Link>
             <Link href="/returns" className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors" data-testid="link-returns">
               <Shield className="w-4 h-4" />
               {homeSettings?.footerReturnsText || "سياسة الاسترجاع"}
             </Link>
+            <a
+              href={whatsappLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-muted-foreground hover:text-green-600 transition-colors"
+              data-testid="link-footer-whatsapp"
+            >
+              <SiWhatsapp className="w-4 h-4" />
+              تواصل واتساب
+            </a>
           </div>
           <div className="text-center">
             <p className="text-muted-foreground">
@@ -188,9 +190,6 @@ export function MobileFooter() {
           <p className="text-sm text-muted-foreground leading-relaxed">
             أويو بلاست - الوجهة الأولى لمستلزمات التغليف والبلاستيك في اليمن.
           </p>
-          <p className="text-xs text-muted-foreground mt-2">
-            رقم توثيق الاسم التجاري: <strong className="text-foreground">139688</strong>
-          </p>
         </div>
 
         {/* تواصل معنا */}
@@ -217,18 +216,25 @@ export function MobileFooter() {
 
         {/* روابط قانونية */}
         <div className="flex justify-center gap-4 mb-4 flex-wrap">
-          <Link href="/about" className="text-sm text-muted-foreground hover:text-primary" data-testid="mobile-link-about">
-            من نحن
-          </Link>
-          <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary" data-testid="mobile-link-terms">
-            {homeSettings?.footerAffiliateText || "التسويق بالعمولة"}
-          </Link>
           <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary" data-testid="mobile-link-privacy">
             {homeSettings?.footerPrivacyText || "سياسة الخصوصية"}
+          </Link>
+          <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary" data-testid="mobile-link-terms">
+            الشروط والأحكام
           </Link>
           <Link href="/returns" className="text-sm text-muted-foreground hover:text-primary" data-testid="mobile-link-returns">
             {homeSettings?.footerReturnsText || "سياسة الاسترجاع"}
           </Link>
+          <a
+            href={whatsappLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-muted-foreground hover:text-green-600 flex items-center gap-1"
+            data-testid="mobile-link-footer-whatsapp"
+          >
+            <SiWhatsapp className="w-3.5 h-3.5" />
+            واتساب
+          </a>
         </div>
 
         {/* Copyright */}
