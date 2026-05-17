@@ -120,6 +120,24 @@ OYO PLAST is a comprehensive e-commerce platform for plastic printing and suppli
 - **Limitation MVP:** WAC يُحدَّث فقط للمنتجات التي تستخدم smart_variants ومع `variant_label` معطى. المنتجات بلا variants تحصل على زيادة مخزون فقط (التحذير يظهر في wacReport).
 - **UI:** `/admin/purchase-orders` (`AdminPurchaseOrders.tsx`) — قائمة بفلتر حالة + dialog إنشاء (اختيار vendor من النوع vendor/both، عناصر مع variant selector ديناميكي حسب smart_variants، حساب فوري للإجمالي) + dialog تفاصيل + dialog استلام مع تقرير WAC قبل/بعد. رابط فتح من تبويب "المخزون" في `Admin.tsx`.
 
+### Phase 5: المعاينة الفورية للطباعة (Live Print Preview — May 17, 2026)
+- **الفكرة:** بعد رفع التصميم، يرى العميل صورة المنتج مع شعاره مرسوماً عليها بـ Canvas API الخام (بدون مكتبات)، ويمكنه سحب الشعار وتغيير حجمه بشريط.
+- **Schema:** `products.print_area` TEXT (JSON `{x, y, width, height}` كنسب مئوية 0-100) في `shared/schema.ts` و migration additive في `server/migrate.ts`.
+- **Backend (`server/routes.ts`):**
+  - `LITE_COLS` + `mapProductRow`: يُعيد `printArea` (parse JSON آمن مع try/catch).
+  - POST `/api/admin/products`: تطبيع object→JSON string قبل الحفظ.
+  - PATCH `/api/admin/products/:id`: نفس التطبيع قبل `pickFields` لمطابقة سلوك POST، مع `printArea` في الـ allowlist.
+- **Admin (`Admin.tsx`):** قسم بنفسجي "🎯 منطقة الطباعة على صورة المنتج" داخل قسم الطباعة الفورية — 4 inputs (x/y/w/h %) مع تحقق clamp 0-100 + زر مسح. ProductFormData type/emptyForm/create/update/load كلها تشمل `printArea`.
+- **ProductDetail (`ProductDetail.tsx`):**
+  - State: `logoPosition` + `previewImgAspect` + refs (`previewCanvasRef`, `previewContainerRef`, `dragStateRef`).
+  - useEffect 1: تهيئة `logoPosition` من `product.printArea` أو الافتراضي `{25,25,50,50}` عند رفع التصميم؛ تنظيف عند إزالة الرفع.
+  - useEffect 2: يرسم صورة المنتج بـ `drawImage(bg, 0, 0, W, H)` (تملأ كامل الـ canvas) ثم الشعار فوقها بنسب مئوية. `previewImgAspect` يُحدَّث من `bg.naturalWidth/Height` لتطابق حاوية الـ DOM نسبةَ الصورة → **لا letterboxing، إحداثيات السحب = إحداثيات الرسم تماماً**.
+  - Pointer handlers (Down/Move/Up) مع `setPointerCapture` لسحب موضع الشعار + clamp ضمن 0-100 ناقص العرض/الطول.
+  - شريط range (10-90%) لتغيير حجم الشعار + Reposition تلقائي إن خرج من الحدود.
+  - `logoPosition` مدمج في `cartPayload.designOptions` (مع شروط Phase 4 الموجودة). ينتقل ضمن `design_options` JSON من cart → order_items.
+- **UX:** Canvas 240×(240/aspect) مع إطار بنفسجي متقطع قابل للسحب. الحاوية `touchAction: none` لتمكين السحب باللمس.
+- **Limitation:** Canvas API الخام (لا konva/fabric). دوران الشعار وطبقات متعددة محجوزة لـ Phase 3.
+
 ### Critical Fixes (May 17, 2026)
 - **Checkout total miscalculation:** `Checkout.tsx` كان يحسب الإجمالي من `product.price` (أرخص متغيّر) بدل `item.unitPrice` المخزّن لكل عنصر سلة → 3 منتجات × 2,200 بدل 111,700. أُصلح في `subtotal` useMemo وفي render العناصر (مع SAR conversion ديناميكية عبر rate مشتق).
 - **NotificationBell شفافة:** `PopoverContent` كان يفتقد bg صريح → أُضيف `bg-white dark:bg-gray-900 border shadow-2xl`.

@@ -223,6 +223,7 @@ interface ProductFormData {
   printingDesignFeeOverride: string;
   printingColorPriceOverride: string;
   printingSidePriceOverride: string;
+  printArea: { x: number; y: number; width: number; height: number } | null;
   tags: string;
   showReviews: boolean;
   showInPrinting: boolean;
@@ -260,6 +261,7 @@ const emptyProductForm: ProductFormData = {
   printingDesignFeeOverride: "",
   printingColorPriceOverride: "",
   printingSidePriceOverride: "",
+  printArea: null,
   tags: "",
   showReviews: true,
   showInPrinting: false,
@@ -5543,6 +5545,7 @@ export default function Admin() {
           printingDesignFeeOverride: numOrNull(data.printingDesignFeeOverride),
           printingColorPriceOverride: numOrNull(data.printingColorPriceOverride),
           printingSidePriceOverride: numOrNull(data.printingSidePriceOverride),
+          printArea: data.printArea || null,
           tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
           showReviews: data.showReviews,
           showInPrinting: data.showInPrinting,
@@ -5613,6 +5616,7 @@ export default function Admin() {
         printingDesignFeeOverride: numOrNull(data.printingDesignFeeOverride),
         printingColorPriceOverride: numOrNull(data.printingColorPriceOverride),
         printingSidePriceOverride: numOrNull(data.printingSidePriceOverride),
+        printArea: data.printArea || null,
         tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
         showReviews: data.showReviews,
         showInPrinting: data.showInPrinting,
@@ -5870,6 +5874,7 @@ export default function Admin() {
       printingDesignFeeOverride: (product as any).printingDesignFeeOverride != null ? String((product as any).printingDesignFeeOverride) : "",
       printingColorPriceOverride: (product as any).printingColorPriceOverride != null ? String((product as any).printingColorPriceOverride) : "",
       printingSidePriceOverride: (product as any).printingSidePriceOverride != null ? String((product as any).printingSidePriceOverride) : "",
+      printArea: (product as any).printArea && typeof (product as any).printArea === "object" ? (product as any).printArea : null,
       tags: product.tags ? product.tags.join(', ') : "",
       enableVariantUI: (product as any).enableVariantUI ?? false,
       colorImages: [],
@@ -7491,6 +7496,13 @@ export default function Admin() {
                         </button>
                         {formSections.printing && (
                         <div className="p-4 space-y-4">
+                          {/* ─── نظام التسعير القديم (مخفي — تم استبداله بـ Phase 4) ─── */}
+                          <div className="p-3 bg-gray-50 dark:bg-gray-800/40 rounded-lg border border-dashed border-gray-300 dark:border-gray-700" data-testid="note-legacy-pricing-hidden">
+                            <p className="text-xs text-muted-foreground text-center leading-relaxed">
+                              ⭐ النظام القديم ملغي. استخدم <strong className="text-foreground">"فئة الطباعة الاحترافية"</strong> أو <strong className="text-foreground">"تسعير الطباعة الفوري (تجاوز)"</strong> أدناه.
+                            </p>
+                          </div>
+                          {false && (<>
                           <div>
                             <div className="flex items-center gap-2 mb-2">
                               <input
@@ -7581,6 +7593,8 @@ export default function Admin() {
                               </div>
                             )}
                           </div>
+                          </>)}
+                          {/* ─── نهاية النظام القديم المخفي ─── */}
 
                           {/* ── فئة الطباعة الاحترافية ── */}
                           <div>
@@ -7665,6 +7679,88 @@ export default function Admin() {
                             <p className="text-[11px] text-muted-foreground mt-2">
                               💡 المعادلة: <code>إجمالي الطباعة = رسوم التصميم + (الألوان الإضافية × سعر اللون) + (الأوجه الإضافية × سعر الوجه)</code>
                             </p>
+                          </div>
+
+                          {/* ── Phase 5: منطقة الطباعة للمعاينة الفورية ── */}
+                          <div className="border border-purple-200 dark:border-purple-800 rounded-xl p-3 bg-purple-50/40 dark:bg-purple-950/20">
+                            <Label className="font-bold flex items-center gap-2 mb-1 text-sm">
+                              🎯 منطقة الطباعة على صورة المنتج (للمعاينة الفورية)
+                            </Label>
+                            <p className="text-xs text-muted-foreground mb-3">
+                              حدّد موقع وحجم الشعار على صورة المنتج (نسب مئوية 0-100). اتركها فارغة لاستخدام الوسط الافتراضي.
+                            </p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              <div>
+                                <Label htmlFor="print-area-x" className="text-xs">X (يسار %)</Label>
+                                <Input
+                                  id="print-area-x"
+                                  type="number" min={0} max={100}
+                                  value={productForm.printArea?.x ?? ""}
+                                  onChange={e => {
+                                    const x = e.target.value === "" ? null : Math.max(0, Math.min(100, Number(e.target.value)));
+                                    setProductForm({ ...productForm, printArea: x == null && !productForm.printArea ? null : { x: x ?? 25, y: productForm.printArea?.y ?? 25, width: productForm.printArea?.width ?? 50, height: productForm.printArea?.height ?? 50 } });
+                                  }}
+                                  placeholder="25"
+                                  className="mt-1"
+                                  data-testid="input-print-area-x"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="print-area-y" className="text-xs">Y (أعلى %)</Label>
+                                <Input
+                                  id="print-area-y"
+                                  type="number" min={0} max={100}
+                                  value={productForm.printArea?.y ?? ""}
+                                  onChange={e => {
+                                    const y = e.target.value === "" ? null : Math.max(0, Math.min(100, Number(e.target.value)));
+                                    setProductForm({ ...productForm, printArea: y == null && !productForm.printArea ? null : { x: productForm.printArea?.x ?? 25, y: y ?? 25, width: productForm.printArea?.width ?? 50, height: productForm.printArea?.height ?? 50 } });
+                                  }}
+                                  placeholder="25"
+                                  className="mt-1"
+                                  data-testid="input-print-area-y"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="print-area-w" className="text-xs">عرض %</Label>
+                                <Input
+                                  id="print-area-w"
+                                  type="number" min={5} max={100}
+                                  value={productForm.printArea?.width ?? ""}
+                                  onChange={e => {
+                                    const w = e.target.value === "" ? null : Math.max(5, Math.min(100, Number(e.target.value)));
+                                    setProductForm({ ...productForm, printArea: w == null && !productForm.printArea ? null : { x: productForm.printArea?.x ?? 25, y: productForm.printArea?.y ?? 25, width: w ?? 50, height: productForm.printArea?.height ?? 50 } });
+                                  }}
+                                  placeholder="50"
+                                  className="mt-1"
+                                  data-testid="input-print-area-width"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="print-area-h" className="text-xs">طول %</Label>
+                                <Input
+                                  id="print-area-h"
+                                  type="number" min={5} max={100}
+                                  value={productForm.printArea?.height ?? ""}
+                                  onChange={e => {
+                                    const h = e.target.value === "" ? null : Math.max(5, Math.min(100, Number(e.target.value)));
+                                    setProductForm({ ...productForm, printArea: h == null && !productForm.printArea ? null : { x: productForm.printArea?.x ?? 25, y: productForm.printArea?.y ?? 25, width: productForm.printArea?.width ?? 50, height: h ?? 50 } });
+                                  }}
+                                  placeholder="50"
+                                  className="mt-1"
+                                  data-testid="input-print-area-height"
+                                />
+                              </div>
+                            </div>
+                            {productForm.printArea && (
+                              <button
+                                type="button"
+                                onClick={() => setProductForm({ ...productForm, printArea: null })}
+                                className="mt-2 text-xs text-red-600 hover:underline"
+                                data-testid="button-clear-print-area"
+                              >
+                                مسح منطقة الطباعة
+                              </button>
+                            )}
                           </div>
 
                         </div>

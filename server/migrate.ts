@@ -674,8 +674,10 @@ export async function runMigrations(): Promise<void> {
       await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS printing_side_price_override NUMERIC`);
       await client.query(`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS design_options TEXT`);
       await client.query(`ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS design_options TEXT`);
+      // Phase 5: منطقة الطباعة للمعاينة الفورية
+      await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_area TEXT`);
     } catch (e) {
-      console.warn("[WARN] phase4 printing pricing migration:", e instanceof Error ? e.message : e);
+      console.warn("[WARN] phase4/5 printing migration:", e instanceof Error ? e.message : e);
     }
 
     console.log("[SUCCESS] Database migrations completed");

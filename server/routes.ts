@@ -1865,7 +1865,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     available_bag_colors, tags, show_reviews, show_in_printing, enable_variant_ui, color_images,
     original_price, original_price_sar, discount_percent, promotional_tags,
     has_free_shipping, enable_smart_variants, smart_variants, printing_category_id,
-    printing_design_fee_override, printing_color_price_override, printing_side_price_override`;
+    printing_design_fee_override, printing_color_price_override, printing_side_price_override,
+    print_area`;
 
   // عند أوّل تحميل، نُسخّن الكاش حتّى mapProductRow يستخدم السعر الصحيح
   getExchangeRate().catch(() => {});
@@ -1931,6 +1932,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       printingDesignFeeOverride: r.printing_design_fee_override ?? null,
       printingColorPriceOverride: r.printing_color_price_override ?? null,
       printingSidePriceOverride: r.printing_side_price_override ?? null,
+      printArea: (() => {
+        try { return r.print_area ? JSON.parse(r.print_area) : null; } catch { return null; }
+      })(),
     enableVariantUI: r.enable_variant_ui ?? false,
     colorImages: r.color_images ?? null,
       originalPrice: r.original_price ?? null,
@@ -2333,6 +2337,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         printingDesignFeeOverride: data.printingDesignFeeOverride !== "" && data.printingDesignFeeOverride != null ? String(data.printingDesignFeeOverride) : null,
         printingColorPriceOverride: data.printingColorPriceOverride !== "" && data.printingColorPriceOverride != null ? String(data.printingColorPriceOverride) : null,
         printingSidePriceOverride: data.printingSidePriceOverride !== "" && data.printingSidePriceOverride != null ? String(data.printingSidePriceOverride) : null,
+        // Phase 5: منطقة الطباعة
+        printArea: data.printArea && typeof data.printArea === "object" ? JSON.stringify(data.printArea) : (typeof data.printArea === "string" && data.printArea ? data.printArea : null),
         supplierId: data.supplierId ? Number(data.supplierId) : null,
         showReviews: data.showReviews ?? true,
         hasFreeShipping: data.hasFreeShipping ?? false,
@@ -2407,10 +2413,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "bulkPricing", "sizePricing", "showReviews", "showInPrinting",
         "printingCategoryId", "supplierId",
         "printingDesignFeeOverride", "printingColorPriceOverride", "printingSidePriceOverride",
+        "printArea",
         "enableVariantUI", "colorImages",
         "promotionalTags",
         "hasFreeShipping", "enableSmartVariants", "smartVariants"
       ];
+      // Phase 5: تطبيع printArea (object → JSON string) لمطابقة سلوك POST
+      if (Object.prototype.hasOwnProperty.call(data, "printArea")) {
+        const pa = data.printArea;
+        data.printArea = pa && typeof pa === "object" ? JSON.stringify(pa) : (typeof pa === "string" && pa ? pa : null);
+      }
       const fields = allowPricingFields
         ? [...baseFields, "price", "priceSar", "originalPrice", "originalPriceSar", "discountPercent"]
         : baseFields;

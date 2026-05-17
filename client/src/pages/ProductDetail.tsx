@@ -285,6 +285,12 @@ export default function ProductDetail() {
   // ── Phase 4: حاسبة الطباعة الفورية ──────────────────────────────────────
   const [printingColors, setPrintingColors] = useState<number>(1);
   const [printingSides, setPrintingSides]   = useState<number>(1);
+  // ── Phase 5: المعاينة الفورية للطباعة ───────────────────────────────────
+  const [logoPosition, setLogoPosition] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [previewImgAspect, setPreviewImgAspect] = useState<number>(1); // عرض / طول صورة المنتج
+  const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const previewContainerRef = useRef<HTMLDivElement | null>(null);
+  const dragStateRef = useRef<{ dragging: boolean; offsetX: number; offsetY: number }>({ dragging: false, offsetX: 0, offsetY: 0 });
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [variantActiveImg, setVariantActiveImg]   = useState<string | null>(null);
   const [promoBarOpen, setPromoBarOpen]           = useState(false);
@@ -650,6 +656,8 @@ export default function ProductDetail() {
           colorTotal: phase4PrintingBreakdown.colorTotal,
           sideTotal: phase4PrintingBreakdown.sideTotal,
           totalPrintingCost: phase4PrintingBreakdown.totalPrintingCost,
+          // Phase 5: موضع الشعار على المنتج (% نسب 0-100)
+          ...(logoPosition ? { logoPosition } : {}),
         },
       } : {}),
       // السعر الوحدوي المحسوب
@@ -659,7 +667,96 @@ export default function ProductDetail() {
       enableBagPrinting, selectedBagColor, printColors,
       productPrintingCat, printWidth, printHeight, printFinish, printColorSeparation, professionalPrintingUnitPrice,
       totalPrice, selectedSmartVariant, smartVariantsData, showSmartVariants,
-      hasPhase4Pricing, printingColors, printingSides, phase4PrintingBreakdown]);
+      hasPhase4Pricing, printingColors, printingSides, phase4PrintingBreakdown, logoPosition]);
+
+  // ── Phase 5: تهيئة موضع الشعار من إعدادات المنتج عند رفع التصميم ──────
+  useEffect(() => {
+    if (uploadedDesignUrl && !logoPosition) {
+      const defaultArea = (product as any)?.printArea && typeof (product as any).printArea === "object"
+        ? (product as any).printArea
+        : { x: 25, y: 25, width: 50, height: 50 };
+      setLogoPosition({
+        x: Number(defaultArea.x) || 25,
+        y: Number(defaultArea.y) || 25,
+        width: Number(defaultArea.width) || 50,
+        height: Number(defaultArea.height) || 50,
+      });
+    }
+    if (!uploadedDesignUrl && logoPosition) {
+      setLogoPosition(null);
+    }
+  }, [uploadedDesignUrl, (product as any)?.printArea]);
+
+  // ── Phase 5: رسم المعاينة على Canvas ──────────────────────────────────
+  useEffect(() => {
+    if (!uploadedDesignUrl || !logoPosition || !previewCanvasRef.current || !product?.imageUrl) return;
+    const canvas = previewCanvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const W = canvas.width, H = canvas.height;
+    const bg = new Image();
+    bg.crossOrigin = "anonymous";
+    bg.onload = () => {
+      // حدّث aspect ratio لمزامنة الحاوية مع الـ canvas (لا letterboxing → إحداثيات السحب = إحداثيات الرسم)
+      if (bg.width > 0 && bg.height > 0) {
+        const ar = bg.width / bg.height;
+        if (Math.abs(ar - previewImgAspect) > 0.01) setPreviewImgAspect(ar);
+      }
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, W, H);
+      // ارسم صورة المنتج لتملأ الـ canvas بالكامل (الحاوية بنفس النسبة)
+      ctx.drawImage(bg, 0, 0, W, H);
+      // ارسم الشعار بنسب مئوية من كامل الـ canvas
+      const logo = new Image();
+      logo.onload = () => {
+        const lx = W * logoPosition.x / 100;
+        const ly = H * logoPosition.y / 100;
+        const lw = W * logoPosition.width / 100;
+        const lh = H * logoPosition.height / 100;
+        ctx.drawImage(logo, lx, ly, lw, lh);
+      };
+      logo.src = uploadedDesignUrl;
+    };
+    bg.onerror = () => {
+      ctx.fillStyle = "#f3f4f6";
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#9ca3af";
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("لا يمكن تحميل صورة المنتج", W / 2, H / 2);
+    };
+    bg.src = product.imageUrl;
+  }, [uploadedDesignUrl, logoPosition, product?.imageUrl]);
+
+  // ── Phase 5: handlers للسحب ──────────────────────────────────────────
+  const handlePreviewPointerDown = (e: React.PointerEvent) => {
+    if (!logoPosition || !previewContainerRef.current) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const rect = previewContainerRef.current.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * 100;
+    const py = ((e.clientY - rect.top) / rect.height) * 100;
+    dragStateRef.current = {
+      dragging: true,
+      offsetX: px - logoPosition.x,
+      offsetY: py - logoPosition.y,
+    };
+  };
+  const handlePreviewPointerMove = (e: React.PointerEvent) => {
+    if (!dragStateRef.current.dragging || !logoPosition || !previewContainerRef.current) return;
+    const rect = previewContainerRef.current.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * 100;
+    const py = ((e.clientY - rect.top) / rect.height) * 100;
+    let newX = px - dragStateRef.current.offsetX;
+    let newY = py - dragStateRef.current.offsetY;
+    newX = Math.max(0, Math.min(100 - logoPosition.width, newX));
+    newY = Math.max(0, Math.min(100 - logoPosition.height, newY));
+    setLogoPosition({ ...logoPosition, x: newX, y: newY });
+  };
+  const handlePreviewPointerUp = (e: React.PointerEvent) => {
+    dragStateRef.current.dragging = false;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+  };
 
   // ── التحقق من اختيار المقاس قبل الإضافة للسلة ──
   const validateSelection = (): string | null => {
@@ -968,8 +1065,10 @@ export default function ProductDetail() {
                 {printingCost > 0 && <span className="mr-1">(يشمل {formatPrice(printingCost)} طباعة)</span>}
               </p>
             )}
-            {/* 🤖 زر التواصل مع موظف المبيعات الذكي */}
-            <ContactSalesButton productId={product.id} productName={product.name} />
+            {/* 🤖 زر التواصل مع موظف المبيعات الذكي — يظهر فقط للمنتجات بدون تسعير فوري (Phase 4) */}
+            {!hasPhase4Pricing && (
+              <ContactSalesButton productId={product.id} productName={product.name} />
+            )}
             {/* شريط العروض الترويجية (SHEIN-style) */}
             {promoBarEnabled && (
               <>
@@ -1717,6 +1816,70 @@ export default function ProductDetail() {
                     <Textarea value={designNotes} onChange={e => setDesignNotes(e.target.value)}
                       placeholder="ملاحظات التصميم..." className="resize-none text-sm" rows={2}
                       data-testid="input-design-notes" />
+
+                    {/* ── Phase 5: المعاينة الفورية للطباعة ─────────────── */}
+                    {uploadedDesignUrl && logoPosition && (
+                      <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl p-3 mt-2" data-testid="section-live-preview">
+                        <div className="font-bold text-sm text-purple-700 dark:text-purple-300 flex items-center gap-1 mb-2">
+                          🎨 المعاينة الفورية — اسحب الشعار لتغيير موضعه
+                        </div>
+                        <div
+                          ref={previewContainerRef}
+                          className="relative mx-auto bg-white dark:bg-gray-900 rounded-lg overflow-hidden border border-purple-200 dark:border-purple-700"
+                          style={{ width: 240, height: 240 / previewImgAspect, maxWidth: "100%", touchAction: "none" }}
+                          data-testid="container-live-preview"
+                        >
+                          <canvas
+                            ref={previewCanvasRef}
+                            width={Math.round(240)}
+                            height={Math.round(240 / previewImgAspect)}
+                            className="block w-full h-full select-none"
+                          />
+                          {/* طبقة شفافة للسحب فوق الـ Canvas */}
+                          <div
+                            className="absolute cursor-move border-2 border-dashed border-purple-500/70 hover:border-purple-600 transition-colors"
+                            style={{
+                              left: `${logoPosition.x}%`,
+                              top: `${logoPosition.y}%`,
+                              width: `${logoPosition.width}%`,
+                              height: `${logoPosition.height}%`,
+                            }}
+                            onPointerDown={handlePreviewPointerDown}
+                            onPointerMove={handlePreviewPointerMove}
+                            onPointerUp={handlePreviewPointerUp}
+                            onPointerCancel={handlePreviewPointerUp}
+                            data-testid="drag-logo-overlay"
+                          />
+                        </div>
+                        {/* شريط تكبير/تصغير */}
+                        <div className="mt-3 flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">حجم الشعار</span>
+                          <input
+                            type="range"
+                            min={10} max={90} step={1}
+                            value={logoPosition.width}
+                            onChange={e => {
+                              const newSize = Number(e.target.value);
+                              setLogoPosition({
+                                ...logoPosition,
+                                width: newSize,
+                                height: newSize,
+                                x: Math.min(logoPosition.x, 100 - newSize),
+                                y: Math.min(logoPosition.y, 100 - newSize),
+                              });
+                            }}
+                            className="flex-1 accent-purple-600"
+                            data-testid="slider-logo-size"
+                          />
+                          <span className="text-xs font-semibold text-purple-700 dark:text-purple-300 w-10 text-center">
+                            {Math.round(logoPosition.width)}%
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-1 text-center">
+                          💡 اسحب الإطار البنفسجي لتغيير الموضع، واستخدم الشريط لتغيير الحجم
+                        </p>
+                      </div>
+                    )}
 
                     {/* ── Phase 4: حاسبة الطباعة الفورية ─────────────── */}
                     {hasPhase4Pricing && (
