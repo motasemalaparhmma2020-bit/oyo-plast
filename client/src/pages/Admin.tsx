@@ -8440,6 +8440,19 @@ export default function Admin() {
                 </Button>
               </a>
             </div>
+            <div className="mb-4 p-4 bg-gradient-to-l from-blue-50 to-sky-50 dark:from-blue-950/40 dark:to-sky-950/40 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                  👥 إدارة الموظفين البشريين
+                </h3>
+                <p className="text-xs text-blue-700 dark:text-blue-300">إضافة/تعديل/تعطيل أعضاء الفريق + ضبط الأدوار (مدير منتجات، طلبات، مالية، مندوب توصيل). الدخول لاحقاً من <code>/staff</code>.</p>
+              </div>
+              <a href="/admin/staff" data-testid="link-admin-staff">
+                <Button className="gap-1 bg-blue-600 hover:bg-blue-700">
+                  فتح
+                </Button>
+              </a>
+            </div>
             <InventorySection
               productsList={productsList}
               productsLoading={productsLoading}
