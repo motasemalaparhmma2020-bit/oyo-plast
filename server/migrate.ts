@@ -679,6 +679,8 @@ export async function runMigrations(): Promise<void> {
       // Phase 6: تغيير لون الكيس عبر Cloudinary
       await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS base_image_public_id TEXT`);
       await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS available_colors TEXT`);
+      // Task 2: سداد مستحقات الموردين — إضافة طريقة الدفع
+      await client.query(`ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS payment_method TEXT`);
     } catch (e) {
       console.warn("[WARN] phase4/5/6 printing migration:", e instanceof Error ? e.message : e);
     }

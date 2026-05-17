@@ -1529,13 +1529,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const { pool: dbPool } = await import("./db");
       const supplierId = parseInt(req.params.id);
-      const { amount, notes, orderIds } = req.body;
+      const { amount, notes, orderIds, paymentMethod } = req.body;
       if (!amount || Number(amount) <= 0) return res.status(400).json({ message: "المبلغ مطلوب" });
       
       // سجّل الدفعة
       await dbPool.query(
-        `INSERT INTO supplier_payments (supplier_id, amount, notes) VALUES ($1, $2, $3)`,
-        [supplierId, amount, notes || null]
+        `INSERT INTO supplier_payments (supplier_id, amount, payment_method, notes) VALUES ($1, $2, $3, $4)`,
+        [supplierId, amount, paymentMethod || null, notes || null]
       );
       // حدّث رصيد المورد
       await dbPool.query(

@@ -8502,6 +8502,17 @@ export default function Admin() {
 
           {/* ─── Suppliers Tab ─────────────────────────────────────────── */}
           <TabsContent value="suppliers">
+            <div className="mb-4 p-4 bg-gradient-to-l from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950 border border-green-200 rounded-lg flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-sm text-green-900 dark:text-green-100">💰 سداد مستحقات الموردين</h3>
+                <p className="text-xs text-green-700 dark:text-green-300">عرض الموردين بمستحقات، تسجيل دفعات، وسجل المدفوعات السابقة</p>
+              </div>
+              <a href="/admin/supplier-payments" data-testid="link-supplier-payments">
+                <Button className="gap-1 bg-green-600 hover:bg-green-700">
+                  فتح
+                </Button>
+              </a>
+            </div>
             <SupplierManagement adminToken={adminToken} />
             <AdminServiceAreas adminToken={adminToken} />
           </TabsContent>

@@ -248,6 +248,7 @@ export const supplierPayments = pgTable("supplier_payments", {
   id: serial("id").primaryKey(),
   supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
   amount: numeric("amount").notNull(),
+  paymentMethod: text("payment_method"),
   notes: text("notes"),
   paidAt: timestamp("paid_at").defaultNow(),
 });
