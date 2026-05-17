@@ -99,7 +99,7 @@ const DEFAULT_PDP: PdpLayout = {
     { id: "reviews", visible: true },
     { id: "related", visible: true, count: 4 },
   ],
-  stickyBar: { visible: false, cartHeight: 52 },
+  stickyBar: { visible: true, cartHeight: 52 },
   margins: { h: 16, v: 8, gap: 12 },
 };
 
@@ -302,6 +302,13 @@ export default function ProductDetail() {
   const [reviewImageUrl, setReviewImageUrl] = useState<string | null>(null);
   const [isUploadingReviewImage, setIsUploadingReviewImage] = useState(false);
   const [activeTab, setActiveTab]         = useState<"description" | "reviews">("description");
+  // ── Phase B: Image Zoom Lightbox ──────────────────────────────────────────
+  const [zoomOpen, setZoomOpen] = useState(false);
+  const [zoomScale, setZoomScale] = useState(1);
+  // ── Phase B: Collapsible info sections (description, specs, reviews) ──────
+  const [openDesc, setOpenDesc] = useState(true);
+  const [openSpecs, setOpenSpecs] = useState(false);
+  const [openReviewsCol, setOpenReviewsCol] = useState(false);
   const [wishlistPending, setWishlistPending] = useState(false);
   const [variantsExpanded, setVariantsExpanded] = useState(true);
   const [searchQuery, setSearchQuery]     = useState("");
@@ -938,8 +945,16 @@ export default function ProductDetail() {
                     {allImages.map((img, idx) => (
                       <div key={idx} className="flex-[0_0_100%] min-w-0 h-full flex items-center justify-center"
                         style={{ padding: imgMode === 'contain' ? 8 : 0 }}>
-                        <LazyImage src={img} alt={`${product.name} ${idx + 1}`}
-                          className={`w-full h-full ${imgMode === 'cover' ? 'object-cover' : 'object-contain'}`} />
+                        <button
+                          type="button"
+                          onClick={() => { setZoomScale(1); setZoomOpen(true); }}
+                          className="w-full h-full cursor-zoom-in"
+                          aria-label="تكبير الصورة"
+                          data-testid={`button-zoom-image-${idx}`}
+                        >
+                          <LazyImage src={img} alt={`${product.name} ${idx + 1}`}
+                            className={`w-full h-full ${imgMode === 'cover' ? 'object-cover' : 'object-contain'}`} />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -960,8 +975,16 @@ export default function ProductDetail() {
               </>
             ) : (
               <div className="w-full flex items-center justify-center" style={{ height: imgH, padding: imgMode === 'contain' ? 8 : 0 }}>
-                <LazyImage src={effectiveMainImageUrl} alt={product.name}
-                  className={`w-full h-full ${imgMode === 'cover' ? 'object-cover' : 'object-contain'}`} />
+                <button
+                  type="button"
+                  onClick={() => { setZoomScale(1); setZoomOpen(true); }}
+                  className="w-full h-full cursor-zoom-in"
+                  aria-label="تكبير الصورة"
+                  data-testid="button-zoom-image-single"
+                >
+                  <LazyImage src={effectiveMainImageUrl} alt={product.name}
+                    className={`w-full h-full ${imgMode === 'cover' ? 'object-cover' : 'object-contain'}`} />
+                </button>
               </div>
             )}
             {/* Stock badges on image */}
@@ -2019,33 +2042,71 @@ export default function ProductDetail() {
         );
       }
 
-      // ── DESCRIPTION ───────────────────────────────────────────────────────
+      // ── DESCRIPTION + SPECS + REVIEWS (Phase B: Collapsibles) ─────────────
       case "description": {
         if (!sec["description"]?.visible) return null;
+        const sectionBtn = "w-full flex items-center justify-between py-3 px-1 text-right";
+        const sectionTitle = "text-sm font-bold text-foreground";
+        const chevron = (open: boolean) => open
+          ? <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          : <ChevronDown className="h-4 w-4 text-muted-foreground" />;
+        // مواصفات بسيطة من حقول المنتج
+        const specs: Array<[string, string | number | null | undefined]> = [
+          ["التصنيف", (product as any)?.categoryName || (product as any)?.category],
+          ["الوزن", (product as any)?.weight],
+          ["الأبعاد", (product as any)?.dimensions],
+          ["الخامة", (product as any)?.material],
+          ["البلد", (product as any)?.countryOfOrigin],
+          ["الرمز (SKU)", (product as any)?.sku],
+        ].filter(([, v]) => v != null && String(v).trim() !== "") as any;
+
         return (
-          <div key="description" className="px-4" data-testid="section-description">
-            {/* Tabs: Description + Reviews toggle */}
-            <div className="flex border-b mb-3">
-              <button
-                onClick={() => setActiveTab("description")}
-                className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === "description" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}
-                data-testid="tab-description">
-                الوصف
+          <div key="description" className="px-4 space-y-1 divide-y" data-testid="section-description">
+            {/* ── الوصف ────────────────────────────────────────────── */}
+            <div>
+              <button onClick={() => setOpenDesc(o => !o)} className={sectionBtn} data-testid="button-toggle-description">
+                <span className={sectionTitle}>📋 الوصف</span>
+                {chevron(openDesc)}
               </button>
-              <button
-                onClick={() => setActiveTab("reviews")}
-                className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === "reviews" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}
-                data-testid="tab-reviews">
-                التقييمات ({reviews.length})
-              </button>
+              {openDesc && (
+                <div className="pb-3">
+                  <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line" data-testid="text-product-description">
+                    {product.description || 'لا يوجد وصف متاح لهذا المنتج.'}
+                  </p>
+                </div>
+              )}
             </div>
-            {activeTab === "description" && (
-              <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-product-description">
-                {product.description || 'لا يوجد وصف متاح لهذا المنتج.'}
-              </p>
+
+            {/* ── المواصفات ───────────────────────────────────────── */}
+            {specs.length > 0 && (
+              <div>
+                <button onClick={() => setOpenSpecs(o => !o)} className={sectionBtn} data-testid="button-toggle-specs">
+                  <span className={sectionTitle}>📐 المواصفات</span>
+                  {chevron(openSpecs)}
+                </button>
+                {openSpecs && (
+                  <div className="pb-3">
+                    <dl className="text-sm divide-y border rounded-lg overflow-hidden">
+                      {specs.map(([k, v]) => (
+                        <div key={k} className="flex items-center justify-between px-3 py-2" data-testid={`spec-row-${k}`}>
+                          <dt className="text-muted-foreground">{k}</dt>
+                          <dd className="font-medium text-foreground">{String(v)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                )}
+              </div>
             )}
-            {activeTab === "reviews" && (
-              <div className="space-y-4">
+
+            {/* ── التقييمات ────────────────────────────────────────── */}
+            <div>
+              <button onClick={() => setOpenReviewsCol(o => !o)} className={sectionBtn} data-testid="button-toggle-reviews">
+                <span className={sectionTitle}>⭐ التقييمات ({reviews.length})</span>
+                {chevron(openReviewsCol)}
+              </button>
+              {openReviewsCol && (
+                <div className="pb-3 space-y-4">
                 {/* Add Review - only for buyers with delivered orders */}
                 {!isAuthenticated ? (
                   <div className="border rounded-xl p-4 text-center space-y-2 bg-gray-50 dark:bg-gray-800/50">
@@ -2153,8 +2214,9 @@ export default function ProductDetail() {
                     لا توجد تقييمات بعد. كن أول من يقيّم!
                   </div>
                 )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
         );
       }
@@ -2162,22 +2224,34 @@ export default function ProductDetail() {
       // ── REVIEWS (separate section — if reviews tab not used) ──────────────
       case "reviews": return null; // Merged into description tabs
 
-      // ── RELATED ───────────────────────────────────────────────────────────
+      // ── RELATED (Phase B: Horizontal scroll carousel) ─────────────────────
       case "related": {
         if (!sec["related"]?.visible || relatedProducts.length === 0) return null;
         return (
-          <div key="related" className="px-4 pb-6" data-testid="section-related">
-            <h2 className="font-bold text-base mb-3">منتجات مشابهة</h2>
-            <div className="grid grid-cols-2 gap-3">
+          <div key="related" className="pb-6" data-testid="section-related">
+            <div className="px-4 flex items-center justify-between mb-3">
+              <h2 className="font-bold text-base">منتجات مشابهة</h2>
+              <Link href="/products">
+                <span className="text-xs text-primary font-semibold hover:underline cursor-pointer" data-testid="link-view-all-related">عرض الكل ›</span>
+              </Link>
+            </div>
+            <div
+              className="flex gap-3 overflow-x-auto px-4 pb-2 snap-x snap-mandatory scroll-smooth scrollbar-thin"
+              style={{ scrollbarWidth: 'thin' }}
+              data-testid="carousel-related"
+            >
               {relatedProducts.map(p => (
                 <Link key={p.id} href={`/products/${p.id}`}>
-                  <div className="border rounded-xl overflow-hidden hover:shadow-md transition-shadow cursor-pointer bg-white dark:bg-gray-900"
-                    data-testid={`card-related-${p.id}`}>
+                  <div
+                    className="border rounded-xl overflow-hidden hover:shadow-md transition-shadow cursor-pointer bg-white dark:bg-gray-900 flex-shrink-0 snap-start"
+                    style={{ width: 160 }}
+                    data-testid={`card-related-${p.id}`}
+                  >
                     <div className="aspect-square bg-gray-50 dark:bg-gray-800">
-                      <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-2" />
+                      <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-2" loading="lazy" />
                     </div>
                     <div className="p-2">
-                      <p className="font-medium text-xs line-clamp-2 mb-1">{p.name}</p>
+                      <p className="font-medium text-xs line-clamp-2 mb-1 min-h-[2rem]">{p.name}</p>
                       {(() => {
                         const op = (p as any).originalPrice;
                         const opSar = (p as any).originalPriceSar;
@@ -2340,6 +2414,107 @@ export default function ProductDetail() {
       </div>
 
       {stickyBar}
+
+      {/* ── Phase B: Image Zoom Lightbox ──────────────────────────────────── */}
+      {zoomOpen && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center"
+          onClick={() => setZoomOpen(false)}
+          data-testid="zoom-lightbox"
+        >
+          {/* زر الإغلاق */}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setZoomOpen(false); }}
+            className="absolute top-4 right-4 z-10 p-2 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-sm transition-colors"
+            aria-label="إغلاق"
+            data-testid="button-zoom-close"
+          >
+            <X className="h-6 w-6 text-white" />
+          </button>
+
+          {/* عداد الصور */}
+          {allImages.length > 1 && (
+            <div className="absolute top-4 left-4 z-10 bg-white/15 backdrop-blur-sm text-white text-sm px-3 py-1 rounded-full">
+              {currentImageIndex + 1} / {allImages.length}
+            </div>
+          )}
+
+          {/* الصورة الحالية مع zoom */}
+          <div
+            className="w-full h-full flex items-center justify-center overflow-auto p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={allImages[currentImageIndex] || effectiveMainImageUrl}
+              alt={product.name}
+              onClick={() => setZoomScale(s => (s >= 2.5 ? 1 : s + 0.5))}
+              style={{
+                transform: `scale(${zoomScale})`,
+                transformOrigin: 'center center',
+                transition: 'transform 200ms ease',
+                cursor: zoomScale >= 2.5 ? 'zoom-out' : 'zoom-in',
+                maxWidth: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain',
+              }}
+              data-testid="img-zoom"
+            />
+          </div>
+
+          {/* أسهم التنقّل */}
+          {allImages.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setZoomScale(1); scrollPrev(); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-sm"
+                aria-label="السابق"
+                data-testid="button-zoom-prev"
+              >
+                <ChevronRight className="h-6 w-6 text-white" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setZoomScale(1); scrollNext(); }}
+                className="absolute left-3 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-sm"
+                aria-label="التالي"
+                data-testid="button-zoom-next"
+              >
+                <ChevronLeft className="h-6 w-6 text-white" />
+              </button>
+            </>
+          )}
+
+          {/* شريط التحكّم بالتكبير في الأسفل */}
+          <div
+            className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-full px-3 py-1.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setZoomScale(s => Math.max(1, s - 0.5))}
+              className="p-1.5 text-white hover:bg-white/15 rounded-full"
+              aria-label="تصغير"
+              data-testid="button-zoom-out"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <span className="text-white text-xs font-bold min-w-[42px] text-center" data-testid="text-zoom-scale">
+              {Math.round(zoomScale * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={() => setZoomScale(s => Math.min(3, s + 0.5))}
+              className="p-1.5 text-white hover:bg-white/15 rounded-full"
+              aria-label="تكبير"
+              data-testid="button-zoom-in"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
