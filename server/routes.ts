@@ -3459,6 +3459,33 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const user = (req as any).user;
       const userId = getUserId(user);
 
+      // 🛡️ تقييد منطقة الخدمة — السماح فقط بمحافظتي ذمار وصنعاء + أمانة العاصمة
+      // (الأسماء البديلة بالعربي/اللاتيني مدعومة، تجاهل الفراغات والتشكيل)
+      const ALLOWED_SERVICE_CITIES = new Set([
+        "ذمار", "صنعاء", "امانة العاصمة", "أمانة العاصمة",
+        "dhamar", "sanaa", "sana'a", "sanaa city", "amanat al asimah", "amanah",
+      ]);
+      const normalizeCity = (v: any) => String(v || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[\u064B-\u065F\u0670]/g, "") // إزالة التشكيل
+        .replace(/[إأآا]/g, "ا")
+        .replace(/ة/g, "ه")
+        .replace(/ى/g, "ي")
+        .replace(/\s+/g, " ");
+      const allowedNormalized = new Set(Array.from(ALLOWED_SERVICE_CITIES).map(normalizeCity));
+      // مطابقة دقيقة فقط (token-aware) — لا نستخدم substring لتجنب تجاوز القيد بإضافة كلمات.
+      // ندعم بادئة "محافظة "/"مدينة "/"امانة " بإسقاطها قبل المطابقة.
+      const cityNormRaw = normalizeCity(shippingCity);
+      const cityNorm = cityNormRaw.replace(/^(محافظه|محافظة|مدينه|مدينة|province|city of)\s+/i, "").trim();
+      const cityAllowed = allowedNormalized.has(cityNorm) || allowedNormalized.has(cityNormRaw);
+      if (!cityAllowed) {
+        return res.status(400).json({
+          message: "نأسف، خدمة التوصيل متوفرة حالياً في محافظتي ذمار وصنعاء فقط. سيتم التوسع قريباً.",
+          code: "SERVICE_AREA_RESTRICTED",
+        });
+      }
+
       // 🔒 إعادة حساب أسعار العناصر والمجموع على الخادم (إصلاح أمني)
       // — يتجاهل item.price/unitPrice و total من العميل ويعتمد على DB حصراً.
       let serverSubtotal = 0;

@@ -180,24 +180,36 @@ export function registerAuthRoutes(app: Express): void {
           });
         }
 
-        // البحث عن مستخدم موجود بنفس الرقم
-        let user = await authStorage.getUserByPhone(normalizedPhone);
-        const isNewUser = !user;
+        // 🛡️ منع تكرار رقم الهاتف — رفض التسجيل إن كان الرقم موجوداً
+        // (حتى لو كان الحساب معطلاً is_active=false، للحماية من إعادة استخدام أرقام محظورة)
+        const existsCheck = await client.query(
+          `SELECT id FROM users WHERE phone = $1 LIMIT 1`,
+          [normalizedPhone]
+        );
+        if (existsCheck.rows.length > 0) {
+          return res.status(409).json({
+            message: "هذا الرقم مسجل بالفعل. يرجى استخدام رقم آخر أو تسجيل الدخول.",
+            code: "PHONE_ALREADY_REGISTERED",
+          });
+        }
 
-        if (!user) {
-          // إنشاء مستخدم جديد مباشرة
+        // إنشاء مستخدم جديد مباشرة — مع التقاط خطأ الـ UNIQUE INDEX (23505) كصمام أمان ضد race condition
+        let user;
+        try {
           user = await authStorage.createPhoneUser({
             phone: normalizedPhone,
             fullName: String(fullName).trim(),
           });
-        } else if (!user.fullName && fullName) {
-          // تحديث الاسم لو كان فارغاً
-          await client.query(
-            `UPDATE users SET full_name = $1 WHERE id = $2`,
-            [String(fullName).trim(), user.id]
-          );
-          user = { ...user, fullName: String(fullName).trim() };
+        } catch (e: any) {
+          if (e?.code === "23505" || /duplicate key|unique constraint/i.test(String(e?.message || ""))) {
+            return res.status(409).json({
+              message: "هذا الرقم مسجل بالفعل. يرجى استخدام رقم آخر أو تسجيل الدخول.",
+              code: "PHONE_ALREADY_REGISTERED",
+            });
+          }
+          throw e;
         }
+        const isNewUser = true;
 
         // تسجيل عملية التسجيل في السجل (للحماية من spam)
         await client.query(

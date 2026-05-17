@@ -808,6 +808,30 @@ export async function runMigrations(): Promise<void> {
       console.warn("[WARN] product_volume_offers migration:", e instanceof Error ? e.message : e);
     }
 
+    // ─── UNIQUE phone — منع تكرار أرقام الهواتف على مستوى DB (May 17, 2026) ─────
+    try {
+      // إزالة التكرارات قبل إنشاء الـ INDEX (نُبقي أقدم سجل)
+      await client.query(`
+        DELETE FROM users
+        WHERE id IN (
+          SELECT id FROM (
+            SELECT id, ROW_NUMBER() OVER (PARTITION BY phone ORDER BY created_at NULLS LAST, id) AS rn
+            FROM users
+            WHERE phone IS NOT NULL AND phone <> ''
+          ) t
+          WHERE t.rn > 1
+        )
+      `);
+      await client.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique
+        ON users(phone)
+        WHERE phone IS NOT NULL AND phone <> ''
+      `);
+      console.log("[INFO] users.phone unique index ready");
+    } catch (e) {
+      console.warn("[WARN] users.phone unique index migration:", e instanceof Error ? e.message : e);
+    }
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));
