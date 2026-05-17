@@ -582,6 +582,7 @@ function ReceiveDialog({ token, po, onClose, onDone }: { token: string; po: any;
     return r;
   });
   const [report, setReport] = useState<any[] | null>(null);
+  const [vendorBalanceAdded, setVendorBalanceAdded] = useState<number>(0);
 
   const receiveMutation = useMutation({
     mutationFn: async () => {
@@ -600,6 +601,7 @@ function ReceiveDialog({ token, po, onClose, onDone }: { token: string; po: any;
     },
     onSuccess: (data) => {
       setReport(data.wacReport || []);
+      setVendorBalanceAdded(Number(data.vendorBalanceAdded || 0));
       toast({ title: data.status === "received" ? "تم الاستلام الكامل" : "استلام جزئي", description: "تم تحديث المخزون والتكلفة" });
     },
     onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
@@ -652,6 +654,15 @@ function ReceiveDialog({ token, po, onClose, onDone }: { token: string; po: any;
                 <p className="text-xs text-green-700">إليك ملخص التأثير على كل منتج:</p>
               </div>
             </div>
+            {vendorBalanceAdded > 0 && (
+              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded text-sm" data-testid="text-vendor-balance-added">
+                <span className="text-lg">💰</span>
+                <div>
+                  <p className="font-bold text-amber-900">رصيد المورد زاد بـ {fmt(vendorBalanceAdded)} {report?.[0] ? "" : ""}</p>
+                  <p className="text-xs text-amber-800">يظهر الآن في صفحة "سداد مستحقات الموردين" بانتظار الدفع.</p>
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               {report.map((r, i) => (
                 <Card key={i} className="bg-blue-50 border-blue-200">
@@ -662,6 +673,11 @@ function ReceiveDialog({ token, po, onClose, onDone }: { token: string; po: any;
                       <div>متوسط التكلفة (WAC): {r.oldAvgCost} → <b className="text-blue-700">{r.newAvgCost}</b> (شراء بـ {r.unitCost})</div>
                     ) : (
                       <div className="text-orange-700">⚠️ لم يُحدَّث WAC (المنتج بلا متغيرات أو لم يُحدَّد متغير)</div>
+                    )}
+                    {r.wacWarning && (
+                      <div className="text-orange-800 bg-orange-100 rounded px-2 py-1 mt-1" data-testid={`text-wac-warning-${i}`}>
+                        ⚠️ {r.wacWarning}
+                      </div>
                     )}
                   </CardContent>
                 </Card>

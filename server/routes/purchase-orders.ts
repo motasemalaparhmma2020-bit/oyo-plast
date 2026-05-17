@@ -183,6 +183,23 @@ export function registerPurchaseOrderRoutes(app: Express, requireAdmin: Admin) {
       if (curStatus === "received") {
         return res.status(400).json({ message: "لا يمكن تعديل أمر شراء مستلَم" });
       }
+      // إصلاح Bug #3: منع state machine عكسي (sent/partial → draft)
+      if (status === "draft" && curStatus !== "draft") {
+        return res.status(400).json({ message: "لا يمكن إعادة أمر شراء إلى مسودة" });
+      }
+      // إصلاح Bug #3: منع إلغاء PO تم استلامها جزئياً (لتجنب stock وهمي + WAC غير قابل للعكس)
+      if (status === "cancelled") {
+        const partialCheck = await pool.query(
+          `SELECT COALESCE(SUM(quantity_received), 0)::int AS received_total
+           FROM purchase_order_items WHERE purchase_order_id=$1`,
+          [id]
+        );
+        if ((partialCheck.rows[0]?.received_total || 0) > 0) {
+          return res.status(400).json({
+            message: "لا يمكن إلغاء أمر شراء استُلِم جزئياً. أنشئ مرتجع يدوي أو اتصل بالدعم."
+          });
+        }
+      }
 
       const sets: string[] = [];
       const params: any[] = [];
@@ -265,6 +282,7 @@ export function registerPurchaseOrderRoutes(app: Express, requireAdmin: Admin) {
 
       const wacReport: any[] = [];
       let allFull = true;
+      let totalReceivedCost = 0; // إصلاح Bug #1: مجموع تكاليف الدفعة الحالية لتحديث balance_due
 
       for (const it of itemsR.rows) {
         const remaining = it.quantity_ordered - it.quantity_received;
@@ -280,15 +298,25 @@ export function registerPurchaseOrderRoutes(app: Express, requireAdmin: Admin) {
         }
         if (recvQty <= 0) continue;
         if (it.quantity_received + recvQty < it.quantity_ordered) allFull = false;
-        if (!it.product_id) continue; // عنصر بدون منتج (snapshot فقط) — تجاهل
+        if (!it.product_id) {
+          // إصلاح Bug #1: حتى عنصر بدون منتج له تكلفة للمورد
+          totalReceivedCost += recvQty * (Number(it.unit_cost) || 0);
+          await client.query(
+            `UPDATE purchase_order_items SET quantity_received = quantity_received + $1 WHERE id = $2`,
+            [recvQty, it.id]
+          );
+          continue;
+        }
 
         const unitCost = Number(it.unit_cost) || 0;
         const oldStock = Math.max(0, Number(it.product_stock) || 0);
+        totalReceivedCost += recvQty * unitCost; // إصلاح Bug #1
 
         // ── (1) حدّث WAC على الـ variant إن وُجد، وإلا على المنتج ككل ──
         let oldAvgCost = 0;
         let newAvgCost = 0;
         let updatedVariantLabel: string | null = null;
+        let wacWarning: string | null = null; // إصلاح Bug #4
 
         if (it.enable_smart_variants && it.smart_variants && it.variant_label) {
           let sv: any = null;
@@ -308,8 +336,17 @@ export function registerPurchaseOrderRoutes(app: Express, requireAdmin: Admin) {
                 `UPDATE products SET smart_variants = $1 WHERE id = $2`,
                 [JSON.stringify(sv), it.product_id]
               );
+            } else {
+              // إصلاح Bug #4: المتغيّر غير موجود — WAC لم يُحدَّث
+              wacWarning = `المتغيّر "${it.variant_label}" غير موجود في المنتج — WAC لم يُحدَّث (المخزون فقط)`;
             }
+          } else {
+            wacWarning = "smart_variants غير صالح JSON — WAC لم يُحدَّث";
           }
+        } else if (it.variant_label && !it.enable_smart_variants) {
+          wacWarning = "المنتج لا يستخدم Smart Variants — variant_label تُجوهل";
+        } else if (!it.variant_label && it.enable_smart_variants) {
+          wacWarning = "المنتج يستخدم Smart Variants لكن لم يُحدَّد variant_label — WAC لم يُحدَّث";
         }
 
         // ── (2) زيادة المخزون على المنتج ──
@@ -334,6 +371,7 @@ export function registerPurchaseOrderRoutes(app: Express, requireAdmin: Admin) {
           unitCost,
           newAvgCost: updatedVariantLabel ? Math.round(newAvgCost * 100) / 100 : null,
           newStock: oldStock + recvQty,
+          wacWarning, // إصلاح Bug #4: تحذير صريح في التقرير
         });
       }
 
@@ -346,8 +384,23 @@ export function registerPurchaseOrderRoutes(app: Express, requireAdmin: Admin) {
         [newStatus, id]
       );
 
+      // ── (5) إصلاح Bug #1: تحديث رصيد المورد (vendor balance_due) ──
+      // نزيد balance_due بقيمة البضاعة المستلَمة في هذه الدفعة فقط
+      // (الشحن لا يُضاف هنا — يُسوّى يدوياً عبر دفعة منفصلة عند الحاجة)
+      if (po.supplier_id && totalReceivedCost > 0) {
+        await client.query(
+          `UPDATE suppliers SET balance_due = COALESCE(balance_due, 0) + $1 WHERE id = $2`,
+          [totalReceivedCost.toFixed(2), po.supplier_id]
+        );
+      }
+
       await client.query("COMMIT");
-      res.json({ ok: true, status: newStatus, wacReport });
+      res.json({
+        ok: true,
+        status: newStatus,
+        wacReport,
+        vendorBalanceAdded: totalReceivedCost, // إصلاح Bug #1: للعرض في الواجهة
+      });
     } catch (e: any) {
       await client.query("ROLLBACK").catch(() => {});
       res.status(500).json({ message: "فشل الاستلام", details: e.message });
