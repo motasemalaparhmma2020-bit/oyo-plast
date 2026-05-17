@@ -280,6 +280,105 @@ export function pickCostFromSmartVariants(
   }
 }
 
+/**
+ * 🔒 الحساب الموثوق لسعر الوحدة على الخادم (يمنع تلاعب العميل بـ unitPrice).
+ * يعتمد على: smart_variants، Phase 4 overrides، printing_categories.
+ * يُرجع unitPrice (السعر/الوحدة) + lineTotal (السطر الكامل) + breakdown.
+ */
+export async function computeServerUnitPrice(
+  pid: number,
+  item: any
+): Promise<{ unitPrice: number; lineTotal: number; breakdown: any }> {
+  const { pool: _pool } = await import("./db");
+  const r = await _pool.query(
+    `SELECT p.price, p.smart_variants, p.printing_price_per_unit,
+            p.printing_design_fee_override, p.printing_color_price_override, p.printing_side_price_override,
+            p.printing_category_id,
+            pc.design_fee_per_mockup, pc.color_price_per_color, pc.price_per_side
+       FROM products p
+       LEFT JOIN printing_categories pc ON pc.id = p.printing_category_id
+      WHERE p.id = $1`,
+    [pid]
+  );
+  if (!r.rows.length) throw new Error(`المنتج ${pid} غير موجود`);
+  const row = r.rows[0];
+
+  const qty = Math.max(1, Number(item.quantity) || 1);
+  const selectedSize = item.selectedSize ?? null;
+  const selectedColor = item.selectedColor ?? null;
+  const selectedBagColor = item.selectedBagColor ?? null;
+
+  // (1) السعر الأساسي من smart_variants (أرخص متغير مطابق للـ label أو أرخص بالعموم)
+  let basePrice = parseFloat(String(row.price ?? "0")) || 0;
+  try {
+    const sv = typeof row.smart_variants === "string" ? JSON.parse(row.smart_variants) : row.smart_variants;
+    if (sv && Array.isArray(sv.variants) && sv.variants.length > 0) {
+      const wanted = [selectedSize, selectedColor, selectedBagColor]
+        .filter(Boolean)
+        .map((s: any) => String(s).trim().toLowerCase());
+      let matched: any = null;
+      if (wanted.length > 0) {
+        for (const v of sv.variants) {
+          const lbl = String(v.label || "").trim().toLowerCase();
+          const pr = parseFloat(String(v.price ?? "0"));
+          if (lbl && wanted.includes(lbl) && !isNaN(pr) && pr > 0) {
+            if (!matched || pr < matched._price) matched = { ...v, _price: pr };
+          }
+        }
+      }
+      if (matched) {
+        basePrice = matched._price;
+      } else {
+        const priced = sv.variants
+          .map((v: any) => parseFloat(String(v.price ?? "0")))
+          .filter((p: number) => !isNaN(p) && p > 0);
+        if (priced.length > 0) basePrice = Math.min(...priced);
+      }
+    }
+  } catch { /* ignore */ }
+
+  // (2) Phase 4 — الطباعة الفورية (designFee + extras)
+  let phase4Total = 0;
+  let designFee = 0, colorTotal = 0, sideTotal = 0;
+  if (item.customPrinting && item.designOptions) {
+    let opts: any = null;
+    try {
+      opts = typeof item.designOptions === "string" ? JSON.parse(item.designOptions) : item.designOptions;
+    } catch { opts = null; }
+    if (opts && typeof opts === "object") {
+      const colors = Math.max(1, parseInt(String(opts.colors ?? 1)) || 1);
+      const sides = Math.max(1, parseInt(String(opts.sides ?? 1)) || 1);
+      const dFee = Number(row.printing_design_fee_override ?? row.design_fee_per_mockup ?? 0) || 0;
+      const pColor = Number(row.printing_color_price_override ?? row.color_price_per_color ?? 0) || 0;
+      const pSide = Number(row.printing_side_price_override ?? row.price_per_side ?? 0) || 0;
+      designFee = dFee;
+      colorTotal = Math.max(0, colors - 1) * pColor;
+      sideTotal = Math.max(0, sides - 1) * pSide;
+      phase4Total = designFee + colorTotal + sideTotal;
+    }
+  }
+
+  // (3) طباعة قديمة (per-unit) — فقط إن لا يوجد Phase 4
+  let customPrintingPerUnit = 0;
+  if (item.customPrinting && phase4Total === 0) {
+    customPrintingPerUnit = Number(row.printing_price_per_unit ?? 0) || 0;
+  }
+
+  // (4) الطباعة الاحترافية (per-unit) — تعتمد على عرض/طول، مقبول مع حدّ علوي للسلامة
+  let proPrintingPerUnit = Number(item.printingUnitPrice ?? 0) || 0;
+  if (proPrintingPerUnit < 0) proPrintingPerUnit = 0;
+  if (proPrintingPerUnit > 100000) proPrintingPerUnit = 0; // sanity cap
+
+  const lineTotal = (basePrice + proPrintingPerUnit + customPrintingPerUnit) * qty + phase4Total;
+  const unitPrice = lineTotal / qty;
+
+  return {
+    unitPrice: Math.max(0, Math.round(unitPrice * 100) / 100),
+    lineTotal: Math.max(0, Math.round(lineTotal * 100) / 100),
+    breakdown: { basePrice, proPrintingPerUnit, customPrintingPerUnit, phase4Total, designFee, colorTotal, sideTotal, qty },
+  };
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<void> {
   await setupAuth(app);
   registerAuthRoutes(app);
@@ -3204,12 +3303,37 @@ h1{font-size:18px;color:#222;margin:4px 0;}
 
       const {
         customerName, customerEmail, customerPhone, shippingCity, shippingAddress,
-        shippingOption, shippingCost, notes, total, items, paymentMethod = "cash_on_delivery",
+        shippingOption, shippingCost, notes, items, paymentMethod = "cash_on_delivery",
         couponCode, discountAmount, subtotalBeforeDiscount,
         customerLat, customerLng, locationAccuracy, locationMethod,
       } = req.body;
       const user = (req as any).user;
       const userId = getUserId(user);
+
+      // 🔒 إعادة حساب أسعار العناصر والمجموع على الخادم (إصلاح أمني)
+      // — يتجاهل item.price/unitPrice و total من العميل ويعتمد على DB حصراً.
+      let serverSubtotal = 0;
+      if (Array.isArray(items)) {
+        for (const it of items) {
+          const pid = Number(it.productId ?? (it as any).product_id ?? it.product?.id);
+          if (!pid) {
+            return res.status(400).json({ message: "بعض المنتجات في الطلب غير صالحة" });
+          }
+          try {
+            const c = await computeServerUnitPrice(pid, it);
+            it.price = String(c.unitPrice);
+            it.unitPrice = c.unitPrice;
+            serverSubtotal += c.lineTotal;
+          } catch (e: any) {
+            return res.status(400).json({ message: `تعذّر التحقق من سعر المنتج ${pid}`, details: e.message });
+          }
+        }
+      }
+      // الشحن والخصم يبقى كما أرسله العميل (الكوبون محقّق مسبقاً في smart-pricing)
+      const safeShipping = Math.max(0, Number(shippingCost) || 0);
+      const safeDiscount = Math.max(0, Number(discountAmount) || 0);
+      const total = Math.max(0, Math.round((serverSubtotal - safeDiscount + safeShipping) * 100) / 100);
+      const serverSubtotalRounded = Math.round(serverSubtotal * 100) / 100;
 
       // ─── حماية الأرباح من الكوبونات (Smart Pricing) ───────────────────────────
       if (couponCode && Array.isArray(items) && items.length > 0) {
@@ -3314,8 +3438,8 @@ h1{font-size:18px;color:#222;margin:4px 0;}
           items,
           paymentMethod,
           couponCode: couponCode || null,
-          discountAmount: discountAmount || null,
-          subtotalBeforeDiscount: subtotalBeforeDiscount || null,
+          discountAmount: safeDiscount > 0 ? safeDiscount : null,
+          subtotalBeforeDiscount: safeDiscount > 0 ? serverSubtotalRounded : null,
           userId,
         });
       } catch (orderErr: any) {
@@ -6819,12 +6943,24 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         selectedBagColor, printColorCount, printColor1, printColor2, printColor3,
         // ── حقول الطباعة الاحترافية ──
         printingCategoryId, printWidth, printHeight, printFinish, printColorSeparation, printingUnitPrice,
-        unitPrice,
+        // ⚠️ unitPrice من العميل يُتجاهل — يُعاد حسابه على الخادم (إصلاح أمني)
         // ── رسوم التصميم من الموظف الذكي ──
         aiDesignFee,
         // ── Phase 4: خيارات الطباعة الفورية ──
         designOptions,
       } = req.body;
+
+      // 🔒 إعادة حساب unitPrice على الخادم لمنع تلاعب العميل
+      let serverUnitPrice: number | null = null;
+      try {
+        const computed = await computeServerUnitPrice(Number(productId), {
+          quantity, selectedSize, selectedColor, selectedBagColor,
+          customPrinting, designOptions, printingUnitPrice,
+        });
+        serverUnitPrice = computed.unitPrice;
+      } catch (e: any) {
+        return res.status(400).json({ message: "تعذّر التحقق من سعر المنتج", details: e.message });
+      }
 
       // هل هذه طباعة مخصصة (لا نجمع الكميات مع عناصر أخرى)
       const hasPrinting = customPrinting || printColorCount > 0 || printingCategoryId || designOptions;
@@ -6873,7 +7009,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
           printFinish: printFinish || null,
           printColorSeparation: printColorSeparation || false,
           printingUnitPrice: printingUnitPrice || null,
-          unitPrice: unitPrice || null,
+          unitPrice: serverUnitPrice != null ? String(serverUnitPrice) : null,
           aiDesignFee: aiDesignFee || null,
           designOptions: designOptions
             ? (typeof designOptions === "string" ? designOptions : JSON.stringify(designOptions))
