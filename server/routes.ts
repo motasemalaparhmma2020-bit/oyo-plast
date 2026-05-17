@@ -1866,7 +1866,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     original_price, original_price_sar, discount_percent, promotional_tags,
     has_free_shipping, enable_smart_variants, smart_variants, printing_category_id,
     printing_design_fee_override, printing_color_price_override, printing_side_price_override,
-    print_area`;
+    print_area, base_image_public_id, available_colors`;
 
   // عند أوّل تحميل، نُسخّن الكاش حتّى mapProductRow يستخدم السعر الصحيح
   getExchangeRate().catch(() => {});
@@ -1935,6 +1935,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       printArea: (() => {
         try { return r.print_area ? JSON.parse(r.print_area) : null; } catch { return null; }
       })(),
+      // Phase 6
+      baseImagePublicId: r.base_image_public_id ?? null,
+      availableColors: (() => {
+        try { return r.available_colors ? JSON.parse(r.available_colors) : null; } catch { return null; }
+      })(),
+      cloudinaryCloudName: r.base_image_public_id ? (process.env.CLOUDINARY_CLOUD_NAME || null) : null,
     enableVariantUI: r.enable_variant_ui ?? false,
     colorImages: r.color_images ?? null,
       originalPrice: r.original_price ?? null,
@@ -2339,6 +2345,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         printingSidePriceOverride: data.printingSidePriceOverride !== "" && data.printingSidePriceOverride != null ? String(data.printingSidePriceOverride) : null,
         // Phase 5: منطقة الطباعة
         printArea: data.printArea && typeof data.printArea === "object" ? JSON.stringify(data.printArea) : (typeof data.printArea === "string" && data.printArea ? data.printArea : null),
+        // Phase 6: ألوان ديناميكية
+        baseImagePublicId: typeof data.baseImagePublicId === "string" && data.baseImagePublicId ? data.baseImagePublicId : null,
+        availableColors: data.availableColors && typeof data.availableColors === "object" ? JSON.stringify(data.availableColors) : (typeof data.availableColors === "string" && data.availableColors ? data.availableColors : null),
         supplierId: data.supplierId ? Number(data.supplierId) : null,
         showReviews: data.showReviews ?? true,
         hasFreeShipping: data.hasFreeShipping ?? false,
@@ -2414,6 +2423,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "printingCategoryId", "supplierId",
         "printingDesignFeeOverride", "printingColorPriceOverride", "printingSidePriceOverride",
         "printArea",
+        "baseImagePublicId", "availableColors",
         "enableVariantUI", "colorImages",
         "promotionalTags",
         "hasFreeShipping", "enableSmartVariants", "smartVariants"
@@ -2422,6 +2432,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (Object.prototype.hasOwnProperty.call(data, "printArea")) {
         const pa = data.printArea;
         data.printArea = pa && typeof pa === "object" ? JSON.stringify(pa) : (typeof pa === "string" && pa ? pa : null);
+      }
+      // Phase 6: تطبيع availableColors
+      if (Object.prototype.hasOwnProperty.call(data, "availableColors")) {
+        const ac = data.availableColors;
+        data.availableColors = ac && typeof ac === "object" ? JSON.stringify(ac) : (typeof ac === "string" && ac ? ac : null);
       }
       const fields = allowPricingFields
         ? [...baseFields, "price", "priceSar", "originalPrice", "originalPriceSar", "discountPercent"]
@@ -4845,6 +4860,82 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       res.json(result.rows);
     } catch (e: any) {
       res.status(500).json({ message: "فشل جلب السجل" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // محفظة العميل + ملخص الحساب (للوحات الجديدة /wallet /account)
+  // ═══════════════════════════════════════════════════════════════════
+  app.get("/api/wallet", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(
+        `SELECT id, user_id as "userId", balance_yer as "balanceYer", balance_sar as "balanceSar",
+                created_at as "createdAt", updated_at as "updatedAt"
+         FROM wallets WHERE user_id=$1`,
+        [user.id]
+      );
+      if (!r.rows.length) {
+        const ins = await dbPool.query(
+          `INSERT INTO wallets (user_id, balance_yer, balance_sar) VALUES ($1, '0', '0')
+           RETURNING id, user_id as "userId", balance_yer as "balanceYer", balance_sar as "balanceSar",
+                     created_at as "createdAt", updated_at as "updatedAt"`,
+          [user.id]
+        );
+        return res.json(ins.rows[0]);
+      }
+      res.json(r.rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب المحفظة" });
+    }
+  });
+
+  app.get("/api/wallet/transactions", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(
+        `SELECT id, wallet_id as "walletId", user_id as "userId", type, amount, currency,
+                description, order_id as "orderId", created_at as "createdAt"
+         FROM wallet_transactions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50`,
+        [user.id]
+      );
+      res.json(r.rows);
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الحركات" });
+    }
+  });
+
+  app.get("/api/account/summary", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const { pool: dbPool } = await import("./db");
+      const [wRes, pRes, oRes] = await Promise.all([
+        dbPool.query(`SELECT balance_yer, balance_sar FROM wallets WHERE user_id=$1`, [user.id]),
+        dbPool.query(`SELECT points, lifetime_points FROM reward_points WHERE user_id=$1`, [user.id]),
+        dbPool.query(
+          `SELECT
+             COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE status IN ('pending','deposit_paid'))::int AS pending,
+             COUNT(*) FILTER (WHERE status IN ('delivered','completed'))::int AS completed
+           FROM orders WHERE user_id=$1`,
+          [user.id]
+        ),
+      ]);
+      const w = wRes.rows[0] || { balance_yer: "0", balance_sar: "0" };
+      const p = pRes.rows[0] || { points: 0, lifetime_points: 0 };
+      const o = oRes.rows[0] || { total: 0, pending: 0, completed: 0 };
+      res.json({
+        wallet:  { balanceYer: String(w.balance_yer ?? "0"), balanceSar: String(w.balance_sar ?? "0") },
+        points:  { current: Number(p.points ?? 0), lifetime: Number(p.lifetime_points ?? 0) },
+        orders:  { total: Number(o.total ?? 0), pending: Number(o.pending ?? 0), completed: Number(o.completed ?? 0) },
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب الملخص" });
     }
   });
 

@@ -3,7 +3,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Product, Review } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { ContactSalesButton } from "@/components/SalesChat";
 import { useSEO } from "@/hooks/use-seo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -288,6 +287,8 @@ export default function ProductDetail() {
   // ── Phase 5: المعاينة الفورية للطباعة ───────────────────────────────────
   const [logoPosition, setLogoPosition] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [previewImgAspect, setPreviewImgAspect] = useState<number>(1); // عرض / طول صورة المنتج
+  // ── Phase 6: تغيير لون الكيس عبر Cloudinary ─────────────────────────────
+  const [selectedDynamicBagColor, setSelectedDynamicBagColor] = useState<{ id: string; name: string; code: string } | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<{ dragging: boolean; offsetX: number; offsetY: number }>({ dragging: false, offsetX: 0, offsetY: 0 });
@@ -346,14 +347,29 @@ export default function ProductDetail() {
     setPrintColorSeparation(false);
     setVariantActiveImg(null);
     setCurrentImageIndex(0);
+    setSelectedDynamicBagColor(null); // Phase 6: لا يتسرّب اللون بين المنتجات
   }, [numericId]);
 
   // ── Derived Data ─────────────────────────────────────────────────────────
+  // ── Phase 6: رابط Cloudinary الديناميكي عند اختيار لون كيس ──
+  const dynamicColorImageUrl = useMemo(() => {
+    if (!product || !selectedDynamicBagColor) return null;
+    const publicId = (product as any).baseImagePublicId;
+    const cloudName = (product as any).cloudinaryCloudName;
+    if (!publicId || !cloudName) return null;
+    // e_replace_color:NEW_COLOR:white → يحوّل البكسلات البيضاء إلى اللون المطلوب
+    return `https://res.cloudinary.com/${cloudName}/image/upload/e_replace_color:${selectedDynamicBagColor.id}:white/${publicId}`;
+  }, [product, selectedDynamicBagColor]);
+
+  // الصورة الرئيسية الفعلية (مع تطبيق لون ديناميكي إن وُجد)
+  const effectiveMainImageUrl = useMemo(() => dynamicColorImageUrl || product?.imageUrl || "", [dynamicColorImageUrl, product?.imageUrl]);
+
   // ── دمج كل الصور: المنتج + متغيرات ذكية + صور الألوان ──
   const allImages = useMemo(() => {
     if (!product) return [];
     const imgs: string[] = [];
-    if (product.imageUrl) imgs.push(product.imageUrl);
+    const mainImg = dynamicColorImageUrl || product.imageUrl;
+    if (mainImg) imgs.push(mainImg);
     if (product.imageUrls?.length) product.imageUrls.forEach(u => { if (u && !imgs.includes(u)) imgs.push(u); });
     // صور المتغيرات الذكية (SHEIN-style)
     try {
@@ -376,7 +392,7 @@ export default function ProductDetail() {
       }
     } catch {}
     return imgs;
-  }, [product]);
+  }, [product, dynamicColorImageUrl]);
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ direction: 'rtl' });
   const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
@@ -658,6 +674,8 @@ export default function ProductDetail() {
           totalPrintingCost: phase4PrintingBreakdown.totalPrintingCost,
           // Phase 5: موضع الشعار على المنتج (% نسب 0-100)
           ...(logoPosition ? { logoPosition } : {}),
+          // Phase 6: لون الكيس المختار (Cloudinary)
+          ...(selectedDynamicBagColor ? { bagColor: selectedDynamicBagColor } : {}),
         },
       } : {}),
       // السعر الوحدوي المحسوب
@@ -667,7 +685,7 @@ export default function ProductDetail() {
       enableBagPrinting, selectedBagColor, printColors,
       productPrintingCat, printWidth, printHeight, printFinish, printColorSeparation, professionalPrintingUnitPrice,
       totalPrice, selectedSmartVariant, smartVariantsData, showSmartVariants,
-      hasPhase4Pricing, printingColors, printingSides, phase4PrintingBreakdown, logoPosition]);
+      hasPhase4Pricing, printingColors, printingSides, phase4PrintingBreakdown, logoPosition, selectedDynamicBagColor]);
 
   // ── Phase 5: تهيئة موضع الشعار من إعدادات المنتج عند رفع التصميم ──────
   useEffect(() => {
@@ -726,8 +744,8 @@ export default function ProductDetail() {
       ctx.textAlign = "center";
       ctx.fillText("لا يمكن تحميل صورة المنتج", W / 2, H / 2);
     };
-    bg.src = product.imageUrl;
-  }, [uploadedDesignUrl, logoPosition, product?.imageUrl]);
+    bg.src = effectiveMainImageUrl;
+  }, [uploadedDesignUrl, logoPosition, effectiveMainImageUrl]);
 
   // ── Phase 5: handlers للسحب ──────────────────────────────────────────
   const handlePreviewPointerDown = (e: React.PointerEvent) => {
@@ -942,7 +960,7 @@ export default function ProductDetail() {
               </>
             ) : (
               <div className="w-full flex items-center justify-center" style={{ height: imgH, padding: imgMode === 'contain' ? 8 : 0 }}>
-                <LazyImage src={product.imageUrl || ''} alt={product.name}
+                <LazyImage src={effectiveMainImageUrl} alt={product.name}
                   className={`w-full h-full ${imgMode === 'cover' ? 'object-cover' : 'object-contain'}`} />
               </div>
             )}
@@ -1064,10 +1082,6 @@ export default function ProductDetail() {
                 الإجمالي: <strong className="text-foreground" data-testid="text-total-price">{formatPrice(totalPrice)} {currLabel}</strong>
                 {printingCost > 0 && <span className="mr-1">(يشمل {formatPrice(printingCost)} طباعة)</span>}
               </p>
-            )}
-            {/* 🤖 زر التواصل مع موظف المبيعات الذكي — يظهر فقط للمنتجات بدون تسعير فوري (Phase 4) */}
-            {!hasPhase4Pricing && (
-              <ContactSalesButton productId={product.id} productName={product.name} />
             )}
             {/* شريط العروض الترويجية (SHEIN-style) */}
             {promoBarEnabled && (
@@ -1777,6 +1791,53 @@ export default function ProductDetail() {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* ════════════ Phase 6: اختيار لون الكيس (Cloudinary) ════════════ */}
+            {Array.isArray((product as any).availableColors) && (product as any).availableColors.length > 0 && (product as any).baseImagePublicId && (product as any).cloudinaryCloudName && (
+              <div className="rounded-xl border border-pink-300/50 bg-pink-50/40 dark:bg-pink-950/20 p-4 space-y-3" data-testid="section-bag-color-picker">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🎨</span>
+                    <span className="font-bold text-sm">اختر لون الكيس</span>
+                  </div>
+                  {selectedDynamicBagColor && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDynamicBagColor(null)}
+                      className="text-[11px] text-pink-700 dark:text-pink-300 hover:underline"
+                      data-testid="button-reset-bag-color"
+                    >
+                      إعادة للون الأصلي
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {((product as any).availableColors as Array<{id:string;name:string;code:string}>).map((c) => {
+                    const isActive = selectedDynamicBagColor?.id === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setSelectedDynamicBagColor(c)}
+                        title={c.name}
+                        className={`relative w-10 h-10 rounded-full border-2 transition-all ${isActive ? 'border-gray-900 dark:border-white scale-110 ring-2 ring-pink-400' : 'border-gray-300 dark:border-gray-600 hover:scale-105'}`}
+                        style={{ backgroundColor: c.code }}
+                        data-testid={`button-bag-color-${c.id}`}
+                      >
+                        {isActive && (
+                          <Check className="absolute inset-0 m-auto h-4 w-4 text-white mix-blend-difference" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedDynamicBagColor && (
+                  <p className="text-xs text-pink-700 dark:text-pink-300">
+                    اللون المختار: <strong>{selectedDynamicBagColor.name}</strong>
+                  </p>
+                )}
               </div>
             )}
 

@@ -65,6 +65,9 @@ import Wishlist from "@/pages/Wishlist";
 import Notifications from "@/pages/Notifications";
 import NotificationSettings from "@/pages/NotificationSettings";
 import MyAccount from "@/pages/MyAccount";
+import WalletPage from "@/pages/Wallet";
+import LoyaltyPage from "@/pages/Loyalty";
+import SettingsPage from "@/pages/Settings";
 import MyCredit from "@/pages/MyCredit";
 import MarketerCoupons from "@/pages/MarketerCoupons";
 import Printing from "@/pages/Printing";
@@ -616,6 +619,15 @@ function Router() {
             </Route>
             <Route path="/account/credit">
               <RequireAccountType><MyCredit /></RequireAccountType>
+            </Route>
+            <Route path="/wallet">
+              <RequireAccountType><WalletPage /></RequireAccountType>
+            </Route>
+            <Route path="/loyalty">
+              <RequireAccountType><LoyaltyPage /></RequireAccountType>
+            </Route>
+            <Route path="/settings">
+              <RequireAccountType><SettingsPage /></RequireAccountType>
             </Route>
             <Route path="/marketer/coupons">
               <RequireAccountType><MarketerCoupons /></RequireAccountType>

@@ -84,6 +84,9 @@ export const products = pgTable("products", {
   printingSidePriceOverride: numeric("printing_side_price_override"),     // override لسعر الوجه الإضافي
   // ── Phase 5: منطقة الطباعة للمعاينة الفورية ──────────────────────────────
   printArea: text("print_area"),  // JSON: {x, y, width, height} كنسب مئوية 0-100 على صورة المنتج
+  // ── Phase 6: تغيير لون الكيس عبر Cloudinary (المستوى ج) ─────────────────
+  baseImagePublicId: text("base_image_public_id"),  // Cloudinary public_id لصورة بيضاء قابلة للتلوين
+  availableColors: text("available_colors"),         // JSON: [{id,name,code}]
   // ── مدة التصنيع بالأيام ─────────────────────────────────────────────────────
   manufacturingDays: integer("manufacturing_days").default(0).notNull(), // 0 = جاهز فوراً
 });

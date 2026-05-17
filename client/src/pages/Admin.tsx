@@ -224,6 +224,8 @@ interface ProductFormData {
   printingColorPriceOverride: string;
   printingSidePriceOverride: string;
   printArea: { x: number; y: number; width: number; height: number } | null;
+  baseImagePublicId: string;
+  availableColors: string; // JSON كنص — يُحفظ كـ array
   tags: string;
   showReviews: boolean;
   showInPrinting: boolean;
@@ -262,6 +264,8 @@ const emptyProductForm: ProductFormData = {
   printingColorPriceOverride: "",
   printingSidePriceOverride: "",
   printArea: null,
+  baseImagePublicId: "",
+  availableColors: "",
   tags: "",
   showReviews: true,
   showInPrinting: false,
@@ -5546,6 +5550,12 @@ export default function Admin() {
           printingColorPriceOverride: numOrNull(data.printingColorPriceOverride),
           printingSidePriceOverride: numOrNull(data.printingSidePriceOverride),
           printArea: data.printArea || null,
+          baseImagePublicId: data.baseImagePublicId?.trim() || null,
+          availableColors: (() => {
+            const s = (data.availableColors || "").trim();
+            if (!s) return null;
+            try { const j = JSON.parse(s); return Array.isArray(j) ? j : null; } catch { return null; }
+          })(),
           tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
           showReviews: data.showReviews,
           showInPrinting: data.showInPrinting,
@@ -5617,6 +5627,12 @@ export default function Admin() {
         printingColorPriceOverride: numOrNull(data.printingColorPriceOverride),
         printingSidePriceOverride: numOrNull(data.printingSidePriceOverride),
         printArea: data.printArea || null,
+        baseImagePublicId: data.baseImagePublicId?.trim() || null,
+        availableColors: (() => {
+          const s = (data.availableColors || "").trim();
+          if (!s) return null;
+          try { const j = JSON.parse(s); return Array.isArray(j) ? j : null; } catch { return null; }
+        })(),
         tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
         showReviews: data.showReviews,
         showInPrinting: data.showInPrinting,
@@ -5875,6 +5891,8 @@ export default function Admin() {
       printingColorPriceOverride: (product as any).printingColorPriceOverride != null ? String((product as any).printingColorPriceOverride) : "",
       printingSidePriceOverride: (product as any).printingSidePriceOverride != null ? String((product as any).printingSidePriceOverride) : "",
       printArea: (product as any).printArea && typeof (product as any).printArea === "object" ? (product as any).printArea : null,
+      baseImagePublicId: (product as any).baseImagePublicId || "",
+      availableColors: Array.isArray((product as any).availableColors) ? JSON.stringify((product as any).availableColors, null, 2) : "",
       tags: product.tags ? product.tags.join(', ') : "",
       enableVariantUI: (product as any).enableVariantUI ?? false,
       colorImages: [],
@@ -7761,6 +7779,44 @@ export default function Admin() {
                                 مسح منطقة الطباعة
                               </button>
                             )}
+                          </div>
+
+                          {/* ── Phase 6: تغيير لون الكيس عبر Cloudinary ── */}
+                          <div className="border border-pink-200 dark:border-pink-800 rounded-xl p-3 bg-pink-50/40 dark:bg-pink-950/20">
+                            <Label className="font-bold flex items-center gap-2 mb-1 text-sm">
+                              🎨 تغيير لون الكيس ديناميكياً (Cloudinary)
+                            </Label>
+                            <p className="text-xs text-muted-foreground mb-3">
+                              لتفعيل هذه الميزة، ارفع صورة كيس <strong>أبيض ناصع بخلفية شفافة</strong> إلى Cloudinary، ثم ضع <code>public_id</code> أدناه + قائمة الألوان المتاحة.
+                            </p>
+                            <div className="space-y-3">
+                              <div>
+                                <Label htmlFor="base-image-public-id" className="text-xs">Cloudinary public_id</Label>
+                                <Input
+                                  id="base-image-public-id"
+                                  value={productForm.baseImagePublicId}
+                                  onChange={e => setProductForm({ ...productForm, baseImagePublicId: e.target.value })}
+                                  placeholder="مثال: products/bag-white-v1"
+                                  className="mt-1 font-mono text-sm"
+                                  data-testid="input-base-image-public-id"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="available-colors" className="text-xs">الألوان المتاحة (JSON)</Label>
+                                <Textarea
+                                  id="available-colors"
+                                  value={productForm.availableColors}
+                                  onChange={e => setProductForm({ ...productForm, availableColors: e.target.value })}
+                                  placeholder={'[\n  { "id": "red", "name": "أحمر", "code": "#FF0000" },\n  { "id": "blue", "name": "أزرق", "code": "#0000FF" },\n  { "id": "green", "name": "أخضر", "code": "#008000" }\n]'}
+                                  rows={6}
+                                  className="mt-1 font-mono text-xs"
+                                  data-testid="textarea-available-colors"
+                                />
+                                <p className="text-[11px] text-muted-foreground mt-1">
+                                  💡 <code>id</code> = اسم اللون بالإنجليزي يفهمه Cloudinary (red/blue/yellow/green...). <code>code</code> = HEX للعرض في الأيقونة.
+                                </p>
+                              </div>
+                            </div>
                           </div>
 
                         </div>

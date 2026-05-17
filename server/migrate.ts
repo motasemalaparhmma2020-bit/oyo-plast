@@ -676,8 +676,11 @@ export async function runMigrations(): Promise<void> {
       await client.query(`ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS design_options TEXT`);
       // Phase 5: منطقة الطباعة للمعاينة الفورية
       await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS print_area TEXT`);
+      // Phase 6: تغيير لون الكيس عبر Cloudinary
+      await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS base_image_public_id TEXT`);
+      await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS available_colors TEXT`);
     } catch (e) {
-      console.warn("[WARN] phase4/5 printing migration:", e instanceof Error ? e.message : e);
+      console.warn("[WARN] phase4/5/6 printing migration:", e instanceof Error ? e.message : e);
     }
 
     console.log("[SUCCESS] Database migrations completed");
