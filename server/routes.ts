@@ -337,9 +337,16 @@ export async function computeServerUnitPrice(
   try {
     const sv = typeof row.smart_variants === "string" ? JSON.parse(row.smart_variants) : row.smart_variants;
     if (sv && Array.isArray(sv.variants) && sv.variants.length > 0) {
-      const wanted = [selectedSize, selectedColor, selectedBagColor]
-        .filter(Boolean)
-        .map((s: any) => String(s).trim().toLowerCase());
+      // ── دعم تسميات متعدّدة في selectedSize (مثل "بندل 2 | XL") ──
+      // العميل يُمرر تسميات smart variants المختارة مفصولة بـ " | "
+      // لكي يطابق الخادم كل tokens (bundle + size + weight معاً).
+      const splitTokens = (s: any): string[] =>
+        s ? String(s).split("|").map((t: string) => t.trim().toLowerCase()).filter(Boolean) : [];
+      const wanted = [
+        ...splitTokens(selectedSize),
+        ...splitTokens(selectedColor),
+        ...splitTokens(selectedBagColor),
+      ];
       let matched: any = null;
       if (wanted.length > 0) {
         for (const v of sv.variants) {

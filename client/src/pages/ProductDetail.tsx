@@ -686,12 +686,25 @@ export default function ProductDetail() {
     // ── الخيارات الذكية لها الأولوية: استخرج تسميات اللون والمقاس من المتغيرات المختارة ──
     let svSize: string | undefined;
     let svColor: string | undefined;
+    let svBundleLabel: string | undefined;
+    let svBundleCount: number | undefined;
     if (showSmartVariants && smartVariantsData) {
       for (const [type, vid] of Object.entries(selectedSmartVariant)) {
         const v = smartVariantsData.variants.find(x => x.id === vid);
         if (!v) continue;
         if (type === 'size' || type === 'weight') svSize = v.label;
         if (type === 'color' || type === 'image') svColor = v.label;
+        if (type === 'bundle') {
+          svBundleLabel = v.label;
+          svBundleCount = Number((v as any).count) || undefined;
+        }
+      }
+      // ── 🎁 الشدة/البندل لها الأولوية المطلقة في selectedSize ──
+      // (الخادم يطابق label مع smart_variants لاستخراج السعر الصحيح)
+      // إن وُجد bundle مختار، يُكتب في selectedSize ليصل للخادم ويُحفظ في DB
+      // (مهم لإعادة الحساب في PATCH/merge)
+      if (svBundleLabel) {
+        svSize = svSize ? `${svBundleLabel} | ${svSize}` : svBundleLabel;
       }
     }
     return {
@@ -837,7 +850,7 @@ export default function ProductDetail() {
     // عندما تكون الخيارات الذكية مفعّلة، تجاهل تماماً الفحوصات القديمة
     // (لأن واجهات sizes/sizePricing القديمة مخفية ولا يمكن للمستخدم التفاعل معها)
     if (showSmartVariants && smartVariantsData) {
-      const LABELS: Record<string, string> = { color: "اللون", size: "المقاس", weight: "الوزن", image: "الخيار" };
+      const LABELS: Record<string, string> = { color: "اللون", size: "المقاس", weight: "الوزن", image: "الخيار", bundle: "الكمية (شدة/بندل)" };
       for (const type of smartVariantsData.activeTypes) {
         const typeVariants = smartVariantsData.variants.filter(v => v.type === type && v.label);
         if (typeVariants.length > 0 && !selectedSmartVariant[type]) {
