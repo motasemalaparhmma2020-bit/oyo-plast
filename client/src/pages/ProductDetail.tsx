@@ -297,6 +297,14 @@ export default function ProductDetail() {
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<{ dragging: boolean; offsetX: number; offsetY: number }>({ dragging: false, offsetX: 0, offsetY: 0 });
+  // ── Phase 2 UX Revamp (May 18, 2026): main-image preview + ink chips ─────
+  const mainPreviewContainerRef = useRef<HTMLDivElement | null>(null);
+  const mainDragStateRef = useRef<{ dragging: boolean; offsetX: number; offsetY: number }>({ dragging: false, offsetX: 0, offsetY: 0 });
+  const [showUploadZone, setShowUploadZone] = useState(false);
+  const [previewPhase, setPreviewPhase] = useState<'idle' | 'countdown' | 'active'>('idle');
+  const [previewCountdown, setPreviewCountdown] = useState(3);
+  const [selectedInkColor, setSelectedInkColor] = useState<{ name: string; hex: string } | null>(null);
+  const [quantityDefaultApplied, setQuantityDefaultApplied] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [variantActiveImg, setVariantActiveImg]   = useState<string | null>(null);
   const [promoBarOpen, setPromoBarOpen]           = useState(false);
@@ -352,6 +360,11 @@ export default function ProductDetail() {
     setEnableCustomPrinting(false);
     setEnableBagPrinting(false);
     setSelectedBagColor(null);
+    setShowUploadZone(false);
+    setPreviewPhase('idle');
+    setPreviewCountdown(3);
+    setSelectedInkColor(null);
+    setQuantityDefaultApplied(false);
     setPrintColors([""]);
     setPrintWidth("");
     setPrintHeight("");
@@ -434,7 +447,7 @@ export default function ProductDetail() {
     marketerCommissionPercent: number | null;
     isActive: boolean; sortOrder: number;
   }
-  const { data: volumeOffers = [] } = useQuery<VolumeOffer[]>({
+  const { data: volumeOffers = [], isSuccess: volumeOffersLoaded } = useQuery<VolumeOffer[]>({
     queryKey: ['/api/products', id, 'volume-offers'],
     queryFn: async () => {
       const res = await fetch(`/api/products/${numericId}/volume-offers`);
@@ -850,6 +863,118 @@ export default function ProductDetail() {
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
   };
 
+  // ── Phase 2 UX: drag handlers للسحب على الصورة الرئيسية ─────────────────
+  const handleMainPreviewPointerDown = (e: React.PointerEvent) => {
+    if (!logoPosition || !mainPreviewContainerRef.current) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const rect = mainPreviewContainerRef.current.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * 100;
+    const py = ((e.clientY - rect.top) / rect.height) * 100;
+    mainDragStateRef.current = { dragging: true, offsetX: px - logoPosition.x, offsetY: py - logoPosition.y };
+  };
+  const handleMainPreviewPointerMove = (e: React.PointerEvent) => {
+    if (!mainDragStateRef.current.dragging || !logoPosition || !mainPreviewContainerRef.current) return;
+    const rect = mainPreviewContainerRef.current.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * 100;
+    const py = ((e.clientY - rect.top) / rect.height) * 100;
+    let newX = px - mainDragStateRef.current.offsetX;
+    let newY = py - mainDragStateRef.current.offsetY;
+    newX = Math.max(0, Math.min(100 - logoPosition.width, newX));
+    newY = Math.max(0, Math.min(100 - logoPosition.height, newY));
+    setLogoPosition({ ...logoPosition, x: newX, y: newY });
+  };
+  const handleMainPreviewPointerUp = (e: React.PointerEvent) => {
+    mainDragStateRef.current.dragging = false;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+  };
+
+  // ── Phase 2: عدّاد 3 ثواني بعد رفع التصميم ──────────────────────────────
+  useEffect(() => {
+    if (!uploadedDesignUrl) { setPreviewPhase('idle'); setPreviewCountdown(3); return; }
+    if (previewPhase !== 'idle') return;
+    setPreviewPhase('countdown');
+    setPreviewCountdown(3);
+    let n = 3;
+    const t = setInterval(() => {
+      n -= 1;
+      setPreviewCountdown(n);
+      if (n <= 0) {
+        clearInterval(t);
+        setPreviewPhase('active');
+        if (!enableCustomPrinting) setEnableCustomPrinting(true);
+      }
+    }, 1000);
+    return () => clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploadedDesignUrl]);
+
+  // ── Phase 2: الكمية الافتراضية = أصغر عرض كمية متاح (يُطبَّق مرة واحدة) ──
+  useEffect(() => {
+    if (quantityDefaultApplied) return;
+    if (sortedOffers.length === 0) return;
+    const minQ = sortedOffers[0].minQuantity;
+    if (minQ && minQ > 1) setQuantity(minQ);
+    setQuantityDefaultApplied(true);
+  }, [sortedOffers, quantityDefaultApplied]);
+
+  // ── Phase 2: تنبيه الأدمن للمنتجات التي لا تحتوي عروض كميات ─────────────
+  // يعمل فقط بعد اكتمال fetch (isSuccess) لتجنّب التنبيهات الكاذبة
+  useEffect(() => {
+    if (!product?.id) return;
+    if (!volumeOffersLoaded) return;
+    if (sortedOffers.length > 0) return;
+    const key = `no-volume-offers-notified-${product.id}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, '1');
+    fetch('/api/admin/notify-missing-volume-offers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productId: product.id, productName: product.name }),
+    }).catch(() => { /* silent */ });
+  }, [product?.id, product?.name, volumeOffersLoaded, sortedOffers.length]);
+
+  // ── Phase 2: قائمة ألوان حبر الطباعة الجاهزة (chips) ────────────────────
+  const inkColorPalette = useMemo(() => ([
+    { name: 'أسود',  hex: '#1a1a1a' },
+    { name: 'أبيض',  hex: '#FFFFFF' },
+    { name: 'ذهبي',  hex: '#D4AF37' },
+    { name: 'فضي',   hex: '#C0C0C0' },
+    { name: 'أحمر',  hex: '#EF4444' },
+    { name: 'أزرق',  hex: '#3B82F6' },
+    { name: 'أخضر',  hex: '#22C55E' },
+    { name: 'وردي',  hex: '#EC4899' },
+    { name: 'برتقالي', hex: '#F97316' },
+  ]), []);
+
+  // ── Phase 2: نصيحة التباين الذكية ───────────────────────────────────────
+  const isHexDark = (hex: string): boolean => {
+    const h = hex.replace('#', '');
+    const r = parseInt(h.substring(0, 2), 16) || 0;
+    const g = parseInt(h.substring(2, 4), 16) || 0;
+    const b = parseInt(h.substring(4, 6), 16) || 0;
+    const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+    return yiq < 128;
+  };
+  const smartContrastTip = useMemo(() => {
+    if (!selectedDynamicBagColor || !selectedInkColor) return null;
+    const bagDark = isHexDark(selectedDynamicBagColor.code);
+    const inkDark = isHexDark(selectedInkColor.hex);
+    if (bagDark === inkDark) {
+      return { good: false, text: `⚠️ ${selectedInkColor.name} على ${selectedDynamicBagColor.name} قد لا يكون واضحاً — جرّب لوناً أكثر تبايناً` };
+    }
+    return { good: true, text: `✨ ${selectedInkColor.name} على ${selectedDynamicBagColor.name} يبرز بشكل احترافي` };
+  }, [selectedDynamicBagColor, selectedInkColor]);
+
+  // ── Phase 2: مزامنة selectedInkColor مع printColors[0] (للتوافق مع cart) ─
+  // عند إلغاء الاختيار يُمسح اللون الأول أيضاً لتجنّب stale state
+  useEffect(() => {
+    setPrintColors(prev => {
+      const n = [...prev];
+      n[0] = selectedInkColor ? selectedInkColor.name : "";
+      return n;
+    });
+  }, [selectedInkColor]);
+
   // ── التحقق من اختيار المقاس قبل الإضافة للسلة ──
   const validateSelection = (): string | null => {
     // عندما تكون الخيارات الذكية مفعّلة، تجاهل تماماً الفحوصات القديمة
@@ -1088,6 +1213,59 @@ export default function ProductDetail() {
             {effectiveDiscount > 0 && (
               <div className="absolute top-3 left-3 bg-red-500 text-white rounded-full w-10 h-10 flex items-center justify-center font-extrabold text-xs shadow-lg">
                 -{effectiveDiscount}%
+              </div>
+            )}
+            {/* ── Phase 2 UX: عدّاد المعاينة فوق الصورة (مُقيّد بارتفاع الصورة فقط) */}
+            {previewPhase === 'countdown' && uploadedDesignUrl && (
+              <div
+                className="absolute left-0 right-0 top-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-none"
+                style={{ height: imgH }}
+                data-testid="overlay-preview-countdown"
+              >
+                <div className="text-white text-center">
+                  <div className="text-7xl font-black mb-2 animate-pulse" data-testid="text-preview-countdown">{previewCountdown}</div>
+                  <div className="text-sm">جارٍ تجهيز المعاينة الفورية…</div>
+                </div>
+              </div>
+            )}
+            {/* ── Phase 2 UX: شعار العميل مرسوم على الصورة الرئيسية (مُقيّد بارتفاع الصورة) */}
+            {previewPhase === 'active' && uploadedDesignUrl && logoPosition && (
+              <div
+                ref={mainPreviewContainerRef}
+                className="absolute left-0 right-0 top-0 z-[5]"
+                style={{ touchAction: 'none', height: imgH }}
+                data-testid="container-main-image-preview"
+              >
+                <img
+                  src={uploadedDesignUrl}
+                  alt="logo preview"
+                  className="absolute pointer-events-none select-none"
+                  style={{
+                    left: `${logoPosition.x}%`,
+                    top: `${logoPosition.y}%`,
+                    width: `${logoPosition.width}%`,
+                    height: `${logoPosition.height}%`,
+                    objectFit: 'contain',
+                  }}
+                  data-testid="img-logo-on-main"
+                />
+                <div
+                  className="absolute cursor-move border-2 border-dashed border-purple-500/80 hover:border-purple-600 transition-colors rounded-md"
+                  style={{
+                    left: `${logoPosition.x}%`,
+                    top: `${logoPosition.y}%`,
+                    width: `${logoPosition.width}%`,
+                    height: `${logoPosition.height}%`,
+                  }}
+                  onPointerDown={handleMainPreviewPointerDown}
+                  onPointerMove={handleMainPreviewPointerMove}
+                  onPointerUp={handleMainPreviewPointerUp}
+                  onPointerCancel={handleMainPreviewPointerUp}
+                  data-testid="drag-main-logo-overlay"
+                />
+                <div className="absolute bottom-2 right-2 bg-purple-600 text-white text-[10px] px-2 py-1 rounded-full shadow-lg pointer-events-none">
+                  ✋ اسحب الشعار لتغيير موضعه
+                </div>
               </div>
             )}
             {/* Thumbnails */}
@@ -1822,11 +2000,183 @@ export default function ProductDetail() {
         const hasDesignUpload = product.allowDesignUpload;
         if (!hasBagPrinting && !hasProfPrinting && !hasDesignUpload) return null;
 
+        // ── Phase 2 UX Revamp: ألوان الكيس Cloudinary المتاحة ─────────────
+        const cloudBagColors = ((product as any).availableColors || []) as Array<{id:string;name:string;code:string}>;
+        const hasCloudBagColors = cloudBagColors.length > 0 && (product as any).baseImagePublicId && (product as any).cloudinaryCloudName;
+
         return (
           <div key="printing" className="px-4 space-y-3" data-testid="section-printing">
 
-            {/* ════════════ طباعة الأكياس المخصصة ════════════ */}
+            {/* ════════ Phase 2 UX: لوحة الطباعة البسيطة الجديدة ════════ */}
+            {hasDesignUpload && (
+              <div className="rounded-2xl border-2 border-purple-300 dark:border-purple-700 bg-gradient-to-br from-purple-50 via-white to-pink-50 dark:from-purple-950/30 dark:via-gray-900 dark:to-pink-950/30 p-4 space-y-3 shadow-sm" data-testid="section-quick-print">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">🖨️</span>
+                  <div>
+                    <h3 className="font-extrabold text-sm">طباعة شعارك على المنتج</h3>
+                    <p className="text-[11px] text-muted-foreground">ارفع شعارك وشاهد المعاينة الفورية مباشرة على المنتج</p>
+                  </div>
+                </div>
+
+                {/* الزر الأساسي — يظهر فقط قبل بدء الرفع */}
+                {!showUploadZone && !uploadedDesignUrl && (
+                  <Button
+                    size="lg"
+                    onClick={() => { setShowUploadZone(true); setTimeout(() => fileInputRef.current?.click(), 100); }}
+                    className="w-full h-14 text-base font-extrabold bg-gradient-to-l from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-lg shadow-purple-500/30 rounded-xl"
+                    data-testid="button-start-preview">
+                    📸 اضغط هنا للمعاينة الفورية
+                  </Button>
+                )}
+
+                {/* منطقة الرفع */}
+                {(showUploadZone || uploadedDesignUrl) && (
+                  <div
+                    className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${uploadedDesignUrl ? 'border-green-400 bg-green-50/60 dark:bg-green-950/20' : 'border-purple-400 bg-purple-50/60 dark:bg-purple-950/20 hover:border-purple-500'}`}
+                    onClick={() => fileInputRef.current?.click()}
+                    data-testid="zone-design-upload">
+                    <input ref={fileInputRef} type="file" accept="image/*,.pdf,.ai,.psd"
+                      onChange={handleDesignUpload} className="hidden" data-testid="input-design-upload" />
+                    {isUploadingDesign ? (
+                      <div className="flex items-center justify-center gap-2 text-purple-700 dark:text-purple-300">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span className="text-sm font-bold">جارٍ رفع التصميم…</span>
+                      </div>
+                    ) : uploadedFile ? (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-center gap-2 text-green-700 dark:text-green-300">
+                          <Check className="h-5 w-5" />
+                          <span className="text-sm font-bold truncate max-w-[200px]">{uploadedFile.name}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setUploadedFile(null);
+                            setUploadedDesignUrl(null);
+                            setPreviewPhase('idle');
+                            setPreviewCountdown(3);
+                            setEnableCustomPrinting(false);
+                            setLogoPosition(null);
+                          }}
+                          className="text-[11px] text-purple-700 dark:text-purple-300 hover:underline"
+                          data-testid="button-change-design">
+                          تغيير التصميم
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-purple-700 dark:text-purple-300">
+                        <Upload className="h-6 w-6 mx-auto mb-1" />
+                        <p className="text-sm font-bold">اضغط لرفع التصميم</p>
+                        <p className="text-[10px] text-muted-foreground mt-1">PDF · PNG · JPG · AI · PSD</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* شريط الحجم — يظهر بعد اكتمال المعاينة */}
+                {previewPhase === 'active' && logoPosition && (
+                  <div className="bg-white dark:bg-gray-900 rounded-lg border border-purple-200 dark:border-purple-800 p-2.5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-bold text-purple-700 dark:text-purple-300">📏 حجم الشعار</span>
+                      <span className="mr-auto text-xs font-bold text-purple-700 dark:text-purple-300" data-testid="text-logo-size-percent">
+                        {Math.round(logoPosition.width)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range" min={10} max={90} step={1}
+                      value={logoPosition.width}
+                      onChange={e => {
+                        const newSize = Number(e.target.value);
+                        setLogoPosition({
+                          ...logoPosition,
+                          width: newSize, height: newSize,
+                          x: Math.min(logoPosition.x, 100 - newSize),
+                          y: Math.min(logoPosition.y, 100 - newSize),
+                        });
+                      }}
+                      className="w-full accent-purple-600"
+                      data-testid="slider-logo-size"
+                    />
+                    <p className="text-[10px] text-muted-foreground text-center mt-1">✋ اسحب الشعار على الصورة لتغيير موضعه</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ════════ Phase 2 UX: ألوان الكيس (Cloudinary + قديم) ════════ */}
+            {hasCloudBagColors && (
+              <div className="rounded-2xl border border-sky-300 dark:border-sky-700 bg-sky-50/60 dark:bg-sky-950/20 p-4 space-y-2" data-testid="section-bag-color-picker">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🎨</span>
+                  <span className="font-bold text-sm">لون الكيس</span>
+                  {selectedDynamicBagColor && (
+                    <span className="text-[11px] bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 px-2 py-0.5 rounded-full font-semibold mr-auto">
+                      {selectedDynamicBagColor.name}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {cloudBagColors.map((c) => {
+                    const isActive = selectedDynamicBagColor?.id === c.id;
+                    return (
+                      <button key={c.id} type="button"
+                        onClick={() => setSelectedDynamicBagColor(isActive ? null : c)}
+                        title={c.name}
+                        className={`relative w-10 h-10 rounded-full border-2 transition-all ${isActive ? 'border-gray-900 dark:border-white scale-110 ring-2 ring-sky-400' : 'border-gray-300 dark:border-gray-600 hover:scale-105'}`}
+                        style={{ backgroundColor: c.code }}
+                        data-testid={`button-bag-color-${c.id}`}>
+                        {isActive && <Check className="absolute inset-0 m-auto h-4 w-4 text-white mix-blend-difference" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ════════ Phase 2 UX: لون الحبر (chips بدل text input) ════════ */}
             {hasBagPrinting && (
+              <div className="rounded-2xl border border-orange-300 dark:border-orange-700 bg-orange-50/60 dark:bg-orange-950/20 p-4 space-y-2" data-testid="section-ink-color">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🖊️</span>
+                  <span className="font-bold text-sm">لون الطباعة (الحبر)</span>
+                  {selectedInkColor && (
+                    <span className="text-[11px] bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded-full font-semibold mr-auto">
+                      {selectedInkColor.name}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {inkColorPalette.map((ink) => {
+                    const isActive = selectedInkColor?.name === ink.name;
+                    return (
+                      <button key={ink.name} type="button"
+                        onClick={() => setSelectedInkColor(isActive ? null : ink)}
+                        title={ink.name}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-all ${isActive ? "border-orange-500 shadow-md ring-2 ring-orange-200 dark:ring-orange-800 bg-white dark:bg-gray-900" : "border-border bg-white/80 dark:bg-gray-900/60 hover:border-orange-400"}`}
+                        data-testid={`button-ink-color-${ink.name}`}>
+                        <span className="w-4 h-4 rounded-full border border-black/15 shadow-sm" style={{ backgroundColor: ink.hex }} />
+                        {ink.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ════════ Phase 2 UX: نصيحة التباين الذكية ════════ */}
+            {smartContrastTip && (
+              <div
+                className={`rounded-xl p-3 text-sm font-semibold ${smartContrastTip.good
+                  ? 'bg-gradient-to-l from-purple-100 to-pink-100 dark:from-purple-900/40 dark:to-pink-900/40 text-purple-800 dark:text-purple-200 border border-purple-300 dark:border-purple-700'
+                  : 'bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700'}`}
+                data-testid="banner-smart-contrast-tip">
+                {smartContrastTip.text}
+              </div>
+            )}
+
+            {/* ════════ القسم القديم — مخفي لكن محفوظ للتوافق ════════ */}
+            {false && hasBagPrinting && (
               <div className="rounded-xl border border-cyan-300/60 bg-cyan-50/40 dark:bg-cyan-950/20 overflow-hidden">
                 <button
                   className="w-full flex items-center gap-2 px-4 py-3 text-right"
@@ -2046,9 +2396,9 @@ export default function ProductDetail() {
               </div>
             )}
 
-            {/* ════════════ Phase 6: اختيار لون الكيس (Cloudinary) ════════════ */}
-            {Array.isArray((product as any).availableColors) && (product as any).availableColors.length > 0 && (product as any).baseImagePublicId && (product as any).cloudinaryCloudName && (
-              <div className="rounded-xl border border-pink-300/50 bg-pink-50/40 dark:bg-pink-950/20 p-4 space-y-3" data-testid="section-bag-color-picker">
+            {/* ════════════ Phase 6 — القديم — مخفي (مُكرَّر في القسم الجديد أعلاه) ════════════ */}
+            {false && Array.isArray((product as any).availableColors) && (product as any).availableColors.length > 0 && (product as any).baseImagePublicId && (product as any).cloudinaryCloudName && (
+              <div className="rounded-xl border border-pink-300/50 bg-pink-50/40 dark:bg-pink-950/20 p-4 space-y-3" data-testid="section-bag-color-picker-old">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">🎨</span>
@@ -2093,9 +2443,9 @@ export default function ProductDetail() {
               </div>
             )}
 
-            {/* ════════════ رفع ملف التصميم ════════════ */}
-            {hasDesignUpload && (
-              <div className="rounded-xl border border-blue-300/50 bg-blue-50/40 dark:bg-blue-950/20 p-4 space-y-2">
+            {/* ════════════ رفع ملف التصميم — القديم — مخفي ════════════ */}
+            {false && hasDesignUpload && (
+              <div className="rounded-xl border border-blue-300/50 bg-blue-50/40 dark:bg-blue-950/20 p-4 space-y-2" data-testid="section-design-upload-old">
                 <div className="flex items-center gap-2">
                   <Upload className="h-4 w-4 text-blue-600" />
                   <span className="font-bold text-sm">ارفع ملف التصميم</span>

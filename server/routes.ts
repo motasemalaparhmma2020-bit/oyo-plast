@@ -1090,6 +1090,48 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ─── فك قفل الترحيل بالقوة (admin only) ─────────────────────────────
   // يستخدم في حالة استثنائية: عملية ترحيل سابقة انقطعت لكن القفل بقي عالقاً
   // (مثل crash لـ instance قديم في autoscale)
+  // ── Phase 2 UX: تنبيه الأدمن لمنتج بدون عروض كميات (May 18, 2026) ──────
+  // مفتوح للعملاء لأنه يُستدعى تلقائياً من ProductDetail عند فتح منتج بدون عروض،
+  // لكنه يستخدم throttling داخلي قوي (مرة كل ساعة لكل productId) لمنع الـ spam.
+  const lastNotifyByProduct = new Map<number, number>();
+  const NOTIFY_THROTTLE_MS = 60 * 60 * 1000; // ساعة
+  app.post("/api/admin/notify-missing-volume-offers", async (req, res) => {
+    try {
+      const { productId, productName } = req.body || {};
+      const pid = Number(productId);
+      if (!Number.isFinite(pid) || pid <= 0) return res.status(400).json({ error: "invalid productId" });
+      const name = String(productName || "").trim().slice(0, 200);
+      if (!name) return res.status(400).json({ error: "missing productName" });
+      // throttle: تجاهل بصمت إذا أُرسل تنبيه لنفس المنتج خلال آخر ساعة
+      const last = lastNotifyByProduct.get(pid) || 0;
+      const now = Date.now();
+      if (now - last < NOTIFY_THROTTLE_MS) {
+        return res.json({ ok: true, throttled: true });
+      }
+      // تحقق أن المنتج موجود فعلاً وأنه بلا عروض (دفاع ضد التزييف)
+      const { pool } = await import("./db");
+      const { rows: prodRows } = await pool.query(`SELECT id, name FROM products WHERE id=$1 LIMIT 1`, [pid]);
+      if (prodRows.length === 0) return res.status(404).json({ error: "product not found" });
+      const { rows: offerRows } = await pool.query(
+        `SELECT 1 FROM product_volume_offers WHERE product_id=$1 AND is_active=true LIMIT 1`,
+        [pid]
+      );
+      if (offerRows.length > 0) return res.json({ ok: true, hasOffers: true });
+      lastNotifyByProduct.set(pid, now);
+      const { notifyStaff } = await import("./lib/staff-notify");
+      await notifyStaff({
+        roles: ["owner", "product_manager"],
+        title: "⚠️ منتج بدون عروض كميات",
+        message: `المنتج "${prodRows[0].name}" (#${pid}) لا يحوي عروض كميات. يُعرض للعميل بسعر القطعة الأصلية فقط. يُنصح بإضافة عروض كميات.`,
+        type: "system",
+      });
+      res.json({ ok: true });
+    } catch (e: any) {
+      console.error("notify-missing-volume-offers error:", e.message);
+      res.status(500).json({ error: "notify failed" });
+    }
+  });
+
   app.post("/api/admin/migrate-base64-images/force-unlock", requireAdmin, async (_req, res) => {
     const LOCK_KEY = 4242042042;
     const { pool: dbPool } = await import("./db");
