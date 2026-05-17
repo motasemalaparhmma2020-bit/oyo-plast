@@ -152,5 +152,10 @@ OYO PLAST is a comprehensive e-commerce platform for plastic printing and suppli
 - **UI (`client/src/pages/AdminAIAgents.tsx`):** صفحة `/admin/ai-agents` بثلاث تبويبات (شبكة الوكلاء مع شارة pending + أزرار chat/edit, الإجراءات المعلّقة مع approve/reject, تقرير راشد مع زر توليد فوري). كل الطلبات تستخدم `adminFetch`/`adminApiRequest` التي تحقن `x-admin-token` من localStorage تلقائياً. رابط فتح من تبويب "المخزون" في `Admin.tsx`.
 - **Limitation:** DeepSeek يتطلب رصيداً مدفوعاً (حالياً 402 Insufficient Balance) — الوكلاء المعتمدون على Gemini يعملون فوراً (ليلى/ماجد/عمر/أوبو). راشد يعمل بالحقائق ولا يخترع.
 
+### Task 9: توثيق صلاحيات الفريق (May 17, 2026)
+- **الملف:** `docs/STAFF_PERMISSIONS.md` — مرجع موحّد بالعربية لكل ما يخصّ الموظفين.
+- **يحتوي:** 5 أدوار (owner/product_manager/order_manager/finance/delivery) + جدول صلاحيات تفصيلي لكل دور (يستطيع/لا يستطيع) + endpoints محمية + خطوات إنشاء/تعطيل الموظف + middleware `requireStaff(allowedRoles[])` + سجل audit + أفضل الممارسات (least-privilege, password rotation, 2FA roadmap) + ملفات الكود المرجعية.
+- **الهدف:** مرجع المالك عند توظيف أحد جديد، ومرجع المطوّر عند إضافة endpoint جديد.
+
 ## History
 Detailed session-by-session changelog is in `docs/CHANGELOG.md` (Visual Search v1–v5.1, April 2026 hardening, Session April 30 UX polish, Session May 16 bundle variant + smart back button).
