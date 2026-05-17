@@ -74,6 +74,7 @@ import LoyaltyPage from "@/pages/Loyalty";
 import SettingsPage from "@/pages/Settings";
 import MyCredit from "@/pages/MyCredit";
 import MarketerCoupons from "@/pages/MarketerCoupons";
+import MyCouponsPage from "@/pages/MyCoupons";
 import Printing from "@/pages/Printing";
 import StaffPortal from "@/pages/StaffPortal";
 import SupplierPortal from "@/pages/SupplierPortal";
@@ -640,6 +641,9 @@ function Router() {
             </Route>
             <Route path="/marketer/coupons">
               <RequireAccountType><MarketerCoupons /></RequireAccountType>
+            </Route>
+            <Route path="/my-coupons">
+              <RequireAccountType><MyCouponsPage /></RequireAccountType>
             </Route>
             <Route path="/printing" component={Printing} />
             <Route path="/staff" component={StaffGate} />

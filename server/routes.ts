@@ -5213,16 +5213,27 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         [user.id]
       );
       if (!r.rows.length) {
-        const ins = await dbPool.query(
-          `INSERT INTO wallets (user_id, balance_yer, balance_sar) VALUES ($1, '0', '0')
-           RETURNING id, user_id as "userId", balance_yer as "balanceYer", balance_sar as "balanceSar",
-                     created_at as "createdAt", updated_at as "updatedAt"`,
-          [user.id]
-        );
-        return res.json(ins.rows[0]);
+        try {
+          const ins = await dbPool.query(
+            `INSERT INTO wallets (user_id, balance_yer, balance_sar) VALUES ($1, '0', '0')
+             ON CONFLICT (user_id) DO UPDATE SET updated_at=NOW()
+             RETURNING id, user_id as "userId", balance_yer as "balanceYer", balance_sar as "balanceSar",
+                       created_at as "createdAt", updated_at as "updatedAt"`,
+            [user.id]
+          );
+          return res.json(ins.rows[0]);
+        } catch (insertErr: any) {
+          // FK error or race — return empty wallet representation gracefully
+          console.warn("[/api/wallet] auto-create failed:", insertErr.message);
+          return res.json({
+            id: 0, userId: user.id, balanceYer: "0", balanceSar: "0",
+            createdAt: null, updatedAt: null,
+          });
+        }
       }
       res.json(r.rows[0]);
     } catch (e: any) {
+      console.error("[/api/wallet] error:", e.message, e.stack);
       res.status(500).json({ message: "فشل جلب المحفظة" });
     }
   });
@@ -5271,6 +5282,39 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       });
     } catch (e: any) {
       res.status(500).json({ message: "فشل جلب الملخص" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // كوبونات العميل (للصفحة /my-coupons) — تجميع من أوامر سابقة
+  // ═══════════════════════════════════════════════════════════════════
+  app.get("/api/my/coupons", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(
+        `SELECT
+           coupon_code AS code,
+           COUNT(*)::int AS "usageCount",
+           COALESCE(SUM(COALESCE(discount_amount, 0)), 0)::numeric AS "totalDiscount",
+           MAX(created_at) AS "lastUsedAt"
+         FROM orders
+         WHERE user_id=$1 AND coupon_code IS NOT NULL AND coupon_code <> ''
+         GROUP BY coupon_code
+         ORDER BY MAX(created_at) DESC`,
+        [user.id]
+      );
+      const rows = r.rows.map((row: any) => ({
+        code: String(row.code),
+        usageCount: Number(row.usageCount || 0),
+        totalDiscount: Number(row.totalDiscount || 0),
+        lastUsedAt: row.lastUsedAt ? new Date(row.lastUsedAt).toISOString() : null,
+      }));
+      res.json(rows);
+    } catch (e: any) {
+      console.error("[/api/my/coupons] error:", e.message);
+      res.status(500).json({ message: "فشل جلب الكوبونات" });
     }
   });
 

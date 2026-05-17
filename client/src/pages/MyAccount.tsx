@@ -145,7 +145,7 @@ export default function MyAccount() {
     { icon: MapPin,       label: "عناويني",      href: "/addresses",         color: "text-indigo-600", bg: "bg-indigo-100 dark:bg-indigo-950/40", testid: "tool-addresses" },
     { icon: User,         label: "ملفي الشخصي",  href: "/profile",           color: "text-cyan-600",   bg: "bg-cyan-100 dark:bg-cyan-950/40",     testid: "tool-profile" },
     { icon: Bell,         label: "إشعاراتي",     href: "/notifications",     color: "text-purple-600", bg: "bg-purple-100 dark:bg-purple-950/40", testid: "tool-notifications" },
-    { icon: Ticket,       label: "كوبوناتي",     href: "/marketer/coupons",  color: "text-rose-600",   bg: "bg-rose-100 dark:bg-rose-950/40",     testid: "tool-coupons" },
+    { icon: Ticket,       label: "كوبوناتي",     href: "/my-coupons",        color: "text-rose-600",   bg: "bg-rose-100 dark:bg-rose-950/40",     testid: "tool-coupons" },
     { icon: Wallet,       label: "محفظتي",       href: "/wallet",            color: "text-emerald-600",bg: "bg-emerald-100 dark:bg-emerald-950/40", testid: "tool-wallet" },
     { icon: Award,        label: "نقاطي",        href: "/loyalty",           color: "text-amber-600",  bg: "bg-amber-100 dark:bg-amber-950/40",   testid: "tool-loyalty" },
     { icon: CreditCard,   label: "الائتمان",     href: "/account/credit",    color: "text-orange-600", bg: "bg-orange-100 dark:bg-orange-950/40", testid: "tool-credit" },
@@ -159,7 +159,7 @@ export default function MyAccount() {
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 pb-24" dir="rtl">
       {/* ──────── Hero Header ──────── */}
       <div className="bg-gradient-to-br from-[#1976D2] via-[#2196F3] to-[#42A5F5] text-white">
-        <div className="container max-w-2xl mx-auto px-4 pt-3 pb-8 relative">
+        <div className="container max-w-2xl mx-auto px-4 pt-3 pb-6 relative">
           <div className="flex items-center justify-between mb-3">
             <Button
               variant="ghost" size="icon"
