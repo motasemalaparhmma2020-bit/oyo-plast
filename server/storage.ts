@@ -527,6 +527,9 @@ export class DatabaseStorage implements IStorage {
           customPrinting: item.customPrinting ?? (item as any).custom_printing ?? false,
           designNotes: item.designNotes ?? (item as any).design_notes ?? null,
           designFileUrl: item.designFileUrl ?? (item as any).design_file_url ?? null,
+          designOptions: item.designOptions
+            ? (typeof item.designOptions === "string" ? item.designOptions : JSON.stringify(item.designOptions))
+            : ((item as any).design_options ?? null),
           productName,
           productImage,
           costPriceAtOrder,

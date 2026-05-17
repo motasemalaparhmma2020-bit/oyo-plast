@@ -282,6 +282,9 @@ export default function ProductDetail() {
   const [isUploadingDesign, setIsUploadingDesign] = useState(false);
   const [designNotes, setDesignNotes]     = useState("");
   const [enableCustomPrinting, setEnableCustomPrinting] = useState(false);
+  // ── Phase 4: حاسبة الطباعة الفورية ──────────────────────────────────────
+  const [printingColors, setPrintingColors] = useState<number>(1);
+  const [printingSides, setPrintingSides]   = useState<number>(1);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [variantActiveImg, setVariantActiveImg]   = useState<string | null>(null);
   const [promoBarOpen, setPromoBarOpen]           = useState(false);
@@ -542,9 +545,48 @@ export default function ProductDetail() {
     enableCustomPrinting && product?.printingPricePerUnit ? Number(product.printingPricePerUnit) * quantity : 0,
     [enableCustomPrinting, product?.printingPricePerUnit, quantity]);
 
+  // ── Phase 4: تسعير الطباعة الفوري (Hybrid Override) ─────────────────────
+  // المنطق: override المنتج ?? قيمة الفئة ?? 0
+  const printingPricing = useMemo(() => {
+    const designFee = Number(
+      (product as any)?.printingDesignFeeOverride ??
+      productPrintingCat?.designFeePerMockup ?? 0
+    ) || 0;
+    const pricePerColor = Number(
+      (product as any)?.printingColorPriceOverride ??
+      productPrintingCat?.colorPricePerColor ?? 0
+    ) || 0;
+    const pricePerSide = Number(
+      (product as any)?.printingSidePriceOverride ??
+      productPrintingCat?.pricePerSide ?? 0
+    ) || 0;
+    return { designFee, pricePerColor, pricePerSide };
+  }, [product, productPrintingCat]);
+
+  const hasPhase4Pricing = useMemo(() =>
+    (printingPricing.designFee + printingPricing.pricePerColor + printingPricing.pricePerSide) > 0,
+    [printingPricing]);
+
+  const phase4PrintingBreakdown = useMemo(() => {
+    if (!enableCustomPrinting || !hasPhase4Pricing) {
+      return { designFee: 0, colorTotal: 0, sideTotal: 0, totalPrintingCost: 0 };
+    }
+    const extraColors = Math.max(0, printingColors - 1); // أول لون مجاني
+    const extraSides  = Math.max(0, printingSides - 1);  // أول وجه مجاني
+    const colorTotal  = extraColors * printingPricing.pricePerColor;
+    const sideTotal   = extraSides * printingPricing.pricePerSide;
+    const designFee   = printingPricing.designFee;
+    return {
+      designFee,
+      colorTotal,
+      sideTotal,
+      totalPrintingCost: designFee + colorTotal + sideTotal,
+    };
+  }, [enableCustomPrinting, hasPhase4Pricing, printingColors, printingSides, printingPricing]);
+
   const totalPrice = useMemo(() =>
-    (Number(currentPrice) * quantity) + printingCost + bagPrintingCost + (professionalPrintingUnitPrice * quantity),
-    [currentPrice, quantity, printingCost, bagPrintingCost, professionalPrintingUnitPrice]);
+    (Number(currentPrice) * quantity) + printingCost + bagPrintingCost + (professionalPrintingUnitPrice * quantity) + phase4PrintingBreakdown.totalPrintingCost,
+    [currentPrice, quantity, printingCost, bagPrintingCost, professionalPrintingUnitPrice, phase4PrintingBreakdown.totalPrintingCost]);
 
   const currentStock = useMemo(() =>
     currentSizeData?.stock !== undefined ? currentSizeData.stock : (product?.stock || 0),
@@ -599,13 +641,25 @@ export default function ProductDetail() {
         printColorSeparation,
         printingUnitPrice: professionalPrintingUnitPrice || undefined,
       } : {}),
+      // ── Phase 4: خيارات الطباعة الفورية ──
+      ...(enableCustomPrinting && hasPhase4Pricing && phase4PrintingBreakdown.totalPrintingCost > 0 ? {
+        designOptions: {
+          colors: printingColors,
+          sides: printingSides,
+          designFee: phase4PrintingBreakdown.designFee,
+          colorTotal: phase4PrintingBreakdown.colorTotal,
+          sideTotal: phase4PrintingBreakdown.sideTotal,
+          totalPrintingCost: phase4PrintingBreakdown.totalPrintingCost,
+        },
+      } : {}),
       // السعر الوحدوي المحسوب
       unitPrice: totalPrice / quantity || undefined,
     };
   }, [product?.id, quantity, selectedSize, selectedColor, enableCustomPrinting, designNotes, uploadedDesignUrl,
       enableBagPrinting, selectedBagColor, printColors,
       productPrintingCat, printWidth, printHeight, printFinish, printColorSeparation, professionalPrintingUnitPrice,
-      totalPrice, selectedSmartVariant, smartVariantsData, showSmartVariants]);
+      totalPrice, selectedSmartVariant, smartVariantsData, showSmartVariants,
+      hasPhase4Pricing, printingColors, printingSides, phase4PrintingBreakdown]);
 
   // ── التحقق من اختيار المقاس قبل الإضافة للسلة ──
   const validateSelection = (): string | null => {
@@ -1663,6 +1717,76 @@ export default function ProductDetail() {
                     <Textarea value={designNotes} onChange={e => setDesignNotes(e.target.value)}
                       placeholder="ملاحظات التصميم..." className="resize-none text-sm" rows={2}
                       data-testid="input-design-notes" />
+
+                    {/* ── Phase 4: حاسبة الطباعة الفورية ─────────────── */}
+                    {hasPhase4Pricing && (
+                      <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-3 space-y-3 mt-2" data-testid="section-printing-calculator">
+                        <div className="font-bold text-sm text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                          🖨️ خيارات الطباعة
+                        </div>
+
+                        {/* عدد الألوان */}
+                        {printingPricing.pricePerColor > 0 && (
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm">عدد الألوان</Label>
+                            <div className="flex items-center gap-2">
+                              <Button type="button" size="sm" variant="outline" className="h-7 w-7 p-0"
+                                onClick={() => setPrintingColors(c => Math.max(1, c - 1))}
+                                data-testid="button-printing-colors-minus">−</Button>
+                              <span className="w-8 text-center font-bold" data-testid="text-printing-colors">{printingColors}</span>
+                              <Button type="button" size="sm" variant="outline" className="h-7 w-7 p-0"
+                                onClick={() => setPrintingColors(c => Math.min(10, c + 1))}
+                                data-testid="button-printing-colors-plus">+</Button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* عدد الأوجه */}
+                        {printingPricing.pricePerSide > 0 && (
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm">عدد الأوجه</Label>
+                            <div className="flex gap-1">
+                              <Button type="button" size="sm"
+                                variant={printingSides === 1 ? "default" : "outline"}
+                                onClick={() => setPrintingSides(1)}
+                                data-testid="button-printing-sides-1">وجه واحد</Button>
+                              <Button type="button" size="sm"
+                                variant={printingSides === 2 ? "default" : "outline"}
+                                onClick={() => setPrintingSides(2)}
+                                data-testid="button-printing-sides-2">وجهان</Button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* تفصيل الأسعار */}
+                        <div className="border-t border-blue-200 dark:border-blue-800 pt-2 space-y-1 text-xs">
+                          {phase4PrintingBreakdown.designFee > 0 && (
+                            <div className="flex justify-between" data-testid="text-design-fee">
+                              <span className="text-muted-foreground">رسوم التصميم</span>
+                              <span className="font-semibold">{formatPrice(phase4PrintingBreakdown.designFee)} {currLabel}</span>
+                            </div>
+                          )}
+                          {phase4PrintingBreakdown.colorTotal > 0 && (
+                            <div className="flex justify-between" data-testid="text-color-total">
+                              <span className="text-muted-foreground">ألوان إضافية ({Math.max(0, printingColors - 1)} × {formatPrice(printingPricing.pricePerColor)})</span>
+                              <span className="font-semibold">{formatPrice(phase4PrintingBreakdown.colorTotal)} {currLabel}</span>
+                            </div>
+                          )}
+                          {phase4PrintingBreakdown.sideTotal > 0 && (
+                            <div className="flex justify-between" data-testid="text-side-total">
+                              <span className="text-muted-foreground">وجه إضافي</span>
+                              <span className="font-semibold">{formatPrice(phase4PrintingBreakdown.sideTotal)} {currLabel}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between pt-1 border-t border-blue-200/60 dark:border-blue-800/60 text-sm">
+                            <span className="font-bold text-blue-700 dark:text-blue-300">إجمالي الطباعة</span>
+                            <span className="font-bold text-blue-700 dark:text-blue-300" data-testid="text-printing-total">
+                              {formatPrice(phase4PrintingBreakdown.totalPrintingCost)} {currLabel}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

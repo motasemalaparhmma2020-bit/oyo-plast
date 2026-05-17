@@ -78,6 +78,10 @@ export const products = pgTable("products", {
   productCommissionRate: numeric("product_commission_rate"), // عمولة خاصة تتغلب على العمولة العامة
   // ── الطباعة الاحترافية ──────────────────────────────────────────────────────
   printingCategoryId: integer("printing_category_id"), // FK → printingCategories (طباعة احترافية)
+  // ── تسعير الطباعة (Override للقيم في printingCategories، Phase 4) ────────────
+  printingDesignFeeOverride: numeric("printing_design_fee_override"),     // override لرسوم التصميم
+  printingColorPriceOverride: numeric("printing_color_price_override"),   // override لسعر اللون الإضافي
+  printingSidePriceOverride: numeric("printing_side_price_override"),     // override لسعر الوجه الإضافي
   // ── مدة التصنيع بالأيام ─────────────────────────────────────────────────────
   manufacturingDays: integer("manufacturing_days").default(0).notNull(), // 0 = جاهز فوراً
 });
@@ -92,6 +96,10 @@ export const printingCategories = pgTable("printing_categories", {
   colorSeparationPrice: numeric("color_separation_price"), // تكلفة فرز الألوان
   minWidthCm: numeric("min_width_cm"),   // الحد الأدنى للعرض
   minHeightCm: numeric("min_height_cm"), // الحد الأدنى للارتفاع
+  // ── تسعير الطباعة الفوري (Phase 4) ───────────────────────────────────────
+  designFeePerMockup: numeric("design_fee_per_mockup").default("0"),   // رسوم التصميم لكل تصميم
+  colorPricePerColor: numeric("color_price_per_color").default("0"),    // سعر اللون الإضافي
+  pricePerSide: numeric("price_per_side").default("0"),                 // سعر الوجه الإضافي (وجه/وجهين)
   isActive: boolean("is_active").default(true).notNull(),
 });
 
@@ -126,6 +134,8 @@ export const cartItems = pgTable("cart_items", {
   printColorSeparation: boolean("print_color_separation").default(false), // فرز الألوان
   printingUnitPrice: numeric("printing_unit_price"), // سعر الطباعة الاحترافية لهذا العنصر
   aiDesignFee: numeric("ai_design_fee").default("0"), // رسوم التصميم المضافة من الموظف الذكي
+  // ── خيارات الطباعة الفورية (Phase 4) — JSON ────────────────────────────
+  designOptions: text("design_options"),
 });
 
 export const orders = pgTable("orders", {
@@ -275,6 +285,8 @@ export const orderItems = pgTable("order_items", {
   productImage: text("product_image"), // صورة المنتج وقت الطلب
   // ── COGS Snapshot (Phase 1 — May 2026) ────────────────────────────────────
   costPriceAtOrder: numeric("cost_price_at_order"), // تكلفة الشراء المرجعية وقت الطلب (للأرباح التاريخية الدقيقة)
+  // ── Phase 4: خيارات الطباعة الفورية — JSON ───────────────────────────────
+  designOptions: text("design_options"),
 });
 
 // Product Reviews

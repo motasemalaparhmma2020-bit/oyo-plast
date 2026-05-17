@@ -201,6 +201,15 @@ function CartMerger() {
                   customPrinting: item.customPrinting,
                   designNotes: item.designNotes,
                   designFileUrl: item.designFileUrl,
+                  selectedBagColor: item.selectedBagColor,
+                  printColor1: item.printColor1,
+                  printColor2: item.printColor2,
+                  printColor3: item.printColor3,
+                  printColorCount: item.printColorCount,
+                  unitPrice: item.unitPrice,
+                  designOptions: typeof item.designOptions === 'object'
+                    ? JSON.stringify(item.designOptions)
+                    : item.designOptions,
                 }),
               });
               if (!res.ok) remaining.push(item);

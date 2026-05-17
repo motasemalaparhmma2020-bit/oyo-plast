@@ -58,6 +58,7 @@ export function useAddToCart() {
           printColor3: data.printColor3,
           printColorCount: data.printColorCount,
           unitPrice: data.unitPrice,
+          designOptions: (data as any).designOptions,
         });
         return { success: true, guest: true };
       }
@@ -118,6 +119,7 @@ export function useAddToCart() {
         printColor3: data.printColor3,
         printColorCount: data.printColorCount,
         unitPrice: data.unitPrice,
+        designOptions: (data as any).designOptions,
       });
       return { success: true, guest: true, fallback: true };
     },

@@ -92,6 +92,26 @@ OYO PLAST is a comprehensive e-commerce platform for plastic printing and suppli
 - **Gemini API** (visual search + printing assistant)
 - **Jawal Pay** (planned electronic payments)
 
+### Phase 4: تسعير الطباعة الفوري — Hybrid Override (May 17, 2026)
+- **الفكرة:** السعر = `product.override ?? printingCategory.value ?? 0` لكل من 3 حقول: `designFee` (رسوم تصميم لكل mockup) + `colorPrice` (سعر لكل لون إضافي) + `sidePrice` (سعر لكل وجه إضافي).
+- **الصيغة:** `extraColors = max(0, colors-1)`, `extraSides = max(0, sides-1)`, `totalPrintingCost = designFee + extraColors*colorPrice + extraSides*sidePrice`. أول لون وأول وجه مجاناً.
+- **Schema (`shared/schema.ts`):**
+  - `printing_categories`: أضيف `design_fee_per_mockup`, `color_price_per_color`, `price_per_side` (numeric, default 0).
+  - `products`: أضيف `printing_design_fee_override`, `printing_color_price_override`, `printing_side_price_override` (numeric, nullable).
+  - `cart_items` + `order_items`: أضيف `design_options` (TEXT, JSON يحوي `{colors, sides, designFee, colorTotal, sideTotal, totalPrintingCost}`).
+- **Migration:** كل الأعمدة additive عبر `ALTER TABLE ADD COLUMN IF NOT EXISTS` في `server/migrate.ts`.
+- **Backend (`server/routes.ts`):**
+  - `LITE_COLS` + `mapProductRow`: يُعيد الـ 3 override fields.
+  - POST/PATCH `/api/admin/products`: تقبل + تحفظ الـ overrides (PATCH allowlist موسّع).
+  - POST `/api/cart`: تقبل + تحفظ `designOptions` JSON. `hasPrinting` check يتضمن `designOptions`.
+  - GET `/api/cart`: تُعيد `ci.design_options AS "designOptions"` (مهم لـ Checkout).
+  - `storage.createOrder`: تنقل `designOptions` من cart إلى order_items.
+- **Frontend:**
+  - `ProductDetail.tsx`: state `printingColors`/`printingSides` + `printingPricing` useMemo (override ?? category ?? 0) + `phase4PrintingBreakdown` مدمج في `totalPrice`. حاسبة UI تظهر فقط إذا `enableCustomPrinting` ON و `hasPhase4Pricing` (أحد الـ 3 أسعار > 0). `cartPayload` يرسل `designOptions` كـ JSON string.
+  - `Admin.tsx`: قسم "🖨️ تسعير الطباعة الفوري (تجاوز)" في نموذج المنتج. ProductFormData type + empty form + create/update mutations + load-on-edit تشمل الـ 3 override fields.
+  - `cartUtils.ts` + `use-cart.ts` (guest paths) + `App.tsx` (CartMerger): جميعها تنقل `designOptions` لضمان استمرارية الـ Phase 4 من ضيف → مسجّل → checkout → order.
+- **Limitation:** لا يوجد server-side recompute لـ `unitPrice` بعد (يتبع النمط القائم في المشروع). موثّق كـ tech-debt للأمان.
+
 ### Purchase Orders — المرحلة 1 (May 17, 2026)
 - **DB:** `suppliers.type` (distributor/vendor/both, default distributor) + جدولان جديدان `purchase_orders` (po_number auto PO-2026-NNN, supplier_id, status draft/sent/partial/received/cancelled, subtotal/shipping/total/currency, notes, created_by, created_at, received_at) و`purchase_order_items` (purchase_order_id, product_id, product_name_snapshot, variant_label, quantity_ordered/received, unit_cost, line_total). Migration additive في `server/migrate.ts`.
 - **Routes:** `server/routes/purchase-orders.ts` — `GET /api/admin/vendors`, `GET/POST /api/admin/purchase-orders`, `GET/PATCH/DELETE /api/admin/purchase-orders/:id`, `POST /api/admin/purchase-orders/:id/receive`. كلها `requireAdmin`.

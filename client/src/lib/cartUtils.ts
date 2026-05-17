@@ -17,6 +17,15 @@ export interface GuestCartItem {
   printColor3?: string;
   printColorCount?: number;
   unitPrice?: number;
+  // Phase 4: خيارات الطباعة الفورية (JSON string أو object)
+  designOptions?: string | {
+    colors: number;
+    sides: number;
+    designFee: number;
+    colorTotal: number;
+    sideTotal: number;
+    totalPrintingCost: number;
+  };
 }
 
 const GUEST_CART_KEY = 'guestCart';

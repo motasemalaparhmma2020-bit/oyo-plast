@@ -664,6 +664,20 @@ export async function runMigrations(): Promise<void> {
       console.warn("[WARN] purchase_orders migration:", e instanceof Error ? e.message : e);
     }
 
+    // ─── Phase 4: تسعير الطباعة الفوري (Hybrid Override) ────────────────────
+    try {
+      await client.query(`ALTER TABLE printing_categories ADD COLUMN IF NOT EXISTS design_fee_per_mockup NUMERIC DEFAULT 0`);
+      await client.query(`ALTER TABLE printing_categories ADD COLUMN IF NOT EXISTS color_price_per_color NUMERIC DEFAULT 0`);
+      await client.query(`ALTER TABLE printing_categories ADD COLUMN IF NOT EXISTS price_per_side NUMERIC DEFAULT 0`);
+      await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS printing_design_fee_override NUMERIC`);
+      await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS printing_color_price_override NUMERIC`);
+      await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS printing_side_price_override NUMERIC`);
+      await client.query(`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS design_options TEXT`);
+      await client.query(`ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS design_options TEXT`);
+    } catch (e) {
+      console.warn("[WARN] phase4 printing pricing migration:", e instanceof Error ? e.message : e);
+    }
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

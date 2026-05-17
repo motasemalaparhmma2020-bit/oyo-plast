@@ -1864,7 +1864,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     marketer_commission_rate, has_printing_options, base_bag_price, single_color_print_price,
     available_bag_colors, tags, show_reviews, show_in_printing, enable_variant_ui, color_images,
     original_price, original_price_sar, discount_percent, promotional_tags,
-    has_free_shipping, enable_smart_variants, smart_variants`;
+    has_free_shipping, enable_smart_variants, smart_variants, printing_category_id,
+    printing_design_fee_override, printing_color_price_override, printing_side_price_override`;
 
   // عند أوّل تحميل، نُسخّن الكاش حتّى mapProductRow يستخدم السعر الصحيح
   getExchangeRate().catch(() => {});
@@ -1926,6 +1927,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       tags: r.tags,
       showReviews: r.show_reviews,
       showInPrinting: r.show_in_printing,
+      printingCategoryId: r.printing_category_id ?? null,
+      printingDesignFeeOverride: r.printing_design_fee_override ?? null,
+      printingColorPriceOverride: r.printing_color_price_override ?? null,
+      printingSidePriceOverride: r.printing_side_price_override ?? null,
     enableVariantUI: r.enable_variant_ui ?? false,
     colorImages: r.color_images ?? null,
       originalPrice: r.original_price ?? null,
@@ -2324,6 +2329,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // ── حقول الطباعة والتصميم ──────────────────────────────────────
         showInPrinting: data.showInPrinting ?? false,
         printingCategoryId: data.printingCategoryId ? Number(data.printingCategoryId) : null,
+        // ── Phase 4: Override تسعير الطباعة ─────────────────────────────
+        printingDesignFeeOverride: data.printingDesignFeeOverride !== "" && data.printingDesignFeeOverride != null ? String(data.printingDesignFeeOverride) : null,
+        printingColorPriceOverride: data.printingColorPriceOverride !== "" && data.printingColorPriceOverride != null ? String(data.printingColorPriceOverride) : null,
+        printingSidePriceOverride: data.printingSidePriceOverride !== "" && data.printingSidePriceOverride != null ? String(data.printingSidePriceOverride) : null,
         supplierId: data.supplierId ? Number(data.supplierId) : null,
         showReviews: data.showReviews ?? true,
         hasFreeShipping: data.hasFreeShipping ?? false,
@@ -2397,6 +2406,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "baseBagPrice", "singleColorPrintPrice", "availableBagColors", "tags",
         "bulkPricing", "sizePricing", "showReviews", "showInPrinting",
         "printingCategoryId", "supplierId",
+        "printingDesignFeeOverride", "printingColorPriceOverride", "printingSidePriceOverride",
         "enableVariantUI", "colorImages",
         "promotionalTags",
         "hasFreeShipping", "enableSmartVariants", "smartVariants"
@@ -6598,6 +6608,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
            ci.print_finish        AS "printFinish",
            ci.print_color_separation AS "printColorSeparation",
            ci.printing_unit_price AS "printingUnitPrice",
+           ci.design_options      AS "designOptions",
            json_build_object(
              'id', p.id,
              'name', p.name,
@@ -6654,10 +6665,12 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         unitPrice,
         // ── رسوم التصميم من الموظف الذكي ──
         aiDesignFee,
+        // ── Phase 4: خيارات الطباعة الفورية ──
+        designOptions,
       } = req.body;
 
       // هل هذه طباعة مخصصة (لا نجمع الكميات مع عناصر أخرى)
-      const hasPrinting = customPrinting || printColorCount > 0 || printingCategoryId;
+      const hasPrinting = customPrinting || printColorCount > 0 || printingCategoryId || designOptions;
       
       // Check if item exists
       const existing = await dbInstance.select().from(cartTable)
@@ -6705,6 +6718,9 @@ h1{font-size:18px;color:#222;margin:4px 0;}
           printingUnitPrice: printingUnitPrice || null,
           unitPrice: unitPrice || null,
           aiDesignFee: aiDesignFee || null,
+          designOptions: designOptions
+            ? (typeof designOptions === "string" ? designOptions : JSON.stringify(designOptions))
+            : null,
         })
         .returning();
       

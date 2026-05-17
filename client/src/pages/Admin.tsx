@@ -220,6 +220,9 @@ interface ProductFormData {
   singleColorPrintPrice: string;
   availableBagColors: string;
   printingCategoryId: string;
+  printingDesignFeeOverride: string;
+  printingColorPriceOverride: string;
+  printingSidePriceOverride: string;
   tags: string;
   showReviews: boolean;
   showInPrinting: boolean;
@@ -254,6 +257,9 @@ const emptyProductForm: ProductFormData = {
   singleColorPrintPrice: "",
   availableBagColors: "",
   printingCategoryId: "",
+  printingDesignFeeOverride: "",
+  printingColorPriceOverride: "",
+  printingSidePriceOverride: "",
   tags: "",
   showReviews: true,
   showInPrinting: false,
@@ -5534,6 +5540,9 @@ export default function Admin() {
           singleColorPrintPrice: numOrNull(data.singleColorPrintPrice),
           availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()).filter(c => c) : null,
           printingCategoryId: data.printingCategoryId ? Number(data.printingCategoryId) : null,
+          printingDesignFeeOverride: numOrNull(data.printingDesignFeeOverride),
+          printingColorPriceOverride: numOrNull(data.printingColorPriceOverride),
+          printingSidePriceOverride: numOrNull(data.printingSidePriceOverride),
           tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
           showReviews: data.showReviews,
           showInPrinting: data.showInPrinting,
@@ -5601,6 +5610,9 @@ export default function Admin() {
         sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()).filter(s => s) : null,
         availableBagColors: data.availableBagColors ? data.availableBagColors.split(',').map(c => c.trim()).filter(c => c) : null,
         printingCategoryId: data.printingCategoryId ? Number(data.printingCategoryId) : null,
+        printingDesignFeeOverride: numOrNull(data.printingDesignFeeOverride),
+        printingColorPriceOverride: numOrNull(data.printingColorPriceOverride),
+        printingSidePriceOverride: numOrNull(data.printingSidePriceOverride),
         tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
         showReviews: data.showReviews,
         showInPrinting: data.showInPrinting,
@@ -5855,6 +5867,9 @@ export default function Admin() {
       singleColorPrintPrice: product.singleColorPrintPrice != null ? String(product.singleColorPrintPrice) : "",
       availableBagColors: product.availableBagColors ? product.availableBagColors.join(', ') : "",
       printingCategoryId: (product as any).printingCategoryId != null ? String((product as any).printingCategoryId) : "",
+      printingDesignFeeOverride: (product as any).printingDesignFeeOverride != null ? String((product as any).printingDesignFeeOverride) : "",
+      printingColorPriceOverride: (product as any).printingColorPriceOverride != null ? String((product as any).printingColorPriceOverride) : "",
+      printingSidePriceOverride: (product as any).printingSidePriceOverride != null ? String((product as any).printingSidePriceOverride) : "",
       tags: product.tags ? product.tags.join(', ') : "",
       enableVariantUI: (product as any).enableVariantUI ?? false,
       colorImages: [],
@@ -7593,6 +7608,63 @@ export default function Admin() {
                                 ✓ الطباعة الاحترافية مُفعّلة — سيظهر حاسبة المساحة للعميل
                               </p>
                             )}
+                          </div>
+
+                          {/* ── Phase 4: تسعير الطباعة الفوري (Override) ── */}
+                          <div className="border border-blue-200 dark:border-blue-800 rounded-xl p-3 bg-blue-50/40 dark:bg-blue-950/20">
+                            <Label className="font-bold flex items-center gap-2 mb-1 text-sm">
+                              🖨️ تسعير الطباعة الفوري (تجاوز)
+                            </Label>
+                            <p className="text-xs text-muted-foreground mb-3">
+                              هذه القيم تتجاوز قيم الفئة المختارة أعلاه. اتركها فارغة لاستخدام القيم الافتراضية للفئة.
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              <div>
+                                <Label htmlFor="printing-design-fee-override" className="text-xs">رسوم التصميم (ر.ي)</Label>
+                                <Input
+                                  id="printing-design-fee-override"
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  value={productForm.printingDesignFeeOverride}
+                                  onChange={e => setProductForm({ ...productForm, printingDesignFeeOverride: e.target.value })}
+                                  placeholder="مثال: 300"
+                                  className="mt-1"
+                                  data-testid="input-printing-design-fee-override"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="printing-color-price-override" className="text-xs">سعر اللون الإضافي (ر.ي)</Label>
+                                <Input
+                                  id="printing-color-price-override"
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  value={productForm.printingColorPriceOverride}
+                                  onChange={e => setProductForm({ ...productForm, printingColorPriceOverride: e.target.value })}
+                                  placeholder="مثال: 20"
+                                  className="mt-1"
+                                  data-testid="input-printing-color-price-override"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="printing-side-price-override" className="text-xs">سعر الوجه الإضافي (ر.ي)</Label>
+                                <Input
+                                  id="printing-side-price-override"
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  value={productForm.printingSidePriceOverride}
+                                  onChange={e => setProductForm({ ...productForm, printingSidePriceOverride: e.target.value })}
+                                  placeholder="مثال: 50"
+                                  className="mt-1"
+                                  data-testid="input-printing-side-price-override"
+                                />
+                              </div>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground mt-2">
+                              💡 المعادلة: <code>إجمالي الطباعة = رسوم التصميم + (الألوان الإضافية × سعر اللون) + (الأوجه الإضافية × سعر الوجه)</code>
+                            </p>
                           </div>
 
                         </div>
