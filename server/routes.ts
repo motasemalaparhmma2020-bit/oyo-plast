@@ -939,7 +939,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         SELECT id, name, description, tags, price,
                original_price AS "originalPrice",
                discount_percent AS "discount",
-               stock, sold_count AS "soldCount"
+               stock, sold_count AS "soldCount",
+               category_id AS "categoryId",
+               COALESCE(rating, 0) AS "rating"
         FROM products
         WHERE is_active IS NOT FALSE
         ORDER BY id
@@ -986,11 +988,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       };
 
       const finalize = async (list: any[]) => {
-        const top = list.slice(0, 6);
+        // ✅ زيادة الحد من 6 إلى 40 لتجربة أشبه بـ AliExpress
+        const top = list.slice(0, 40);
         const imgs = await fetchImagesFor(top.map(p => p.id));
         return top.map(p => ({
           id: p.id, name: p.name, image: imgs.get(p.id) || "", price: p.price,
           originalPrice: p.originalPrice ?? null, discount: p.discount ?? null, stock: p.stock,
+          categoryId: p.categoryId ?? null,
+          rating: Number(p.rating) || 0,
         }));
       };
 

@@ -263,6 +263,8 @@ function SearchBar({ compact, onClose, glassy }: { compact?: boolean; onClose?: 
           price: p.price ?? p.unitPrice ?? null,
           originalPrice: p.originalPrice ?? null,
           discount: p.discount ?? null,
+          categoryId: p.categoryId ?? null,
+          rating: typeof p.rating === "number" ? p.rating : (p.rating ? Number(p.rating) : 0),
         }));
       setVisualResults(list);
       setVisualResultsLoading(false);

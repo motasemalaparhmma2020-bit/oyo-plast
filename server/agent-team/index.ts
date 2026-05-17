@@ -103,9 +103,9 @@ async function buildAgentContext(agent: AgentRow): Promise<string> {
     }
     if (scope.includes("*") || scope.includes("orders")) {
       const r = await pool.query(
-        `SELECT id, status, total_amount, created_at FROM orders ORDER BY created_at DESC LIMIT 10`,
+        `SELECT id, status, total, created_at FROM orders ORDER BY created_at DESC LIMIT 10`,
       );
-      parts.push(`## آخر 10 طلبات:\n${r.rows.map((o) => `- #${o.id} ${o.status} — ${o.total_amount} ر.ي (${new Date(o.created_at).toLocaleDateString("ar-YE")})`).join("\n")}`);
+      parts.push(`## آخر 10 طلبات:\n${r.rows.map((o) => `- #${o.id} ${o.status} — ${o.total} ر.ي (${new Date(o.created_at).toLocaleDateString("ar-YE")})`).join("\n")}`);
     }
     if (scope.includes("*") || scope.includes("users")) {
       const r = await pool.query(`SELECT COUNT(*)::int AS n FROM users`);

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { X, ImageIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { X, ImageIcon, Star, ArrowDownAZ, ArrowUpAZ, Sparkles } from "lucide-react";
 
 // ──────────────────────────────────────────────────────────────────
 // شاشة البحث بالكاميرا — بنمط SHEIN 100%
@@ -14,7 +14,11 @@ export interface VisualResultProduct {
   price?: number | string | null;
   originalPrice?: number | string | null;
   discount?: number | null;
+  categoryId?: number | null;
+  rating?: number | null;
 }
+
+type SortMode = "relevance" | "price_asc" | "price_desc" | "rating";
 
 interface VisualSearchOverlayProps {
   imageUrl: string | null;
@@ -76,6 +80,37 @@ export function VisualSearchOverlay({
       setPercent(0);
     }
   }, [isAnalyzing, imageUrl]);
+
+  // ── فلاتر/ترتيب النتائج ───────────────────────────────────────
+  const [sortMode, setSortMode] = useState<SortMode>("relevance");
+  const [ratingFilter, setRatingFilter] = useState<0 | 4>(0); // 0 = الكل، 4 = ≥4 نجوم
+  // أعد ضبط الفلاتر عند بدء تحليل جديد
+  useEffect(() => {
+    if (isAnalyzing) {
+      setSortMode("relevance");
+      setRatingFilter(0);
+    }
+  }, [isAnalyzing]);
+
+  const filteredResults = useMemo(() => {
+    let list = [...results];
+    if (ratingFilter === 4) {
+      list = list.filter(p => (Number(p.rating) || 0) >= 4);
+    }
+    switch (sortMode) {
+      case "price_asc":
+        list.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+        break;
+      case "price_desc":
+        list.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
+        break;
+      case "rating":
+        list.sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0));
+        break;
+      // relevance = الترتيب من الخادم (لا تغيير)
+    }
+    return list;
+  }, [results, sortMode, ratingFilter]);
 
   // عند انتهاء التحليل، اعرض الدرج بعد لحظة قصيرة (ليرى المستخدم 100% أولاً)
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -226,10 +261,57 @@ export function VisualSearchOverlay({
                   </p>
                 )}
               </div>
-              <span className="text-xs px-2.5 py-1 rounded-full bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 font-bold flex-shrink-0">
-                {results.length} منتج
+              <span className="text-xs px-2.5 py-1 rounded-full bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 font-bold flex-shrink-0" data-testid="text-visual-count">
+                {filteredResults.length} من {results.length}
               </span>
             </div>
+            {/* ── شريط الفلاتر والترتيب (chips) ───────────────────── */}
+            {results.length > 0 && (
+              <div
+                className="mt-2.5 flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-thin"
+                data-testid="visual-filter-bar"
+                style={{ scrollbarWidth: "thin" }}
+              >
+                {[
+                  { id: "relevance", label: "أفضل تطابق", icon: Sparkles },
+                  { id: "price_asc", label: "السعر: من الأقل", icon: ArrowUpAZ },
+                  { id: "price_desc", label: "السعر: من الأعلى", icon: ArrowDownAZ },
+                  { id: "rating", label: "الأعلى تقييماً", icon: Star },
+                ].map(({ id, label, icon: Icon }) => {
+                  const active = sortMode === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setSortMode(id as SortMode)}
+                      className={`flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                        active
+                          ? "bg-[#1a3a4a] text-white border-[#1a3a4a]"
+                          : "bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      }`}
+                      data-testid={`button-sort-${id}`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{label}</span>
+                    </button>
+                  );
+                })}
+                {/* فلتر التقييم ≥4 */}
+                <button
+                  type="button"
+                  onClick={() => setRatingFilter(ratingFilter === 4 ? 0 : 4)}
+                  className={`flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                    ratingFilter === 4
+                      ? "bg-amber-500 text-white border-amber-500"
+                      : "bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  }`}
+                  data-testid="button-filter-rating-4"
+                >
+                  <Star className={`h-3.5 w-3.5 ${ratingFilter === 4 ? "fill-white" : ""}`} />
+                  <span>4+ نجوم</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* قائمة المنتجات (شبكة قابلة للتمرير) */}
@@ -244,28 +326,40 @@ export function VisualSearchOverlay({
                   </div>
                 ))}
               </div>
-            ) : results.length === 0 ? (
+            ) : filteredResults.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-6">
                 <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
                   <ImageIcon className="h-10 w-10 text-gray-400" />
                 </div>
                 <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">
-                  لا توجد منتجات مطابقة
+                  {results.length === 0 ? "لا توجد منتجات مطابقة" : "لا توجد نتائج بهذا الفلتر"}
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                  جرّب صورة أوضح أو ابحث بالاسم يدوياً
+                  {results.length === 0
+                    ? "لم نعثر على منتجات مشابهة. حاول البحث بصورة أخرى أو استخدم البحث النصي."
+                    : "جرّب إزالة الفلاتر أو ابحث بصورة أخرى."}
                 </p>
-                <button
-                  onClick={onCancel}
-                  className="px-5 py-2 rounded-full bg-[#1a3a4a] hover:bg-[#0f2b3a] text-white text-sm font-bold transition-colors"
-                  data-testid="button-close-empty-results"
-                >
-                  إغلاق
-                </button>
+                {results.length > 0 ? (
+                  <button
+                    onClick={() => { setSortMode("relevance"); setRatingFilter(0); }}
+                    className="px-5 py-2 rounded-full bg-[#1a3a4a] hover:bg-[#0f2b3a] text-white text-sm font-bold transition-colors"
+                    data-testid="button-clear-filters"
+                  >
+                    إزالة الفلاتر
+                  </button>
+                ) : (
+                  <button
+                    onClick={onCancel}
+                    className="px-5 py-2 rounded-full bg-[#1a3a4a] hover:bg-[#0f2b3a] text-white text-sm font-bold transition-colors"
+                    data-testid="button-close-empty-results"
+                  >
+                    إغلاق
+                  </button>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pb-6">
-                {results.map((p) => {
+                {filteredResults.map((p) => {
                   const hasDiscount =
                     p.originalPrice != null &&
                     p.price != null &&
@@ -318,6 +412,15 @@ export function VisualSearchOverlay({
                             </span>
                           )}
                         </div>
+                        {/* عرض النجوم — يظهر فقط إذا rating > 0 */}
+                        {p.rating != null && Number(p.rating) > 0 && (
+                          <div className="flex items-center gap-1 mt-1" data-testid={`visual-result-rating-${p.id}`}>
+                            <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                            <span className="text-[10px] text-gray-600 dark:text-gray-300 font-semibold">
+                              {Number(p.rating).toFixed(1)}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </button>
                   );

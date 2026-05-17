@@ -895,11 +895,33 @@ export default function ProductDetail() {
     },
   });
 
+  // ── منتجات مشابهة: كامل القائمة (نفس التصنيف أولاً، ثم نكمل بالأعلى مبيعاً) ──
+  // عرض بـ Infinite Scroll بدل slice ثابت
   const relatedProducts = useMemo(() => {
-    if (!product || !allProducts.length) return [];
-    const count = sec["related"]?.count ?? 4;
-    return allProducts.filter(p => p.id !== product.id && p.categoryId === product.categoryId).slice(0, count);
-  }, [product, allProducts, sec]);
+    if (!product || !allProducts.length) return [] as typeof allProducts;
+    const sameCategory = allProducts.filter(p => p.id !== product.id && p.categoryId === product.categoryId);
+    // إذا كان عدد المنتجات في نفس التصنيف قليل، نُكمل من باقي المنتجات
+    if (sameCategory.length >= 12) return sameCategory;
+    const otherIds = new Set([product.id, ...sameCategory.map(p => p.id)]);
+    const fillers = allProducts.filter(p => !otherIds.has(p.id));
+    return [...sameCategory, ...fillers];
+  }, [product, allProducts]);
+
+  // عرض تدريجي: 12 ثم +12 عند الوصول للأسفل (Infinite Scroll)
+  const [relatedShown, setRelatedShown] = useState(12);
+  useEffect(() => { setRelatedShown(12); }, [product?.id]);
+  const relatedSentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!relatedSentinelRef.current) return;
+    if (relatedShown >= relatedProducts.length) return;
+    const obs = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) {
+        setRelatedShown(s => Math.min(s + 12, relatedProducts.length));
+      }
+    }, { rootMargin: "300px" });
+    obs.observe(relatedSentinelRef.current);
+    return () => obs.disconnect();
+  }, [relatedShown, relatedProducts.length]);
 
   // ── Loading / Not Found ──────────────────────────────────────────────────
   if (isLoading) {
@@ -2227,48 +2249,59 @@ export default function ProductDetail() {
       // ── RELATED (Phase B: Horizontal scroll carousel) ─────────────────────
       case "related": {
         if (!sec["related"]?.visible || relatedProducts.length === 0) return null;
+        const shownItems = relatedProducts.slice(0, relatedShown);
+        const hasMore = relatedShown < relatedProducts.length;
         return (
           <div key="related" className="pb-6" data-testid="section-related">
             <div className="px-4 flex items-center justify-between mb-3">
               <h2 className="font-bold text-base">منتجات مشابهة</h2>
-              <Link href="/products">
-                <span className="text-xs text-primary font-semibold hover:underline cursor-pointer" data-testid="link-view-all-related">عرض الكل ›</span>
-              </Link>
+              <span className="text-xs text-gray-500" data-testid="text-related-count">
+                {shownItems.length} من {relatedProducts.length}
+              </span>
             </div>
             <div
-              className="flex gap-3 overflow-x-auto px-4 pb-2 snap-x snap-mandatory scroll-smooth scrollbar-thin"
-              style={{ scrollbarWidth: 'thin' }}
-              data-testid="carousel-related"
+              className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 px-4"
+              data-testid="grid-related"
             >
-              {relatedProducts.map(p => (
-                <Link key={p.id} href={`/products/${p.id}`}>
-                  <div
-                    className="border rounded-xl overflow-hidden hover:shadow-md transition-shadow cursor-pointer bg-white dark:bg-gray-900 flex-shrink-0 snap-start"
-                    style={{ width: 160 }}
-                    data-testid={`card-related-${p.id}`}
-                  >
-                    <div className="aspect-square bg-gray-50 dark:bg-gray-800">
-                      <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-2" loading="lazy" />
+              {shownItems.map(p => {
+                const op = (p as any).originalPrice;
+                const opSar = (p as any).originalPriceSar;
+                const hasDisc = currency === 'SAR'
+                  ? (opSar && Number(opSar) > Number(p.priceSar || 0))
+                  : (op && Number(op) > Number(p.price || 0));
+                return (
+                  <Link key={p.id} href={`/products/${p.id}`}>
+                    <div
+                      className="border rounded-xl overflow-hidden hover:shadow-md transition-shadow cursor-pointer bg-white dark:bg-gray-900 h-full"
+                      data-testid={`card-related-${p.id}`}
+                    >
+                      <div className="aspect-square bg-gray-50 dark:bg-gray-800">
+                        <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-2" loading="lazy" />
+                      </div>
+                      <div className="p-2">
+                        <p className="font-medium text-xs line-clamp-2 mb-1 min-h-[2rem]">{p.name}</p>
+                        <p className={`font-bold text-sm ${hasDisc ? 'text-red-600 dark:text-red-500' : 'text-gray-900 dark:text-white'}`}>
+                          {formatPrice(currency === 'SAR' && p.priceSar ? p.priceSar : p.price)} {currLabel}
+                        </p>
+                      </div>
                     </div>
-                    <div className="p-2">
-                      <p className="font-medium text-xs line-clamp-2 mb-1 min-h-[2rem]">{p.name}</p>
-                      {(() => {
-                        const op = (p as any).originalPrice;
-                        const opSar = (p as any).originalPriceSar;
-                        const hasDisc = currency === 'SAR'
-                          ? (opSar && Number(opSar) > Number(p.priceSar || 0))
-                          : (op && Number(op) > Number(p.price || 0));
-                        return (
-                          <p className={`font-bold text-sm ${hasDisc ? 'text-red-600 dark:text-red-500' : 'text-gray-900 dark:text-white'}`}>
-                            {formatPrice(currency==='SAR'&&p.priceSar?p.priceSar:p.price)} {currLabel}
-                          </p>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
+            {/* Sentinel للـ Infinite Scroll */}
+            {hasMore && (
+              <div
+                ref={relatedSentinelRef}
+                className="flex items-center justify-center py-6"
+                data-testid="related-sentinel"
+              >
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>جارٍ تحميل المزيد...</span>
+                </div>
+              </div>
+            )}
           </div>
         );
       }

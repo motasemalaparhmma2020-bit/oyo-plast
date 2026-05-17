@@ -4,6 +4,63 @@
 
 ---
 
+## Session May 17, 2026 — جلسة كبيرة (Phase 4/5 + Purchase Orders + AI Team + Visual Search v6)
+
+### Phase 4: تسعير الطباعة الفوري — Hybrid Override
+- **الفكرة:** السعر = `product.override ?? printingCategory.value ?? 0` لكل من 3 حقول: `designFee` (رسوم تصميم لكل mockup) + `colorPrice` (سعر لكل لون إضافي) + `sidePrice` (سعر لكل وجه إضافي).
+- **الصيغة:** `extraColors = max(0, colors-1)`, `extraSides = max(0, sides-1)`, `totalPrintingCost = designFee + extraColors*colorPrice + extraSides*sidePrice`. أول لون وأول وجه مجاناً.
+- **Schema:** `printing_categories` (design_fee_per_mockup, color_price_per_color, price_per_side) + `products` (3 override fields nullable) + `cart_items`/`order_items.design_options` (TEXT JSON).
+- **Backend:** `LITE_COLS`+`mapProductRow` يُعيدان الـ overrides. POST/PATCH `/api/admin/products` تحفظ. POST/GET `/api/cart` تنقل `designOptions`. `storage.createOrder` ينقلها لـ order_items.
+- **Frontend:** `ProductDetail.tsx` state `printingColors`/`printingSides` + `printingPricing` useMemo. حاسبة UI تظهر فقط إذا أحد الـ3 أسعار > 0. `Admin.tsx` قسم "🖨️ تسعير الطباعة الفوري". `cartUtils.ts` + `use-cart.ts` + `App.tsx` (CartMerger) ينقلان `designOptions`.
+- **Limitation:** لا يوجد server-side recompute لـ `unitPrice` بعد — tech-debt موثّق.
+
+### Phase 5: المعاينة الفورية للطباعة (Live Print Preview)
+- **الفكرة:** بعد رفع التصميم، يرى العميل صورة المنتج مع شعاره مرسوماً عليها بـ Canvas API الخام، ويمكنه سحب الشعار وتغيير حجمه.
+- **Schema:** `products.print_area` TEXT (JSON `{x,y,width,height}` كنسب 0-100).
+- **Backend:** `LITE_COLS`+`mapProductRow` parse JSON آمن. POST/PATCH `/api/admin/products` تطبيع object→JSON string قبل الحفظ، مع `printArea` في PATCH allowlist.
+- **Admin:** قسم بنفسجي "🎯 منطقة الطباعة على صورة المنتج" — 4 inputs مع clamp 0-100 + زر مسح.
+- **ProductDetail:** state `logoPosition` + refs (canvas/container/dragState). useEffect 1 يهيّئ من `printArea` أو الافتراضي. useEffect 2 يرسم خلفية + شعار بنسب — `previewImgAspect` يطابق نسبة الصورة فلا letterboxing. Pointer handlers مع `setPointerCapture` + clamp. شريط range 10-90%. `logoPosition` مدمج في `cartPayload.designOptions`.
+- **Limitation:** Canvas API الخام فقط. دوران الشعار وطبقات متعددة محجوزة لـ Phase 3.
+
+### Purchase Orders — المرحلة 1
+- **DB:** `suppliers.type` (distributor/vendor/both) + جدولان جديدان `purchase_orders` (po_number `PO-2026-NNN`, supplier_id, status draft/sent/partial/received/cancelled, subtotal/shipping/total/currency) و`purchase_order_items` (product_id, variant_label, quantity_ordered/received, unit_cost, line_total).
+- **Routes:** `server/routes/purchase-orders.ts` — 6 endpoints `requireAdmin`.
+- **WAC على الاستلام:** يُطبَّق على `smartVariants.variants[i].costPriceY` للـ variant المطابق بالـ label. صيغة: `new_avg = (old_stock*old_avg + recv_qty*unit_cost)/(old_stock+recv_qty)`. `BEGIN`+`FOR UPDATE OF poi,p` لمنع race على JSON.
+- **حماية:** server-side over-receipt check. حذف مسموح فقط لـ draft + cancelled.
+- **Limitation:** WAC يُحدَّث فقط مع smart_variants + variant_label معطى.
+- **UI:** `/admin/purchase-orders` — قائمة + dialog إنشاء + dialog تفاصيل + dialog استلام مع تقرير WAC قبل/بعد.
+
+### Task 8: فريق وكلاء الذكاء الاصطناعي (9 وكلاء)
+- **DB:** `ai_agents`, `ai_agent_actions`, `ai_agent_conversations`. Seed تلقائي 9 وكلاء (`ON CONFLICT name DO NOTHING`).
+- **الوكلاء:** سفر/نور/هدى/رامي/راشد (DeepSeek), ليلى/عمر (Gemini), ماجد/أوبو (Gemini-lite). راشد CEO يحلّل ويوصي بحقائق DB فعلية.
+- **Module:** `server/agent-team/index.ts` — `chatWithAgent()` يبني context حسب `permissions.db_scope` ثم يستدعي المزود. `generateCEOReport()` يجمع حقائق + إنجازات + تقرير سردي + توصيات. cache ساعة + `force` يتجاوز.
+- **Routes:** `server/routes/ai-agents.ts` — 8 endpoints `requireAdmin`. مُسجَّلة في `routes.ts`.
+- **Cron:** `node-cron` يستدعي `generateCEOReport()` يومياً 8 صباحاً.
+- **UI:** `/admin/ai-agents` — 3 تبويبات (الوكلاء + الإجراءات المعلّقة + تقرير راشد). كل الطلبات `adminFetch`/`adminApiRequest`.
+- **Bug fix (May 17 لاحقاً):** `total_amount → total` في تقرير راشد.
+- **Limitation:** DeepSeek يتطلب رصيداً مدفوعاً (احياناً 402 Insufficient Balance) — وكلاء Gemini يعملون فوراً.
+
+### Task 9: توثيق صلاحيات الفريق
+- `docs/STAFF_PERMISSIONS.md` — مرجع موحّد بالعربية. 5 أدوار (owner/product_manager/order_manager/finance/delivery) + جدول صلاحيات + endpoints محمية + خطوات إنشاء/تعطيل + middleware `requireStaff(roles[])` + سجل audit + best practices.
+
+### Visual Search v6 — شبكة موسّعة + فلاتر/ترتيب
+- **الخادم:** `searchProductsByArabicTokens` يُرجع الآن **40 منتجاً** (بدل 6) + `categoryId` + `rating` لكل عنصر.
+- **Overlay:** شريط فلاتر chips (أفضل تطابق / السعر ↑ / السعر ↓ / الأعلى تقييماً) + فلتر "4+ نجوم". عدّاد "X من Y" بعد الفلترة. عرض النجوم على كل بطاقة. حالة فارغة ذكية: "لا نتائج بهذا الفلتر" مع زر "إزالة الفلاتر" بدل "إغلاق".
+- **Navbar:** mapping يمرّر `categoryId`+`rating`.
+
+### منتجات مشابهة — Infinite Scroll
+- `ProductDetail.tsx` `relatedProducts` يُرجع الآن **كامل** المنتجات المطابقة (نفس التصنيف أولاً، ثم باقي المنتجات لتعبئة العدد).
+- `relatedShown` state يبدأ بـ 12 ويزيد +12 عبر `IntersectionObserver` (rootMargin 300px) على sentinel سفلي.
+- التحويل من carousel أفقي إلى **شبكة** (2/3/4 أعمدة حسب حجم الشاشة) — أشبه بـ AliExpress/Amazon.
+
+### Critical Fixes
+- **Checkout total miscalculation:** `Checkout.tsx` كان يحسب الإجمالي من `product.price` بدل `item.unitPrice` المخزّن → إصلاح في `subtotal` useMemo + render العناصر.
+- **NotificationBell شفافة:** `PopoverContent` كان يفتقد bg صريح → `bg-white dark:bg-gray-900 border shadow-2xl`.
+- **"عرض الطلب" لا يصل للطلب:** سببان — (1) `storage.createOrder` لم يحفظ `userId` → GET `/api/orders` يُرجع قائمة فارغة، (2) `actionUrl=/orders` فقط. أُصلح: حفظ userId + `/orders/${orderId}` + Route `/orders/:id` + scrollIntoView + ring highlight.
+- **ADMIN_PASSWORD:** الخادم يقرأ من Replit Configurations (يتجاوز Secrets). إعادة تشغيل مطلوبة بعد تغيير القيمة.
+
+---
+
 ## Session May 16, 2026 — UX & Bundle Variant
 خمس مهام مُنفّذة بترتيب:
 
