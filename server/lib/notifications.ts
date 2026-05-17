@@ -227,7 +227,7 @@ export async function notifyOrderCreated(userId: string, orderId: number, total:
     priority: "high",
     title: `تم استلام طلبك #${orderId}`,
     message: `بمبلغ ${Number(total).toLocaleString()} ${currency} · قيد المراجعة وسيتواصل معك أحد الموظفين قريباً.`,
-    actionUrl: `/orders`,
+    actionUrl: `/orders/${orderId}`,
     orderId,
     groupKey: `order_created:${orderId}`,
   });
@@ -240,7 +240,7 @@ export async function notifyOrderStatus(userId: string, orderId: number, statusL
     priority: "normal",
     title: `تحديث طلبك #${orderId}`,
     message: statusLabel,
-    actionUrl: `/orders`,
+    actionUrl: `/orders/${orderId}`,
     orderId,
     groupKey: `order_status:${orderId}:${statusLabel}`,
   });

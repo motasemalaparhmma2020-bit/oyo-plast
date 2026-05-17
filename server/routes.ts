@@ -7314,9 +7314,11 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       }
 
       const results = [];
+      const syncUserId = getUserId((req as any).user);
       for (const orderData of pendingOrders) {
         try {
-          const order = await storage.createOrder(orderData);
+          // اربط الطلب بالمستخدم الحالي إن كان مسجَّلاً (للأوفلاين sync)
+          const order = await storage.createOrder({ ...orderData, userId: orderData.userId || syncUserId });
           results.push({ success: true, id: order.id, localId: orderData.localId });
         } catch (err: any) {
           results.push({ success: false, localId: orderData.localId, error: err.message });

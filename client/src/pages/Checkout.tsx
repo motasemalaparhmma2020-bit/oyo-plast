@@ -224,18 +224,32 @@ export default function Checkout() {
   }, [codEnabled, digitalWallets]);
 
   const subtotal = useMemo(() => {
+    // 🔧 إصلاح حرج (مايو 2026): استخدم item.unitPrice (السعر الفعلي للمتغيّر الذكي المختار)
+    // بدل product.price (الذي يعكس أرخص متغيّر فقط). كان يسبب حساب الإجمالي بأرخص سعر للجميع.
     if (isAuthenticated) {
       return authCartItems?.reduce((acc, item: any) => {
-        const price = currency === "SAR" && item.product.priceSar
-          ? Number(item.product.priceSar) : Number(item.product.price);
+        const rate = item.product?.priceSar && item.product?.price
+          ? Number(item.product.price) / Number(item.product.priceSar)
+          : 0;
+        const unitY = item.unitPrice != null ? Number(item.unitPrice) : Number(item.product.price);
+        const unitS = currency === "SAR"
+          ? (rate > 0 ? unitY / rate : Number(item.product.priceSar || 0))
+          : 0;
+        const price = currency === "SAR" ? unitS : unitY;
         return acc + price * item.quantity;
       }, 0) || 0;
     }
-    return guestCart.reduce((acc, item) => {
+    return guestCart.reduce((acc, item: any) => {
       const product = allProducts.find(p => p.id === item.productId);
       if (!product) return acc;
-      const price = currency === "SAR" && product.priceSar
-        ? Number(product.priceSar) : Number(product.price);
+      const rate = product.priceSar && product.price
+        ? Number(product.price) / Number(product.priceSar)
+        : 0;
+      const unitY = item.unitPrice != null ? Number(item.unitPrice) : Number(product.price);
+      const unitS = currency === "SAR"
+        ? (rate > 0 ? unitY / rate : Number(product.priceSar || 0))
+        : 0;
+      const price = currency === "SAR" ? unitS : unitY;
       return acc + price * item.quantity;
     }, 0);
   }, [authCartItems, guestCart, currency, isAuthenticated, allProducts]);
@@ -1637,8 +1651,14 @@ export default function Checkout() {
               const isAuthItem = item.id && item.product;
               const product = isAuthItem ? item.product : allProducts.find((p: any) => p.id === item.productId);
               if (!product) return null;
-              const price = currency === "SAR" && product.priceSar
-                ? Number(product.priceSar) : Number(product.price);
+              // 🔧 نفس الإصلاح: استخدم unitPrice الفعلي للمتغيّر الذكي المختار
+              const rate = product.priceSar && product.price
+                ? Number(product.price) / Number(product.priceSar)
+                : 0;
+              const unitY = item.unitPrice != null ? Number(item.unitPrice) : Number(product.price);
+              const price = currency === "SAR"
+                ? (rate > 0 ? unitY / rate : Number(product.priceSar || 0))
+                : unitY;
               const qty = isAuthItem ? item.quantity : item.quantity;
               const selectedColor = item.selectedColor || item.color || "";
               const selectedSize  = item.selectedSize  || item.size  || "";

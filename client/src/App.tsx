@@ -584,6 +584,9 @@ function Router() {
             <Route path="/orders">
               <RequireAccountType><Orders /></RequireAccountType>
             </Route>
+            <Route path="/orders/:id">
+              <RequireAccountType><Orders /></RequireAccountType>
+            </Route>
             <Route path="/profile" component={Profile} />
             <Route path="/addresses">
               <RequireAccountType><Addresses /></RequireAccountType>

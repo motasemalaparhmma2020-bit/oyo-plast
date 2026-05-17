@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Order } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { Link, useRoute } from "wouter";
 import { 
   Package, 
   Clock, 
@@ -72,6 +72,11 @@ export default function Orders() {
   const [orderItems, setOrderItems] = useState<OrderItemWithName[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
 
+  // 🆕 دعم /orders/:id لإبراز طلب محدد عند فتح الإشعار
+  const [, paramsRoute] = useRoute<{ id: string }>("/orders/:id");
+  const highlightedOrderId = paramsRoute?.id ? Number(paramsRoute.id) : null;
+  const highlightRef = useRef<HTMLDivElement | null>(null);
+
   // فلتر الحالة من URL (?status=pending|processing|shipped|delivered|completed|cancelled|all)
   const initialStatus = (() => {
     if (typeof window === "undefined") return "all";
@@ -109,6 +114,20 @@ export default function Orders() {
     acc.all = (acc.all || 0) + 1;
     return acc;
   }, {});
+
+  // عند فتح /orders/:id: عرّض الفلتر للكل + مرّر إلى الطلب (مرة واحدة فقط حتى لا يكسر فلترة المستخدم)
+  const didFocusHighlightedRef = useRef(false);
+  useEffect(() => {
+    if (didFocusHighlightedRef.current) return;
+    if (highlightedOrderId && allOrders?.some(o => o.id === highlightedOrderId)) {
+      didFocusHighlightedRef.current = true;
+      setStatusFilter("all");
+      const t = setTimeout(() => {
+        highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 250);
+      return () => clearTimeout(t);
+    }
+  }, [highlightedOrderId, allOrders]);
 
   const handlePrintInvoice = async (order: Order) => {
     setLoadingItems(true);
@@ -217,8 +236,14 @@ export default function Orders() {
           const currentStatusIndex = getStatusIndex(order.status);
           const isCancelled = order.status === 'cancelled';
           
+          const isHighlighted = order.id === highlightedOrderId;
           return (
-            <Card key={order.id} data-testid={`card-order-${order.id}`}>
+            <Card
+              key={order.id}
+              data-testid={`card-order-${order.id}`}
+              ref={isHighlighted ? highlightRef : undefined}
+              className={isHighlighted ? "ring-2 ring-[#2196F3] shadow-lg" : undefined}
+            >
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <CardTitle className="text-lg">طلب #{order.id}</CardTitle>

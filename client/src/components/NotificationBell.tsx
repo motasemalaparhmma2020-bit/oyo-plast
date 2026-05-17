@@ -120,7 +120,7 @@ export function NotificationBell() {
       <PopoverContent
         align="end"
         side="bottom"
-        className="w-[340px] p-0 max-h-[480px] overflow-hidden flex flex-col"
+        className="w-[340px] p-0 max-h-[480px] overflow-hidden flex flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl"
         dir="rtl"
       >
         <div className="flex items-center justify-between p-3 border-b">

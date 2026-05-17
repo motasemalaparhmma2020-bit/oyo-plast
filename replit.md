@@ -92,5 +92,10 @@ OYO PLAST is a comprehensive e-commerce platform for plastic printing and suppli
 - **Gemini API** (visual search + printing assistant)
 - **Jawal Pay** (planned electronic payments)
 
+### Critical Fixes (May 17, 2026)
+- **Checkout total miscalculation:** `Checkout.tsx` كان يحسب الإجمالي من `product.price` (أرخص متغيّر) بدل `item.unitPrice` المخزّن لكل عنصر سلة → 3 منتجات × 2,200 بدل 111,700. أُصلح في `subtotal` useMemo وفي render العناصر (مع SAR conversion ديناميكية عبر rate مشتق).
+- **NotificationBell شفافة:** `PopoverContent` كان يفتقد bg صريح → أُضيف `bg-white dark:bg-gray-900 border shadow-2xl`.
+- **"عرض الطلب" لا يصل للطلب:** سببان مكدّسان — (1) `storage.createOrder` لم يحفظ `userId` على الطلب رغم وجوده في schema، فـ GET `/api/orders` (WHERE user_id) يُرجع قائمة فارغة للعميل؛ (2) `actionUrl` كان `/orders` فقط. أُصلح: حفظ `userId` في `createOrder`، تغيير `actionUrl` إلى `/orders/${orderId}`، إضافة Route `/orders/:id` في `App.tsx`، ودعم `useRoute` + scrollIntoView + ring highlight في `Orders.tsx`.
+
 ## History
 Detailed session-by-session changelog is in `docs/CHANGELOG.md` (Visual Search v1–v5.1, April 2026 hardening, Session April 30 UX polish, Session May 16 bundle variant + smart back button).

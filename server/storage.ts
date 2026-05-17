@@ -442,7 +442,10 @@ export class DatabaseStorage implements IStorage {
       }
 
       // ── 2. إنشاء الطلب ──────────────────────────────────────────────
+      // 🔧 إصلاح حرج (مايو 2026): حفظ userId على الطلب — كان مفقوداً مما جعل
+      // GET /api/orders يُعيد قائمة فارغة للعميل (يعتمد على WHERE user_id=$1).
       const [order] = await tx.insert(orders).values({
+        userId: data.userId || null,
         customerName: data.customerName,
         customerEmail: data.customerEmail,
         customerPhone: data.customerPhone,
