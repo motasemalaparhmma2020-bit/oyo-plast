@@ -50,6 +50,19 @@ export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSiz
   // لون بادج الخصم من CSS variable (يُطبَّق مباشرةً في الـ style)
   const discountBadgeBg = 'var(--discount-badge-bg, #ef4444)';
 
+  // ── شريط التقييم/المبيعات (نمط SHEIN) ──
+  const ratingValue = Number(product.rating ?? 0);
+  const reviewCountNum = Number(product.reviewCount ?? 0);
+  const soldCount = Number((product as any).soldCount ?? 0);
+  const hasReviews = reviewCountNum > 0 && ratingValue > 0;
+  const formatCount = (n: number): string => {
+    if (n >= 1000) {
+      const k = n / 1000;
+      return `+${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`;
+    }
+    return n.toLocaleString('en-US');
+  };
+
   return (
     <Card
       className="group overflow-hidden border-none shadow-md hover:shadow-2xl transition-all duration-300 bg-white dark:bg-gray-900 flex flex-col h-full"
@@ -83,23 +96,6 @@ export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSiz
             </div>
           )}
 
-          {/* ── فقاعة الخصم — حجم أصغر وأقل تداخلاً مع الصورة ── */}
-          {effectiveDiscount > 0 && (
-            <div
-              className="absolute top-1.5 right-1.5 text-white font-bold rounded-xl flex items-center justify-center shadow-sm px-1.5 py-0.5"
-              style={{
-                fontSize: '10px',
-                lineHeight: 1,
-                display: 'var(--discount-bubble-display, flex)',
-                backgroundColor: discountBadgeBg || '#ef4444',
-                minWidth: '28px',
-              }}
-              data-testid={`badge-discount-${product.id}`}
-            >
-              -{effectiveDiscount}%
-            </div>
-          )}
-
           <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button size="icon" variant="secondary" className="rounded-full h-8 w-8">
               <Eye className="h-4 w-4" />
@@ -121,68 +117,113 @@ export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSiz
           </h3>
         </Link>
 
-        {/* النجوم */}
-        {product.rating && (
-          <div className="flex items-center gap-1 mb-1">
-            <div className="flex items-center">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Star
-                  key={star}
-                  className={`h-2 w-2 ${
-                    star <= Math.floor(Number(product.rating))
-                      ? 'text-yellow-400 fill-yellow-400'
-                      : star - 0.5 <= Number(product.rating)
-                        ? 'text-yellow-400 fill-yellow-400/50'
-                        : 'text-gray-300'
-                  }`}
-                />
-              ))}
-            </div>
-            <span className="text-xs text-muted-foreground">({product.reviewCount || 0})</span>
-          </div>
-        )}
-
-        <div className="space-y-0.5">
-          <div className="flex items-baseline gap-1 flex-wrap">
+        {/* ════════ شريط السعر — نمط SHEIN ════════ */}
+        <div className="space-y-0.5 mb-1">
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            {/* السعر الجديد (بارز) */}
             <span
-              className={`font-extrabold price-num ${
-                (currency === 'YER' && showOriginalPrice) || (currency === 'SAR' && showOriginalPriceSar)
-                  ? 'text-red-600 dark:text-red-500'
-                  : 'text-gray-900 dark:text-white'
-              }`}
+              className="font-extrabold price-num text-gray-900 dark:text-white"
               style={{ fontSize: bannerPriceFontSize ? `${bannerPriceFontSize}px` : 'var(--price-font-size, 16px)', fontFamily: 'var(--font-numbers)' }}
               data-testid={`price-${product.id}`}
               data-price="true"
             >
               {formatPrice(currency === 'SAR' ? product.priceSar : product.price)}
             </span>
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="text-[11px] font-medium text-muted-foreground">
               {currency === 'YER' ? 'ر.ي' : 'ر.س'}
             </span>
-            {/* السعر الأصلي مشطوب */}
+
+            {/* السعر القديم مشطوب */}
             {currency === 'YER' && showOriginalPrice && (
-              <span className="text-xs line-through text-gray-400 price-num" data-price="true" data-testid={`original-price-${product.id}`} style={{ fontFamily: 'var(--font-numbers)' }}>
-                {formatPrice(originalPrice)} ر.ي
+              <span
+                className="text-[11px] line-through text-gray-400 price-num"
+                data-price="true"
+                data-testid={`original-price-${product.id}`}
+                style={{ fontFamily: 'var(--font-numbers)' }}
+              >
+                {formatPrice(originalPrice)}
               </span>
             )}
             {currency === 'SAR' && showOriginalPriceSar && (
-              <span className="text-xs line-through text-gray-400 price-num" data-price="true" style={{ fontFamily: 'var(--font-numbers)' }}>
-                {formatPrice(originalPriceSar)} ر.س
+              <span
+                className="text-[11px] line-through text-gray-400 price-num"
+                data-price="true"
+                style={{ fontFamily: 'var(--font-numbers)' }}
+              >
+                {formatPrice(originalPriceSar)}
+              </span>
+            )}
+
+            {/* بادج الخصم — بارز بجانب السعر */}
+            {effectiveDiscount > 0 && (
+              <span
+                className="font-extrabold rounded-md px-1.5 py-0.5 leading-none"
+                style={{
+                  fontSize: '12px',
+                  color: '#EF4444',
+                  backgroundColor: '#FEE2E2',
+                  display: 'var(--discount-bubble-display, inline-block)',
+                }}
+                data-testid={`badge-discount-${product.id}`}
+              >
+                -{effectiveDiscount}%
               </span>
             )}
           </div>
-          <div className="text-xs text-muted-foreground">
-            {currency === 'YER' && product.priceSar && !showOriginalPriceSar && (
-              <span className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-xs">
-                {formatPrice(product.priceSar)} ر.س
+
+          {/* العملة الثانية */}
+          {currency === 'YER' && product.priceSar && (
+            <span className="text-[10px] text-muted-foreground bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+              {formatPrice(product.priceSar)} ر.س
+            </span>
+          )}
+          {currency === 'SAR' && !showOriginalPrice && (
+            <span className="text-[10px] text-muted-foreground bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+              {formatPrice(product.price)} ر.ي
+            </span>
+          )}
+        </div>
+
+        {/* ════════ شريط التقييم والمبيعات — نمط SHEIN ════════ */}
+        <div className="flex items-center gap-1.5 flex-wrap text-[11px]" data-testid={`rating-row-${product.id}`}>
+          {hasReviews ? (
+            <>
+              <span className="flex items-center gap-0.5">
+                <Star className="h-3.5 w-3.5" style={{ color: '#F59E0B', fill: '#F59E0B' }} />
+                <span className="font-bold text-gray-800 dark:text-gray-100 price-num" style={{ fontFamily: 'var(--font-numbers)' }}>
+                  {ratingValue.toFixed(1)}
+                </span>
+                <span className="text-gray-500 price-num" style={{ fontFamily: 'var(--font-numbers)' }}>
+                  ({formatCount(reviewCountNum)})
+                </span>
               </span>
-            )}
-            {currency === 'SAR' && !showOriginalPrice && (
-              <span className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-xs">
-                {formatPrice(product.price)} ر.ي
+              {soldCount > 0 && (
+                <>
+                  <span className="text-gray-300">•</span>
+                  <span className="text-gray-600 dark:text-gray-300 price-num" style={{ fontFamily: 'var(--font-numbers)' }}>
+                    {formatCount(soldCount)} مبيع
+                  </span>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <span className="flex items-center gap-px text-gray-300">
+                {[1,2,3,4,5].map((s) => <Star key={s} className="h-3 w-3" />)}
               </span>
-            )}
-          </div>
+              <span className="font-semibold text-blue-600 bg-blue-50 dark:bg-blue-950/40 px-1.5 rounded">
+                جديد
+              </span>
+              {soldCount > 0 && (
+                <>
+                  <span className="text-gray-300">•</span>
+                  <span className="text-gray-600 dark:text-gray-300 price-num" style={{ fontFamily: 'var(--font-numbers)' }}>
+                    {formatCount(soldCount)} مبيع
+                  </span>
+                </>
+              )}
+            </>
+          )}
         </div>
       </CardContent>
 
