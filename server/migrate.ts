@@ -781,6 +781,33 @@ export async function runMigrations(): Promise<void> {
       console.warn("[WARN] ai_agents migration:", e instanceof Error ? e.message : e);
     }
 
+    // ─── Volume Offers — العروض التحفيزية حسب الكمية (May 17, 2026) ─────
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS product_volume_offers (
+          id SERIAL PRIMARY KEY,
+          product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          min_quantity INTEGER NOT NULL,
+          max_quantity INTEGER,
+          offer_price_yer NUMERIC NOT NULL,
+          original_price_yer NUMERIC,
+          display_label TEXT,
+          badge_text TEXT,
+          has_free_shipping BOOLEAN DEFAULT false NOT NULL,
+          shipping_fee_yer NUMERIC DEFAULT 0 NOT NULL,
+          marketer_commission_percent NUMERIC,
+          is_active BOOLEAN DEFAULT true NOT NULL,
+          sort_order INTEGER DEFAULT 0 NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_pvo_product_active ON product_volume_offers(product_id, is_active)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_pvo_range ON product_volume_offers(product_id, min_quantity, max_quantity) WHERE is_active = true`);
+      console.log("[INFO] product_volume_offers table ready");
+    } catch (e) {
+      console.warn("[WARN] product_volume_offers migration:", e instanceof Error ? e.message : e);
+    }
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

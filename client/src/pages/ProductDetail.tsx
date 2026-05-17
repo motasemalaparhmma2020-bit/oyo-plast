@@ -419,6 +419,41 @@ export default function ProductDetail() {
     try { return product?.bulkPricing ? JSON.parse(product.bulkPricing) : []; } catch { return []; }
   }, [product?.bulkPricing]);
 
+  // ── Volume Offers — العروض التحفيزية حسب الكمية (May 17, 2026) ────────────
+  interface VolumeOffer {
+    id: number; productId: number;
+    minQuantity: number; maxQuantity: number | null;
+    offerPriceYer: number; originalPriceYer: number | null;
+    displayLabel: string | null; badgeText: string | null;
+    hasFreeShipping: boolean; shippingFeeYer: number;
+    marketerCommissionPercent: number | null;
+    isActive: boolean; sortOrder: number;
+  }
+  const { data: volumeOffers = [] } = useQuery<VolumeOffer[]>({
+    queryKey: ['/api/products', id, 'volume-offers'],
+    queryFn: async () => {
+      const res = await fetch(`/api/products/${numericId}/volume-offers`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!numericId,
+    staleTime: 5 * 60000,
+  });
+  const sortedOffers = useMemo(() =>
+    [...volumeOffers].sort((a, b) => a.minQuantity - b.minQuantity),
+    [volumeOffers]);
+  const activeOffer = useMemo(() => {
+    const matching = sortedOffers.filter(o =>
+      quantity >= o.minQuantity && (o.maxQuantity == null || quantity <= o.maxQuantity)
+    );
+    if (matching.length === 0) return null;
+    return matching.sort((a, b) => a.offerPriceYer - b.offerPriceYer)[0];
+  }, [sortedOffers, quantity]);
+  const nextOffer = useMemo(() => {
+    if (sortedOffers.length === 0) return null;
+    return sortedOffers.find(o => o.minQuantity > quantity) || null;
+  }, [sortedOffers, quantity]);
+
   const sizePricing: SizePricing[] = useMemo(() => {
     try { return product?.sizePricing ? JSON.parse(product.sizePricing) : []; } catch { return []; }
   }, [product?.sizePricing]);
@@ -533,6 +568,11 @@ export default function ProductDetail() {
 
   const currentPrice = useMemo(() => {
     if (!product) return '0';
+    // ── Volume Offer له الأولوية المطلقة (يلغي smart variants + الطباعة) ──
+    // ملاحظة: سعر العرض مُسجّل بـ YER. عرض SAR لاحقاً عبر mapping على الخادم.
+    if (activeOffer) {
+      return String(activeOffer.offerPriceYer);
+    }
     // الخيارات الذكية لها الأولوية الكاملة عند تفعيلها
     if (showSmartVariants && smartVariantPrice) return smartVariantPrice.price;
     if (currentSizeData) {
@@ -544,7 +584,7 @@ export default function ProductDetail() {
       if (applicable) base = applicable.price;
     }
     return base;
-  }, [product, quantity, currency, bulkPricing, currentSizeData, showSmartVariants, smartVariantPrice]);
+  }, [product, quantity, currency, bulkPricing, currentSizeData, showSmartVariants, smartVariantPrice, activeOffer]);
 
   // ── حساب تكلفة الطباعة ─────────────────────────────────────────────────────
   const bagPrintingCost = useMemo(() => {
@@ -596,26 +636,35 @@ export default function ProductDetail() {
     (printingPricing.designFee + printingPricing.pricePerColor + printingPricing.pricePerSide) > 0,
     [printingPricing]);
 
+  // ── المنطق الجديد (Phase 4 v2 — May 17, 2026) ────────────────────
+  // الصيغة: printingPerBag = colors × sides × pricePerColorSide
+  //         totalPrintingCost = (printingPerBag × qty) + designFee
+  // كل لون وكل وجه مدفوع. التصميم رسم ثابت لكل طلب.
   const phase4PrintingBreakdown = useMemo(() => {
     if (!enableCustomPrinting || !hasPhase4Pricing) {
-      return { designFee: 0, colorTotal: 0, sideTotal: 0, totalPrintingCost: 0 };
+      return { designFee: 0, printingPerBag: 0, printingTotal: 0, totalPrintingCost: 0 };
     }
-    const extraColors = Math.max(0, printingColors - 1); // أول لون مجاني
-    const extraSides  = Math.max(0, printingSides - 1);  // أول وجه مجاني
-    const colorTotal  = extraColors * printingPricing.pricePerColor;
-    const sideTotal   = extraSides * printingPricing.pricePerSide;
-    const designFee   = printingPricing.designFee;
+    const colors = Math.max(1, printingColors);
+    const sides  = Math.max(1, printingSides);
+    const printingPerBag = colors * sides * printingPricing.pricePerColor;
+    const printingTotal  = printingPerBag * Math.max(1, quantity);
+    const designFee      = printingPricing.designFee;
     return {
       designFee,
-      colorTotal,
-      sideTotal,
-      totalPrintingCost: designFee + colorTotal + sideTotal,
+      printingPerBag,
+      printingTotal,
+      // legacy fields محفوظة للتوافق مع كود قديم في cart/checkout
+      colorTotal: printingTotal,
+      sideTotal: 0,
+      totalPrintingCost: designFee + printingTotal,
     };
-  }, [enableCustomPrinting, hasPhase4Pricing, printingColors, printingSides, printingPricing]);
+  }, [enableCustomPrinting, hasPhase4Pricing, printingColors, printingSides, printingPricing, quantity]);
 
-  const totalPrice = useMemo(() =>
-    (Number(currentPrice) * quantity) + printingCost + bagPrintingCost + (professionalPrintingUnitPrice * quantity) + phase4PrintingBreakdown.totalPrintingCost,
-    [currentPrice, quantity, printingCost, bagPrintingCost, professionalPrintingUnitPrice, phase4PrintingBreakdown.totalPrintingCost]);
+  const totalPrice = useMemo(() => {
+    // عند تفعيل العرض، السعر شامل ويُلغي كل رسوم الطباعة والأقسام الأخرى
+    if (activeOffer) return Number(currentPrice) * quantity;
+    return (Number(currentPrice) * quantity) + printingCost + bagPrintingCost + (professionalPrintingUnitPrice * quantity) + phase4PrintingBreakdown.totalPrintingCost;
+  }, [currentPrice, quantity, printingCost, bagPrintingCost, professionalPrintingUnitPrice, phase4PrintingBreakdown.totalPrintingCost, activeOffer]);
 
   const currentStock = useMemo(() =>
     currentSizeData?.stock !== undefined ? currentSizeData.stock : (product?.stock || 0),
@@ -1491,8 +1540,131 @@ export default function ProductDetail() {
         );
       }
 
-      // ── BULK PRICING ──────────────────────────────────────────────────────
+      // ── VOLUME OFFERS (May 17, 2026) — Anchor / Progress / Badge / Tiers ─
+      case "volume-offers":
       case "bulk": {
+        // نُدمج عرض العروض التحفيزية مع قسم bulk القديم — لو الاثنان فارغان، لا شيء يُرسم
+        const hasOffers = sortedOffers.length > 0;
+        const hasBulk = sec["bulk"]?.visible && bulkPricing.length > 0;
+        if (!hasOffers && !hasBulk) return null;
+
+        // حساب نسبة التقدّم نحو العرض التالي
+        let progressPct = 0;
+        let remaining = 0;
+        if (nextOffer && quantity < nextOffer.minQuantity) {
+          const prevAnchor = activeOffer?.maxQuantity ?? activeOffer?.minQuantity ?? 0;
+          const span = Math.max(1, nextOffer.minQuantity - prevAnchor);
+          progressPct = Math.min(100, Math.round(((quantity - prevAnchor) / span) * 100));
+          remaining = nextOffer.minQuantity - quantity;
+        } else if (activeOffer) {
+          progressPct = 100;
+        }
+
+        return (
+          <div key="bulk" className="px-4 space-y-3" data-testid="section-volume-offers">
+            {/* ── Active Offer Banner (Anchor + Badge) ── */}
+            {activeOffer && (
+              <div className="rounded-xl border-2 border-orange-400 bg-gradient-to-l from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/40 p-3 shadow-sm" data-testid={`banner-active-offer-${activeOffer.id}`}>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {activeOffer.badgeText && (
+                      <Badge className="bg-orange-500 text-white text-xs animate-pulse" data-testid="badge-offer">
+                        🔥 {activeOffer.badgeText}
+                      </Badge>
+                    )}
+                    {activeOffer.hasFreeShipping && (
+                      <Badge className="bg-green-500 text-white text-xs">🚚 شحن مجاني</Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-2xl font-bold text-orange-600 dark:text-orange-400" data-testid="text-offer-price">
+                    {formatPrice(activeOffer.offerPriceYer)} ر.ي / قطعة
+                  </span>
+                  {activeOffer.originalPriceYer && activeOffer.originalPriceYer > activeOffer.offerPriceYer && (
+                    <>
+                      <span className="text-sm line-through text-gray-400" data-testid="text-anchor-price">
+                        {formatPrice(activeOffer.originalPriceYer)} ر.ي
+                      </span>
+                      <Badge variant="destructive" className="text-xs">
+                        -{Math.round(((activeOffer.originalPriceYer - activeOffer.offerPriceYer) / activeOffer.originalPriceYer) * 100)}%
+                      </Badge>
+                    </>
+                  )}
+                </div>
+                {activeOffer.displayLabel && (
+                  <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">{activeOffer.displayLabel}</p>
+                )}
+              </div>
+            )}
+
+            {/* ── Progress to Next Offer ── */}
+            {nextOffer && remaining > 0 && (
+              <div className="rounded-xl border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30 p-3" data-testid="banner-next-offer">
+                <div className="flex items-center justify-between text-xs mb-2 text-blue-900 dark:text-blue-100">
+                  <span>أضِف {remaining} قطعة فقط للحصول على سعر <strong>{formatPrice(nextOffer.offerPriceYer)} ر.ي</strong></span>
+                  <span className="font-bold">{progressPct}%</span>
+                </div>
+                <div className="h-2 bg-blue-200 dark:bg-blue-900 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-l from-blue-500 to-blue-600 transition-all duration-300"
+                    style={{ width: `${progressPct}%` }}
+                    data-testid="progress-next-offer"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ── All Tiers Grid (clickable to set quantity) ── */}
+            {hasOffers && (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                <p className="text-sm font-bold text-primary mb-2">🎯 عروض الكمية</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {sortedOffers.map(o => {
+                    const isActive = activeOffer?.id === o.id;
+                    return (
+                      <button
+                        key={o.id}
+                        onClick={() => setQuantity(Math.max(o.minQuantity, 1))}
+                        className={`text-right rounded-lg border p-2 transition-all ${isActive
+                          ? "border-orange-500 bg-orange-100 dark:bg-orange-950/50 shadow-md"
+                          : "border-gray-200 dark:border-gray-700 hover:border-primary"}`}
+                        data-testid={`button-tier-${o.id}`}
+                      >
+                        <div className="text-xs font-bold">
+                          {o.minQuantity}{o.maxQuantity ? `–${o.maxQuantity}` : "+"} قطعة
+                        </div>
+                        <div className="text-sm font-bold text-orange-600">
+                          {formatPrice(o.offerPriceYer)} ر.ي
+                        </div>
+                        {o.badgeText && <div className="text-[10px] text-orange-700 dark:text-orange-400 mt-0.5">{o.badgeText}</div>}
+                        {o.hasFreeShipping && <div className="text-[10px] text-green-700 dark:text-green-400">🚚 مجاني</div>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── Legacy bulk pricing badges (if any) ── */}
+            {hasBulk && !hasOffers && (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                <p className="text-sm font-bold text-primary mb-2">💰 خصومات الكميات</p>
+                <div className="flex flex-wrap gap-2">
+                  {bulkPricing.map((bp, i) => (
+                    <Badge key={i} variant={quantity >= bp.minQty ? "default" : "outline"} className="text-xs">
+                      {bp.minQty}+ قطعة: {formatPrice(bp.price)} {currLabel}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // ── BULK PRICING (legacy — احتُفظ بـ case قديم خاطئ سيُتجاوز فعلياً للـ case أعلاه) ──
+      case "bulk-legacy-disabled": {
         if (!sec["bulk"]?.visible || bulkPricing.length === 0) return null;
         return (
           <div key="bulk" className="px-4" data-testid="section-bulk">
@@ -2011,7 +2183,7 @@ export default function ProductDetail() {
                         )}
 
                         {/* عدد الأوجه */}
-                        {printingPricing.pricePerSide > 0 && (
+                        {printingPricing.pricePerColor > 0 && (
                           <div className="flex items-center justify-between">
                             <Label className="text-sm">عدد الأوجه</Label>
                             <div className="flex gap-1">
@@ -2027,28 +2199,30 @@ export default function ProductDetail() {
                           </div>
                         )}
 
-                        {/* تفصيل الأسعار */}
+                        {/* تفصيل الأسعار — Phase 4 v2 */}
                         <div className="border-t border-blue-200 dark:border-blue-800 pt-2 space-y-1 text-xs">
                           {phase4PrintingBreakdown.designFee > 0 && (
                             <div className="flex justify-between" data-testid="text-design-fee">
-                              <span className="text-muted-foreground">رسوم التصميم</span>
+                              <span className="text-muted-foreground">رسوم التصميم (لمرّة واحدة)</span>
                               <span className="font-semibold">{formatPrice(phase4PrintingBreakdown.designFee)} {currLabel}</span>
                             </div>
                           )}
-                          {phase4PrintingBreakdown.colorTotal > 0 && (
-                            <div className="flex justify-between" data-testid="text-color-total">
-                              <span className="text-muted-foreground">ألوان إضافية ({Math.max(0, printingColors - 1)} × {formatPrice(printingPricing.pricePerColor)})</span>
-                              <span className="font-semibold">{formatPrice(phase4PrintingBreakdown.colorTotal)} {currLabel}</span>
-                            </div>
-                          )}
-                          {phase4PrintingBreakdown.sideTotal > 0 && (
-                            <div className="flex justify-between" data-testid="text-side-total">
-                              <span className="text-muted-foreground">وجه إضافي</span>
-                              <span className="font-semibold">{formatPrice(phase4PrintingBreakdown.sideTotal)} {currLabel}</span>
-                            </div>
+                          {phase4PrintingBreakdown.printingPerBag > 0 && (
+                            <>
+                              <div className="flex justify-between" data-testid="text-printing-per-bag">
+                                <span className="text-muted-foreground">
+                                  طباعة/قطعة ({printingColors} لون × {printingSides} وجه × {formatPrice(printingPricing.pricePerColor)})
+                                </span>
+                                <span className="font-semibold">{formatPrice(phase4PrintingBreakdown.printingPerBag)} {currLabel}</span>
+                              </div>
+                              <div className="flex justify-between" data-testid="text-printing-total-qty">
+                                <span className="text-muted-foreground">إجمالي الطباعة ({quantity} قطعة)</span>
+                                <span className="font-semibold">{formatPrice(phase4PrintingBreakdown.printingTotal)} {currLabel}</span>
+                              </div>
+                            </>
                           )}
                           <div className="flex justify-between pt-1 border-t border-blue-200/60 dark:border-blue-800/60 text-sm">
-                            <span className="font-bold text-blue-700 dark:text-blue-300">إجمالي الطباعة</span>
+                            <span className="font-bold text-blue-700 dark:text-blue-300">إجمالي الطباعة + التصميم</span>
                             <span className="font-bold text-blue-700 dark:text-blue-300" data-testid="text-printing-total">
                               {formatPrice(phase4PrintingBreakdown.totalPrintingCost)} {currLabel}
                             </span>

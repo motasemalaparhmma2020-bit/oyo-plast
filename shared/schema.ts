@@ -1399,3 +1399,27 @@ export const insertPurchaseOrderItemSchema = createInsertSchema(purchaseOrderIte
 });
 export type InsertPurchaseOrderItem = z.infer<typeof insertPurchaseOrderItemSchema>;
 export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
+
+// ─── Volume Offers — العروض التحفيزية حسب الكمية (May 17, 2026) ──────────
+// نموذج tiered volume pricing معتمد عالمياً (Vistaprint/CustomInk/Alibaba):
+// سعر العرض شامل (يلغي smart variants + الطباعة + التصميم). يُطبَّق على
+// السلة عندما تقع الكمية ضمن min/max للعرض. الشحن مدمج (مجاني أو رمزي).
+export const productVolumeOffers = pgTable("product_volume_offers", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull(),
+  minQuantity: integer("min_quantity").notNull(),
+  maxQuantity: integer("max_quantity"), // null = لا حد أعلى
+  offerPriceYer: numeric("offer_price_yer").notNull(), // السعر الشامل لكل قطعة
+  originalPriceYer: numeric("original_price_yer"), // للـ Anchor (مشطوب) — اختياري
+  displayLabel: text("display_label"),  // "عرض 100 كيس"
+  badgeText: text("badge_text"),        // "الأكثر طلباً" / "أفضل قيمة"
+  hasFreeShipping: boolean("has_free_shipping").default(false).notNull(),
+  shippingFeeYer: numeric("shipping_fee_yer").default("0").notNull(),
+  marketerCommissionPercent: numeric("marketer_commission_percent"), // null = استخدم عمولة المنتج
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertProductVolumeOfferSchema = createInsertSchema(productVolumeOffers).omit({ id: true, createdAt: true });
+export type InsertProductVolumeOffer = z.infer<typeof insertProductVolumeOfferSchema>;
+export type ProductVolumeOffer = typeof productVolumeOffers.$inferSelect;

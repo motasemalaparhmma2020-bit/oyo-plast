@@ -308,6 +308,30 @@ export async function computeServerUnitPrice(
   const selectedColor = item.selectedColor ?? null;
   const selectedBagColor = item.selectedBagColor ?? null;
 
+  // (0) ─── Volume Offer Override (May 17, 2026) ───────────────────────────
+  // إن كانت الكمية تقع ضمن عرض مفعّل لهذا المنتج، نُطبّق سعر العرض
+  // (السعر شامل: يُلغي smart variants + Phase 4 + الطباعة القديمة)
+  try {
+    const { findActiveOfferForQuantity } = await import("./routes/volume-offers");
+    const offer = await findActiveOfferForQuantity(pid, qty);
+    if (offer && offer.offerPriceYer != null && offer.offerPriceYer >= 0) {
+      const lineTotal = offer.offerPriceYer * qty;
+      return {
+        unitPrice: Math.round(offer.offerPriceYer * 100) / 100,
+        lineTotal: Math.round(lineTotal * 100) / 100,
+        breakdown: {
+          basePrice: offer.offerPriceYer,
+          proPrintingPerUnit: 0, customPrintingPerUnit: 0,
+          phase4Total: 0, designFee: 0, colorTotal: 0, sideTotal: 0,
+          qty, appliedOfferId: offer.id, appliedOfferLabel: offer.displayLabel,
+          freeShipping: offer.hasFreeShipping, offerShippingFee: offer.shippingFeeYer,
+        },
+      };
+    }
+  } catch (e: any) {
+    console.warn("[computeLineTotal volume-offer]", e?.message);
+  }
+
   // (1) السعر الأساسي من smart_variants (أرخص متغير مطابق للـ label أو أرخص بالعموم)
   let basePrice = parseFloat(String(row.price ?? "0")) || 0;
   try {
@@ -350,11 +374,13 @@ export async function computeServerUnitPrice(
       const sides = Math.max(1, parseInt(String(opts.sides ?? 1)) || 1);
       const dFee = Number(row.printing_design_fee_override ?? row.design_fee_per_mockup ?? 0) || 0;
       const pColor = Number(row.printing_color_price_override ?? row.color_price_per_color ?? 0) || 0;
-      const pSide = Number(row.printing_side_price_override ?? row.price_per_side ?? 0) || 0;
+      // ── Phase 4 v2: printingPerBag = colors × sides × pColor ; total = printingPerBag × qty + designFee
+      // كل لون وكل وجه مدفوع. (لم نعد نستخدم pricePerSide كحقل منفصل.)
+      const printingPerBag = colors * sides * pColor;
       designFee = dFee;
-      colorTotal = Math.max(0, colors - 1) * pColor;
-      sideTotal = Math.max(0, sides - 1) * pSide;
-      phase4Total = designFee + colorTotal + sideTotal;
+      colorTotal = printingPerBag * qty;
+      sideTotal = 0; // legacy field — مُدمج داخل colorTotal الآن
+      phase4Total = designFee + colorTotal;
     }
   }
 
@@ -470,6 +496,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ─── المهمة 8: نظام وكلاء الذكاء الاصطناعي (AI Agent Team) ─────
   const { registerAIAgentRoutes } = await import("./routes/ai-agents");
   registerAIAgentRoutes(app, requireAdmin);
+
+  // ─── العروض التحفيزية حسب الكمية (Volume Offers — May 17, 2026) ─────
+  const { registerVolumeOfferRoutes } = await import("./routes/volume-offers");
+  registerVolumeOfferRoutes(app, requireAdmin);
 
   // تقرير راشد التلقائي يومياً الساعة 8:00 صباحاً (تقويم اليمن)
   try {
@@ -3425,6 +3455,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       // 🔒 إعادة حساب أسعار العناصر والمجموع على الخادم (إصلاح أمني)
       // — يتجاهل item.price/unitPrice و total من العميل ويعتمد على DB حصراً.
       let serverSubtotal = 0;
+      const appliedOffersInOrder: Array<{ offerId: number; lineTotal: number; freeShipping: boolean; offerShippingFee: number; marketerCommissionPercent: number | null }> = [];
       if (Array.isArray(items)) {
         for (const it of items) {
           const pid = Number(it.productId ?? (it as any).product_id ?? it.product?.id);
@@ -3436,13 +3467,51 @@ h1{font-size:18px;color:#222;margin:4px 0;}
             it.price = String(c.unitPrice);
             it.unitPrice = c.unitPrice;
             serverSubtotal += c.lineTotal;
+            // التقاط تفاصيل العرض المطبَّق (لاستخدامها في تجاوز الشحن لاحقاً)
+            const bd: any = c.breakdown || {};
+            if (bd.appliedOfferId) {
+              // قراءة marketerCommissionPercent مباشرة من جدول العروض (مصدر الحقيقة)
+              let offerMarketerPct: number | null = null;
+              try {
+                const { pool: pp } = await import("./db");
+                const orow = await pp.query(
+                  `SELECT marketer_commission_percent FROM product_volume_offers WHERE id=$1`,
+                  [bd.appliedOfferId]
+                );
+                if (orow.rows.length && orow.rows[0].marketer_commission_percent != null) {
+                  offerMarketerPct = Number(orow.rows[0].marketer_commission_percent);
+                }
+              } catch { /* keep null */ }
+              appliedOffersInOrder.push({
+                offerId: bd.appliedOfferId,
+                lineTotal: c.lineTotal,
+                freeShipping: !!bd.freeShipping,
+                offerShippingFee: Number(bd.offerShippingFee) || 0,
+                marketerCommissionPercent: offerMarketerPct,
+              });
+              // وسم العنصر بمعرّف العرض (للاستخدام في حساب العمولة لاحقاً)
+              (it as any)._appliedOfferId = bd.appliedOfferId;
+              (it as any)._appliedOfferMarketerPct = offerMarketerPct;
+            }
           } catch (e: any) {
             return res.status(400).json({ message: `تعذّر التحقق من سعر المنتج ${pid}`, details: e.message });
           }
         }
       }
-      // الشحن والخصم يبقى كما أرسله العميل (الكوبون محقّق مسبقاً في smart-pricing)
-      const safeShipping = Math.max(0, Number(shippingCost) || 0);
+      // ─── الشحن: تجاوز عبر العروض إن وُجد ─────────────────────────────────────
+      // قاعدة آمنة: لو كل عناصر الطلب تحت عروض، نُطبّق منطق العرض على الشحن.
+      // - أي عرض = "شحن مجاني" → الشحن صفر.
+      // - وإلا الشحن = أعلى رسوم شحن عرض (لتغطية أي رسوم رمزية أعلى).
+      let safeShipping = Math.max(0, Number(shippingCost) || 0);
+      if (appliedOffersInOrder.length > 0 && Array.isArray(items) && appliedOffersInOrder.length === items.length) {
+        const anyFree = appliedOffersInOrder.some(o => o.freeShipping);
+        if (anyFree) {
+          safeShipping = 0;
+        } else {
+          const maxFee = Math.max(...appliedOffersInOrder.map(o => o.offerShippingFee));
+          safeShipping = maxFee;
+        }
+      }
       const safeDiscount = Math.max(0, Number(discountAmount) || 0);
       const total = Math.max(0, Math.round((serverSubtotal - safeDiscount + safeShipping) * 100) / 100);
       const serverSubtotalRounded = Math.round(serverSubtotal * 100) / 100;
@@ -3589,7 +3658,22 @@ h1{font-size:18px;color:#222;margin:4px 0;}
           );
           if (smR.rows.length) {
             const sm = smR.rows[0];
-            const commission = (Number(total) * Number(sm.commission_rate)) / 100;
+            const defaultPct = Number(sm.commission_rate) || 0;
+            // عمولة بحسب العنصر — العرض المُطبَّق له أولوية على نسبة الكوبون
+            let commission = 0;
+            if (Array.isArray(items) && items.length > 0) {
+              for (const it of items) {
+                const qty = Number(it.quantity) || 1;
+                const unit = Number(it.unitPrice ?? it.price) || 0;
+                const line = unit * qty;
+                const pct = (it as any)._appliedOfferMarketerPct != null
+                  ? Number((it as any)._appliedOfferMarketerPct)
+                  : defaultPct;
+                commission += (line * pct) / 100;
+              }
+            } else {
+              commission = (Number(total) * defaultPct) / 100;
+            }
             await mPool.query(
               `UPDATE orders SET marketer_table_id=$1, marketer_commission_amount=$2 WHERE id=$3`,
               [sm.id, commission.toFixed(2), order.id]
@@ -7097,10 +7181,20 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       );
       
       if (existingItem && !hasPrinting) {
-        // Update quantity
+        // Update quantity — مع إعادة حساب unitPrice (لـ tier overlap)
+        const newQty = existingItem.quantity + quantity;
+        let mergedUnitPrice: number | null = serverUnitPrice;
+        try {
+          const recomputed = await computeServerUnitPrice(Number(productId), {
+            quantity: newQty, selectedSize, selectedColor, selectedBagColor,
+            customPrinting: existingItem.customPrinting, designOptions: existingItem.designOptions,
+            printingUnitPrice: existingItem.printingUnitPrice,
+          });
+          mergedUnitPrice = recomputed.unitPrice;
+        } catch { /* fallback to current serverUnitPrice */ }
         const [updated] = await dbInstance
           .update(cartTable)
-          .set({ quantity: existingItem.quantity + quantity })
+          .set({ quantity: newQty, unitPrice: mergedUnitPrice != null ? String(mergedUnitPrice) : existingItem.unitPrice })
           .where(eqFn(cartTable.id, existingItem.id))
           .returning();
         return res.status(201).json(updated);
@@ -7157,6 +7251,23 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const updateData: Record<string, any> = {};
       if (quantity !== undefined) updateData.quantity = quantity;
       if (designFileUrl !== undefined) updateData.designFileUrl = designFileUrl;
+
+      // إعادة حساب unitPrice عند تغيير الكمية (لتحديث tier pricing)
+      if (quantity !== undefined) {
+        try {
+          const cartId = parseInt(req.params.id);
+          const existRows = await dbInstance.select().from(cartTable).where(eqFn(cartTable.id, cartId));
+          const cur = existRows[0];
+          if (cur) {
+            const recomputed = await computeServerUnitPrice(Number(cur.productId), {
+              quantity: Number(quantity), selectedSize: cur.selectedSize, selectedColor: cur.selectedColor,
+              selectedBagColor: cur.selectedBagColor, customPrinting: cur.customPrinting,
+              designOptions: cur.designOptions, printingUnitPrice: cur.printingUnitPrice,
+            });
+            updateData.unitPrice = String(recomputed.unitPrice);
+          }
+        } catch { /* keep old unitPrice on failure */ }
+      }
       const [updated] = await dbInstance
         .update(cartTable)
         .set(updateData)

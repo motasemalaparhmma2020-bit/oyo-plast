@@ -5072,41 +5072,36 @@ function AdminPrintingCategories({ adminToken }: { adminToken: string | null }) 
                 <h4 className="font-bold text-sm text-purple-900 dark:text-purple-200">تسعير الطباعة الفوري (Phase 4)</h4>
                 <p className="text-xs text-purple-700 dark:text-purple-300 mt-0.5">
                   أسعار افتراضية للمنتجات في هذه الفئة. يمكن تجاوزها لكل منتج على حدة.
-                  أول لون وأول وجه مجاناً — السعر يطبَّق على الإضافي فقط.
+                  ✨ <strong>المنطق الجديد:</strong> سعر الطباعة لكل قطعة = (الألوان × الأوجه × سعر اللون). كل لون وكل وجه مدفوع.
+                  مثال: 100 كيس × (1 لون × 2 وجه × 10 ر.ي) = 2,000 ر.ي طباعة + رسوم تصميم.
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">رسوم التصميم لكل Mockup (ر.ي)</label>
+                <label className="text-xs text-muted-foreground mb-1 block">🎨 رسوم التصميم (لكل طلب — ر.ي)</label>
                 <input type="number" min="0" step="any"
                   className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
                   value={form.designFeePerMockup}
                   onChange={e => setForm(p => ({ ...p, designFeePerMockup: e.target.value }))}
-                  placeholder="0"
+                  placeholder="مثال: 1000"
                   data-testid="input-design-fee-per-mockup" />
+                <p className="text-[10px] text-muted-foreground mt-1">رسم ثابت يُضاف مرة واحدة لكل طلب فيه طباعة</p>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">سعر اللون الإضافي (ر.ي)</label>
+                <label className="text-xs text-muted-foreground mb-1 block">🎨 سعر اللون × الوجه × القطعة (ر.ي)</label>
                 <input type="number" min="0" step="any"
                   className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
                   value={form.colorPricePerColor}
                   onChange={e => setForm(p => ({ ...p, colorPricePerColor: e.target.value }))}
-                  placeholder="0"
+                  placeholder="مثال: 10"
                   data-testid="input-color-price-per-color" />
-                <p className="text-[10px] text-muted-foreground mt-1">يُحسب على عدد الألوان - 1</p>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">سعر الوجه الإضافي (ر.ي)</label>
-                <input type="number" min="0" step="any"
-                  className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
-                  value={form.pricePerSide}
-                  onChange={e => setForm(p => ({ ...p, pricePerSide: e.target.value }))}
-                  placeholder="0"
-                  data-testid="input-price-per-side" />
-                <p className="text-[10px] text-muted-foreground mt-1">يُحسب على عدد الوجوه - 1</p>
+                <p className="text-[10px] text-muted-foreground mt-1">يُضرب بـ (عدد الألوان × عدد الأوجه × الكمية)</p>
               </div>
             </div>
+            {/* حقل سعر الوجه القديم — مُلغى في v2، لكن نُبقيه مخفياً للتوافق */}
+            <input type="hidden" value={form.pricePerSide || "0"}
+              onChange={e => setForm(p => ({ ...p, pricePerSide: e.target.value }))} />
           </div>
           <div className="flex gap-2 justify-end">
             <button onClick={() => { setShowForm(false); setEditCat(null); }}
@@ -8428,6 +8423,19 @@ export default function Admin() {
               </div>
               <a href="/admin/ai-agents" data-testid="link-ai-agents">
                 <Button className="gap-1 bg-purple-600 hover:bg-purple-700">
+                  فتح
+                </Button>
+              </a>
+            </div>
+            <div className="mb-4 p-4 bg-gradient-to-l from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/40 border border-orange-200 dark:border-orange-800 rounded-lg flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-sm text-orange-900 dark:text-orange-100 flex items-center gap-2">
+                  🎯 العروض التحفيزية حسب الكمية
+                </h3>
+                <p className="text-xs text-orange-700 dark:text-orange-300">عروض شاملة (سعر/كمية + شحن + Anchor + Badge + عمولة مسوّق لكل عرض). يلغي smart variants ورسوم الطباعة عند تطابق الكمية.</p>
+              </div>
+              <a href="/admin/volume-offers" data-testid="link-volume-offers">
+                <Button className="gap-1 bg-orange-600 hover:bg-orange-700">
                   فتح
                 </Button>
               </a>
