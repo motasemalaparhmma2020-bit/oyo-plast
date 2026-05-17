@@ -4932,6 +4932,8 @@ function AdminPrintingCategories({ adminToken }: { adminToken: string | null }) 
   const [form, setForm] = useState({
     name: "", pricePerSqMeter: "", pricePerSqCm: "", finishOptionsRaw: "",
     colorSeparationPrice: "", minWidthCm: "", minHeightCm: "", isActive: true,
+    // Phase 4 — تسعير الطباعة الفوري
+    designFeePerMockup: "", colorPricePerColor: "", pricePerSide: "",
   });
 
   const { data: cats = [], isLoading } = useQuery<PrintingCategory[]>({
@@ -4950,6 +4952,10 @@ function AdminPrintingCategories({ adminToken }: { adminToken: string | null }) 
         colorSeparationPrice: form.colorSeparationPrice || null,
         minWidthCm: form.minWidthCm || null,
         minHeightCm: form.minHeightCm || null,
+        // Phase 4
+        designFeePerMockup: form.designFeePerMockup || "0",
+        colorPricePerColor: form.colorPricePerColor || "0",
+        pricePerSide: form.pricePerSide || "0",
         isActive: form.isActive,
       };
       if (editCat) {
@@ -4970,7 +4976,11 @@ function AdminPrintingCategories({ adminToken }: { adminToken: string | null }) 
 
   function openNew() {
     setEditCat(null);
-    setForm({ name: "", pricePerSqMeter: "", pricePerSqCm: "", finishOptionsRaw: "", colorSeparationPrice: "", minWidthCm: "", minHeightCm: "", isActive: true });
+    setForm({
+      name: "", pricePerSqMeter: "", pricePerSqCm: "", finishOptionsRaw: "",
+      colorSeparationPrice: "", minWidthCm: "", minHeightCm: "", isActive: true,
+      designFeePerMockup: "", colorPricePerColor: "", pricePerSide: "",
+    });
     setShowForm(true);
   }
 
@@ -4985,6 +4995,9 @@ function AdminPrintingCategories({ adminToken }: { adminToken: string | null }) 
       minWidthCm: cat.minWidthCm || "",
       minHeightCm: cat.minHeightCm || "",
       isActive: cat.isActive,
+      designFeePerMockup: (cat as any).designFeePerMockup || "",
+      colorPricePerColor: (cat as any).colorPricePerColor || "",
+      pricePerSide: (cat as any).pricePerSide || "",
     });
     setShowForm(true);
   }
@@ -5050,6 +5063,51 @@ function AdminPrintingCategories({ adminToken }: { adminToken: string | null }) 
               <label htmlFor="cat-active" className="text-sm cursor-pointer">فئة نشطة</label>
             </div>
           </div>
+
+          {/* ── Phase 4: تسعير الطباعة الفوري ─────────────────────────── */}
+          <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg space-y-3">
+            <div className="flex items-start gap-2">
+              <span className="text-lg">🖨️</span>
+              <div>
+                <h4 className="font-bold text-sm text-purple-900 dark:text-purple-200">تسعير الطباعة الفوري (Phase 4)</h4>
+                <p className="text-xs text-purple-700 dark:text-purple-300 mt-0.5">
+                  أسعار افتراضية للمنتجات في هذه الفئة. يمكن تجاوزها لكل منتج على حدة.
+                  أول لون وأول وجه مجاناً — السعر يطبَّق على الإضافي فقط.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">رسوم التصميم لكل Mockup (ر.ي)</label>
+                <input type="number" min="0" step="any"
+                  className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
+                  value={form.designFeePerMockup}
+                  onChange={e => setForm(p => ({ ...p, designFeePerMockup: e.target.value }))}
+                  placeholder="0"
+                  data-testid="input-design-fee-per-mockup" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">سعر اللون الإضافي (ر.ي)</label>
+                <input type="number" min="0" step="any"
+                  className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
+                  value={form.colorPricePerColor}
+                  onChange={e => setForm(p => ({ ...p, colorPricePerColor: e.target.value }))}
+                  placeholder="0"
+                  data-testid="input-color-price-per-color" />
+                <p className="text-[10px] text-muted-foreground mt-1">يُحسب على عدد الألوان - 1</p>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">سعر الوجه الإضافي (ر.ي)</label>
+                <input type="number" min="0" step="any"
+                  className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
+                  value={form.pricePerSide}
+                  onChange={e => setForm(p => ({ ...p, pricePerSide: e.target.value }))}
+                  placeholder="0"
+                  data-testid="input-price-per-side" />
+                <p className="text-[10px] text-muted-foreground mt-1">يُحسب على عدد الوجوه - 1</p>
+              </div>
+            </div>
+          </div>
           <div className="flex gap-2 justify-end">
             <button onClick={() => { setShowForm(false); setEditCat(null); }}
               className="px-4 py-2 text-sm border rounded-lg hover:bg-muted transition">إلغاء</button>
@@ -5083,6 +5141,25 @@ function AdminPrintingCategories({ adminToken }: { adminToken: string | null }) 
                   {cat.pricePerSqCm && <span>السم²: <strong className="text-foreground">{Number(cat.pricePerSqCm).toLocaleString("ar-YE")} ر.ي</strong></span>}
                   {cat.colorSeparationPrice && <span>فرز الألوان: <strong className="text-foreground">+{Number(cat.colorSeparationPrice).toLocaleString("ar-YE")} ر.ي</strong></span>}
                 </div>
+                {(Number((cat as any).designFeePerMockup) > 0 || Number((cat as any).colorPricePerColor) > 0 || Number((cat as any).pricePerSide) > 0) && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[11px]">
+                    {Number((cat as any).designFeePerMockup) > 0 && (
+                      <span className="bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full" data-testid={`badge-design-fee-${cat.id}`}>
+                        🎨 تصميم: {Number((cat as any).designFeePerMockup).toLocaleString("ar-YE")} ر.ي
+                      </span>
+                    )}
+                    {Number((cat as any).colorPricePerColor) > 0 && (
+                      <span className="bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full" data-testid={`badge-color-price-${cat.id}`}>
+                        🎨 لون إضافي: {Number((cat as any).colorPricePerColor).toLocaleString("ar-YE")} ر.ي
+                      </span>
+                    )}
+                    {Number((cat as any).pricePerSide) > 0 && (
+                      <span className="bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full" data-testid={`badge-side-price-${cat.id}`}>
+                        📄 وجه إضافي: {Number((cat as any).pricePerSide).toLocaleString("ar-YE")} ر.ي
+                      </span>
+                    )}
+                  </div>
+                )}
                 {(cat.finishOptions || []).length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2">
                     {(cat.finishOptions || []).map((opt, i) => (
