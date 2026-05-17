@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -59,6 +60,7 @@ function SupplierForm({
     email: initial?.email || "",
     cities: initial?.cities || [],
     commissionRate: initial?.commission_rate || "10",
+    type: (initial as any)?.type || "distributor",
     notes: initial?.notes || "",
     isActive: initial?.is_active !== false,
     pin: (initial as any)?.pin || "1234",
@@ -88,6 +90,7 @@ function SupplierForm({
       ...form,
       commissionRate: Number(form.commissionRate),
       pin: form.pin,
+      type: form.type,
       lat: form.lat ? parseFloat(form.lat) : null,
       lng: form.lng ? parseFloat(form.lng) : null,
       serviceRadiusKm: form.serviceRadiusKm ? parseFloat(form.serviceRadiusKm) : 15,
@@ -157,6 +160,22 @@ function SupplierForm({
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
             المورد يستلم {100 - Number(form.commissionRate)}% من الطلب
+          </p>
+        </div>
+        <div>
+          <Label className="text-xs">نوع الجهة 🏷️</Label>
+          <Select value={form.type} onValueChange={(v) => setForm(f => ({ ...f, type: v }))}>
+            <SelectTrigger className="mt-1" data-testid="select-supplier-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="distributor">موزّع (يوصّل للعميل)</SelectItem>
+              <SelectItem value="vendor">مورّد (نشتري منه البضاعة)</SelectItem>
+              <SelectItem value="both">كلاهما</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            يظهر في "أوامر الشراء" فقط الموردون من نوع <b>vendor</b> أو <b>both</b>
           </p>
         </div>
       </div>

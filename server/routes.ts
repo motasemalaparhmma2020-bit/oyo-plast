@@ -1359,13 +1359,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/admin/suppliers", requireAdmin, async (req, res) => {
     try {
       const { pool: dbPool } = await import("./db");
-      const { name, phone, email, cities, commissionRate, notes, pin } = req.body;
+      const { name, phone, email, cities, commissionRate, notes, pin, type } = req.body;
       if (!name || !phone) return res.status(400).json({ message: "الاسم والهاتف مطلوبان" });
       const citiesArr = Array.isArray(cities) ? cities : (cities ? cities.split(",").map((c: string) => c.trim()) : []);
+      const safeType = ["distributor", "vendor", "both"].includes(type) ? type : "distributor";
       const result = await dbPool.query(
-        `INSERT INTO suppliers (name, phone, email, cities, commission_rate, notes, pin)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-        [name, phone, email || null, citiesArr, commissionRate || 10, notes || null, pin || "1234"]
+        `INSERT INTO suppliers (name, phone, email, cities, commission_rate, notes, pin, type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [name, phone, email || null, citiesArr, commissionRate || 10, notes || null, pin || "1234", safeType]
       );
       res.json(result.rows[0]);
     } catch (e: any) {
@@ -1378,16 +1379,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const { pool: dbPool } = await import("./db");
       const id = parseInt(req.params.id);
-      const { name, phone, email, cities, commissionRate, notes, isActive, pin, lat, lng, serviceRadiusKm, province, district } = req.body;
+      const { name, phone, email, cities, commissionRate, notes, isActive, pin, lat, lng, serviceRadiusKm, province, district, type } = req.body;
       const citiesArr = Array.isArray(cities) ? cities : (cities ? cities.split(",").map((c: string) => c.trim()) : []);
+      const safeType = ["distributor", "vendor", "both"].includes(type) ? type : null;
       const result = await dbPool.query(
         `UPDATE suppliers SET name=$1, phone=$2, email=$3, cities=$4, commission_rate=$5, notes=$6, is_active=$7, pin=COALESCE($8, pin),
          lat=COALESCE($9, lat), lng=COALESCE($10, lng), service_radius_km=COALESCE($11, service_radius_km),
-         province=COALESCE($12, province), district=COALESCE($13, district)
-         WHERE id=$14 RETURNING *`,
+         province=COALESCE($12, province), district=COALESCE($13, district), type=COALESCE($14, type)
+         WHERE id=$15 RETURNING *`,
         [name, phone, email || null, citiesArr, commissionRate || 10, notes || null, isActive !== false, pin || null,
          lat != null ? lat : null, lng != null ? lng : null, serviceRadiusKm || null,
-         province || null, district || null, id]
+         province || null, district || null, safeType, id]
       );
       if (!result.rows.length) return res.status(404).json({ message: "المورد غير موجود" });
       res.json(result.rows[0]);
