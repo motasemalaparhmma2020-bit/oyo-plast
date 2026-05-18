@@ -89,6 +89,12 @@ export const products = pgTable("products", {
   availableColors: text("available_colors"),         // JSON: [{id,name,code}]
   // ── مدة التصنيع بالأيام ─────────────────────────────────────────────────────
   manufacturingDays: integer("manufacturing_days").default(0).notNull(), // 0 = جاهز فوراً
+  // ── Phase 7: ألوان الطباعة المخصصة لكل منتج ─────────────────────────────
+  printColorOptions: text("print_color_options"),  // JSON: [{name:"أبيض", hex:"#FFFFFF"}, ...]
+  // ── Phase 7: العروض المتدرجة (Tiered Pricing) ──────────────────────────
+  quantityTiers: text("quantity_tiers"),  // JSON: [{qty:100, totalPrice:6000, unitPrice:60}, ...]
+  // ── Phase 7: حجم نافذة المعاينة بالبكسل (يتحكم به الأدمن) ──────────────
+  previewSize: integer("preview_size").default(150),  // 150 = افتراضي
 });
 
 // ── فئات الطباعة الاحترافية (لوحات / كروت / أوصق / فواتير...) ───────────────

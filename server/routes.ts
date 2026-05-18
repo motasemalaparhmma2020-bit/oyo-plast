@@ -2229,6 +2229,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       cloudinaryCloudName: r.base_image_public_id ? (process.env.CLOUDINARY_CLOUD_NAME || null) : null,
     enableVariantUI: r.enable_variant_ui ?? false,
     colorImages: r.color_images ?? null,
+      // Phase 7: تخصيصات الأدمن لصفحة المنتج
+      printColorOptions: (() => {
+        try { return r.print_color_options ? JSON.parse(r.print_color_options) : null; } catch { return null; }
+      })(),
+      quantityTiers: (() => {
+        try { return r.quantity_tiers ? JSON.parse(r.quantity_tiers) : null; } catch { return null; }
+      })(),
+      previewSize: r.preview_size ?? 150,
       originalPrice: r.original_price ?? null,
       originalPriceSar: dynOriginalPriceSar ?? null,
       discountPercent: r.discount_percent ?? null,
@@ -2815,6 +2823,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         smartVariants: data.smartVariants || null,
         enableVariantUI: data.enableVariantUI ?? false,
         colorImages: data.colorImages || null,
+        // ── Phase 7: تخصيصات الأدمن ─────────────────────────────────────
+        printColorOptions: data.printColorOptions ? (typeof data.printColorOptions === "string" ? data.printColorOptions : JSON.stringify(data.printColorOptions)) : null,
+        quantityTiers: data.quantityTiers ? (typeof data.quantityTiers === "string" ? data.quantityTiers : JSON.stringify(data.quantityTiers)) : null,
+        previewSize: data.previewSize ? Number(data.previewSize) : 150,
       } as any);
       res.status(201).json(product);
     } catch (e: any) {
@@ -2885,8 +2897,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "baseImagePublicId", "availableColors",
         "enableVariantUI", "colorImages",
         "promotionalTags",
-        "hasFreeShipping", "enableSmartVariants", "smartVariants"
+        "hasFreeShipping", "enableSmartVariants", "smartVariants",
+        // Phase 7
+        "printColorOptions", "quantityTiers", "previewSize",
       ];
+      // Phase 7: تطبيع JSON objects → strings
+      if (Object.prototype.hasOwnProperty.call(data, "printColorOptions")) {
+        const v = data.printColorOptions;
+        data.printColorOptions = v && typeof v === "object" ? JSON.stringify(v) : (typeof v === "string" && v ? v : null);
+      }
+      if (Object.prototype.hasOwnProperty.call(data, "quantityTiers")) {
+        const v = data.quantityTiers;
+        data.quantityTiers = v && typeof v === "object" ? JSON.stringify(v) : (typeof v === "string" && v ? v : null);
+      }
+      if (Object.prototype.hasOwnProperty.call(data, "previewSize")) {
+        data.previewSize = data.previewSize ? Number(data.previewSize) : 150;
+      }
       // Phase 5: تطبيع printArea (object → JSON string) لمطابقة سلوك POST
       if (Object.prototype.hasOwnProperty.call(data, "printArea")) {
         const pa = data.printArea;

@@ -238,6 +238,10 @@ interface ProductFormData {
   promotionalTags: string[];
   hasFreeShipping: boolean;
   supplierId: number;
+  // ── Phase 7: تخصيصات المنتج (Admin-controlled) ──────────────────────────
+  printColorOptions: Array<{ name: string; hex: string }>;
+  quantityTiers: Array<{ qty: number; totalPrice: number; unitPrice: number }>;
+  previewSize: number;
 }
 
 const emptyProductForm: ProductFormData = {
@@ -278,6 +282,18 @@ const emptyProductForm: ProductFormData = {
   promotionalTags: [],
   hasFreeShipping: false,
   supplierId: 0,
+  // ── Phase 7 ──
+  printColorOptions: [
+    { name: "أبيض", hex: "#FFFFFF" },
+    { name: "أسود", hex: "#000000" },
+    { name: "ذهبي", hex: "#D4AF37" },
+  ],
+  quantityTiers: [
+    { qty: 100, totalPrice: 6000, unitPrice: 60 },
+    { qty: 500, totalPrice: 27000, unitPrice: 54 },
+    { qty: 1000, totalPrice: 50000, unitPrice: 50 },
+  ],
+  previewSize: 150,
 };
 
 interface CategoryFormData {
@@ -5975,6 +5991,18 @@ export default function Admin() {
       promotionalTags: (product as any).promotionalTags ?? [],
       hasFreeShipping: (product as any).hasFreeShipping ?? false,
       supplierId: (product as any).supplierId ?? (product as any).supplier_id ?? 0,
+      // ── Phase 7: تحميل تخصيصات الأدمن ──
+      printColorOptions: (() => {
+        const v = (product as any).printColorOptions;
+        if (!v) return emptyProductForm.printColorOptions;
+        try { return typeof v === "string" ? JSON.parse(v) : v; } catch { return emptyProductForm.printColorOptions; }
+      })(),
+      quantityTiers: (() => {
+        const v = (product as any).quantityTiers;
+        if (!v) return emptyProductForm.quantityTiers;
+        try { return typeof v === "string" ? JSON.parse(v) : v; } catch { return emptyProductForm.quantityTiers; }
+      })(),
+      previewSize: (product as any).previewSize ?? 150,
     });
     // Parse colorImages JSON if present
     try {
@@ -7889,6 +7917,234 @@ export default function Admin() {
                                 </p>
                               </div>
                             </div>
+                          </div>
+
+                          {/* ═══════════════════════════════════════════════════════════════ */}
+                          {/* ── Phase 7: تخصيصات صفحة المنتج (Admin-controlled) ─────────── */}
+                          {/* ═══════════════════════════════════════════════════════════════ */}
+                          <div className="border-2 border-cyan-300 dark:border-cyan-700 rounded-xl p-3 bg-cyan-50/60 dark:bg-cyan-950/30 space-y-4">
+                            <Label className="font-bold flex items-center gap-2 mb-1 text-base text-cyan-900 dark:text-cyan-100">
+                              ⚙️ تخصيصات صفحة المنتج الجديدة (يتحكم بها الأدمن)
+                            </Label>
+                            <p className="text-xs text-muted-foreground -mt-2">
+                              💡 تحكّم كامل في ألوان الطباعة + العروض المتدرّجة + حجم نافذة المعاينة (مثل شي إن / علي بابا).
+                            </p>
+
+                            {/* ── ✏️ ألوان الطباعة ── */}
+                            <div className="border border-cyan-200 dark:border-cyan-800 rounded-lg p-3 bg-white dark:bg-card">
+                              <div className="flex items-center justify-between mb-2">
+                                <Label className="font-bold text-sm flex items-center gap-2">
+                                  ✏️ ألوان الطباعة المتاحة
+                                </Label>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setProductForm({
+                                    ...productForm,
+                                    printColorOptions: [...productForm.printColorOptions, { name: "", hex: "#000000" }]
+                                  })}
+                                  className="text-xs h-7 gap-1"
+                                  data-testid="button-add-print-color"
+                                >
+                                  + إضافة لون
+                                </Button>
+                              </div>
+                              <div className="space-y-2">
+                                {productForm.printColorOptions.map((c, idx) => (
+                                  <div key={idx} className="flex items-center gap-2">
+                                    <input
+                                      type="color"
+                                      value={c.hex}
+                                      onChange={e => {
+                                        const arr = [...productForm.printColorOptions];
+                                        arr[idx] = { ...arr[idx], hex: e.target.value };
+                                        setProductForm({ ...productForm, printColorOptions: arr });
+                                      }}
+                                      className="w-10 h-10 rounded border cursor-pointer"
+                                      data-testid={`input-print-color-hex-${idx}`}
+                                    />
+                                    <Input
+                                      value={c.name}
+                                      onChange={e => {
+                                        const arr = [...productForm.printColorOptions];
+                                        arr[idx] = { ...arr[idx], name: e.target.value };
+                                        setProductForm({ ...productForm, printColorOptions: arr });
+                                      }}
+                                      placeholder="اسم اللون (مثل: أبيض)"
+                                      className="text-sm flex-1"
+                                      data-testid={`input-print-color-name-${idx}`}
+                                    />
+                                    <Input
+                                      value={c.hex}
+                                      onChange={e => {
+                                        const arr = [...productForm.printColorOptions];
+                                        arr[idx] = { ...arr[idx], hex: e.target.value };
+                                        setProductForm({ ...productForm, printColorOptions: arr });
+                                      }}
+                                      placeholder="#FFFFFF"
+                                      className="text-xs font-mono w-24"
+                                      data-testid={`input-print-color-hex-text-${idx}`}
+                                    />
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => setProductForm({
+                                        ...productForm,
+                                        printColorOptions: productForm.printColorOptions.filter((_, i) => i !== idx)
+                                      })}
+                                      className="text-red-500 h-8 w-8 p-0"
+                                      data-testid={`button-remove-print-color-${idx}`}
+                                    >
+                                      ×
+                                    </Button>
+                                  </div>
+                                ))}
+                                {productForm.printColorOptions.length === 0 && (
+                                  <p className="text-xs text-muted-foreground py-2 text-center">لا توجد ألوان — أضف لوناً واحداً على الأقل</p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* ── 📦 العروض المتدرجة (Tiered Pricing) ── */}
+                            <div className="border border-cyan-200 dark:border-cyan-800 rounded-lg p-3 bg-white dark:bg-card">
+                              <div className="flex items-center justify-between mb-2">
+                                <Label className="font-bold text-sm flex items-center gap-2">
+                                  📦 عروض الكميات (Tiered Pricing)
+                                </Label>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setProductForm({
+                                    ...productForm,
+                                    quantityTiers: [...productForm.quantityTiers, { qty: 0, totalPrice: 0, unitPrice: 0 }]
+                                  })}
+                                  disabled={productForm.quantityTiers.length >= 5}
+                                  className="text-xs h-7 gap-1"
+                                  data-testid="button-add-tier"
+                                >
+                                  + إضافة عرض
+                                </Button>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground mb-2">يُنصح بـ ٣ عروض (مثلاً ١٠٠ / ٥٠٠ / ١٠٠٠). الافتراضي للعميل هو الأول.</p>
+                              <div className="space-y-2">
+                                {productForm.quantityTiers.map((t, idx) => (
+                                  <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-muted/30 p-2 rounded">
+                                    <div className="col-span-3">
+                                      <Label className="text-[10px] text-muted-foreground">الكمية</Label>
+                                      <Input
+                                        type="number"
+                                        min={1}
+                                        value={t.qty || ""}
+                                        onChange={e => {
+                                          const qty = Number(e.target.value) || 0;
+                                          const arr = [...productForm.quantityTiers];
+                                          arr[idx] = { ...arr[idx], qty, unitPrice: qty > 0 && arr[idx].totalPrice > 0 ? Math.round(arr[idx].totalPrice / qty) : arr[idx].unitPrice };
+                                          setProductForm({ ...productForm, quantityTiers: arr });
+                                        }}
+                                        placeholder="100"
+                                        className="text-sm h-8"
+                                        data-testid={`input-tier-qty-${idx}`}
+                                      />
+                                    </div>
+                                    <div className="col-span-4">
+                                      <Label className="text-[10px] text-muted-foreground">السعر الإجمالي (ر.ي)</Label>
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        value={t.totalPrice || ""}
+                                        onChange={e => {
+                                          const totalPrice = Number(e.target.value) || 0;
+                                          const arr = [...productForm.quantityTiers];
+                                          arr[idx] = { ...arr[idx], totalPrice, unitPrice: arr[idx].qty > 0 ? Math.round(totalPrice / arr[idx].qty) : 0 };
+                                          setProductForm({ ...productForm, quantityTiers: arr });
+                                        }}
+                                        placeholder="6000"
+                                        className="text-sm h-8"
+                                        data-testid={`input-tier-total-${idx}`}
+                                      />
+                                    </div>
+                                    <div className="col-span-4">
+                                      <Label className="text-[10px] text-muted-foreground">سعر الوحدة (تلقائي)</Label>
+                                      <Input
+                                        type="number"
+                                        value={t.unitPrice || ""}
+                                        readOnly
+                                        className="text-sm h-8 bg-muted font-bold text-cyan-700"
+                                        data-testid={`input-tier-unit-${idx}`}
+                                      />
+                                    </div>
+                                    <div className="col-span-1 flex items-end justify-end h-full pb-0.5">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setProductForm({
+                                          ...productForm,
+                                          quantityTiers: productForm.quantityTiers.filter((_, i) => i !== idx)
+                                        })}
+                                        className="text-red-500 h-8 w-8 p-0"
+                                        data-testid={`button-remove-tier-${idx}`}
+                                      >
+                                        ×
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                                {productForm.quantityTiers.length === 0 && (
+                                  <p className="text-xs text-muted-foreground py-2 text-center">لا توجد عروض — أضف عرضاً واحداً على الأقل</p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* ── 🖼️ حجم نافذة المعاينة ── */}
+                            <div className="border border-cyan-200 dark:border-cyan-800 rounded-lg p-3 bg-white dark:bg-card">
+                              <Label className="font-bold text-sm flex items-center gap-2 mb-2">
+                                🖼️ حجم نافذة المعاينة (للشعار فوق الكيس)
+                              </Label>
+                              <div className="flex items-center gap-3">
+                                <Input
+                                  type="range"
+                                  min={80}
+                                  max={300}
+                                  step={10}
+                                  value={productForm.previewSize}
+                                  onChange={e => setProductForm({ ...productForm, previewSize: Number(e.target.value) })}
+                                  className="flex-1"
+                                  data-testid="input-preview-size-range"
+                                />
+                                <Input
+                                  type="number"
+                                  min={80}
+                                  max={300}
+                                  value={productForm.previewSize}
+                                  onChange={e => setProductForm({ ...productForm, previewSize: Number(e.target.value) })}
+                                  className="w-20 text-center"
+                                  data-testid="input-preview-size-number"
+                                />
+                                <span className="text-xs text-muted-foreground">بكسل</span>
+                              </div>
+                              <div className="mt-2 flex items-center justify-center bg-muted/30 rounded p-2">
+                                <div
+                                  className="border-2 border-dashed border-cyan-400 bg-cyan-50 rounded flex items-center justify-center text-xs text-cyan-700 font-bold transition-all"
+                                  style={{ width: `${productForm.previewSize}px`, height: `${productForm.previewSize}px` }}
+                                >
+                                  معاينة {productForm.previewSize}×{productForm.previewSize}
+                                </div>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground mt-1.5 text-center">💡 افتراضي: ١٥٠×١٥٠. يظهر هذا الحجم في صفحة المنتج بعد رفع الشعار.</p>
+                            </div>
+
+                            {/* ── 🎨 ملاحظة حول ألوان الكيس ── */}
+                            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-2.5 text-xs">
+                              <span className="font-bold text-amber-900 dark:text-amber-200">🎨 ألوان الكيس:</span>
+                              <span className="text-amber-800 dark:text-amber-300 mr-1">
+                                تُدار من قسم <strong>"الخيارات الذكية"</strong> أعلاه (نوع <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">color</code>) — ارفع <strong>صورة حقيقية</strong> لكل لون كما تفعل شي إن.
+                              </span>
+                            </div>
+
                           </div>
 
                         </div>
