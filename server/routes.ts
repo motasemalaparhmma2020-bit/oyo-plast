@@ -700,6 +700,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Public Design Upload (customer logos) → Cloudinary ──────────────
+  // يستقبل data URL ويُرجع رابط Cloudinary آمناً. حد ٨ ميجا.
+  // مفتوح بدون auth لأن الزوّار يحتاجون رفع شعار قبل إكمال الطلب.
+  app.post("/api/upload/design", async (req, res) => {
+    try {
+      const { imageDataUrl } = req.body || {};
+      if (!imageDataUrl || typeof imageDataUrl !== "string") {
+        return res.status(400).json({ message: "imageDataUrl مطلوب" });
+      }
+      const match = imageDataUrl.match(/^data:image\/[^;]+;base64,(.+)$/);
+      if (!match) return res.status(400).json({ message: "صيغة data URL غير صالحة" });
+      const approxBytes = Math.floor(match[1].length * 0.75);
+      if (approxBytes > 8 * 1024 * 1024) {
+        return res.status(413).json({ message: "الصورة كبيرة جداً (الحد ٨ ميجا)" });
+      }
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+      const apiKey = process.env.CLOUDINARY_API_KEY;
+      const apiSecret = process.env.CLOUDINARY_API_SECRET;
+      if (!cloudName || !apiKey || !apiSecret) {
+        return res.status(503).json({ message: "خدمة التخزين غير مهيّأة" });
+      }
+      const { v2: cloudinary } = await import("cloudinary");
+      cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret, secure: true });
+      const uploadRes: any = await cloudinary.uploader.upload(imageDataUrl, {
+        folder: "oyo-plast/designs",
+        resource_type: "image",
+        transformation: [{ quality: "auto:good", fetch_format: "auto", width: 1200, crop: "limit" }],
+      });
+      return res.json({ url: uploadRes.secure_url, publicId: uploadRes.public_id });
+    } catch (e: any) {
+      console.error("[design upload]", e?.message);
+      return res.status(500).json({ message: "فشل رفع التصميم", details: e?.message });
+    }
+  });
+
   // ─── Image Upload for Staff (product_manager / owner) ────────────────
   // ملاحظة: نُعرِّفها هنا قبل تعريف requireStaff لتفادي مشاكل الترتيب،
   // لذلك نستخدم middleware مدمج يتحقق من الدور.

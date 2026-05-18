@@ -113,12 +113,39 @@ export default function ProductDetailV2() {
   const [selectedPrintColor, setSelectedPrintColor] = useState<PrintColorOption>(printColorOptions[0]);
   const [selectedTier, setSelectedTier] = useState<QuantityTier>(quantityTiers[0]);
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
+  const [logoCloudUrl, setLogoCloudUrl] = useState<string | null>(null);
+  const [isUploadingCloud, setIsUploadingCloud] = useState(false);
   const [originalLogoUrl, setOriginalLogoUrl] = useState<string | null>(null);
   const [enhancedLogoUrl, setEnhancedLogoUrl] = useState<string | null>(null);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [enhanceModalOpen, setEnhanceModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAiEnhancing, setIsAiEnhancing] = useState(false);
+
+  // رفع الشعار إلى Cloudinary (يستبدل dataURL ضخم بـ URL قصير وآمن)
+  const uploadLogoToCloud = async (dataUrl: string): Promise<string | null> => {
+    try {
+      setIsUploadingCloud(true);
+      const res = await fetch("/api/upload/design", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageDataUrl: dataUrl }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (json.url) {
+        setLogoCloudUrl(json.url);
+        return json.url;
+      }
+      return null;
+    } catch (err: any) {
+      console.warn("[uploadLogoToCloud]", err?.message);
+      toast({ title: "⚠️ تعذّر حفظ الشعار سحابياً", description: "سيُحفظ مؤقتاً", variant: "destructive" });
+      return null;
+    } finally {
+      setIsUploadingCloud(false);
+    }
+  };
   const [imageIdx, setImageIdx] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -216,6 +243,7 @@ export default function ProductDetailV2() {
       const { dataUrl, hasMixedBg } = await removeWhiteBackground(file);
       setLogoDataUrl(dataUrl);
       setEnhancedLogoUrl(dataUrl);
+      setLogoCloudUrl(null); // إعادة تعيين قبل الرفع الجديد
       setUploadModalOpen(false);
       if (hasMixedBg) {
         toast({
@@ -223,8 +251,12 @@ export default function ProductDetailV2() {
           description: "اضغط على \"تحسين بالذكاء الاصطناعي\" للحصول على نتيجة أفضل",
         });
       } else {
-        toast({ title: "✅ تم رفع الشعار", description: "تم إزالة الخلفية البيضاء تلقائياً" });
+        toast({ title: "✅ تم رفع الشعار", description: "جارٍ حفظه سحابياً..." });
       }
+      // رفع متوازٍ إلى Cloudinary (لا يُعيق المعاينة)
+      uploadLogoToCloud(dataUrl).then((url) => {
+        if (url) toast({ title: "☁️ تم حفظ الشعار سحابياً" });
+      });
     } catch (err: any) {
       toast({ title: "❌ خطأ", description: err.message || "فشل معالجة الصورة", variant: "destructive" });
     } finally {
@@ -316,14 +348,27 @@ export default function ProductDetailV2() {
 
   // ── Add to cart ──
   const addToCartMutation = useAddToCart();
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!product) return;
+    // إن وُجد شعار محلي لم يُرفع بعد، نضمن رفعه أوّلاً (لمنع تخزين data URL ضخم)
+    let finalLogoUrl: string | null = logoCloudUrl;
+    if (logoDataUrl && !logoCloudUrl) {
+      if (isUploadingCloud) {
+        toast({ title: "⏳ جارٍ حفظ الشعار", description: "يرجى الانتظار ثانية..." });
+        return;
+      }
+      finalLogoUrl = await uploadLogoToCloud(logoDataUrl);
+      if (!finalLogoUrl) {
+        toast({ title: "❌ تعذّر حفظ الشعار", description: "حاول مرة أخرى", variant: "destructive" });
+        return;
+      }
+    }
     const designOptions = {
       bagColor: selectedBagColor?.name,
       bagColorHex: selectedBagColor?.hex,
       printColor: selectedPrintColor?.name,
       printColorHex: selectedPrintColor?.hex,
-      logo: logoDataUrl ? "uploaded" : null,
+      logo: finalLogoUrl ? "uploaded" : null,
       printArea,
     };
     addToCartMutation.mutate({
@@ -333,7 +378,7 @@ export default function ProductDetailV2() {
       printColor1: selectedPrintColor?.name,
       printColorCount: 1,
       unitPrice: selectedTier.unitPrice,
-      designFileUrl: logoDataUrl || undefined,
+      designFileUrl: finalLogoUrl || undefined,
       designOptions,
     } as any);
   };
@@ -767,7 +812,13 @@ export default function ProductDetailV2() {
             </div>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <button
-                onClick={() => { setLogoDataUrl(originalLogoUrl); setEnhanceModalOpen(false); toast({ title: "✓ تم اختيار النسخة الأصلية" }); }}
+                onClick={() => {
+                  setLogoDataUrl(originalLogoUrl);
+                  setLogoCloudUrl(null);
+                  setEnhanceModalOpen(false);
+                  toast({ title: "✓ تم اختيار النسخة الأصلية" });
+                  if (originalLogoUrl) uploadLogoToCloud(originalLogoUrl);
+                }}
                 className="border-2 border-gray-200 rounded-xl p-2 hover:border-cyan-400 transition"
                 data-testid="button-pick-original"
               >
@@ -777,7 +828,13 @@ export default function ProductDetailV2() {
                 <div className="text-xs font-bold text-gray-700">الأصلية</div>
               </button>
               <button
-                onClick={() => { setLogoDataUrl(enhancedLogoUrl); setEnhanceModalOpen(false); toast({ title: "✓ تم اختيار النسخة المحسّنة" }); }}
+                onClick={() => {
+                  setLogoDataUrl(enhancedLogoUrl);
+                  setLogoCloudUrl(null);
+                  setEnhanceModalOpen(false);
+                  toast({ title: "✓ تم اختيار النسخة المحسّنة" });
+                  if (enhancedLogoUrl) uploadLogoToCloud(enhancedLogoUrl);
+                }}
                 className="border-2 border-cyan-500 rounded-xl p-2 bg-cyan-50 hover:bg-cyan-100 transition relative"
                 data-testid="button-pick-enhanced"
               >
