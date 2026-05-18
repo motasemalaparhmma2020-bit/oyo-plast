@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>نموذج تجريبي — صفحة المنتج OYO Plast v2</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Cairo', sans-serif; -webkit-tap-highlight-color: transparent; }
+  body { background: #f3f4f6; padding-bottom: 80px; }
+  .mockup-banner {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: linear-gradient(90deg, #fbbf24, #f59e0b); color: #78350f;
+    text-align: center; padding: 4px 8px; font-size: 11px; font-weight: 700;
+  }
+  .container-app { max-width: 480px; margin: 24px auto 0; background: #fff; min-height: 100vh; box-shadow: 0 0 24px rgba(0,0,0,0.08); }
+  .color-dot { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #e5e7eb; cursor: pointer; transition: all .2s; }
+  .color-dot.active { box-shadow: 0 0 0 2px #06B6D4, inset 0 0 0 2px #fff; transform: scale(1.1); }
+  .qty-card { flex: 1; border: 2px solid #e5e7eb; border-radius: 12px; padding: 10px 6px; text-align: center; cursor: pointer; transition: all .2s; background: #fff; }
+  .qty-card.active { border-color: #06B6D4; background: #ECFEFF; box-shadow: 0 2px 8px rgba(6,182,212,0.15); }
+  .qty-card.active .qty-tag { background: #06B6D4; color: #fff; }
+  .qty-tag { display: inline-block; background: #f3f4f6; color: #6b7280; padding: 1px 8px; border-radius: 8px; font-size: 10px; margin-top: 4px; }
+  .cta-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #e5e7eb; padding: 10px 16px; z-index: 50; max-width: 480px; margin: 0 auto; }
+  .pulse { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+  .price-anim { transition: all .3s ease; }
+  .shimmer { background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200; display: none; align-items: center; justify-content: center; padding: 20px; }
+  .modal-bg.show { display: flex; }
+</style>
+</head>
+<body>
+
+<div class="mockup-banner">
+  🎨 نموذج تجريبي — هذه ليست الصفحة الفعلية | OYO Plast Product Page v2
+</div>
+
+<div class="container-app">
+
+  <!-- ① Header -->
+  <header class="sticky top-0 bg-white/95 backdrop-blur z-40 flex items-center justify-between px-4 h-14 border-b border-gray-100">
+    <button class="p-2 -mr-2 text-gray-700">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="flex items-center gap-3">
+      <button class="p-2 relative">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      </button>
+      <button class="p-2 relative">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+        <span class="absolute -top-0.5 -left-0.5 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">3</span>
+      </button>
+      <button class="p-2 -ml-2 text-gray-700">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ② Main Image (1:1) -->
+  <div class="relative bg-gray-50">
+    <div id="mainImageBox" class="w-full aspect-square flex items-center justify-center relative overflow-hidden" style="background: linear-gradient(135deg, #DBEAFE, #BFDBFE);">
+      <!-- Bag SVG that changes color -->
+      <svg id="bagSvg" width="60%" height="60%" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+        <!-- Handles -->
+        <path d="M 60 40 Q 60 10, 100 10 Q 140 10, 140 40" stroke="#374151" stroke-width="6" fill="none" stroke-linecap="round"/>
+        <!-- Bag body -->
+        <path id="bagBody" d="M 30 50 L 170 50 L 160 230 L 40 230 Z" fill="#3B82F6" stroke="#1E40AF" stroke-width="2"/>
+        <!-- Logo placeholder (will show user logo if uploaded) -->
+        <g id="logoArea">
+          <rect x="75" y="110" width="50" height="50" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.5)" stroke-width="1" stroke-dasharray="4" rx="4"/>
+          <text x="100" y="140" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-size="10">منطقة الطباعة</text>
+        </g>
+        <image id="userLogo" x="75" y="110" width="50" height="50" href="" style="display:none"/>
+      </svg>
+
+      <!-- Image counter -->
+      <div class="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-cyan-500"></span>
+        <span class="w-2 h-2 rounded-full bg-gray-300"></span>
+        <span class="w-2 h-2 rounded-full bg-gray-300"></span>
+        <span class="w-2 h-2 rounded-full bg-gray-300"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content body -->
+  <div class="px-4 pt-3 pb-4 space-y-3">
+
+    <!-- ③ Title + Rating -->
+    <div>
+      <h1 class="text-base font-bold text-gray-900 leading-tight">كيس قماش مشروبي ٣٢×٢٧</h1>
+      <div class="flex items-center gap-2 mt-1 text-xs">
+        <span class="flex items-center gap-0.5 text-amber-500 font-bold">
+          ⭐ 4.8 <span class="text-gray-500 font-normal">(١.٢ ألف)</span>
+        </span>
+        <span class="text-orange-500 font-bold">🔥 رائج</span>
+      </div>
+    </div>
+
+    <!-- ⑤ Price block -->
+    <div class="flex items-baseline gap-2 flex-wrap">
+      <span id="priceMain" class="text-2xl font-extrabold text-red-600 price-anim">6,000 ر.ي</span>
+      <span class="text-sm text-gray-400 line-through">7,058</span>
+      <span class="bg-red-100 text-red-700 text-xs font-bold px-1.5 py-0.5 rounded">-15%</span>
+      <span id="priceUnit" class="block w-full text-xs text-gray-600 mt-0.5 price-anim">60 ر.ي / كيس</span>
+    </div>
+
+    <!-- ⑥ Bag Colors -->
+    <div>
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-sm font-semibold text-gray-700">🎨 لون الكيس:</span>
+        <span id="colorLabel" class="text-xs font-bold text-cyan-600">أزرق</span>
+      </div>
+      <div class="flex gap-2.5 items-center">
+        <button class="color-dot active" style="background:#3B82F6" data-color="أزرق" data-hex="#3B82F6" data-stroke="#1E40AF"></button>
+        <button class="color-dot" style="background:#EF4444" data-color="أحمر" data-hex="#EF4444" data-stroke="#991B1B"></button>
+        <button class="color-dot" style="background:#10B981" data-color="أخضر" data-hex="#10B981" data-stroke="#065F46"></button>
+        <button class="color-dot" style="background:#F59E0B" data-color="أصفر" data-hex="#F59E0B" data-stroke="#92400E"></button>
+        <button class="color-dot" style="background:#111827" data-color="أسود" data-hex="#111827" data-stroke="#000"></button>
+      </div>
+    </div>
+
+    <!-- ⑦ Print Color -->
+    <div class="flex items-center justify-between">
+      <span class="text-sm font-semibold text-gray-700">✏️ لون الطباعة:</span>
+      <select id="printColor" class="text-xs border border-gray-300 rounded-lg px-2 py-1.5 bg-white font-semibold">
+        <option value="#FFFFFF" style="background:#000;color:#fff">⚪ أبيض</option>
+        <option value="#000000">⚫ أسود</option>
+        <option value="#D4AF37">🟡 ذهبي</option>
+        <option value="#C0C0C0">⚪ فضي</option>
+        <option value="#DC2626">🔴 أحمر</option>
+      </select>
+    </div>
+
+    <!-- ⑧ Tiered Pricing -->
+    <div>
+      <div class="text-sm font-semibold text-gray-700 mb-1.5">📦 اختر الكمية:</div>
+      <div class="flex gap-2">
+        <div class="qty-card active" data-qty="100" data-total="6000" data-unit="60">
+          <div class="font-extrabold text-base">١٠٠</div>
+          <div class="text-[11px] text-gray-500 -mt-0.5">كيس</div>
+          <div class="qty-tag">٦٠ ر/كيس</div>
+          <div class="text-[11px] font-bold text-gray-700 mt-1">٦,٠٠٠ ر.ي</div>
+        </div>
+        <div class="qty-card" data-qty="500" data-total="27000" data-unit="54">
+          <div class="font-extrabold text-base">٥٠٠</div>
+          <div class="text-[11px] text-gray-500 -mt-0.5">كيس</div>
+          <div class="qty-tag">٥٤ ر/كيس</div>
+          <div class="text-[11px] font-bold text-gray-700 mt-1">٢٧,٠٠٠ ر.ي</div>
+        </div>
+        <div class="qty-card" data-qty="1000" data-total="50000" data-unit="50">
+          <div class="font-extrabold text-base">١٠٠٠</div>
+          <div class="text-[11px] text-gray-500 -mt-0.5">كيس</div>
+          <div class="qty-tag">٥٠ ر/كيس</div>
+          <div class="text-[11px] font-bold text-gray-700 mt-1">٥٠,٠٠٠ ر.ي</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑨ Upload Logo Button -->
+    <button id="openUploadBtn" class="w-full pulse bg-gradient-to-l from-cyan-500 to-blue-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-cyan-200 flex items-center justify-center gap-2 text-sm">
+      <span class="text-xl">📸</span>
+      ارفع شعارك وشاهد المعاينة فوراً
+    </button>
+
+    <!-- ⑩ Preview (hidden until upload) -->
+    <div id="previewSection" class="hidden">
+      <div class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+        <span>✨ معاينتك الفورية:</span>
+        <button id="changeLogoBtn" class="text-xs text-cyan-600 underline">تغيير الشعار</button>
+      </div>
+      <div class="flex justify-center">
+        <div class="border-2 border-cyan-200 rounded-xl p-2 bg-cyan-50">
+          <svg id="previewSvg" width="150" height="150" viewBox="0 0 200 240">
+            <path d="M 60 40 Q 60 10, 100 10 Q 140 10, 140 40" stroke="#374151" stroke-width="6" fill="none" stroke-linecap="round"/>
+            <path id="previewBag" d="M 30 50 L 170 50 L 160 230 L 40 230 Z" fill="#3B82F6" stroke="#1E40AF" stroke-width="2"/>
+            <image id="previewLogo" x="75" y="110" width="50" height="50" href=""/>
+          </svg>
+        </div>
+      </div>
+      <p class="text-center text-[11px] text-gray-500 mt-1.5">الموقع تلقائي من إعدادات المنتج</p>
+    </div>
+
+  </div>
+
+  <!-- Description (below the fold) -->
+  <div class="border-t border-gray-100 mt-2 px-4 py-4 space-y-3">
+    <div>
+      <h3 class="font-bold text-sm mb-1.5">📝 وصف المنتج</h3>
+      <p class="text-xs text-gray-600 leading-relaxed">كيس قماش مشروبي عالي الجودة بمقاس ٣٢×٢٧ سم. مناسب للمحلات التجارية والعلامات التجارية. يمكنك طباعة شعارك عليه بألوان متعددة. متوفر بـ ٥ ألوان.</p>
+    </div>
+    <div>
+      <h3 class="font-bold text-sm mb-1.5">⭐ تقييمات العملاء (125)</h3>
+      <div class="text-xs text-gray-600">⭐⭐⭐⭐⭐ "جودة ممتازة وطباعة واضحة" — أحمد م.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ⑪ Sticky CTA -->
+<div class="cta-bar flex items-center gap-2">
+  <button class="bg-cyan-50 text-cyan-700 p-2.5 rounded-xl border border-cyan-200">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+  </button>
+  <button class="flex-1 bg-gradient-to-l from-cyan-500 to-blue-600 text-white font-bold py-3 rounded-xl shadow-md flex items-center justify-center gap-2 text-sm">
+    أضف للسلة — <span id="ctaPrice">6,000 ر.ي</span>
+  </button>
+</div>
+
+<!-- Upload Modal -->
+<div class="modal-bg" id="uploadModal">
+  <div class="bg-white rounded-2xl p-5 max-w-xs w-full">
+    <div class="text-center mb-3">
+      <div class="text-3xl mb-1">📤</div>
+      <h3 class="font-bold text-base">ارفع شعارك</h3>
+      <p class="text-xs text-gray-500 mt-1">PNG / JPG / PDF — حتى ٥ ميجا</p>
+    </div>
+    <label class="block border-2 border-dashed border-cyan-300 rounded-xl p-6 text-center cursor-pointer bg-cyan-50 hover:bg-cyan-100 transition">
+      <input type="file" id="fileInput" accept="image/*" class="hidden">
+      <div class="text-2xl mb-1">🖼️</div>
+      <div class="text-sm font-bold text-cyan-700">اختر صورة من جوالك</div>
+      <div class="text-[11px] text-gray-500 mt-1">سنزيل الخلفية البيضاء تلقائياً</div>
+    </label>
+    <button id="closeModal" class="w-full mt-3 text-sm text-gray-500 py-2">إلغاء</button>
+  </div>
+</div>
+
+<script>
+// === Color switching ===
+const colorDots = document.querySelectorAll('.color-dot');
+const bagBody = document.getElementById('bagBody');
+const previewBag = document.getElementById('previewBag');
+const colorLabel = document.getElementById('colorLabel');
+
+colorDots.forEach(dot => {
+  dot.addEventListener('click', () => {
+    colorDots.forEach(d => d.classList.remove('active'));
+    dot.classList.add('active');
+    const hex = dot.dataset.hex;
+    const stroke = dot.dataset.stroke;
+    bagBody.setAttribute('fill', hex);
+    bagBody.setAttribute('stroke', stroke);
+    previewBag.setAttribute('fill', hex);
+    previewBag.setAttribute('stroke', stroke);
+    colorLabel.textContent = dot.dataset.color;
+    // haptic-like feedback
+    document.getElementById('mainImageBox').style.background = `linear-gradient(135deg, ${hex}22, ${hex}44)`;
+  });
+});
+
+// === Quantity tiers ===
+const qtyCards = document.querySelectorAll('.qty-card');
+const priceMain = document.getElementById('priceMain');
+const priceUnit = document.getElementById('priceUnit');
+const ctaPrice = document.getElementById('ctaPrice');
+
+qtyCards.forEach(card => {
+  card.addEventListener('click', () => {
+    qtyCards.forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+    const total = Number(card.dataset.total).toLocaleString('ar-EG');
+    const unit = card.dataset.unit;
+    priceMain.textContent = `${total} ر.ي`;
+    priceUnit.textContent = `${unit} ر.ي / كيس`;
+    ctaPrice.textContent = `${total} ر.ي`;
+    // flash animation
+    priceMain.style.transform = 'scale(1.1)';
+    setTimeout(() => priceMain.style.transform = 'scale(1)', 200);
+  });
+});
+
+// === Upload modal ===
+const modal = document.getElementById('uploadModal');
+document.getElementById('openUploadBtn').addEventListener('click', () => modal.classList.add('show'));
+document.getElementById('closeModal').addEventListener('click', () => modal.classList.remove('show'));
+modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
+document.getElementById('changeLogoBtn').addEventListener('click', () => modal.classList.add('show'));
+
+// === File upload + background removal (white pixels → transparent) ===
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      // Remove white-ish background
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imgData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i+1], b = data[i+2];
+        if (r > 240 && g > 240 && b > 240) data[i+3] = 0;
+      }
+      ctx.putImageData(imgData, 0, 0);
+      const dataUrl = canvas.toDataURL('image/png');
+      // Show on main + preview
+      document.getElementById('userLogo').setAttribute('href', dataUrl);
+      document.getElementById('userLogo').style.display = '';
+      document.getElementById('logoArea').style.display = 'none';
+      document.getElementById('previewLogo').setAttribute('href', dataUrl);
+      document.getElementById('previewSection').classList.remove('hidden');
+      modal.classList.remove('show');
+      // Scroll to preview
+      setTimeout(() => {
+        document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 200);
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+</script>
+
+</body>
+</html>
