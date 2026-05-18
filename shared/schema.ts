@@ -94,7 +94,9 @@ export const products = pgTable("products", {
   // ── Phase 7: العروض المتدرجة (Tiered Pricing) ──────────────────────────
   quantityTiers: text("quantity_tiers"),  // JSON: [{qty:100, totalPrice:6000, unitPrice:60}, ...]
   // ── Phase 7: حجم نافذة المعاينة بالبكسل (يتحكم به الأدمن) ──────────────
-  previewSize: integer("preview_size").default(150),  // 150 = افتراضي
+  previewSize: integer("preview_size").default(150),  // قديم — يُحتفظ به للتوافق
+  previewWidth: integer("preview_width").default(200),   // عرض نافذة المعاينة (مثل: 200px لكيس 30سم عرض)
+  previewHeight: integer("preview_height").default(250), // ارتفاع نافذة المعاينة (مثل: 250px لكيس 40سم ارتفاع)
 });
 
 // ── فئات الطباعة الاحترافية (لوحات / كروت / أوصق / فواتير...) ───────────────

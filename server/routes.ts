@@ -2237,6 +2237,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         try { return r.quantity_tiers ? JSON.parse(r.quantity_tiers) : null; } catch { return null; }
       })(),
       previewSize: r.preview_size ?? 150,
+      previewWidth: r.preview_width ?? 200,
+      previewHeight: r.preview_height ?? 250,
       originalPrice: r.original_price ?? null,
       originalPriceSar: dynOriginalPriceSar ?? null,
       discountPercent: r.discount_percent ?? null,
@@ -2826,7 +2828,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // ── Phase 7: تخصيصات الأدمن ─────────────────────────────────────
         printColorOptions: data.printColorOptions ? (typeof data.printColorOptions === "string" ? data.printColorOptions : JSON.stringify(data.printColorOptions)) : null,
         quantityTiers: data.quantityTiers ? (typeof data.quantityTiers === "string" ? data.quantityTiers : JSON.stringify(data.quantityTiers)) : null,
-        previewSize: data.previewSize ? Number(data.previewSize) : 150,
+        previewWidth: data.previewWidth ? Number(data.previewWidth) : 200,
+        previewHeight: data.previewHeight ? Number(data.previewHeight) : 250,
       } as any);
       res.status(201).json(product);
     } catch (e: any) {
@@ -2899,7 +2902,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "promotionalTags",
         "hasFreeShipping", "enableSmartVariants", "smartVariants",
         // Phase 7
-        "printColorOptions", "quantityTiers", "previewSize",
+        "printColorOptions", "quantityTiers", "previewWidth", "previewHeight",
       ];
       // Phase 7: تطبيع JSON objects → strings
       if (Object.prototype.hasOwnProperty.call(data, "printColorOptions")) {
@@ -2910,8 +2913,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const v = data.quantityTiers;
         data.quantityTiers = v && typeof v === "object" ? JSON.stringify(v) : (typeof v === "string" && v ? v : null);
       }
-      if (Object.prototype.hasOwnProperty.call(data, "previewSize")) {
-        data.previewSize = data.previewSize ? Number(data.previewSize) : 150;
+      if (Object.prototype.hasOwnProperty.call(data, "previewWidth")) {
+        data.previewWidth = data.previewWidth ? Number(data.previewWidth) : 200;
+      }
+      if (Object.prototype.hasOwnProperty.call(data, "previewHeight")) {
+        data.previewHeight = data.previewHeight ? Number(data.previewHeight) : 250;
       }
       // Phase 5: تطبيع printArea (object → JSON string) لمطابقة سلوك POST
       if (Object.prototype.hasOwnProperty.call(data, "printArea")) {

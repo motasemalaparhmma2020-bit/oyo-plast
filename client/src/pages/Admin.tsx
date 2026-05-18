@@ -241,7 +241,8 @@ interface ProductFormData {
   // ── Phase 7: تخصيصات المنتج (Admin-controlled) ──────────────────────────
   printColorOptions: Array<{ name: string; hex: string }>;
   quantityTiers: Array<{ qty: number; totalPrice: number; unitPrice: number }>;
-  previewSize: number;
+  previewWidth: number;
+  previewHeight: number;
 }
 
 const emptyProductForm: ProductFormData = {
@@ -293,7 +294,8 @@ const emptyProductForm: ProductFormData = {
     { qty: 500, totalPrice: 27000, unitPrice: 54 },
     { qty: 1000, totalPrice: 50000, unitPrice: 50 },
   ],
-  previewSize: 150,
+  previewWidth: 200,
+  previewHeight: 250,
 };
 
 interface CategoryFormData {
@@ -5659,6 +5661,15 @@ export default function Admin() {
           promotionalTags: data.promotionalTags.length > 0 ? data.promotionalTags : null,
           hasFreeShipping: data.hasFreeShipping,
           supplierId: data.supplierId || null,
+          // ── Phase 7: تخصيصات الأدمن ──
+          printColorOptions: Array.isArray(data.printColorOptions) && data.printColorOptions.length > 0
+            ? data.printColorOptions.filter(c => c.name?.trim() && c.hex?.trim())
+            : null,
+          quantityTiers: Array.isArray(data.quantityTiers) && data.quantityTiers.length > 0
+            ? data.quantityTiers.filter(t => t.qty > 0 && t.totalPrice > 0)
+            : null,
+          previewWidth: Number(data.previewWidth) || 200,
+          previewHeight: Number(data.previewHeight) || 250,
         })
       });
       if (!res.ok) {
@@ -5736,6 +5747,15 @@ export default function Admin() {
         promotionalTags: data.promotionalTags.length > 0 ? data.promotionalTags : null,
         hasFreeShipping: data.hasFreeShipping,
         supplierId: data.supplierId || null,
+        // ── Phase 7: تخصيصات الأدمن ──
+        printColorOptions: Array.isArray(data.printColorOptions) && data.printColorOptions.length > 0
+          ? data.printColorOptions.filter(c => c.name?.trim() && c.hex?.trim())
+          : null,
+        quantityTiers: Array.isArray(data.quantityTiers) && data.quantityTiers.length > 0
+          ? data.quantityTiers.filter(t => t.qty > 0 && t.totalPrice > 0)
+          : null,
+        previewWidth: Number(data.previewWidth) || 200,
+        previewHeight: Number(data.previewHeight) || 250,
       };
       
       const realImageUrls = (data.imageUrls || []).filter(
@@ -6002,7 +6022,8 @@ export default function Admin() {
         if (!v) return emptyProductForm.quantityTiers;
         try { return typeof v === "string" ? JSON.parse(v) : v; } catch { return emptyProductForm.quantityTiers; }
       })(),
-      previewSize: (product as any).previewSize ?? 150,
+      previewWidth: (product as any).previewWidth ?? 200,
+      previewHeight: (product as any).previewHeight ?? 250,
     });
     // Parse colorImages JSON if present
     try {
@@ -8099,42 +8120,74 @@ export default function Admin() {
                               </div>
                             </div>
 
-                            {/* ── 🖼️ حجم نافذة المعاينة ── */}
+                            {/* ── 🖼️ أبعاد نافذة المعاينة (عرض × ارتفاع) ── */}
                             <div className="border border-cyan-200 dark:border-cyan-800 rounded-lg p-3 bg-white dark:bg-card">
                               <Label className="font-bold text-sm flex items-center gap-2 mb-2">
-                                🖼️ حجم نافذة المعاينة (للشعار فوق الكيس)
+                                🖼️ أبعاد نافذة المعاينة (مطابقة لشكل الكيس الحقيقي)
                               </Label>
-                              <div className="flex items-center gap-3">
-                                <Input
-                                  type="range"
-                                  min={80}
-                                  max={300}
-                                  step={10}
-                                  value={productForm.previewSize}
-                                  onChange={e => setProductForm({ ...productForm, previewSize: Number(e.target.value) })}
-                                  className="flex-1"
-                                  data-testid="input-preview-size-range"
-                                />
-                                <Input
-                                  type="number"
-                                  min={80}
-                                  max={300}
-                                  value={productForm.previewSize}
-                                  onChange={e => setProductForm({ ...productForm, previewSize: Number(e.target.value) })}
-                                  className="w-20 text-center"
-                                  data-testid="input-preview-size-number"
-                                />
-                                <span className="text-xs text-muted-foreground">بكسل</span>
-                              </div>
-                              <div className="mt-2 flex items-center justify-center bg-muted/30 rounded p-2">
-                                <div
-                                  className="border-2 border-dashed border-cyan-400 bg-cyan-50 rounded flex items-center justify-center text-xs text-cyan-700 font-bold transition-all"
-                                  style={{ width: `${productForm.previewSize}px`, height: `${productForm.previewSize}px` }}
-                                >
-                                  معاينة {productForm.previewSize}×{productForm.previewSize}
+                              <p className="text-[11px] text-muted-foreground mb-3 leading-relaxed">
+                                💡 <strong>مثال:</strong> كيس عرضه ٣٠سم وارتفاعه ٤٠سم → اضبط ٢٠٠ × ٢٧٠ بكسل (نسبة ٣:٤).
+                                <br />هذا يضمن أن التصميم يظهر للعميل بنفس نسبة الكيس الحقيقي.
+                              </p>
+                              <div className="grid grid-cols-2 gap-3 mb-3">
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">العرض (Width)</Label>
+                                  <div className="flex items-center gap-1 mt-1">
+                                    <Input
+                                      type="number"
+                                      min={80}
+                                      max={400}
+                                      value={productForm.previewWidth}
+                                      onChange={e => setProductForm({ ...productForm, previewWidth: Number(e.target.value) || 200 })}
+                                      className="text-center font-bold text-cyan-700"
+                                      data-testid="input-preview-width"
+                                    />
+                                    <span className="text-xs text-muted-foreground">px</span>
+                                  </div>
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">الارتفاع (Height)</Label>
+                                  <div className="flex items-center gap-1 mt-1">
+                                    <Input
+                                      type="number"
+                                      min={80}
+                                      max={500}
+                                      value={productForm.previewHeight}
+                                      onChange={e => setProductForm({ ...productForm, previewHeight: Number(e.target.value) || 250 })}
+                                      className="text-center font-bold text-cyan-700"
+                                      data-testid="input-preview-height"
+                                    />
+                                    <span className="text-xs text-muted-foreground">px</span>
+                                  </div>
                                 </div>
                               </div>
-                              <p className="text-[11px] text-muted-foreground mt-1.5 text-center">💡 افتراضي: ١٥٠×١٥٠. يظهر هذا الحجم في صفحة المنتج بعد رفع الشعار.</p>
+                              <div className="flex flex-wrap gap-1.5 mb-3">
+                                <span className="text-[10px] text-muted-foreground self-center">قوالب جاهزة:</span>
+                                {[
+                                  { label: "مربع 200×200", w: 200, h: 200 },
+                                  { label: "كيس 30×40 (200×270)", w: 200, h: 270 },
+                                  { label: "كيس طويل 20×40 (150×300)", w: 150, h: 300 },
+                                  { label: "كيس عريض 40×30 (270×200)", w: 270, h: 200 },
+                                ].map(p => (
+                                  <button
+                                    key={p.label}
+                                    type="button"
+                                    onClick={() => setProductForm({ ...productForm, previewWidth: p.w, previewHeight: p.h })}
+                                    className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-900 dark:hover:bg-cyan-800 text-cyan-800 dark:text-cyan-200 transition"
+                                    data-testid={`button-preset-${p.w}x${p.h}`}
+                                  >
+                                    {p.label}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="flex items-center justify-center bg-muted/30 rounded p-3 min-h-[280px]">
+                                <div
+                                  className="border-2 border-dashed border-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 rounded flex items-center justify-center text-xs text-cyan-700 dark:text-cyan-300 font-bold transition-all"
+                                  style={{ width: `${productForm.previewWidth}px`, height: `${productForm.previewHeight}px` }}
+                                >
+                                  معاينة<br />{productForm.previewWidth} × {productForm.previewHeight}
+                                </div>
+                              </div>
                             </div>
 
                             {/* ── 🎨 ملاحظة حول ألوان الكيس ── */}
