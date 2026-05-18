@@ -5246,8 +5246,8 @@ export default function Admin() {
   const [smartVariantsList, setSmartVariantsList] = useState<SmartVariant[]>([]);
   const [smartActiveTypes, setSmartActiveTypes] = useState<SmartVariantType[]>([]);
   const [formSections, setFormSections] = useState<Record<string, boolean>>({
-    basics: false,
-    media: false,
+    basics: true,
+    media: true,
     discount: false,
     smart: false,
     printing: false,

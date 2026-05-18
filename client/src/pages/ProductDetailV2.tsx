@@ -383,6 +383,40 @@ export default function ProductDetailV2() {
     } as any);
   };
 
+  // ── Reviews ──
+  const { data: reviews = [] } = useQuery<any[]>({
+    queryKey: ["/api/products", Number(id), "reviews"],
+    queryFn: async () => {
+      const r = await fetch(`/api/products/${id}/reviews`);
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!id,
+    staleTime: 60_000,
+  });
+  const avgRating = reviews.length > 0
+    ? reviews.reduce((s: number, r: any) => s + (Number(r.rating) || 0), 0) / reviews.length
+    : Number((product as any)?.rating) || 0;
+
+  // ── Related Products (same category, exclude current) ──
+  const productCategoryId = (product as any)?.categoryId;
+  const { data: relatedRaw = [] } = useQuery<any[]>({
+    queryKey: ["/api/products", { categoryId: productCategoryId }],
+    queryFn: async () => {
+      if (!productCategoryId) return [];
+      const r = await fetch(`/api/products?categoryId=${productCategoryId}`);
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!productCategoryId,
+    staleTime: 60_000,
+  });
+  const relatedProducts = useMemo(() => {
+    return (relatedRaw || [])
+      .filter((p: any) => p && p.id !== Number(id))
+      .slice(0, 6);
+  }, [relatedRaw, id]);
+
   // ── Cart count for header badge ──
   const { data: cartItems = [] } = useQuery<any[]>({ queryKey: ["/api/cart"], staleTime: 30_000 });
   const cartCount = cartItems.reduce((s: number, it: any) => s + (it.quantity || 0), 0);
@@ -717,6 +751,78 @@ export default function ProductDetailV2() {
             </div>
           </div>
         )}
+
+        {/* Reviews */}
+        <div className="border-t border-gray-100 mt-2 px-4 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-sm">⭐ التقييمات والمراجعات</h3>
+            <div className="flex items-center gap-1" data-testid="rating-summary">
+              <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+              <span className="text-sm font-bold">{avgRating.toFixed(1)}</span>
+              <span className="text-xs text-gray-500">({reviews.length})</span>
+            </div>
+          </div>
+          {reviews.length === 0 ? (
+            <p className="text-xs text-gray-500 text-center py-3" data-testid="text-no-reviews">
+              لا توجد مراجعات بعد. كن أول من يقيّم هذا المنتج ✨
+            </p>
+          ) : (
+            <div className="space-y-3 max-h-64 overflow-y-auto">
+              {reviews.slice(0, 10).map((rv: any) => (
+                <div key={rv.id} className="bg-gray-50 rounded-lg p-2.5" data-testid={`review-${rv.id}`}>
+                  <div className="flex items-center gap-1 mb-1">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star
+                        key={i}
+                        className={`w-3 h-3 ${i < (Number(rv.rating) || 0) ? "fill-amber-400 text-amber-400" : "text-gray-300"}`}
+                      />
+                    ))}
+                    <span className="text-[11px] text-gray-500 mr-auto">
+                      {rv.userName || rv.user_name || "زبون"}
+                    </span>
+                  </div>
+                  {rv.comment && (
+                    <p className="text-xs text-gray-700 leading-relaxed">{rv.comment}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Related Products */}
+        {relatedProducts.length > 0 && (
+          <div className="border-t border-gray-100 mt-2 px-4 py-4">
+            <h3 className="font-bold text-sm mb-3">🛍️ منتجات مشابهة</h3>
+            <div className="grid grid-cols-2 gap-3" data-testid="related-products">
+              {relatedProducts.map((rp: any) => {
+                const rpImg = (rp.imageUrls && rp.imageUrls[0]) || rp.imageUrl || "/placeholder.png";
+                const rpPrice = Number(rp.price) || 0;
+                return (
+                  <Link
+                    key={rp.id}
+                    href={`/product/${rp.id}`}
+                    className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-cyan-400 transition active:scale-[0.98]"
+                    data-testid={`related-product-${rp.id}`}
+                  >
+                    <div className="aspect-square bg-gray-100 overflow-hidden">
+                      <img src={rpImg} alt={rp.name} className="w-full h-full object-cover" loading="lazy" />
+                    </div>
+                    <div className="p-2">
+                      <h4 className="text-xs font-bold text-gray-800 line-clamp-2 min-h-[2.2em]">{rp.name}</h4>
+                      <p className="text-cyan-600 font-bold text-sm mt-1">
+                        {formatNum(rpPrice)} <span className="text-[10px] text-gray-500">ر.ي</span>
+                      </p>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Bottom spacer to avoid sticky CTA overlap */}
+        <div className="h-24" aria-hidden="true" />
 
       </div>
 
