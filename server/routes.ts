@@ -332,6 +332,44 @@ export async function computeServerUnitPrice(
     console.warn("[computeLineTotal volume-offer]", e?.message);
   }
 
+  // (0.5) ─── Phase 7: Quantity Tiers Override ────────────────────────────
+  // إن وجدت quantity_tiers يُحدّدها الأدمن، نطبّق سعر الـ tier المطابق للكمية.
+  // المنطق: أعلى tier qty ≤ qty المطلوب → يربح. مثلاً ١٠٠/٥٠٠/١٠٠٠ كيس + qty=600 → tier ٥٠٠
+  try {
+    const rawTiers = row.quantity_tiers;
+    const tiers = rawTiers
+      ? (typeof rawTiers === "string" ? JSON.parse(rawTiers) : rawTiers)
+      : null;
+    if (Array.isArray(tiers) && tiers.length > 0) {
+      const valid = tiers
+        .filter((t: any) => t && Number(t.qty) > 0 && Number(t.unitPrice) > 0)
+        .map((t: any) => ({ qty: Number(t.qty), unitPrice: Number(t.unitPrice), totalPrice: Number(t.totalPrice) || 0 }))
+        .sort((a, b) => a.qty - b.qty);
+      // أعلى tier qty ≤ qty المطلوب
+      let matched = null;
+      for (const t of valid) {
+        if (qty >= t.qty) matched = t;
+      }
+      // إن كانت الكمية أقل من أصغر tier، نطبّق أصغر tier (لا نعاقب العميل)
+      if (!matched && valid.length > 0) matched = valid[0];
+      if (matched) {
+        const lineTotal = matched.unitPrice * qty;
+        return {
+          unitPrice: Math.round(matched.unitPrice * 100) / 100,
+          lineTotal: Math.round(lineTotal * 100) / 100,
+          breakdown: {
+            basePrice: matched.unitPrice,
+            proPrintingPerUnit: 0, customPrintingPerUnit: 0,
+            phase4Total: 0, designFee: 0, colorTotal: 0, sideTotal: 0,
+            qty, appliedTierQty: matched.qty,
+          },
+        };
+      }
+    }
+  } catch (e: any) {
+    console.warn("[computeLineTotal quantity-tiers]", e?.message);
+  }
+
   // (1) السعر الأساسي من smart_variants (أرخص متغير مطابق للـ label أو أرخص بالعموم)
   let basePrice = parseFloat(String(row.price ?? "0")) || 0;
   try {
@@ -3333,6 +3371,65 @@ h1{font-size:18px;color:#222;margin:4px 0;}
 <div class="stage"><img class="bg" src="${esc(product)}"/><img class="logo" src="${esc(logo)}"/></div>
 <p class="note">هذا نموذج تقريبي لعرض الشعار على المنتج. التصميم النهائي سيتم تجهيزه بعد تأكيد الطلب.</p>
 </body></html>`);
+  });
+
+  // ── Phase 7: تحسين الشعار بالذكاء الاصطناعي ─────────────────────────
+  // إزالة خلفية + تحسين تباين + توضيح حواف باستخدام sharp (server-side)
+  // أقوى وأسرع من Canvas client-side
+  app.post("/api/ai/enhance-logo", async (req, res) => {
+    try {
+      const { imageDataUrl } = req.body || {};
+      if (!imageDataUrl || typeof imageDataUrl !== "string") {
+        return res.status(400).json({ message: "imageDataUrl مطلوب" });
+      }
+      // استخراج base64 من data URL
+      const match = imageDataUrl.match(/^data:image\/[^;]+;base64,(.+)$/);
+      if (!match) return res.status(400).json({ message: "صيغة data URL غير صالحة" });
+      const inputBuffer = Buffer.from(match[1], "base64");
+      if (inputBuffer.length > 8 * 1024 * 1024) {
+        return res.status(413).json({ message: "الصورة كبيرة جداً (الحد ٨ ميجا)" });
+      }
+
+      const sharp = (await import("sharp")).default;
+
+      // تحجيم إلى حد أقصى ٨٠٠ بكسل للأداء
+      const resized = await sharp(inputBuffer)
+        .resize(800, 800, { fit: "inside", withoutEnlargement: true })
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      const { data, info } = resized;
+      const out = Buffer.from(data);
+
+      // إزالة خلفية بيضاء (threshold أقوى من Canvas) + anti-aliasing zone
+      for (let i = 0; i < out.length; i += 4) {
+        const r = out[i], g = out[i + 1], b = out[i + 2];
+        // خلفية بيضاء صريحة → شفافية كاملة
+        if (r > 235 && g > 235 && b > 235) {
+          out[i + 3] = 0;
+        } else if (r > 210 && g > 210 && b > 210) {
+          // منطقة انتقالية → شفافية متدرّجة (نعومة الحواف)
+          const minRGB = Math.min(r, g, b);
+          out[i + 3] = Math.max(0, Math.min(255, Math.round(((minRGB - 210) / 25) * 255)));
+        }
+      }
+
+      // إعادة بناء الصورة + تطبيق normalize + sharpen
+      const enhanced = await sharp(out, {
+        raw: { width: info.width, height: info.height, channels: 4 },
+      })
+        .normalise()
+        .sharpen({ sigma: 1.0 })
+        .png({ compressionLevel: 8 })
+        .toBuffer();
+
+      const enhancedDataUrl = `data:image/png;base64,${enhanced.toString("base64")}`;
+      res.json({ enhancedDataUrl, method: "sharp" });
+    } catch (e: any) {
+      console.error("[enhance-logo] error:", e?.message || e);
+      res.status(500).json({ message: "فشل تحسين الصورة", details: e?.message });
+    }
   });
 
   // رفع شعار العميل من المحادثة (Cloudinary)

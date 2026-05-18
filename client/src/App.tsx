@@ -48,6 +48,7 @@ import Products from "@/pages/Products";
 import CategoryPage from "@/pages/CategoryPage";
 import CategoriesPage from "@/pages/CategoriesPage";
 import ProductDetail from "@/pages/ProductDetail";
+import ProductDetailV2 from "@/pages/ProductDetailV2";
 import Cart from "@/pages/Cart";
 import Checkout from "@/pages/Checkout";
 import OrderConfirmation from "@/pages/OrderConfirmation";
@@ -573,8 +574,10 @@ function Router() {
             <Route path="/products" component={Products} />
             <Route path="/categories" component={CategoriesPage} />
             <Route path="/category/:slug" component={CategoryPage} />
-            <Route path="/product/:id" component={ProductDetail} />
-            <Route path="/products/:id" component={ProductDetail} />
+            <Route path="/product/:id" component={ProductDetailV2} />
+            <Route path="/products/:id" component={ProductDetailV2} />
+            <Route path="/product-v1/:id" component={ProductDetail} />
+            <Route path="/products-v1/:id" component={ProductDetail} />
             <Route path="/cart" component={Cart} />
             <Route path="/compare" component={Compare} />
             
