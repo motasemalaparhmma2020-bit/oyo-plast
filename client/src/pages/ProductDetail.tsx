@@ -2183,7 +2183,8 @@ export default function ProductDetail() {
                   <span className="text-lg">🎨</span>
                   <span className="font-bold text-sm">لون الكيس</span>
                   {selectedDynamicBagColor && (
-                    <span className="text-[11px] bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 px-2 py-0.5 rounded-full font-semibold mr-auto">
+                    <span className="text-[11px] bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 px-2 py-0.5 rounded-full font-semibold mr-auto flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full border border-black/20 shadow-sm" style={{ backgroundColor: selectedDynamicBagColor.code || '#ccc' }} />
                       {selectedDynamicBagColor.name}
                     </span>
                   )}
@@ -2196,7 +2197,7 @@ export default function ProductDetail() {
                         onClick={() => setSelectedDynamicBagColor(isActive ? null : c)}
                         title={c.name}
                         className={`relative w-10 h-10 rounded-full border-2 transition-all ${isActive ? 'border-gray-900 dark:border-white scale-110 ring-2 ring-sky-400' : 'border-gray-300 dark:border-gray-600 hover:scale-105'}`}
-                        style={{ backgroundColor: c.code }}
+                        style={{ backgroundColor: c.code || '#cccccc' }}
                         data-testid={`button-bag-color-${c.id}`}>
                         {isActive && <Check className="absolute inset-0 m-auto h-4 w-4 text-white mix-blend-difference" />}
                       </button>
@@ -2213,7 +2214,8 @@ export default function ProductDetail() {
                   <span className="text-lg">🖊️</span>
                   <span className="font-bold text-sm">لون الطباعة (الحبر)</span>
                   {selectedInkColor && (
-                    <span className="text-[11px] bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded-full font-semibold mr-auto">
+                    <span className="text-[11px] bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded-full font-semibold mr-auto flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full border border-black/20 shadow-sm" style={{ backgroundColor: selectedInkColor.hex || '#ccc' }} />
                       {selectedInkColor.name}
                     </span>
                   )}
