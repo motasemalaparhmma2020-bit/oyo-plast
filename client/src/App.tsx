@@ -589,10 +589,10 @@ function Router() {
             <Route path="/products" component={Products} />
             <Route path="/categories" component={CategoriesPage} />
             <Route path="/category/:slug" component={CategoryPage} />
-            <Route path="/product/:id" component={ProductDetailV2} />
-            <Route path="/products/:id" component={ProductDetailV2} />
-            <Route path="/product-v1/:id" component={ProductDetail} />
-            <Route path="/products-v1/:id" component={ProductDetail} />
+            <Route path="/product/:id" component={ProductDetail} />
+            <Route path="/products/:id" component={ProductDetail} />
+            <Route path="/product-v2/:id" component={ProductDetailV2} />
+            <Route path="/products-v2/:id" component={ProductDetailV2} />
             <Route path="/cart" component={Cart} />
             <Route path="/compare" component={Compare} />
             
