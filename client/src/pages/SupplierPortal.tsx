@@ -665,6 +665,11 @@ function SupplierFinanceTab({ session }: { session: SupplierSession }) {
           </div>
           <p className="text-3xl font-extrabold" data-testid="text-balance-due">{fmt(data?.balanceDue)}</p>
           <p className="text-xs opacity-80 mt-1">ر.ي · سيُسوّى عبر إدارة المنصة</p>
+          <a href="/supplier/statement" data-testid="link-statement">
+            <button className="mt-3 w-full bg-white/20 hover:bg-white/30 text-white text-sm font-bold py-2 rounded-lg backdrop-blur transition">
+              📊 عرض كشف الحساب التفصيلي
+            </button>
+          </a>
         </CardContent>
       </Card>
 
