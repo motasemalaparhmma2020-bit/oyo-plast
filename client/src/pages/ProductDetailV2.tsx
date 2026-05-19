@@ -422,6 +422,34 @@ export default function ProductDetailV2() {
   const { data: cartItems = [] } = useQuery<any[]>({ queryKey: ["/api/cart"], staleTime: 30_000 });
   const cartCount = cartItems.reduce((s: number, it: any) => s + (it.quantity || 0), 0);
 
+  // ── Volume Offers (عروض الكميات) ──
+  const numericProductId = Number(id);
+  const { data: volumeOffers = [] } = useQuery<any[]>({
+    queryKey: ["/api/products", numericProductId, "volume-offers"],
+    queryFn: async () => {
+      const res = await fetch(`/api/products/${numericProductId}/volume-offers`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!numericProductId && !!(product as any)?.enableVolumeOffers,
+    staleTime: 5 * 60_000,
+  });
+  const sortedOffers = useMemo(
+    () => [...volumeOffers].sort((a, b) => (a.minQuantity ?? 0) - (b.minQuantity ?? 0)),
+    [volumeOffers]
+  );
+  const activeOffer = useMemo(() => {
+    const q = selectedTier?.qty ?? 0;
+    const m = sortedOffers.filter(
+      (o) => q >= (o.minQuantity ?? 0) && (o.maxQuantity == null || q <= o.maxQuantity)
+    );
+    return m[m.length - 1] || null;
+  }, [sortedOffers, selectedTier]);
+  const nextOffer = useMemo(() => {
+    const q = selectedTier?.qty ?? 0;
+    return sortedOffers.find((o) => (o.minQuantity ?? 0) > q) || null;
+  }, [sortedOffers, selectedTier]);
+
   if (isLoading || !product) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -483,7 +511,7 @@ export default function ProductDetailV2() {
               className="max-w-[80%] max-h-[80%] object-contain transition-all"
               onError={(e) => { (e.target as HTMLImageElement).src = product.mainImage || "/placeholder.png"; }}
             />
-            {/* Logo overlay on print area */}
+            {/* Logo overlay on print area — tinted via CSS mask so any color works */}
             {logoDataUrl && (
               <div
                 className="absolute pointer-events-none"
@@ -492,26 +520,18 @@ export default function ProductDetailV2() {
                   top: `${printArea.y}%`,
                   width: `${printArea.width}%`,
                   height: `${printArea.height}%`,
-                  // Dynamic print color tint via filter
-                  filter: selectedPrintColor.hex !== "#FFFFFF" && selectedPrintColor.hex !== "#000000"
-                    ? `drop-shadow(0 0 0 ${selectedPrintColor.hex})`
-                    : undefined,
+                  background: selectedPrintColor?.hex || "#000000",
+                  WebkitMaskImage: `url(${logoDataUrl})`,
+                  maskImage: `url(${logoDataUrl})`,
+                  WebkitMaskRepeat: "no-repeat",
+                  maskRepeat: "no-repeat",
+                  WebkitMaskSize: "contain",
+                  maskSize: "contain",
+                  WebkitMaskPosition: "center",
+                  maskPosition: "center",
                 }}
-              >
-                <img
-                  src={logoDataUrl}
-                  alt="logo"
-                  className="w-full h-full object-contain"
-                  style={{
-                    filter: selectedPrintColor.hex === "#000000"
-                      ? "brightness(0)"
-                      : selectedPrintColor.hex === "#FFFFFF"
-                      ? "brightness(0) invert(1)"
-                      : `brightness(0) saturate(100%)`,
-                    // For colored print, we use a CSS color overlay via mask
-                  }}
-                />
-              </div>
+                data-testid="logo-overlay-main"
+              />
             )}
             {/* Image counter dots */}
             {images.length > 1 && (
@@ -567,6 +587,78 @@ export default function ProductDetailV2() {
               {formatNum(selectedTier.unitPrice)} ر.ي / كيس
             </span>
           </div>
+
+          {/* ⑤b Volume Offers — عروض الكميات */}
+          {sortedOffers.length > 0 && (
+            <div className="space-y-2" data-testid="section-volume-offers">
+              {activeOffer && (
+                <div className="rounded-xl border-2 border-orange-400 bg-gradient-to-l from-orange-50 to-amber-50 p-3 shadow-sm" data-testid={`banner-active-offer-${activeOffer.id}`}>
+                  <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                    {activeOffer.badgeText && (
+                      <span className="bg-orange-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+                        🔥 {activeOffer.badgeText}
+                      </span>
+                    )}
+                    {activeOffer.hasFreeShipping && (
+                      <span className="bg-green-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">🚚 شحن مجاني</span>
+                    )}
+                  </div>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-xl font-extrabold text-orange-600" data-testid="text-offer-price">
+                      {formatNum(Number(activeOffer.offerPriceYer))} ر.ي / قطعة
+                    </span>
+                    {activeOffer.originalPriceYer && Number(activeOffer.originalPriceYer) > Number(activeOffer.offerPriceYer) && (
+                      <>
+                        <span className="text-xs line-through text-gray-400">
+                          {formatNum(Number(activeOffer.originalPriceYer))} ر.ي
+                        </span>
+                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                          -{Math.round(((Number(activeOffer.originalPriceYer) - Number(activeOffer.offerPriceYer)) / Number(activeOffer.originalPriceYer)) * 100)}%
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  {activeOffer.displayLabel && (
+                    <p className="text-[11px] text-orange-700 mt-1">{activeOffer.displayLabel}</p>
+                  )}
+                </div>
+              )}
+              {nextOffer && (selectedTier?.qty ?? 0) < (nextOffer.minQuantity ?? 0) && (
+                <div className="rounded-xl border border-blue-300 bg-blue-50 p-2.5 text-[11px] text-blue-900" data-testid="banner-next-offer">
+                  أضِف <strong>{(nextOffer.minQuantity ?? 0) - (selectedTier?.qty ?? 0)}</strong> قطعة لتحصل على سعر <strong>{formatNum(Number(nextOffer.offerPriceYer))} ر.ي</strong>
+                </div>
+              )}
+              <div className="rounded-xl border border-cyan-200 bg-cyan-50/50 p-2.5">
+                <p className="text-xs font-bold text-cyan-700 mb-2">🎯 عروض الكمية</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {sortedOffers.map((o: any) => {
+                    const isActive = activeOffer?.id === o.id;
+                    return (
+                      <button
+                        key={o.id}
+                        onClick={() => {
+                          const minQ = o.minQuantity ?? 1;
+                          const match = quantityTiers.find((t) => t.qty >= minQ) || quantityTiers[quantityTiers.length - 1];
+                          if (match) setSelectedTier(match);
+                        }}
+                        className={`text-right rounded-lg border-2 p-2 transition-all bg-white ${isActive ? "border-orange-500 bg-orange-100 shadow-md" : "border-gray-200 hover:border-cyan-400"}`}
+                        data-testid={`button-volume-tier-${o.id}`}
+                      >
+                        <div className="text-[11px] font-bold text-gray-700">
+                          {o.minQuantity}{o.maxQuantity ? `–${o.maxQuantity}` : "+"} قطعة
+                        </div>
+                        <div className="text-sm font-extrabold text-orange-600">
+                          {formatNum(Number(o.offerPriceYer))} ر.ي
+                        </div>
+                        {o.badgeText && <div className="text-[10px] text-orange-700 mt-0.5">{o.badgeText}</div>}
+                        {o.hasFreeShipping && <div className="text-[10px] text-green-700">🚚 مجاني</div>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ⑥ Bag Colors */}
           {bagColors.length > 0 && (
