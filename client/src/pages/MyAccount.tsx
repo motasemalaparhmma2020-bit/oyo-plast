@@ -9,7 +9,7 @@ import {
   ShoppingBag, Wallet, Award, ChevronRight, Package, Clock,
   CheckCircle2, Truck, RefreshCcw, LogIn, UserPlus, Bell, Heart,
   MapPin, Settings as SettingsIcon, MessageCircle, Handshake,
-  CreditCard, User, Ticket, ShieldCheck, HelpCircle, LogOut, ExternalLink,
+  CreditCard, User, Ticket, ShieldCheck, HelpCircle, LogOut, ExternalLink, AlertTriangle,
 } from "lucide-react";
 import type { Order } from "@shared/schema";
 import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
@@ -142,6 +142,7 @@ export default function MyAccount() {
   // 9 أدوات فريدة (3×3) — أُزيل المكرر مع بطاقات Finance أعلاه (المحفظة/النقاط/الائتمان)
   const tools: Array<{ icon: any; label: string; href?: string; color: string; bg: string; external?: boolean; onClick?: () => void; testid: string }> = [
     { icon: ShoppingBag,  label: "طلباتي",       href: "/orders",            color: "text-blue-600",   bg: "bg-blue-100 dark:bg-blue-950/40",     testid: "tool-orders" },
+    { icon: AlertTriangle,label: "مديونياتي",    href: "/my-debts",          color: "text-rose-600",   bg: "bg-rose-100 dark:bg-rose-950/40",     testid: "tool-debts" },
     { icon: MapPin,       label: "عناويني",      href: "/addresses",         color: "text-indigo-600", bg: "bg-indigo-100 dark:bg-indigo-950/40", testid: "tool-addresses" },
     { icon: User,         label: "ملفي الشخصي",  href: "/profile",           color: "text-cyan-600",   bg: "bg-cyan-100 dark:bg-cyan-950/40",     testid: "tool-profile" },
     { icon: Bell,         label: "إشعاراتي",     href: "/notifications",     color: "text-purple-600", bg: "bg-purple-100 dark:bg-purple-950/40", testid: "tool-notifications" },

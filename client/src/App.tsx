@@ -75,6 +75,7 @@ import WalletPage from "@/pages/Wallet";
 import LoyaltyPage from "@/pages/Loyalty";
 import SettingsPage from "@/pages/Settings";
 import MyCredit from "@/pages/MyCredit";
+import MyDebts from "@/pages/MyDebts";
 import MarketerCoupons from "@/pages/MarketerCoupons";
 import MyCouponsPage from "@/pages/MyCoupons";
 import Printing from "@/pages/Printing";
@@ -636,6 +637,9 @@ function Router() {
             </Route>
             <Route path="/account/credit">
               <RequireAccountType><MyCredit /></RequireAccountType>
+            </Route>
+            <Route path="/my-debts">
+              <RequireAccountType><MyDebts /></RequireAccountType>
             </Route>
             <Route path="/wallet">
               <RequireAccountType><WalletPage /></RequireAccountType>

@@ -4850,6 +4850,182 @@ h1{font-size:18px;color:#222;margin:4px 0;}
     }
   });
 
+  // ═════════════════════════════════════════════════════════════════════
+  // 💰 مديونياتي — صفحة العميل (delivered + unpaid orders)
+  // ═════════════════════════════════════════════════════════════════════
+  app.get("/api/my-debts", async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user) || req.session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
+      const { pool: dbPool } = await import("./db");
+      const result = await dbPool.query(`
+        SELECT
+          o.id, o.total, o.currency, o.status, o.payment_status,
+          COALESCE(o.deposit_amount, 0) AS deposit_amount,
+          COALESCE(o.discount_amount, 0) AS discount_amount,
+          o.receipt_image_url, o.amount_claimed,
+          o.shipping_city, o.created_at,
+          ip.id AS plan_id,
+          ip.remaining_amount AS plan_remaining,
+          ip.remaining_paid AS plan_remaining_paid,
+          ip.status AS plan_status,
+          cc.tier,
+          ct.payment_term_days,
+          ct.cash_discount_percent
+        FROM orders o
+        LEFT JOIN installment_plans ip ON ip.order_id = o.id
+        LEFT JOIN customer_credit cc ON cc.customer_id = o.user_id
+        LEFT JOIN customer_credit_tiers ct ON ct.tier_key = cc.tier
+        WHERE o.user_id = $1
+          AND o.status IN ('delivered','completed')
+          AND COALESCE(o.payment_status,'unpaid') NOT IN ('paid')
+        ORDER BY o.created_at DESC
+        LIMIT 100
+      `, [userId]);
+
+      const debts = result.rows
+        .map((r: any) => {
+          const total = Number(r.total || 0);
+          const deposit = Number(r.deposit_amount || 0);
+          const discount = Number(r.discount_amount || 0);
+          const claimed = Number(r.amount_claimed || 0);
+          // إذا فيه خطة تقسيط فُعّلت → استخدم remaining_amount منها
+          const remaining = r.plan_id
+            ? Number(r.plan_remaining || 0)
+            : Math.max(0, total - deposit - discount - claimed);
+          const dueDays = Number(r.payment_term_days || 30);
+          const deliveredAt = new Date(r.created_at);
+          const dueDate = new Date(deliveredAt.getTime() + dueDays * 24 * 3600 * 1000);
+          return {
+            orderId: r.id,
+            total,
+            deposit,
+            discount,
+            paid: deposit + discount + claimed,
+            remaining,
+            currency: r.currency || "YER",
+            paymentStatus: r.payment_status || "unpaid",
+            hasReceipt: !!r.receipt_image_url,
+            shippingCity: r.shipping_city,
+            createdAt: r.created_at,
+            dueDate: dueDate.toISOString(),
+            tier: r.tier,
+            cashDiscountPercent: Number(r.cash_discount_percent || 1),
+            planId: r.plan_id,
+          };
+        })
+        .filter((d: any) => d.remaining > 0);
+
+      res.json(debts);
+    } catch (e: any) {
+      console.error("[my-debts] error:", e?.message);
+      res.status(500).json({ message: "فشل جلب المديونيات" });
+    }
+  });
+
+  // 💳 رفع إيصال دفع مديونية + خصم اختياري للدفع المبكّر
+  app.post("/api/my-debts/:orderId/pay", upload.single("receipt"), async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user) || req.session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
+      const orderId = parseInt(req.params.orderId);
+      if (!req.file) return res.status(400).json({ message: "يجب رفع صورة الإيصال" });
+      const { pool: dbPool } = await import("./db");
+
+      // التحقق من ملكية الطلب وأنه فعلاً عليه مديونية
+      const own = await dbPool.query(
+        `SELECT o.id, o.total, o.user_id, o.status, o.payment_status,
+                COALESCE(o.deposit_amount,0) AS deposit_amount,
+                COALESCE(o.discount_amount,0) AS discount_amount,
+                COALESCE(o.amount_claimed,0) AS amount_claimed,
+                o.customer_name, o.customer_phone
+         FROM orders o WHERE o.id=$1`,
+        [orderId]
+      );
+      if (!own.rows.length) return res.status(404).json({ message: "الطلب غير موجود" });
+      const o = own.rows[0];
+      if (String(o.user_id) !== String(userId)) return res.status(403).json({ message: "غير مصرح" });
+      if (!["delivered", "completed"].includes(o.status)) {
+        return res.status(400).json({ message: "هذا الطلب غير مؤهل للسداد بعد" });
+      }
+      // 🛡️ منع الرفع المزدوج (يحمي من تطبيق الخصم مرتين)
+      if (o.payment_status === "pending_verification") {
+        return res.status(409).json({ message: "لديك إيصال قيد التحقق لهذا الطلب. انتظر مراجعة الإدارة." });
+      }
+      if (o.payment_status === "paid") {
+        return res.status(409).json({ message: "هذا الطلب مدفوع بالكامل." });
+      }
+
+      const applyEarlyDiscount = String(req.body?.applyEarlyDiscount || "false") === "true";
+      const amountClaimedRaw = Number(req.body?.amountClaimed || 0);
+      const paymentMethod = String(req.body?.paymentMethod || "bank_transfer");
+      const transactionRef = String(req.body?.transactionRef || "");
+
+      const total = Number(o.total);
+      const currentRemaining = Math.max(0, total - Number(o.deposit_amount) - Number(o.discount_amount) - Number(o.amount_claimed));
+      const earlyDiscount = applyEarlyDiscount ? Math.round(currentRemaining * 0.01) : 0;
+      const expectedAmount = currentRemaining - earlyDiscount;
+
+      // رفع الصورة إلى Cloudinary
+      let receiptUrl = "";
+      try {
+        const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+        const apiKey = process.env.CLOUDINARY_API_KEY;
+        const apiSecret = process.env.CLOUDINARY_API_SECRET;
+        if (cloudName && apiKey && apiSecret) {
+          const { v2: cloudinary } = await import("cloudinary");
+          cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
+          const uploadRes: any = await new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+              { folder: "oyo_debt_receipts", public_id: `debt_${orderId}_${Date.now()}`, resource_type: "image" },
+              (err, result) => err ? reject(err) : resolve(result)
+            );
+            stream.end(req.file!.buffer);
+          });
+          receiptUrl = uploadRes.secure_url;
+        } else {
+          const base64 = req.file.buffer.toString("base64");
+          receiptUrl = `data:${req.file.mimetype};base64,${base64}`;
+        }
+      } catch (uploadErr: any) {
+        console.error("[my-debts/pay] upload failed:", uploadErr?.message);
+        return res.status(500).json({ message: "فشل رفع الإيصال، حاول مرة أخرى" });
+      }
+
+      // تحديث الطلب: pending_verification + تطبيق الخصم المبكّر إن وُجد
+      await dbPool.query(
+        `UPDATE orders
+            SET receipt_image_url=$1,
+                payment_status='pending_verification',
+                amount_claimed = COALESCE(amount_claimed,0) + $2,
+                discount_amount = COALESCE(discount_amount,0) + $3
+          WHERE id=$4`,
+        [receiptUrl, amountClaimedRaw || expectedAmount, earlyDiscount, orderId]
+      );
+
+      // إشعار الإدارة (in-app + WhatsApp)
+      try {
+        const { notifyStaff } = await import("./lib/staff-notify");
+        await notifyStaff(["owner", "finance", "order_manager"], {
+          title: "💰 إيصال سداد مديونية",
+          message: `طلب #${orderId} | العميل: ${o.customer_name} | المبلغ المُدّعى: ${(amountClaimedRaw || expectedAmount).toLocaleString()} ر.ي${earlyDiscount > 0 ? ` (خصم مبكّر ${earlyDiscount.toLocaleString()})` : ""}${transactionRef ? ` | مرجع: ${transactionRef}` : ""}`,
+          telegram: true,
+        });
+      } catch {}
+
+      res.json({
+        success: true,
+        receiptUrl,
+        amountPaid: amountClaimedRaw || expectedAmount,
+        earlyDiscount,
+        message: "تم استلام إيصال السداد، سيتم التحقق منه خلال ساعات قليلة",
+      });
+    } catch (e: any) {
+      console.error("[my-debts/pay] error:", e?.message);
+      res.status(500).json({ message: "فشل تسجيل الدفع" });
+    }
+  });
+
   app.patch("/api/notifications/read-all", async (req: any, res) => {
     try {
       const userId = getUserId(req.user) || req.session?.userId;
@@ -5661,9 +5837,34 @@ h1{font-size:18px;color:#222;margin:4px 0;}
             cancelled: "تم إلغاء طلبك",
           };
           const label = statusMap[newStatus] || `تحديث الحالة: ${newStatus}`;
-          const { notifyOrderStatus, notifyOrderDelivered } = await import("./lib/notifications");
+          const { notifyOrderStatus, notifyOrderDelivered, createNotification } = await import("./lib/notifications");
           if (newStatus === "delivered") {
             await notifyOrderDelivered(String(order.userId), order.id);
+            // 💰 إشعار "سدّد مديونيتك" — يفتح صفحة /my-debts مباشرة
+            try {
+              const { pool: dbPool2 } = await import("./db");
+              const dbg = await dbPool2.query(
+                `SELECT total, COALESCE(deposit_amount,0) AS deposit, COALESCE(discount_amount,0) AS disc, COALESCE(amount_claimed,0) AS claimed
+                   FROM orders WHERE id=$1`,
+                [order.id]
+              );
+              if (dbg.rows.length) {
+                const r = dbg.rows[0];
+                const remaining = Math.max(0, Number(r.total) - Number(r.deposit) - Number(r.disc) - Number(r.claimed));
+                if (remaining > 0) {
+                  await createNotification({
+                    userId: String(order.userId),
+                    type: "order_status",
+                    priority: "high",
+                    title: `💰 طلب #${order.id} — متبقي ${remaining.toLocaleString("ar-YE")} ر.ي`,
+                    message: "ادفع اليوم واحصل على خصم 1% — اضغط لرفع إيصال الدفع",
+                    actionUrl: `/my-debts`,
+                    orderId: order.id,
+                    groupKey: `debt_due:${order.id}`,
+                  });
+                }
+              }
+            } catch {}
           } else {
             await notifyOrderStatus(String(order.userId), order.id, label);
           }
