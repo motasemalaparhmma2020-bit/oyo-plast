@@ -237,6 +237,7 @@ interface ProductFormData {
   discountPercent: string;
   promotionalTags: string[];
   hasFreeShipping: boolean;
+  productType?: 'ready' | 'customizable';
   supplierId: number;
   // ── Phase 7: تخصيصات المنتج (Admin-controlled) ──────────────────────────
   printColorOptions: Array<{ name: string; hex: string }>;
@@ -282,6 +283,7 @@ const emptyProductForm: ProductFormData = {
   discountPercent: "",
   promotionalTags: [],
   hasFreeShipping: false,
+  productType: 'ready' as 'ready' | 'customizable',
   supplierId: 0,
   // ── Phase 7 ──
   printColorOptions: [
@@ -5660,6 +5662,7 @@ export default function Admin() {
           discountPercent: data.discountPercent ? Number(data.discountPercent) : null,
           promotionalTags: data.promotionalTags.length > 0 ? data.promotionalTags : null,
           hasFreeShipping: data.hasFreeShipping,
+          productType: data.productType ?? 'ready',
           supplierId: data.supplierId || null,
           // ── Phase 7: تخصيصات الأدمن ──
           printColorOptions: Array.isArray(data.printColorOptions) && data.printColorOptions.length > 0
@@ -5746,6 +5749,7 @@ export default function Admin() {
         discountPercent: data.discountPercent ? Number(data.discountPercent) : null,
         promotionalTags: data.promotionalTags.length > 0 ? data.promotionalTags : null,
         hasFreeShipping: data.hasFreeShipping,
+        productType: data.productType ?? 'ready',
         supplierId: data.supplierId || null,
         // ── Phase 7: تخصيصات الأدمن ──
         printColorOptions: Array.isArray(data.printColorOptions) && data.printColorOptions.length > 0
@@ -6010,6 +6014,7 @@ export default function Admin() {
       discountPercent: (product as any).discountPercent != null ? String((product as any).discountPercent) : "",
       promotionalTags: (product as any).promotionalTags ?? [],
       hasFreeShipping: (product as any).hasFreeShipping ?? false,
+      productType: ((product as any).productType === 'customizable' ? 'customizable' : 'ready') as 'ready' | 'customizable',
       supplierId: (product as any).supplierId ?? (product as any).supplier_id ?? 0,
       // ── Phase 7: تحميل تخصيصات الأدمن ──
       printColorOptions: (() => {
@@ -7163,6 +7168,47 @@ export default function Admin() {
                             <Label htmlFor="product-free-shipping" className="font-medium flex items-center gap-2">
                               🚚 شحن مجاني على هذا المنتج
                             </Label>
+                          </div>
+                          {/* ── نوع المنتج: جاهز / قابل للطباعة ── */}
+                          <div className="rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20 p-3 space-y-2 mt-1">
+                            <Label className="font-bold text-sm flex items-center gap-2">
+                              🏷️ نوع المنتج
+                            </Label>
+                            <p className="text-[11px] text-muted-foreground">
+                              يتحكم في ظهور خيارات الطباعة/الألوان/رفع الشعار في صفحة المنتج
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                              <label className={`flex items-start gap-2 rounded-md border p-2.5 cursor-pointer transition ${productForm.productType === 'ready' ? 'border-blue-500 bg-blue-100/60 dark:bg-blue-900/30' : 'border-gray-200 hover:border-blue-300'}`}>
+                                <input
+                                  type="radio"
+                                  name="product-type"
+                                  value="ready"
+                                  checked={productForm.productType === 'ready'}
+                                  onChange={() => setProductForm({...productForm, productType: 'ready'})}
+                                  className="mt-0.5"
+                                  data-testid="radio-product-type-ready"
+                                />
+                                <div className="flex-1">
+                                  <p className="font-bold text-sm">📦 منتج جاهز</p>
+                                  <p className="text-[10px] text-muted-foreground">بدون طباعة — لا تظهر خيارات الألوان أو الشعار</p>
+                                </div>
+                              </label>
+                              <label className={`flex items-start gap-2 rounded-md border p-2.5 cursor-pointer transition ${productForm.productType === 'customizable' ? 'border-blue-500 bg-blue-100/60 dark:bg-blue-900/30' : 'border-gray-200 hover:border-blue-300'}`}>
+                                <input
+                                  type="radio"
+                                  name="product-type"
+                                  value="customizable"
+                                  checked={productForm.productType === 'customizable'}
+                                  onChange={() => setProductForm({...productForm, productType: 'customizable'})}
+                                  className="mt-0.5"
+                                  data-testid="radio-product-type-customizable"
+                                />
+                                <div className="flex-1">
+                                  <p className="font-bold text-sm">🎨 منتج قابل للطباعة</p>
+                                  <p className="text-[10px] text-muted-foreground">تظهر كل خيارات التخصيص (ألوان، شعار، طباعة)</p>
+                                </div>
+                              </label>
+                            </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <input

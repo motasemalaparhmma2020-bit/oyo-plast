@@ -2495,7 +2495,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     marketer_commission_rate, has_printing_options, base_bag_price, single_color_print_price,
     available_bag_colors, tags, show_reviews, show_in_printing, enable_variant_ui, color_images,
     original_price, original_price_sar, discount_percent, promotional_tags,
-    has_free_shipping, enable_smart_variants, smart_variants, printing_category_id,
+    has_free_shipping, product_type, enable_smart_variants, smart_variants, printing_category_id,
     printing_design_fee_override, printing_color_price_override, printing_side_price_override,
     print_area, base_image_public_id, available_colors,
     print_color_options, quantity_tiers, preview_width, preview_height`;
@@ -2591,6 +2591,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       effectiveDiscount,
       promotionalTags: r.promotional_tags ?? [],
       hasFreeShipping: r.has_free_shipping ?? false,
+      productType: r.product_type ?? "ready",
       enableSmartVariants: r.enable_smart_variants ?? false,
       smartVariants: r.smart_variants ?? null,
       // 💰 COGS — يُكشف فقط لمسارات الأدمن (opts.includeCogs=true). البيانات سرّية ولا تُرسل في الـ API العام.
@@ -3166,6 +3167,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         supplierId: data.supplierId ? Number(data.supplierId) : null,
         showReviews: data.showReviews ?? true,
         hasFreeShipping: data.hasFreeShipping ?? false,
+        productType: (data.productType === "customizable" ? "customizable" : "ready"),
         // ── الخيارات الذكية (SHEIN-Style) ─────────────────────────────
         enableSmartVariants: data.enableSmartVariants ?? false,
         smartVariants: data.smartVariants || null,
@@ -3246,7 +3248,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "baseImagePublicId", "availableColors",
         "enableVariantUI", "colorImages",
         "promotionalTags",
-        "hasFreeShipping", "enableSmartVariants", "smartVariants",
+        "hasFreeShipping", "productType", "enableSmartVariants", "smartVariants",
         // Phase 7
         "printColorOptions", "quantityTiers", "previewWidth", "previewHeight",
       ];

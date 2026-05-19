@@ -377,8 +377,12 @@ export default function ProductDetail() {
 
   // ── Derived Data ─────────────────────────────────────────────────────────
   // ── Phase 6: رابط Cloudinary الديناميكي عند اختيار لون كيس ──
+  // 🛡️ يطبَّق فقط على المنتجات القابلة للتخصيص (customizable) لمنع تطبيق تغيير اللون
+  // على منتجات جاهزة (بلاستيك/معدن/إلخ) لا يصلح فيها استبدال لون البكسلات.
   const dynamicColorImageUrl = useMemo(() => {
     if (!product || !selectedDynamicBagColor) return null;
+    const ptype = (product as any).productType ?? "ready";
+    if (ptype !== "customizable") return null;
     const publicId = (product as any).baseImagePublicId;
     const cloudName = (product as any).cloudinaryCloudName;
     if (!publicId || !cloudName) return null;
@@ -2044,6 +2048,8 @@ export default function ProductDetail() {
       // ── PRINTING ──────────────────────────────────────────────────────────
       case "printing": {
         if (!sec["printing"]?.visible) return null;
+        // 🛡️ إخفاء قسم الطباعة/التخصيص بالكامل للمنتجات الجاهزة
+        if (((product as any)?.productType ?? "ready") === "ready") return null;
         const hasBagPrinting = product.hasPrintingOptions;
         const hasProfPrinting = !!(product as any).printingCategoryId && productPrintingCat;
         const hasDesignUpload = product.allowDesignUpload;
@@ -2861,7 +2867,7 @@ export default function ProductDetail() {
         const shownItems = relatedProducts.slice(0, relatedShown);
         const hasMore = relatedShown < relatedProducts.length;
         return (
-          <div key="related" className="pb-6" data-testid="section-related">
+          <div key="related" className="pb-1" data-testid="section-related">
             <div className="px-4 flex items-center justify-between mb-3">
               <h2 className="font-bold text-base">منتجات مشابهة</h2>
               <span className="text-xs text-gray-500" data-testid="text-related-count">

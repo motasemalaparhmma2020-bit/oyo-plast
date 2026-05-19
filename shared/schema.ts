@@ -73,6 +73,7 @@ export const products = pgTable("products", {
   // ── التصنيفات الترويجية ─────────────────────────────────────────────────────
   promotionalTags: text("promotional_tags").array(),  // ['new','offers','exclusive','discounts','deals','clearance','featured']
   hasFreeShipping: boolean("has_free_shipping").default(false), // شحن مجاني لهذا المنتج
+  productType: text("product_type").default("ready").notNull(), // 'ready' (جاهز بدون طباعة) | 'customizable' (قابل للطباعة)
   // ── المورد المسؤول عن هذا المنتج ──────────────────────────────────────────
   supplierId: integer("supplier_id"),           // المورد الافتراضي لهذا المنتج
   productCommissionRate: numeric("product_commission_rate"), // عمولة خاصة تتغلب على العمولة العامة

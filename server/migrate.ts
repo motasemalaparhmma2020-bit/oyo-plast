@@ -93,6 +93,12 @@ export async function runMigrations(): Promise<void> {
         ADD COLUMN IF NOT EXISTS color_images TEXT;
     `);
 
+    // نوع المنتج: 'ready' (جاهز بدون طباعة) | 'customizable' (قابل للتخصيص)
+    await client.query(`
+      ALTER TABLE products
+        ADD COLUMN IF NOT EXISTS product_type VARCHAR(50) NOT NULL DEFAULT 'ready';
+    `);
+
     // Master switch for variant product page in navigation_settings
     await client.query(`
       ALTER TABLE navigation_settings
