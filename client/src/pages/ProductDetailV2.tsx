@@ -57,7 +57,7 @@ function buildBagImageUrl(product: any, color: BagColor): string {
     return `https://res.cloudinary.com/${cloudName}/image/upload/e_replace_color:${hex}:50:white/${publicId}.jpg`;
   }
   // Fallback to main image
-  return product?.mainImage || "/placeholder.png";
+  return product?.imageUrl || product?.mainImage || "/placeholder.png";
 }
 
 export default function ProductDetailV2() {
@@ -163,6 +163,7 @@ export default function ProductDetailV2() {
   // ── Images list ──
   const images: string[] = useMemo(() => {
     const list = [
+      (product as any)?.imageUrl,
       (product as any)?.mainImage,
       ...((product as any)?.imageUrls || []),
     ].filter(Boolean);
@@ -173,7 +174,7 @@ export default function ProductDetailV2() {
   const currentBagImage = useMemo(() => {
     if (selectedBagColor?.imageUrl) return selectedBagColor.imageUrl;
     if (imageIdx > 0 && images[imageIdx]) return images[imageIdx];
-    return buildBagImageUrl(product, selectedBagColor);
+    return buildBagImageUrl(product, selectedBagColor) || images[0] || "/placeholder.png";
   }, [product, selectedBagColor, imageIdx, images]);
 
   // ── Canvas-based background removal ──
