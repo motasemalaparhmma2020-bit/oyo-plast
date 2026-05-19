@@ -10232,7 +10232,18 @@ h1{font-size:18px;color:#222;margin:4px 0;}
     }
   }
 
-  // كل 24 ساعة + تشغيل أولي بعد 10 دقائق
-  setInterval(runDebtDueReminders, 24 * 60 * 60 * 1000);
+  // جدولة cron يومية الساعة 8:00 صباحاً + تشغيل أولي تجريبي بعد 10 دقائق
+  try {
+    const cron = await import("node-cron");
+    cron.schedule("0 8 * * *", async () => {
+      console.log("[debt-reminder] cron تشغيل الساعة 8 صباحاً");
+      await runDebtDueReminders();
+    });
+    console.log("[INFO] تم جدولة تذكير استحقاق المديونيات (8:00 صباحاً)");
+  } catch (e: any) {
+    console.error("[debt-reminder] cron schedule error:", e?.message);
+    // fallback: كل 24 ساعة
+    setInterval(runDebtDueReminders, 24 * 60 * 60 * 1000);
+  }
   setTimeout(runDebtDueReminders, 10 * 60 * 1000);
 }
