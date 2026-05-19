@@ -2867,7 +2867,7 @@ export default function ProductDetail() {
         const shownItems = relatedProducts.slice(0, relatedShown);
         const hasMore = relatedShown < relatedProducts.length;
         return (
-          <div key="related" className="pb-1" data-testid="section-related">
+          <div key="related" className="pb-2" data-testid="section-related">
             <div className="px-4 flex items-center justify-between mb-3">
               <h2 className="font-bold text-base">منتجات مشابهة</h2>
               <span className="text-xs text-gray-500" data-testid="text-related-count">
