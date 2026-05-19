@@ -546,6 +546,130 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const { registerVolumeOfferRoutes } = await import("./routes/volume-offers");
   registerVolumeOfferRoutes(app, requireAdmin);
 
+  // ─── Cron: مهلة استجابة المورد + إعادة التعيين التلقائي (كل ١٥ دقيقة) ─────
+  try {
+    const cron = await import("node-cron");
+    cron.schedule("*/15 * * * *", async () => {
+      try {
+        const { pool: dbPool } = await import("./db");
+        const expired = await dbPool.query(`
+          SELECT o.id, o.supplier_id, o.shipping_city, o.total, o.currency,
+                 o.customer_name, o.customer_phone, o.customer_lat, o.customer_lng,
+                 o.tried_supplier_ids, o.supplier_reassignment_count, o.supplier_amount,
+                 COALESCE(s.response_timeout_hours, 24) AS timeout_hours
+          FROM orders o
+          LEFT JOIN suppliers s ON o.supplier_id = s.id
+          WHERE o.supplier_response_status = 'pending'
+            AND o.supplier_id IS NOT NULL
+            AND o.status NOT IN ('cancelled','delivered','shipped','pending_admin')
+            AND o.supplier_assigned_at IS NOT NULL
+            AND o.supplier_assigned_at + (COALESCE(s.response_timeout_hours, 24) || ' hours')::interval < NOW()
+          LIMIT 50
+        `);
+        if (expired.rows.length === 0) return;
+        console.log(`[supplier-timeout] فحص ${expired.rows.length} طلب متأخر`);
+
+        for (const o of expired.rows) {
+          try {
+            // مطالبة ذرّية بالطلب (atomic claim) — يمنع المعالجة المزدوجة من cron + /run-now
+            const tried = Array.from(new Set([...(o.tried_supplier_ids || []), o.supplier_id]));
+            const claim = await dbPool.query(
+              `UPDATE orders
+                 SET supplier_id=NULL, supplier_amount=NULL, platform_commission=NULL,
+                     supplier_token=NULL, supplier_notified=false,
+                     supplier_status='timed_out', supplier_response_status='timed_out',
+                     supplier_reassignment_count = COALESCE(supplier_reassignment_count,0)+1,
+                     tried_supplier_ids = $2::int[]
+               WHERE id=$1 AND supplier_response_status='pending' AND supplier_id=$3
+               RETURNING id`,
+              [o.id, tried, o.supplier_id]
+            );
+            if (claim.rowCount === 0) {
+              // عامل آخر تكفّل بهذا الطلب — تخطّ
+              continue;
+            }
+            // عداد "طلبات فات وقتها" + استرجاع الرصيد من المورد السابق (مرة واحدة فقط)
+            await dbPool.query(
+              `UPDATE suppliers
+                 SET missed_orders_count = COALESCE(missed_orders_count,0)+1,
+                     total_sales = GREATEST(0, COALESCE(total_sales,0) - $1),
+                     balance_due = GREATEST(0, COALESCE(balance_due,0) - $2)
+               WHERE id=$3`,
+              [Number(o.total || 0), Number(o.supplier_amount || 0), o.supplier_id]
+            );
+            // محاولة إعادة التعيين لمورد بديل (مع استبعاد المُجرَّبين)
+            const r = await autoAssignSupplier(
+              o.id, o.shipping_city || "", Number(o.total), o.currency || "YER",
+              o.customer_name || "—", o.customer_phone || "",
+              o.customer_lat ? Number(o.customer_lat) : undefined,
+              o.customer_lng ? Number(o.customer_lng) : undefined,
+              tried
+            );
+            if (!r.ok) {
+              // لا يوجد بديل → تدخل الأدمن
+              await dbPool.query(`UPDATE orders SET status='pending_admin' WHERE id=$1`, [o.id]);
+              try {
+                const { notifyStaff } = await import("./lib/staff-notify");
+                await notifyStaff({
+                  roles: ["order_manager", "owner"],
+                  type: "order",
+                  orderId: o.id,
+                  title: `⚠️ طلب يحتاج تدخلاً يدوياً #${o.id}`,
+                  message: `انتهت مهلة المورد ولا يوجد بديل متاح في ${o.shipping_city || "—"}`,
+                  telegramText: `⚠️ <b>طلب #${o.id}</b> يحتاج تدخل أدمن — لا يوجد مورد بديل`,
+                });
+              } catch {}
+              console.log(`[supplier-timeout] طلب #${o.id} → pending_admin`);
+            } else {
+              try {
+                const { notifyStaff } = await import("./lib/staff-notify");
+                await notifyStaff({
+                  roles: ["order_manager", "owner"],
+                  type: "order",
+                  orderId: o.id,
+                  title: `🔄 إعادة تعيين تلقائي للطلب #${o.id}`,
+                  message: `المورد السابق #${o.supplier_id} لم يستجب — نُقل إلى مورد بديل`,
+                });
+              } catch {}
+              console.log(`[supplier-timeout] طلب #${o.id} أُعيد تعيينه للمورد #${r.supplierId}`);
+            }
+          } catch (innerE: any) {
+            console.warn(`[supplier-timeout] فشل معالجة الطلب #${o.id}:`, innerE.message);
+          }
+        }
+      } catch (e: any) {
+        console.warn("[supplier-timeout cron] خطأ:", e?.message);
+      }
+    });
+    console.log("[INFO] تم جدولة فحص مهلة الموردين (كل ١٥ دقيقة)");
+  } catch (e) {
+    console.warn("[WARN] تعذّر جدولة cron لمهلة الموردين");
+  }
+
+  // ─── Cron: تحرير عمولات المسوقين تلقائياً (كل ساعة) ────────────────────
+  try {
+    const cron = await import("node-cron");
+    cron.schedule("0 * * * *", async () => {
+      try {
+        const { pool: dbPool } = await import("./db");
+        const r = await dbPool.query(
+          `UPDATE marketer_commissions
+           SET status='released', released_at=NOW()
+           WHERE status='held' AND hold_until IS NOT NULL AND hold_until <= NOW()
+           RETURNING id, marketer_id, commission_amount`
+        );
+        if (r.rows.length > 0) {
+          console.log(`[commission-release] ✅ حُرّرت ${r.rows.length} عمولة`);
+        }
+      } catch (e: any) {
+        console.warn("[commission-release cron] خطأ:", e?.message);
+      }
+    });
+    console.log("[INFO] تم جدولة تحرير عمولات المسوقين (كل ساعة)");
+  } catch (e) {
+    console.warn("[WARN] تعذّر جدولة cron لتحرير العمولات");
+  }
+
   // تقرير راشد التلقائي يومياً الساعة 8:00 صباحاً (تقويم اليمن)
   try {
     const cron = await import("node-cron");
@@ -1619,17 +1743,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   async function autoAssignSupplier(
     orderId: number, city: string, orderTotal: number, currency: string,
     customerName: string, customerPhone: string,
-    customerLat?: number, customerLng?: number
-  ) {
+    customerLat?: number, customerLng?: number,
+    excludeIds: number[] = []
+  ): Promise<{ ok: boolean; supplierId?: number }> {
     try {
       const { pool: dbPool } = await import("./db");
       let supplier: any = null;
       let distanceKm: number | null = null;
+      const excl = excludeIds.length ? excludeIds : [0]; // postgres needs non-empty array
 
       // ── المرحلة ١: GPS-based — أقرب موزع ضمن نطاق خدمته ──────────────
       if (customerLat && customerLng) {
         const gpsRes = await dbPool.query(
-          `SELECT * FROM suppliers WHERE is_active=true AND lat IS NOT NULL AND lng IS NOT NULL`
+          `SELECT * FROM suppliers WHERE is_active=true AND lat IS NOT NULL AND lng IS NOT NULL AND NOT(id = ANY($1::int[]))`,
+          [excl]
         );
         const withDist = gpsRes.rows.map((s: any) => ({
           ...s,
@@ -1647,8 +1774,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // ── المرحلة ٢: مطابقة المدينة — fallback ──────────────────────────
       if (!supplier && city) {
         const cityRes = await dbPool.query(
-          `SELECT * FROM suppliers WHERE is_active=true AND $1=ANY(cities) ORDER BY id LIMIT 1`,
-          [city]
+          `SELECT * FROM suppliers WHERE is_active=true AND $1=ANY(cities) AND NOT(id = ANY($2::int[])) ORDER BY id LIMIT 1`,
+          [city, excl]
         );
         if (cityRes.rows.length) supplier = cityRes.rows[0];
       }
@@ -1656,7 +1783,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // ── المرحلة ٣: أقرب موزع متاح بصرف النظر عن المسافة ───────────────
       if (!supplier && customerLat && customerLng) {
         const allRes = await dbPool.query(
-          `SELECT * FROM suppliers WHERE is_active=true AND lat IS NOT NULL AND lng IS NOT NULL`
+          `SELECT * FROM suppliers WHERE is_active=true AND lat IS NOT NULL AND lng IS NOT NULL AND NOT(id = ANY($1::int[]))`,
+          [excl]
         );
         if (allRes.rows.length) {
           const sorted = allRes.rows.map((s: any) => ({
@@ -1668,14 +1796,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
       }
 
-      if (!supplier) return; // لا يوجد أي موزع نشط
+      if (!supplier) return { ok: false }; // لا يوجد أي موزع نشط متاح
 
       const commissionRate = Number(supplier.commission_rate || 10);
       const platformCommission = orderTotal * commissionRate / 100;
       const supplierAmount = orderTotal - platformCommission;
 
       await dbPool.query(
-        `UPDATE orders SET supplier_id=$1, supplier_amount=$2, platform_commission=$3 WHERE id=$4`,
+        `UPDATE orders SET supplier_id=$1, supplier_amount=$2, platform_commission=$3,
+           supplier_assigned_at=NOW(), supplier_response_status='pending'
+         WHERE id=$4`,
         [supplier.id, supplierAmount.toFixed(2), platformCommission.toFixed(2), orderId]
       );
       await dbPool.query(
@@ -1686,8 +1816,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         customerName, customerPhone, shippingCity: city, supplierAmount, currency,
         distanceKm: distanceKm ? distanceKm.toFixed(1) : null
       });
+      return { ok: true, supplierId: supplier.id };
     } catch (e: any) {
       console.error("Auto-assign supplier error:", e.message);
+      return { ok: false };
     }
   }
 
@@ -1805,6 +1937,141 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ message: "فشل تسجيل الدفعة" });
+    }
+  });
+
+  // ─── تسوية المورد: المورد ورّد مبلغاً للمنصة (دفعة COD أو غيرها) ─────────
+  // POST /api/admin/suppliers/:id/settle  body: { amount, currency?, method?, notes?, orderIds? }
+  app.post("/api/admin/suppliers/:id/settle", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const supplierId = parseInt(req.params.id);
+      const { amount, currency, method, notes, orderIds } = req.body || {};
+      if (!amount || Number(amount) <= 0) return res.status(400).json({ message: "المبلغ مطلوب وأكبر من صفر" });
+
+      const supRes = await dbPool.query("SELECT id, name FROM suppliers WHERE id=$1", [supplierId]);
+      if (!supRes.rows.length) return res.status(404).json({ message: "المورد غير موجود" });
+
+      const remRes = await dbPool.query(
+        `INSERT INTO supplier_remittances (supplier_id, amount, currency, method, notes, recorded_by, order_ids)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [supplierId, Number(amount), currency || "YER", method || null, notes || null, "admin", Array.isArray(orderIds) ? orderIds : []]
+      );
+      await dbPool.query(
+        `UPDATE suppliers SET balance_due=GREATEST(0, COALESCE(balance_due,0) - $1), total_paid=COALESCE(total_paid,0) + $1 WHERE id=$2`,
+        [Number(amount), supplierId]
+      );
+      try {
+        const { notifyStaff } = await import("./lib/staff-notify");
+        await notifyStaff({
+          roles: ["finance", "owner"],
+          type: "order",
+          title: `💰 توريد من مورد #${supplierId}`,
+          message: `${supRes.rows[0].name} ورّد ${Number(amount).toLocaleString()} ${currency || "ر.ي"}${method ? " · " + method : ""}`,
+        });
+      } catch {}
+      res.json({ success: true, remittance: remRes.rows[0] });
+    } catch (e: any) {
+      console.error("[settle] error:", e.message);
+      res.status(500).json({ message: "فشل تسجيل التوريد" });
+    }
+  });
+
+  // قائمة التوريدات لمورد
+  app.get("/api/admin/suppliers/:id/remittances", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(
+        "SELECT * FROM supplier_remittances WHERE supplier_id=$1 ORDER BY paid_at DESC LIMIT 100",
+        [parseInt(req.params.id)]
+      );
+      res.json(r.rows);
+    } catch {
+      res.status(500).json({ message: "فشل الجلب" });
+    }
+  });
+
+  // تحديث مهلة الاستجابة لكل مورد
+  app.patch("/api/admin/suppliers/:id/timeout", requireAdmin, async (req, res) => {
+    try {
+      const hours = parseInt(req.body?.hours);
+      if (!hours || hours < 1 || hours > 168) return res.status(400).json({ message: "المهلة يجب أن تكون بين 1 و 168 ساعة" });
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query("UPDATE suppliers SET response_timeout_hours=$1 WHERE id=$2", [hours, parseInt(req.params.id)]);
+      res.json({ success: true });
+    } catch {
+      res.status(500).json({ message: "فشل التحديث" });
+    }
+  });
+
+  // تشغيل فحص مهلة الموردين يدوياً (للاختبار + للأدمن)
+  app.post("/api/admin/supplier-timeout/run-now", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const expired = await dbPool.query(`
+        SELECT o.id, o.supplier_id, o.shipping_city, o.total, o.currency,
+               o.customer_name, o.customer_phone, o.customer_lat, o.customer_lng,
+               o.tried_supplier_ids, o.supplier_amount
+        FROM orders o
+        LEFT JOIN suppliers s ON o.supplier_id = s.id
+        WHERE o.supplier_response_status = 'pending'
+          AND o.supplier_id IS NOT NULL
+          AND o.status NOT IN ('cancelled','delivered','shipped','pending_admin')
+          AND o.supplier_assigned_at IS NOT NULL
+          AND o.supplier_assigned_at + (COALESCE(s.response_timeout_hours, 24) || ' hours')::interval < NOW()
+        LIMIT 50
+      `);
+      const results: any[] = [];
+      for (const o of expired.rows) {
+        const tried = Array.from(new Set([...(o.tried_supplier_ids || []), o.supplier_id]));
+        // مطالبة ذرّية (atomic claim)
+        const claim = await dbPool.query(
+          `UPDATE orders SET supplier_id=NULL, supplier_amount=NULL, platform_commission=NULL, supplier_token=NULL, supplier_notified=false,
+             supplier_status='timed_out', supplier_response_status='timed_out',
+             supplier_reassignment_count = COALESCE(supplier_reassignment_count,0)+1, tried_supplier_ids = $2::int[]
+           WHERE id=$1 AND supplier_response_status='pending' AND supplier_id=$3 RETURNING id`,
+          [o.id, tried, o.supplier_id]
+        );
+        if (claim.rowCount === 0) { results.push({ orderId: o.id, action: "skipped_already_processed" }); continue; }
+        await dbPool.query(
+          `UPDATE suppliers SET missed_orders_count = COALESCE(missed_orders_count,0)+1,
+             total_sales=GREATEST(0, COALESCE(total_sales,0)-$1), balance_due=GREATEST(0, COALESCE(balance_due,0)-$2) WHERE id=$3`,
+          [Number(o.total || 0), Number(o.supplier_amount || 0), o.supplier_id]
+        );
+        const r = await autoAssignSupplier(
+          o.id, o.shipping_city || "", Number(o.total), o.currency || "YER",
+          o.customer_name || "—", o.customer_phone || "",
+          o.customer_lat ? Number(o.customer_lat) : undefined,
+          o.customer_lng ? Number(o.customer_lng) : undefined,
+          tried
+        );
+        if (!r.ok) {
+          await dbPool.query(`UPDATE orders SET status='pending_admin' WHERE id=$1`, [o.id]);
+          results.push({ orderId: o.id, action: "pending_admin" });
+        } else {
+          results.push({ orderId: o.id, action: "reassigned", newSupplierId: r.supplierId });
+        }
+      }
+      res.json({ checked: expired.rows.length, results });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // قائمة الطلبات التي تحتاج تدخل أدمن
+  app.get("/api/admin/orders/pending-admin", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const r = await dbPool.query(`
+        SELECT o.id, o.customer_name, o.customer_phone, o.shipping_city, o.total, o.currency,
+               o.created_at, o.status, o.supplier_reassignment_count, o.tried_supplier_ids
+        FROM orders o
+        WHERE o.status='pending_admin'
+        ORDER BY o.created_at DESC LIMIT 200
+      `);
+      res.json(r.rows);
+    } catch {
+      res.status(500).json({ message: "فشل الجلب" });
     }
   });
 
@@ -1928,9 +2195,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       };
       const newOrderStatus = statusMap[status];
 
+      // عند قبول/شحن/تسليم — نُسجّل أن المورد استجاب (يوقف عداد المهلة)
+      const responseStatus = status === "cancelled" ? "rejected" : "accepted";
       await dbPool.query(
-        `UPDATE orders SET supplier_status=$1, status=$2, delivery_status=CASE WHEN $1='delivered' THEN 'delivered' WHEN $1='shipped' THEN 'shipped' ELSE delivery_status END WHERE supplier_token=$3`,
-        [status, newOrderStatus, token]
+        `UPDATE orders SET supplier_status=$1, status=$2,
+           supplier_response_status=$4,
+           delivery_status=CASE WHEN $1='delivered' THEN 'delivered' WHEN $1='shipped' THEN 'shipped' ELSE delivery_status END
+         WHERE supplier_token=$3`,
+        [status, newOrderStatus, token, responseStatus]
       );
 
       // Task 3: تحديث sold_count عند تغيير الحالة من قِبل المورد
@@ -4747,6 +5019,57 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   app.get("/api/supplier/me", requireSupplier, async (req, res) => {
     const supplier = (req as any).supplier;
     res.json({ id: supplier.id, name: supplier.name, phone: supplier.phone, cities: supplier.cities, commissionRate: supplier.commission_rate, balanceDue: supplier.balance_due, totalSales: supplier.total_sales });
+  });
+
+  // ─── كشف حساب المورد ─────────────────────────────────────────────────────
+  app.get("/api/supplier/statement", requireSupplier, async (req, res) => {
+    try {
+      const supplier = (req as any).supplier;
+      const { pool: dbPool } = await import("./db");
+
+      const totals = await dbPool.query(`
+        SELECT
+          COALESCE(SUM(total::numeric),0) AS total_sales,
+          COALESCE(SUM(CASE WHEN status='delivered' THEN supplier_amount::numeric ELSE 0 END),0) AS total_earned,
+          COALESCE(SUM(CASE WHEN status='delivered' AND payment_method='cash_on_delivery' THEN total::numeric ELSE 0 END),0) AS total_collected_cod,
+          COUNT(*) FILTER (WHERE status='delivered') AS delivered_count,
+          COUNT(*) FILTER (WHERE status NOT IN ('cancelled','delivered')) AS active_count
+        FROM orders WHERE supplier_id=$1
+      `, [supplier.id]);
+
+      const remTotals = await dbPool.query(
+        `SELECT COALESCE(SUM(amount),0) AS total_remitted FROM supplier_remittances WHERE supplier_id=$1`,
+        [supplier.id]
+      );
+
+      const recentOrders = await dbPool.query(`
+        SELECT id, customer_name, shipping_city, total, currency, status, supplier_amount, payment_method, created_at
+        FROM orders WHERE supplier_id=$1 ORDER BY created_at DESC LIMIT 30
+      `, [supplier.id]);
+
+      const recentRems = await dbPool.query(
+        `SELECT id, amount, currency, method, notes, paid_at FROM supplier_remittances WHERE supplier_id=$1 ORDER BY paid_at DESC LIMIT 30`,
+        [supplier.id]
+      );
+
+      res.json({
+        supplier: { id: supplier.id, name: supplier.name },
+        totals: {
+          totalSales: Number(totals.rows[0].total_sales),
+          totalEarned: Number(totals.rows[0].total_earned),
+          totalCollectedCOD: Number(totals.rows[0].total_collected_cod),
+          totalRemitted: Number(remTotals.rows[0].total_remitted),
+          balanceDue: Number(supplier.balance_due || 0),
+          deliveredCount: Number(totals.rows[0].delivered_count),
+          activeCount: Number(totals.rows[0].active_count),
+        },
+        recentOrders: recentOrders.rows,
+        recentRemittances: recentRems.rows,
+      });
+    } catch (e: any) {
+      console.error("[statement] error:", e.message);
+      res.status(500).json({ message: "فشل جلب كشف الحساب" });
+    }
   });
 
   // ─── حماية خصوصية العميل: إخفاء الهاتف والعنوان التفصيلي قبل أن يستلم المورد الطلب ───
