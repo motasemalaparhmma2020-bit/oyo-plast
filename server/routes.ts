@@ -4714,7 +4714,68 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       } catch { /* non-fatal */ }
 
       if (action === "approve") {
-        if (expectedShippingDate) {
+        // ─── كشف ما إذا كان هذا اعتماد سداد مديونية (طلب مُسلَّم + amount_claimed > 0) ──
+        const fullOrder = await dbPool.query(
+          `SELECT id, user_id, status, total, currency,
+                  COALESCE(deposit_amount,0)  AS deposit_amount,
+                  COALESCE(discount_amount,0) AS discount_amount,
+                  COALESCE(amount_claimed,0)  AS amount_claimed
+             FROM orders WHERE id=$1`,
+          [orderId]
+        );
+        const ord = fullOrder.rows[0];
+        const isDebtPayment =
+          ord &&
+          ["delivered", "completed"].includes(ord.status) &&
+          Number(ord.amount_claimed) > 0;
+
+        if (isDebtPayment) {
+          // اعتماد سداد دين: حدّث رصيد العميل + علِّم paid عند التغطية الكاملة
+          const total = Number(ord.total);
+          const paid =
+            Number(ord.deposit_amount) +
+            Number(ord.discount_amount) +
+            Number(ord.amount_claimed);
+          const fullyCovered = paid >= total - 0.5; // tolerance
+          const newStatus = fullyCovered ? "paid" : "partial";
+
+          const client = await dbPool.connect();
+          try {
+            await client.query("BEGIN");
+            if (expectedShippingDate) {
+              await client.query(
+                `UPDATE orders SET payment_status=$2, expected_shipping_date=$3 WHERE id=$1`,
+                [orderId, newStatus, expectedShippingDate]
+              );
+            } else {
+              await client.query(
+                `UPDATE orders SET payment_status=$2 WHERE id=$1`,
+                [orderId, newStatus]
+              );
+            }
+            // خفض رصيد العميل (إن وجد سجل ائتمان)
+            if (ord.user_id) {
+              const reduction =
+                Number(ord.discount_amount) + Number(ord.amount_claimed);
+              await client.query(
+                `UPDATE customer_credit
+                    SET current_balance = GREATEST(0, current_balance - $2),
+                        total_paid_amount = COALESCE(total_paid_amount,0) + $2,
+                        last_payment_at = NOW(),
+                        updated_at = NOW()
+                  WHERE customer_id = $1`,
+                [ord.user_id, reduction]
+              );
+            }
+            await client.query("COMMIT");
+          } catch (txErr: any) {
+            await client.query("ROLLBACK");
+            console.error("[debt-approve] tx error:", txErr?.message);
+            throw txErr;
+          } finally {
+            client.release();
+          }
+        } else if (expectedShippingDate) {
           await dbPool.query(
             `UPDATE orders SET payment_status='transferred', expected_shipping_date=$2 WHERE id=$1`,
             [orderId, expectedShippingDate]
@@ -10080,4 +10141,98 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   setInterval(runInstallmentReminders, 24 * 60 * 60 * 1000);
   // تشغيل أولي بعد 5 دقائق من بدء الخادم
   setTimeout(runInstallmentReminders, 5 * 60 * 1000);
+
+  // ─── تذكير قبل 3 أيام من استحقاق مديونية العميل (يومياً) ──────────────────
+  async function runDebtDueReminders() {
+    try {
+      const { pool: dbPool } = await import("./db");
+      // طلبات مُسلَّمة + غير مسددة + باقي عليها 3 أيام (± 12 ساعة) لتاريخ الاستحقاق
+      const rows = await dbPool.query(`
+        SELECT o.id, o.user_id, o.customer_name, o.customer_phone, o.total,
+               COALESCE(o.deposit_amount,0)  AS deposit,
+               COALESCE(o.discount_amount,0) AS discount,
+               COALESCE(o.amount_claimed,0)  AS claimed,
+               o.created_at,
+               COALESCE(ct.payment_term_days, 30) AS term_days,
+               COALESCE(o.notes,'') AS notes
+          FROM orders o
+          LEFT JOIN customer_credit cc ON cc.customer_id = o.user_id
+          LEFT JOIN customer_credit_tiers ct ON ct.tier_key = cc.tier
+         WHERE o.status IN ('delivered','completed')
+           AND COALESCE(o.payment_status,'unpaid') NOT IN ('paid','pending_verification')
+           AND o.user_id IS NOT NULL
+           AND COALESCE(o.notes,'') NOT LIKE '%[تذكير_استحقاق%'
+         LIMIT 100
+      `);
+
+      const now = Date.now();
+      for (const r of rows.rows) {
+        try {
+          const remaining =
+            Number(r.total) - Number(r.deposit) - Number(r.discount) - Number(r.claimed);
+          if (remaining <= 0) continue;
+          const dueMs =
+            new Date(r.created_at).getTime() +
+            Number(r.term_days) * 24 * 3600 * 1000;
+          const diffDays = (dueMs - now) / (24 * 3600 * 1000);
+          // إرسال إذا كانت المدة المتبقية بين يومين ونصف وثلاثة ونصف
+          if (diffDays < 2.5 || diffDays > 3.5) continue;
+
+          // إشعار داخلي + actionUrl إلى /my-debts
+          try {
+            const { createNotification } = await import("./lib/notifications");
+            await createNotification({
+              userId: String(r.user_id),
+              type: "payment_due",
+              title: "⏰ تذكير: استحقاق سداد بعد 3 أيام",
+              message: `الطلب #${r.id} — المبلغ المتبقي ${remaining.toLocaleString()} ر.ي. سدّد الآن واحصل على خصم 1% للسداد المبكّر.`,
+              actionUrl: "/my-debts",
+              priority: "high",
+              groupKey: `debt-due-${r.id}`,
+              orderId: r.id,
+            });
+          } catch {}
+
+          // واتساب (إن توفّر)
+          const accountSid = process.env.TWILIO_ACCOUNT_SID;
+          const authToken = process.env.TWILIO_AUTH_TOKEN;
+          const fromNumber = process.env.TWILIO_FROM_NUMBER;
+          if (accountSid && authToken && fromNumber && r.customer_phone) {
+            const phone = String(r.customer_phone).replace(/\s+/g, "").replace(/^00/, "+");
+            if (phone.startsWith("+")) {
+              const msg = `⏰ تذكير ودّي بسداد مديونية\n━━━━━━━━━━━━━━━━━━━━━\n🆔 الطلب: #${r.id}\n💰 المتبقي: ${remaining.toLocaleString()} ر.ي\n📅 الاستحقاق: بعد 3 أيام\n\n🎁 سدّد الآن واحصل على خصم 1% للسداد المبكّر.\n🔗 https://oyoplast.com/my-debts\n━━━━━━━━━━━━━━━━━━━━━\nأويو بلاست 🛍️`;
+              await fetch(
+                `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+                {
+                  method: "POST",
+                  headers: {
+                    Authorization: "Basic " + Buffer.from(`${accountSid}:${authToken}`).toString("base64"),
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  body: new URLSearchParams({ To: `whatsapp:${phone}`, From: `whatsapp:${fromNumber}`, Body: msg }),
+                }
+              );
+            }
+          }
+
+          // تعليم الطلب أن التذكير أُرسل (لمنع التكرار)
+          await dbPool.query(
+            `UPDATE orders SET notes=COALESCE(notes,'')||$1 WHERE id=$2`,
+            [`\n[تذكير_استحقاق: ${new Date().toISOString().slice(0,10)}]`, r.id]
+          );
+        } catch (innerErr: any) {
+          console.error("[debt-reminder] item err:", innerErr?.message);
+        }
+      }
+      if (rows.rows.length > 0) {
+        console.log(`[debt-reminder] فحص ${rows.rows.length} طلب — تذكيرات الاستحقاق`);
+      }
+    } catch (e: any) {
+      console.error("[debt-reminder] error:", e?.message);
+    }
+  }
+
+  // كل 24 ساعة + تشغيل أولي بعد 10 دقائق
+  setInterval(runDebtDueReminders, 24 * 60 * 60 * 1000);
+  setTimeout(runDebtDueReminders, 10 * 60 * 1000);
 }
