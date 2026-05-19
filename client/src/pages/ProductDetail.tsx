@@ -386,9 +386,26 @@ export default function ProductDetail() {
     const publicId = (product as any).baseImagePublicId;
     const cloudName = (product as any).cloudinaryCloudName;
     if (!publicId || !cloudName) return null;
-    // e_replace_color:NEW_COLOR:white → يحوّل البكسلات البيضاء إلى اللون المطلوب
-    return `https://res.cloudinary.com/${cloudName}/image/upload/e_replace_color:${selectedDynamicBagColor.id}:white/${publicId}`;
+    // e_replace_color:NEW_COLOR:TOLERANCE:FROM_COLOR
+    // tolerance=60 مهم لالتقاط جميع ظلال الأبيض على الكيس (وإلا تبقى الصورة بيضاء).
+    // نستخدم hex بدون # ليعمل مع أي لون مخصص.
+    const targetHex = (selectedDynamicBagColor.code || '').replace('#', '') || selectedDynamicBagColor.id;
+    return `https://res.cloudinary.com/${cloudName}/image/upload/e_replace_color:${targetHex}:60:ffffff/${publicId}`;
   }, [product, selectedDynamicBagColor]);
+
+  // Phase 6: عند تحميل منتج قابل للتخصيص فيه ألوان كيس، اختر أول لون افتراضياً
+  // حتى تظهر الصورة الملوّنة من Cloudinary بدلاً من الصورة الفارغة/proxy.
+  useEffect(() => {
+    if (!product) return;
+    const ptype = (product as any).productType ?? "ready";
+    if (ptype !== "customizable") return;
+    const publicId = (product as any).baseImagePublicId;
+    const cloudName = (product as any).cloudinaryCloudName;
+    if (!publicId || !cloudName) return;
+    const colors = (product as any).availableColors;
+    if (!Array.isArray(colors) || colors.length === 0) return;
+    setSelectedDynamicBagColor((prev) => prev ?? colors[0]);
+  }, [product]);
 
   // الصورة الرئيسية الفعلية (مع تطبيق لون ديناميكي إن وُجد)
   const effectiveMainImageUrl = useMemo(() => dynamicColorImageUrl || product?.imageUrl || "", [dynamicColorImageUrl, product?.imageUrl]);
