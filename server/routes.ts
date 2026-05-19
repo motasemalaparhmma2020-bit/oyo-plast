@@ -2480,6 +2480,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!result.rows.length) return res.status(404).send("Not found");
       const imageUrl = result.rows[0].image_url;
       if (!imageUrl) return res.status(404).send("No image");
+      // حماية من الحلقة الدائرية: رفض إعادة التوجيه إلى أي /api/ (يخلق loop)
+      if (imageUrl.startsWith("/api/")) return res.status(404).send("Circular image reference");
       if (!imageUrl.startsWith("data:")) return res.redirect(imageUrl);
       const matches = imageUrl.match(new RegExp("^data:([^;]+);base64,(.+)$", "s"));
       if (!matches) return res.status(400).send("Invalid image data");
@@ -2538,6 +2540,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!result.rows.length) return res.status(404).send("Not found");
       const imageUrl = result.rows[0].image_url;
       if (!imageUrl) return res.status(404).send("No image");
+      // حماية من الحلقة الدائرية: رفض إعادة التوجيه إلى أي /api/ (يخلق loop)
+      if (imageUrl.startsWith("/api/")) return res.status(404).send("Circular image reference");
       if (!imageUrl.startsWith("data:")) return res.redirect(imageUrl);
       const matches = imageUrl.match(new RegExp("^data:([^;]+);base64,(.+)$", "s"));
       if (!matches) return res.status(400).send("Invalid image data");
@@ -2594,6 +2598,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!result.rows.length) return res.status(404).send("Not found");
       const imageUrl = result.rows[0].image_url;
       if (!imageUrl) return res.status(404).send("No image");
+      // حماية من الحلقة الدائرية: رفض إعادة التوجيه إلى أي /api/ (يخلق loop)
+      if (imageUrl.startsWith("/api/")) return res.status(404).send("Circular image reference");
       if (!imageUrl.startsWith("data:")) return res.redirect(imageUrl);
       const matches = imageUrl.match(new RegExp("^data:([^;]+);base64,(.+)$", "s"));
       if (!matches) return res.status(400).send("Invalid image data");
@@ -2618,6 +2624,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const imageUrls = result.rows[0].image_urls;
       if (!imageUrls || !imageUrls[imgIndex]) return res.status(404).send("No image at index");
       const imageUrl = imageUrls[imgIndex];
+      // حماية من الحلقة الدائرية: رفض إعادة التوجيه إلى أي /api/ (يخلق loop)
+      if (typeof imageUrl === "string" && imageUrl.startsWith("/api/")) {
+        return res.status(404).send("Circular image reference");
+      }
       if (!imageUrl.startsWith("data:")) {
         // صورة خارجية (Cloudinary) — وجّه مباشرةً مع caching
         res.set("Cache-Control", "public, max-age=86400");
