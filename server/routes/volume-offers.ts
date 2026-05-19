@@ -28,6 +28,11 @@ function mapRow(r: Row) {
  */
 export async function findActiveOfferForQuantity(productId: number, qty: number) {
   if (!productId || !qty || qty < 1) return null;
+  // ── Phase A: العروض لا تُطبَّق إلا إذا فعّل الأدمن enable_volume_offers ──
+  const gate = await pool.query(
+    `SELECT enable_volume_offers FROM products WHERE id = $1`, [productId]
+  );
+  if (!gate.rows.length || gate.rows[0].enable_volume_offers !== true) return null;
   const r = await pool.query(`
     SELECT * FROM product_volume_offers
     WHERE product_id = $1
@@ -45,6 +50,13 @@ export function registerVolumeOfferRoutes(app: Express, requireAdmin: RequestHan
     try {
       const pid = parseInt(req.params.id);
       if (!pid) return res.status(400).json({ message: "Invalid product id" });
+      // ── Phase A: لا نُرجع عروضاً إن لم يُفعّل الأدمن enable_volume_offers ──
+      const gate = await pool.query(
+        `SELECT enable_volume_offers FROM products WHERE id = $1`, [pid]
+      );
+      if (!gate.rows.length || gate.rows[0].enable_volume_offers !== true) {
+        return res.json([]);
+      }
       const r = await pool.query(`
         SELECT * FROM product_volume_offers
         WHERE product_id = $1 AND is_active = true

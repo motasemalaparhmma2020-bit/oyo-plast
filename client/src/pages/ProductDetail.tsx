@@ -511,7 +511,7 @@ export default function ProductDetail() {
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!numericId,
+    enabled: !!numericId && !!(product as any)?.enableVolumeOffers,
     staleTime: 5 * 60000,
   });
   const sortedOffers = useMemo(() =>
@@ -707,9 +707,11 @@ export default function ProductDetail() {
     return { designFee, pricePerColor, pricePerSide };
   }, [product, productPrintingCat]);
 
-  const hasPhase4Pricing = useMemo(() =>
-    (printingPricing.designFee + printingPricing.pricePerColor + printingPricing.pricePerSide) > 0,
-    [printingPricing]);
+  const hasPhase4Pricing = useMemo(() => {
+    const enabled = (product as any)?.hasPrintingOptions === true || (product as any)?.printingCategoryId;
+    if (!enabled) return false;
+    return (printingPricing.designFee + printingPricing.pricePerColor + printingPricing.pricePerSide) > 0;
+  }, [printingPricing, product]);
 
   // ── المنطق الجديد (Phase 4 v2 — May 17, 2026) ────────────────────
   // الصيغة: printingPerBag = colors × sides × pricePerColorSide
@@ -2069,7 +2071,8 @@ export default function ProductDetail() {
         if (((product as any)?.productType ?? "ready") === "ready") return null;
         const hasBagPrinting = product.hasPrintingOptions;
         const hasProfPrinting = !!(product as any).printingCategoryId && productPrintingCat;
-        const hasDesignUpload = product.allowDesignUpload;
+        // Live Preview يتطلب تفعيل صريح من الأدمن (showLivePreview) إلى جانب allowDesignUpload
+        const hasDesignUpload = product.allowDesignUpload && (product as any).showLivePreview === true;
         if (!hasBagPrinting && !hasProfPrinting && !hasDesignUpload) return null;
 
         // ── Phase 2 UX Revamp: ألوان الكيس Cloudinary المتاحة ─────────────

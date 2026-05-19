@@ -232,6 +232,8 @@ interface ProductFormData {
   enableVariantUI: boolean;
   colorImages: ColorImageEntry[];
   enableSmartVariants: boolean;
+  showLivePreview: boolean;
+  enableVolumeOffers: boolean;
   originalPrice: string;
   originalPriceSar: string;
   discountPercent: string;
@@ -277,7 +279,9 @@ const emptyProductForm: ProductFormData = {
   showInPrinting: false,
   enableVariantUI: false,
   colorImages: [],
-  enableSmartVariants: true,
+  enableSmartVariants: false,
+  showLivePreview: false,
+  enableVolumeOffers: false,
   originalPrice: "",
   originalPriceSar: "",
   discountPercent: "",
@@ -5651,6 +5655,8 @@ export default function Admin() {
           tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
           showReviews: data.showReviews,
           showInPrinting: data.showInPrinting,
+          showLivePreview: data.showLivePreview,
+          enableVolumeOffers: data.enableVolumeOffers,
           enableVariantUI: data.enableVariantUI,
           colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
           enableSmartVariants: data.enableSmartVariants,
@@ -5738,6 +5744,8 @@ export default function Admin() {
         tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : null,
         showReviews: data.showReviews,
         showInPrinting: data.showInPrinting,
+        showLivePreview: data.showLivePreview,
+        enableVolumeOffers: data.enableVolumeOffers,
         enableVariantUI: data.enableVariantUI,
         colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
         enableSmartVariants: data.enableSmartVariants,
@@ -6009,6 +6017,8 @@ export default function Admin() {
       enableVariantUI: (product as any).enableVariantUI ?? false,
       colorImages: [],
       enableSmartVariants: (product as any).enableSmartVariants ?? false,
+      showLivePreview: (product as any).showLivePreview ?? false,
+      enableVolumeOffers: (product as any).enableVolumeOffers ?? false,
       originalPrice: (product as any).originalPrice != null ? String((product as any).originalPrice) : "",
       originalPriceSar: (product as any).originalPriceSar != null ? String((product as any).originalPriceSar) : "",
       discountPercent: (product as any).discountPercent != null ? String((product as any).discountPercent) : "",
@@ -7659,6 +7669,89 @@ export default function Admin() {
                         )}
                         </div>
                       </div>
+                      </div>
+
+                      {/* ══ مفاتيح الميزات المتقدمة (Feature Toggles) ══ */}
+                      <div className="border rounded-lg overflow-hidden bg-amber-50/40 dark:bg-amber-900/10">
+                        <div className="px-4 py-3 border-b bg-amber-100/60 dark:bg-amber-900/20">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">⚙️</span>
+                            <div>
+                              <h3 className="font-bold text-sm">مفاتيح الميزات المتقدمة</h3>
+                              <p className="text-[11px] text-muted-foreground">كل ميزة لا تظهر في صفحة المنتج إلا بعد تفعيلها هنا.</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-3 space-y-2">
+                          {/* showLivePreview */}
+                          <label className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 border rounded-lg p-2.5 cursor-pointer hover:border-amber-400">
+                            <div className="flex items-center gap-2">
+                              <span>🖼️</span>
+                              <div>
+                                <span className="text-sm font-semibold">معاينة الطباعة الحية</span>
+                                <p className="text-[11px] text-muted-foreground">يسمح للعميل برفع شعار ومعاينته فوراً على المنتج (يتطلب أيضاً "السماح بالطباعة المخصصة")</p>
+                              </div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={productForm.showLivePreview}
+                              onChange={(e) => setProductForm({ ...productForm, showLivePreview: e.target.checked })}
+                              className="w-5 h-5 accent-amber-600"
+                              data-testid="checkbox-show-live-preview"
+                            />
+                          </label>
+                          {/* enableVolumeOffers */}
+                          <label className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 border rounded-lg p-2.5 cursor-pointer hover:border-amber-400">
+                            <div className="flex items-center gap-2">
+                              <span>📦</span>
+                              <div>
+                                <span className="text-sm font-semibold">عروض الكميات</span>
+                                <p className="text-[11px] text-muted-foreground">إظهار جدول الأسعار التنازلية حسب الكمية على صفحة المنتج.</p>
+                              </div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={productForm.enableVolumeOffers}
+                              onChange={(e) => setProductForm({ ...productForm, enableVolumeOffers: e.target.checked })}
+                              className="w-5 h-5 accent-amber-600"
+                              data-testid="checkbox-enable-volume-offers"
+                            />
+                          </label>
+                          {/* allowDesignUpload — مرئي هنا للتنظيم */}
+                          <label className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 border rounded-lg p-2.5 cursor-pointer hover:border-amber-400">
+                            <div className="flex items-center gap-2">
+                              <span>🎨</span>
+                              <div>
+                                <span className="text-sm font-semibold">السماح بالطباعة المخصصة (رفع تصميم)</span>
+                                <p className="text-[11px] text-muted-foreground">يسمح للعميل برفع ملف التصميم (PDF/PNG/AI/PSD).</p>
+                              </div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={productForm.allowDesignUpload}
+                              onChange={(e) => setProductForm({ ...productForm, allowDesignUpload: e.target.checked })}
+                              className="w-5 h-5 accent-amber-600"
+                              data-testid="checkbox-toggle-allow-design-upload"
+                            />
+                          </label>
+                          {/* hasPrintingOptions — حاسبة الطباعة */}
+                          <label className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 border rounded-lg p-2.5 cursor-pointer hover:border-amber-400">
+                            <div className="flex items-center gap-2">
+                              <span>🧮</span>
+                              <div>
+                                <span className="text-sm font-semibold">حاسبة الطباعة الذكية</span>
+                                <p className="text-[11px] text-muted-foreground">إظهار حاسبة سعر الطباعة (رسوم تصميم + ألوان + وجوه).</p>
+                              </div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={productForm.hasPrintingOptions}
+                              onChange={(e) => setProductForm({ ...productForm, hasPrintingOptions: e.target.checked })}
+                              className="w-5 h-5 accent-amber-600"
+                              data-testid="checkbox-toggle-has-printing-options"
+                            />
+                          </label>
+                        </div>
                       </div>
 
                       {/* ══ القسم 5: الطباعة والإضافات ══ */}

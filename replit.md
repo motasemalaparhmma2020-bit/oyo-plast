@@ -36,6 +36,17 @@ OYO PLAST is a comprehensive RTL Arabic e-commerce platform for plastic printing
 - **Guest browsing:** Home/Products/Categories/Cart open. Checkout/orders/wishlist/notifications/account/marketer require auth (`RequireAccountType`). Guest cart in localStorage merges via `CartMerger` in `App.tsx`.
 - **Admin:** `POST /api/admin/login` checks `process.env.ADMIN_PASSWORD`. HMAC token via `x-admin-token`. ⚠️ Replit **Configurations** values override **Secrets** with same name.
 
+### Feature Toggles (Phase A — May 19, 2026)
+- كل ميزة في صفحة المنتج لا تظهر إلا بعد تفعيلها يدوياً في الأدمن. لا fallbacks ضمنية.
+- **`enableSmartVariants`**: تشغيل/إيقاف الخيارات الذكية. القفل أحادي الاتجاه أُزيل — PATCH يقبل `false`.
+- **`hasPrintingOptions`**: حاسبة الطباعة الذكية (تصميم + ألوان + وجوه) — مخفية إن كانت `false`.
+- **`allowDesignUpload`**: رفع تصميم للعميل (PDF/PNG/AI/PSD).
+- **`showLivePreview`** (جديد): معاينة الطباعة الحية على Canvas. تتطلب `allowDesignUpload` معاً.
+- **`enableVolumeOffers`** (جديد): جدول أسعار الكميات. الـuseQuery معطّل عند false (لا طلبات zombie).
+- DB: عمودان جديدان `show_live_preview` و `enable_volume_offers` (auto-migrate في `server/db.ts`). افتراضي false.
+- Admin UI: قسم "مفاتيح الميزات المتقدمة" بأعلى نموذج المنتج يجمع المفاتيح الأربعة الرئيسية.
+- صورة المنتج تُرفع تلقائياً لـCloudinary عبر `/api/admin/upload` (مستخدم سابقاً في حقل الصور الـ 5).
+
 ### Pricing (Unified — Smart Variants as Source of Truth)
 - Server computes `price/priceSar/originalPrice/discountPercent` automatically from **cheapest smart variant** in POST/PATCH `/api/admin/products`. Client-sent prices are ignored.
 - **Helpers** (`server/routes.ts` ~145-210): `getExchangeRate()` reads `settings.exchange_rate` (60s cache) + `invalidateExchangeRateCache()` on settings update. `computeBaseFromSmartVariants(json, rate)`.

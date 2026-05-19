@@ -2644,7 +2644,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     has_free_shipping, product_type, enable_smart_variants, smart_variants, printing_category_id,
     printing_design_fee_override, printing_color_price_override, printing_side_price_override,
     print_area, base_image_public_id, available_colors,
-    print_color_options, quantity_tiers, preview_width, preview_height`;
+    print_color_options, quantity_tiers, preview_width, preview_height,
+    show_live_preview, enable_volume_offers`;
 
   // عند أوّل تحميل، نُسخّن الكاش حتّى mapProductRow يستخدم السعر الصحيح
   getExchangeRate().catch(() => {});
@@ -2740,6 +2741,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       productType: r.product_type ?? "ready",
       enableSmartVariants: r.enable_smart_variants ?? false,
       smartVariants: r.smart_variants ?? null,
+      showLivePreview: r.show_live_preview ?? false,
+      enableVolumeOffers: r.enable_volume_offers ?? false,
       // 💰 COGS — يُكشف فقط لمسارات الأدمن (opts.includeCogs=true). البيانات سرّية ولا تُرسل في الـ API العام.
       ...(opts?.includeCogs ? (() => {
         if (!r.smart_variants) return { costPriceY: null, costPriceSar: null, profitMarginY: null, profitPercent: null };
@@ -3317,6 +3320,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // ── الخيارات الذكية (SHEIN-Style) ─────────────────────────────
         enableSmartVariants: data.enableSmartVariants ?? false,
         smartVariants: data.smartVariants || null,
+        // ── Feature toggles (May 19, 2026) ─────────────────────────────
+        showLivePreview: data.showLivePreview ?? false,
+        enableVolumeOffers: data.enableVolumeOffers ?? false,
         enableVariantUI: data.enableVariantUI ?? false,
         colorImages: data.colorImages || null,
         // ── Phase 7: تخصيصات الأدمن ─────────────────────────────────────
@@ -3335,13 +3341,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const id = parseInt(req.params.id);
       const data = req.body;
-
-      // ─── Defensive: لا يُسمح بإطفاء الخيارات الذكية إن كانت مُفعّلة ───
-      if (data.enableSmartVariants === false) {
-        return res.status(422).json({
-          message: "⛔ لا يمكن تعطيل الخيارات الذكية بعد تفعيلها. أنشئ منتجاً جديداً بدلاً من ذلك.",
-        });
-      }
 
       // ─── إعادة حساب السعر/الخصم تلقائياً عند تحديث الخيارات الذكية ───
       if (data.smartVariants !== undefined && data.smartVariants !== null) {
@@ -3395,6 +3394,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "enableVariantUI", "colorImages",
         "promotionalTags",
         "hasFreeShipping", "productType", "enableSmartVariants", "smartVariants",
+        // Feature toggles (May 19, 2026)
+        "showLivePreview", "enableVolumeOffers",
         // Phase 7
         "printColorOptions", "quantityTiers", "previewWidth", "previewHeight",
       ];

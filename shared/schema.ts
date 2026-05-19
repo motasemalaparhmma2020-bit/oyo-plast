@@ -66,6 +66,9 @@ export const products = pgTable("products", {
   // Smart Variants (الخيارات الذكية)
   enableSmartVariants: boolean("enable_smart_variants").default(false).notNull(),
   smartVariants: text("smart_variants"), // JSON: SmartVariantsData
+  // ── Feature toggles (May 19, 2026) — كل خيار يجب تفعيله يدوياً ───────────
+  showLivePreview: boolean("show_live_preview").default(false).notNull(),       // معاينة الطباعة الحية (Canvas)
+  enableVolumeOffers: boolean("enable_volume_offers").default(false).notNull(), // عروض الكميات (volume_offers)
   // ── حقول الخصم ──────────────────────────────────────────────────────────────
   originalPrice: numeric("original_price"),           // السعر الأصلي قبل الخصم (ر.ي)
   originalPriceSar: numeric("original_price_sar"),    // السعر الأصلي بالريال السعودي

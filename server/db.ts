@@ -27,3 +27,16 @@ pool.on('error', (err) => {
 });
 
 export const db = drizzle(pool, { schema });
+
+// ── Auto-migrate: ensure feature-toggle columns exist (May 19, 2026) ──
+(async () => {
+  try {
+    await pool.query(`
+      ALTER TABLE products
+        ADD COLUMN IF NOT EXISTS show_live_preview boolean NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS enable_volume_offers boolean NOT NULL DEFAULT false
+    `);
+  } catch (e) {
+    console.warn("[migrate] feature-toggle columns:", (e as Error).message);
+  }
+})();
