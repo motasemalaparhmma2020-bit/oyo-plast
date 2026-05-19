@@ -572,6 +572,17 @@ function Router() {
             <Route path="/privacy" component={Privacy} />
             <Route path="/terms" component={Terms} />
             <Route path="/returns" component={Returns} />
+            <Route path="/share">
+              {() => {
+                const [, navigate] = useLocation();
+                useEffect(() => {
+                  const params = new URLSearchParams(window.location.search);
+                  const q = (params.get("title") || params.get("text") || params.get("url") || "").trim();
+                  navigate(q ? `/products?q=${encodeURIComponent(q)}` : "/", { replace: true });
+                }, []);
+                return null;
+              }}
+            </Route>
             
             {/* Public pages - no auth required */}
             <Route path="/" component={Home} />

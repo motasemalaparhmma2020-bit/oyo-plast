@@ -805,7 +805,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           );
           stream.end(req.file!.buffer);
         });
-        return res.json({ imageUrl: uploadRes.secure_url, provider: "cloudinary" });
+        return res.json({ imageUrl: uploadRes.secure_url, publicId: uploadRes.public_id, provider: "cloudinary" });
       }
       // ─── Fallback: base64 ────────────────────────────────────────────
       const { pool: dbPool } = await import("./db");
@@ -891,7 +891,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           );
           stream.end(req.file!.buffer);
         });
-        return res.json({ imageUrl: uploadRes.secure_url, provider: "cloudinary" });
+        return res.json({ imageUrl: uploadRes.secure_url, publicId: uploadRes.public_id, provider: "cloudinary" });
       }
       // Fallback: base64
       const { pool: dbPool } = await import("./db");
@@ -932,7 +932,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           );
           stream.end(req.file!.buffer);
         });
-        return res.json({ imageUrl: uploadRes.secure_url, provider: "cloudinary" });
+        return res.json({ imageUrl: uploadRes.secure_url, publicId: uploadRes.public_id, provider: "cloudinary" });
       }
       // ─── Fallback: base64 ────────────────────────────────────────────
       const { pool: dbPool } = await import("./db");

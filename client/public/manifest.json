@@ -48,6 +48,15 @@
       "label": "متجر أويو بلاست — سطح المكتب"
     }
   ],
+  "share_target": {
+    "action": "/share",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
   "shortcuts": [
     {
       "name": "المنتجات",
@@ -68,6 +77,13 @@
       "short_name": "طلباتي",
       "description": "تتبّع طلباتك الحالية",
       "url": "/orders?source=shortcut",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "خدمات الطباعة",
+      "short_name": "الطباعة",
+      "description": "اطلب طباعة شعارك على الأكياس",
+      "url": "/printing?source=shortcut",
       "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]

@@ -1829,7 +1829,12 @@ export default function ProductDetail() {
       case "volume-offers":
       case "bulk": {
         // نُدمج عرض العروض التحفيزية مع قسم bulk القديم — لو الاثنان فارغان، لا شيء يُرسم
-        const hasOffers = sortedOffers.length > 0;
+        // إخفاء عروض الكميات للمنتجات الجاهزة (ready) التي لا تملك متغيّر bundle
+        const productKind = ((product as any).productType ?? "ready");
+        const variantsList = ((product as any).smartVariants?.variants || []) as Array<{ type?: string }>;
+        const hasBundleVariant = Array.isArray(variantsList) && variantsList.some(v => v?.type === "bundle");
+        const offersAllowedForKind = productKind === "customizable" || hasBundleVariant;
+        const hasOffers = offersAllowedForKind && sortedOffers.length > 0;
         const hasBulk = sec["bulk"]?.visible && bulkPricing.length > 0;
         if (!hasOffers && !hasBulk) return null;
 
@@ -2077,7 +2082,11 @@ export default function ProductDetail() {
 
         // ── Phase 2 UX Revamp: ألوان الكيس Cloudinary المتاحة ─────────────
         const cloudBagColors = ((product as any).availableColors || []) as Array<{id:string;name:string;code:string}>;
-        const hasCloudBagColors = cloudBagColors.length > 0 && (product as any).baseImagePublicId && (product as any).cloudinaryCloudName;
+        const isCustomizableProduct = ((product as any).productType ?? "ready") === "customizable";
+        const hasCloudBagColors = isCustomizableProduct
+          && cloudBagColors.length > 0
+          && !!(product as any).baseImagePublicId
+          && !!(product as any).cloudinaryCloudName;
 
         return (
           <div key="printing" className="px-4 space-y-3" data-testid="section-printing">

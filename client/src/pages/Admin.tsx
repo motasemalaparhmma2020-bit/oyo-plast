@@ -8052,14 +8052,64 @@ export default function Admin() {
                             <div className="space-y-3">
                               <div>
                                 <Label htmlFor="base-image-public-id" className="text-xs">Cloudinary public_id</Label>
-                                <Input
-                                  id="base-image-public-id"
-                                  value={productForm.baseImagePublicId}
-                                  onChange={e => setProductForm({ ...productForm, baseImagePublicId: e.target.value })}
-                                  placeholder="مثال: products/bag-white-v1"
-                                  className="mt-1 font-mono text-sm"
-                                  data-testid="input-base-image-public-id"
-                                />
+                                <div className="flex gap-2 mt-1">
+                                  <Input
+                                    id="base-image-public-id"
+                                    value={productForm.baseImagePublicId}
+                                    onChange={e => setProductForm({ ...productForm, baseImagePublicId: e.target.value })}
+                                    placeholder="مثال: oyo-plast/products/bag-white-v1"
+                                    className="font-mono text-sm flex-1"
+                                    data-testid="input-base-image-public-id"
+                                  />
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    id="white-bag-upload"
+                                    className="hidden"
+                                    data-testid="input-white-bag-file"
+                                    onChange={async e => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      const fd = new FormData();
+                                      fd.append("image", file);
+                                      try {
+                                        const res = await fetch("/api/admin/upload", {
+                                          method: "POST",
+                                          headers: { "x-admin-token": adminToken || "" },
+                                          body: fd,
+                                        });
+                                        const data = await res.json();
+                                        if (!res.ok) throw new Error(data?.message || "فشل الرفع");
+                                        if (!data.publicId) {
+                                          toast({ title: "تنبيه", description: "تم الرفع لكن Cloudinary غير مُهيّأ — لن تعمل ميزة تغيير اللون.", variant: "destructive" });
+                                          return;
+                                        }
+                                        setProductForm(prev => ({ ...prev, baseImagePublicId: data.publicId }));
+                                        toast({ title: "✅ تم", description: "تم رفع الصورة وحفظ public_id بنجاح" });
+                                      } catch (err: any) {
+                                        toast({ title: "خطأ", description: err.message || "تعذّر رفع الصورة", variant: "destructive" });
+                                      } finally {
+                                        e.target.value = "";
+                                      }
+                                    }}
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => document.getElementById("white-bag-upload")?.click()}
+                                    className="whitespace-nowrap text-xs"
+                                    data-testid="button-upload-white-bag"
+                                  >
+                                    📸 رفع كيس أبيض
+                                  </Button>
+                                </div>
+                                {productForm.baseImagePublicId && (
+                                  <div className="mt-2 text-[11px] bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2">
+                                    <span className="text-green-700 dark:text-green-300 font-bold">✅ مرفوع:</span>{" "}
+                                    <code className="font-mono text-muted-foreground break-all" data-testid="text-public-id-value">{productForm.baseImagePublicId}</code>
+                                  </div>
+                                )}
                               </div>
                               <div>
                                 <Label htmlFor="available-colors" className="text-xs">الألوان المتاحة (JSON)</Label>
