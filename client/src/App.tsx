@@ -65,6 +65,7 @@ import AdminBroadcastNotifications from "@/pages/AdminBroadcastNotifications";
 import AdminPurchaseOrders from "@/pages/AdminPurchaseOrders";
 import AdminSupplierPayments from "@/pages/AdminSupplierPayments";
 import AdminAIAgents from "@/pages/AdminAIAgents";
+import AdminDiagnostics from "@/pages/AdminDiagnostics";
 import AdminVolumeOffers from "@/pages/AdminVolumeOffers";
 import AdminStaff from "@/pages/AdminStaff";
 import Wishlist from "@/pages/Wishlist";
@@ -564,6 +565,7 @@ function Router() {
             <Route path="/admin/purchase-orders" component={AdminPurchaseOrders} />
             <Route path="/admin/supplier-payments" component={AdminSupplierPayments} />
             <Route path="/admin/ai-agents" component={AdminAIAgents} />
+            <Route path="/admin/diagnostics" component={AdminDiagnostics} />
             <Route path="/admin/volume-offers" component={AdminVolumeOffers} />
             <Route path="/admin/staff" component={AdminStaff} />
             <Route path="/about" component={About} />

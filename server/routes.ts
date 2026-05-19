@@ -1569,6 +1569,152 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ─── Invoice Settings ─────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔍 Diagnostics — فحص شامل لكل المنتجات (صور/Cloudinary/ألوان/عروض)
+  // ═══════════════════════════════════════════════════════════════════════════
+  app.get("/api/admin/diagnostics", requireAdmin, async (req, res) => {
+    try {
+      const { pool: p } = await import("./db");
+      const rows = (await p.query(`
+        SELECT id, name, image_url, image_urls, base_image_public_id, available_colors,
+               print_color_options, quantity_tiers, smart_variants, product_type, is_active
+        FROM products
+        ORDER BY id ASC
+      `)).rows;
+
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME || null;
+      const host = `${req.protocol}://${req.get("host")}`;
+
+      // SSRF guard: allow only same-host (relative) + Cloudinary + the app's public host
+      const allowedHosts = new Set<string>([
+        "res.cloudinary.com",
+        (req.get("host") || "").toLowerCase(),
+        "oyoplast.com",
+        "www.oyoplast.com",
+      ]);
+      const isPrivateHost = (h: string) =>
+        /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.|169\.254\.|::1|fc|fd|0\.)/i.test(h);
+      const checkUrl = async (u: string | null): Promise<{ ok: boolean; status: number | string; finalUrl?: string }> => {
+        if (!u) return { ok: false, status: "empty" };
+        try {
+          let full: string;
+          if (u.startsWith("http")) {
+            const parsed = new URL(u);
+            const host = parsed.hostname.toLowerCase();
+            if (!/^https?:$/.test(parsed.protocol)) return { ok: false, status: "scheme_blocked" };
+            if (isPrivateHost(host)) return { ok: false, status: "host_blocked" };
+            if (!allowedHosts.has(host)) return { ok: false, status: "host_not_allowed" };
+            full = u;
+          } else {
+            full = `${host}${u.startsWith("/") ? "" : "/"}${u}`;
+          }
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 4000);
+          const r = await fetch(full, { method: "HEAD", signal: ctrl.signal, redirect: "follow" });
+          clearTimeout(timer);
+          return { ok: r.ok, status: r.status, finalUrl: r.url };
+        } catch (e: any) {
+          return { ok: false, status: e?.name === "AbortError" ? "timeout" : "error" };
+        }
+      };
+
+      const safeJson = (s: any): any => {
+        if (!s) return null;
+        if (typeof s === "object") return s;
+        try { return JSON.parse(s); } catch { return "__INVALID__"; }
+      };
+
+      const results = await Promise.all(rows.map(async (r: any) => {
+        const main = await checkUrl(r.image_url);
+        const gallery = Array.isArray(r.image_urls) ? r.image_urls : [];
+        const galleryChecks = await Promise.all(gallery.slice(0, 5).map((u: string) => checkUrl(u)));
+
+        const ac = safeJson(r.available_colors);
+        const acValid = Array.isArray(ac) && ac.every((c: any) => c?.id && c?.name && c?.code);
+
+        const pco = safeJson(r.print_color_options);
+        const pcoValid = !pco || (Array.isArray(pco) && pco.every((c: any) => c?.name && c?.hex));
+
+        const qt = safeJson(r.quantity_tiers);
+        const qtValid = !qt || (Array.isArray(qt) && qt.every((t: any) => Number(t?.qty) > 0 && Number(t?.totalPrice) > 0));
+
+        const sv = safeJson(r.smart_variants);
+        const svValid = !sv || (sv && Array.isArray(sv.variants));
+
+        const hasCloudinary = !!(r.base_image_public_id && cloudName);
+        const cloudinaryPreview = hasCloudinary
+          ? `https://res.cloudinary.com/${cloudName}/image/upload/w_200,h_200,c_fit/${r.base_image_public_id}`
+          : null;
+
+        const cloudinaryCheck = cloudinaryPreview ? await checkUrl(cloudinaryPreview) : null;
+
+        return {
+          id: r.id,
+          name: r.name,
+          isActive: r.is_active,
+          productType: r.product_type,
+          mainImage: {
+            url: r.image_url,
+            ok: main.ok,
+            status: main.status,
+          },
+          gallery: {
+            count: gallery.length,
+            checked: galleryChecks.length,
+            broken: galleryChecks.filter(c => !c.ok).length,
+          },
+          cloudinary: {
+            publicId: r.base_image_public_id || null,
+            hasCloudName: !!cloudName,
+            previewUrl: cloudinaryPreview,
+            ok: cloudinaryCheck?.ok ?? null,
+            status: cloudinaryCheck?.status ?? null,
+          },
+          availableColors: {
+            present: !!r.available_colors,
+            valid: acValid,
+            count: Array.isArray(ac) ? ac.length : 0,
+            raw: ac === "__INVALID__" ? "INVALID_JSON" : null,
+          },
+          printColorOptions: {
+            present: !!r.print_color_options,
+            valid: pcoValid,
+            count: Array.isArray(pco) ? pco.length : 0,
+          },
+          quantityTiers: {
+            present: !!r.quantity_tiers,
+            valid: qtValid,
+            count: Array.isArray(qt) ? qt.length : 0,
+            data: Array.isArray(qt) ? qt : null,
+          },
+          smartVariants: {
+            present: !!r.smart_variants,
+            valid: svValid,
+            count: sv?.variants?.length ?? 0,
+            activeTypes: sv?.activeTypes ?? [],
+          },
+        };
+      }));
+
+      const summary = {
+        totalProducts: results.length,
+        activeProducts: results.filter(r => r.isActive).length,
+        brokenMainImages: results.filter(r => !r.mainImage.ok).length,
+        withCloudinary: results.filter(r => r.cloudinary.publicId).length,
+        cloudinaryBroken: results.filter(r => r.cloudinary.publicId && r.cloudinary.ok === false).length,
+        withAvailableColors: results.filter(r => r.availableColors.present).length,
+        invalidColorsJson: results.filter(r => r.availableColors.raw === "INVALID_JSON").length,
+        withTiers: results.filter(r => r.quantityTiers.present).length,
+        cloudName: cloudName || "(not set)",
+      };
+
+      res.json({ summary, products: results });
+    } catch (e: any) {
+      console.error("[diagnostics]", e);
+      res.status(500).json({ message: e?.message || "خطأ في الفحص" });
+    }
+  });
+
   app.get("/api/admin/invoice-settings", requireAdmin, async (_req, res) => {
     try {
       const { pool: dbPool } = await import("./db");
@@ -5944,6 +6090,24 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         } else if (newStatus === "cancelled" || newStatus === "refunded") {
           await recalcSoldCountForOrder(order.id, "dec");
         }
+      }
+      // ─── إنذار الأدمن عند الاسترداد/الإلغاء الكبير (≥ 50,000 ر.ي) ─────
+      if (order && (newStatus === "refunded" || newStatus === "cancelled")) {
+        try {
+          const orderTotal = Number(order.total || 0);
+          const isLarge = (order.currency === "SAR" ? orderTotal * 200 : orderTotal) >= 50000;
+          if (isLarge) {
+            const { notifyStaff } = await import("./lib/staff-notify");
+            await notifyStaff({
+              roles: ["finance", "owner"],
+              type: "payment",
+              orderId: order.id,
+              title: `🚨 ${newStatus === "refunded" ? "استرداد" : "إلغاء"} كبير #${order.id}`,
+              message: `${orderTotal.toLocaleString()} ${order.currency || "ر.ي"} — ${order.customerName || "—"}`,
+              telegramText: `🚨 <b>${newStatus === "refunded" ? "استرداد" : "إلغاء"} كبير</b>\n🆔 طلب #${order.id}\n💰 ${orderTotal.toLocaleString()} ${order.currency || "ر.ي"}`,
+            });
+          }
+        } catch {}
       }
       // تسجيل حدث الطلب فوراً (T4 — حماية لحظية)
       if (order) {
