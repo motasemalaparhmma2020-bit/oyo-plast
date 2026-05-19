@@ -102,6 +102,42 @@ uri = "file://attached_assets/play-store/feature-graphic-raw.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "lJXhabxLBI_wzy7s5Us1Z"
+uri = "file://public/products/test_bag_white.png"
+type = "image"
+title = "tote bag white"
+
+[[generated]]
+id = "fHstohM4GaKG1QjUMUpey"
+uri = "file://public/products/test_bag_black.png"
+type = "image"
+title = "tote bag black"
+
+[[generated]]
+id = "HALLcHRl7fSejJM8NU10p"
+uri = "file://public/products/test_bag_beige.png"
+type = "image"
+title = "tote bag beige"
+
+[[generated]]
+id = "Gt-Zux6OTaWi0Jzu_Ksvq"
+uri = "file://public/products/test_bag_blue.png"
+type = "image"
+title = "tote bag blue"
+
+[[generated]]
+id = "ESO-a0Pd31AeWJwWsWIbv"
+uri = "file://public/products/test_bag_red.png"
+type = "image"
+title = "tote bag red"
+
+[[generated]]
+id = "Yf5SvhSIjDAHyV_FQDa8M"
+uri = "file://public/products/test_bag_green.png"
+type = "image"
+title = "tote bag green"
+
 [[outputs]]
 id = "9khr7Nh71CvY-pKqMhryJ"
 uri = "file://oyo-plast-backup-20260407.tar.gz"
