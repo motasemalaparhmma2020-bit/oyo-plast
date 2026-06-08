@@ -238,12 +238,10 @@ export default function Auth() {
   });
 
   // ── تسجيل/دخول مباشر بدون OTP — تدفق ثنائي المرحلة ──────────────
-  // المرحلة 1 (phone): إدخال الرقم فقط ← الخادم يكشف إن كان موجوداً أو جديداً
-  // المرحلة 2 (name): للمستخدمين الجدد فقط — إدخال الاسم ثم إنشاء الحساب
   const registerDirectMutation = useMutation({
     mutationFn: async () => {
       if (!validatePhone()) throw new Error("رقم الهاتف غير صالح");
-      if (directStep === "name" && fullName.trim().length < 2) {
+      if (fullName.trim().length < 2) {
         setNameError("الاسم يجب أن يكون حرفين على الأقل");
         throw new Error("الاسم مطلوب");
       }
@@ -252,24 +250,17 @@ export default function Auth() {
       if (cleanPhone.startsWith(codeDigits)) cleanPhone = cleanPhone.slice(codeDigits.length);
       if (cleanPhone.startsWith("0")) cleanPhone = cleanPhone.slice(1);
       const rawPhone = `${countryCode.code}${cleanPhone}`;
-      const body: Record<string, string> = { phone: rawPhone };
-      if (directStep === "name") body.fullName = fullName.trim();
       const res = await fetch("/api/auth/register-direct", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(body),
+        body: JSON.stringify({ phone: rawPhone, fullName: fullName.trim() }),
       });
       const data = await safeJson(res);
       if (!res.ok) throw new Error(data?.message || "تعذّر");
       return data;
     },
     onSuccess: (data) => {
-      if (data.needsName) {
-        // رقم جديد — انتقل لمرحلة إدخال الاسم
-        setDirectStep("name");
-        return;
-      }
       toast({
         title: data.isNewUser ? "🎉 أهلاً بك في أويو بلاست!" : "👋 أهلاً بعودتك",
         description: data.isNewUser
@@ -284,83 +275,124 @@ export default function Auth() {
     },
   });
 
-  // ── حقل كود الدولة + رقم الهاتف (مشترك بين المرحلتين) ──────────
-  const renderPhoneField = (onEnter?: () => void) => (
-    <div>
-      <label className="text-sm font-semibold text-foreground mb-1.5 block">رقم الهاتف</label>
-      <div className="flex gap-2">
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowCountries(!showCountries)}
-            className="flex items-center gap-1.5 px-3 h-11 rounded-lg border-2 border-input bg-background hover:border-primary transition-colors text-sm font-bold min-w-[90px]"
-            data-testid="button-country-code"
-          >
-            <span className="text-lg">{countryCode.flag}</span>
-            <span className="text-xs">{countryCode.code}</span>
-            <ChevronDown className="h-3 w-3 text-muted-foreground" />
-          </button>
-          {showCountries && (
-            <div className="absolute top-12 right-0 z-50 bg-background border rounded-xl shadow-xl overflow-hidden min-w-[180px]">
-              {COUNTRY_CODES.map(c => (
-                <button
-                  key={c.code}
-                  type="button"
-                  onClick={() => { setCountryCode(c); setShowCountries(false); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted text-sm"
-                >
-                  <span className="text-lg">{c.flag}</span>
-                  <span className="font-medium">{c.name}</span>
-                  <span className="text-muted-foreground mr-auto">{c.code}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <Input
-          type="tel"
-          value={phone}
-          onChange={e => { setPhone(e.target.value.replace(/\D/g, "")); setPhoneError(""); }}
-          placeholder={countryCode.code === "+967" ? "7XXXXXXXX" : "5XXXXXXXX"}
-          className={`flex-1 h-11 text-base font-mono ${phoneError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-          dir="ltr"
-          onKeyDown={e => { if (e.key === "Enter") onEnter?.(); }}
-          onBlur={validatePhone}
-          data-testid="input-phone"
-        />
-      </div>
-      {phoneError && (
-        <div className="flex items-center gap-1.5 mt-1.5 text-red-500 text-xs font-medium">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-          <span>{phoneError}</span>
-        </div>
-      )}
-    </div>
-  );
+  // ── دخول مباشر برقم الهاتف (مستخدم موجود) أو الانتقال للتسجيل ───────
+  const phoneLoginMutation = useMutation({
+    mutationFn: async () => {
+      if (!validatePhone()) throw new Error("رقم الهاتف غير صالح");
+      const codeDigits = countryCode.code.replace(/\D/g, "");
+      let cleanPhone = phone.replace(/\D/g, "");
+      if (cleanPhone.startsWith(codeDigits)) cleanPhone = cleanPhone.slice(codeDigits.length);
+      if (cleanPhone.startsWith("0")) cleanPhone = cleanPhone.slice(1);
+      const rawPhone = `${countryCode.code}${cleanPhone}`;
+      const res = await fetch("/api/auth/phone-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ phone: rawPhone }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data?.message || "تعذّر تسجيل الدخول");
+      return data;
+    },
+    onSuccess: (data) => {
+      if (data.exists) {
+        // مستخدم موجود — تم تسجيل دخوله مباشرة
+        handleLoginSuccess();
+      } else {
+        // رقم جديد — انتقل لخطوة إدخال الاسم لإكمال التسجيل
+        setStep("name");
+        setTimeout(() => document.getElementById("direct-full-name")?.focus(), 100);
+      }
+    },
+    onError: (err: Error) => {
+      const message = extractErrorMessage(err);
+      toast({ title: "تعذّر المتابعة", description: message, variant: "destructive" });
+    },
+  });
 
-  // ── واجهة التسجيل المباشر — مرحلة 1: إدخال الهاتف فقط ──────────
+  // ── واجهة الخطوة 1 (بدون OTP): رقم الهاتف أولاً ─────────────────────
   const renderDirectPhoneStep = () => (
     <div className="space-y-5">
       <div className="text-center">
         <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-2">
           <Phone className="h-7 w-7 text-primary" />
         </div>
-        <h3 className="font-extrabold text-base">أهلاً بك في أويو بلاست</h3>
-        <p className="text-xs text-muted-foreground mt-1">أدخل رقم هاتفك للدخول أو إنشاء حساب</p>
+        <h3 className="font-extrabold text-base">الدخول أو التسجيل برقم الهاتف</h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          أدخل رقم هاتفك للمتابعة — جديد أو لديك حساب
+        </p>
       </div>
 
-      {renderPhoneField(() => { if (phone.length >= 7) registerDirectMutation.mutate(); })}
+      {/* رقم الهاتف */}
+      <div>
+        <label className="text-sm font-semibold text-foreground mb-1.5 block">رقم الهاتف</label>
+        <div className="flex gap-2">
+          {/* كود الدولة */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowCountries(!showCountries)}
+              className="flex items-center gap-1.5 px-3 h-11 rounded-lg border-2 border-input bg-background hover:border-primary transition-colors text-sm font-bold min-w-[90px]"
+              data-testid="button-country-code"
+            >
+              <span className="text-lg">{countryCode.flag}</span>
+              <span className="text-xs">{countryCode.code}</span>
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            </button>
+            {showCountries && (
+              <div className="absolute top-12 right-0 z-50 bg-background border rounded-xl shadow-xl overflow-hidden min-w-[180px]">
+                {COUNTRY_CODES.map(c => (
+                  <button
+                    key={c.code}
+                    type="button"
+                    onClick={() => { setCountryCode(c); setShowCountries(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted text-sm"
+                  >
+                    <span className="text-lg">{c.flag}</span>
+                    <span className="font-medium">{c.name}</span>
+                    <span className="text-muted-foreground mr-auto">{c.code}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
+          {/* رقم الهاتف */}
+          <Input
+            type="tel"
+            value={phone}
+            onChange={e => { setPhone(e.target.value.replace(/\D/g, "")); setPhoneError(""); }}
+            placeholder={countryCode.code === "+967" ? "7XXXXXXXX" : "5XXXXXXXX"}
+            className={`flex-1 h-11 text-base font-mono ${phoneError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+            dir="ltr"
+            onKeyDown={e => {
+              if (e.key === "Enter" && phone.length >= 7) {
+                phoneLoginMutation.mutate();
+              }
+            }}
+            onBlur={validatePhone}
+            data-testid="input-phone"
+          />
+        </div>
+        {phoneError && (
+          <div className="flex items-center gap-1.5 mt-1.5 text-red-500 text-xs font-medium">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            <span>{phoneError}</span>
+          </div>
+        )}
+      </div>
+
+      {/* زر المتابعة */}
       <Button
         className="w-full h-12 text-base font-extrabold rounded-xl shadow-lg"
-        onClick={() => registerDirectMutation.mutate()}
-        disabled={registerDirectMutation.isPending || phone.length < 7}
-        data-testid="button-register-direct"
+        onClick={() => phoneLoginMutation.mutate()}
+        disabled={phoneLoginMutation.isPending || phone.length < 7}
+        data-testid="button-phone-continue"
       >
-        {registerDirectMutation.isPending ? (
+        {phoneLoginMutation.isPending ? (
           <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري التحقق...</>
         ) : (
-          <><ArrowRight className="h-4 w-4 ml-2 rotate-180" />متابعة</>
+          <><ArrowRight className="h-4 w-4 ml-2" />متابعة</>
         )}
       </Button>
 
@@ -378,39 +410,39 @@ export default function Auth() {
     </div>
   );
 
-  // ── واجهة التسجيل المباشر — مرحلة 2: إدخال الاسم (مستخدم جديد) ──
+  // ── واجهة الخطوة 2 (بدون OTP): الاسم — لرقم جديد فقط ────────────────
   const renderDirectNameStep = () => (
     <div className="space-y-5">
       <div className="text-center">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-500/10 mb-2">
-          <User className="h-7 w-7 text-green-600" />
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-2">
+          <User className="h-7 w-7 text-primary" />
         </div>
-        <h3 className="font-extrabold text-base">أنت جديد! أخبرنا بإسمك</h3>
+        <h3 className="font-extrabold text-base">أهلاً بك في أويو بلاست</h3>
         <p className="text-xs text-muted-foreground mt-1">
-          رقمك: <span className="font-mono font-bold text-foreground">{countryCode.code} {phone}</span>
-          <button
-            type="button"
-            className="mr-2 text-primary underline underline-offset-2 text-xs"
-            onClick={() => { setDirectStep("phone"); setFullName(""); setNameError(""); }}
-            data-testid="button-change-phone"
-          >
-            تغيير
-          </button>
+          رقم جديد — أدخل اسمك لإنشاء حسابك وبدء التسوق
+        </p>
+        <p className="text-xs font-bold text-primary mt-1 dir-ltr">
+          {countryCode.code}{phone}
         </p>
       </div>
 
+      {/* الاسم */}
       <div>
         <label className="text-sm font-semibold text-foreground mb-1.5 block">الاسم الكامل</label>
         <div className="relative">
           <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
+            id="direct-full-name"
             type="text"
             value={fullName}
             onChange={e => { setFullName(e.target.value); setNameError(""); }}
-            onKeyDown={e => { if (e.key === "Enter" && fullName.trim().length >= 2) registerDirectMutation.mutate(); }}
             placeholder="مثال: محمد أحمد"
             className={`h-11 pr-10 ${nameError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-            autoFocus
+            onKeyDown={e => {
+              if (e.key === "Enter" && fullName.trim().length >= 2) {
+                registerDirectMutation.mutate();
+              }
+            }}
             data-testid="input-full-name"
           />
         </div>
@@ -422,11 +454,12 @@ export default function Auth() {
         )}
       </div>
 
+      {/* زر التسجيل المباشر */}
       <Button
         className="w-full h-12 text-base font-extrabold rounded-xl shadow-lg"
         onClick={() => registerDirectMutation.mutate()}
         disabled={registerDirectMutation.isPending || fullName.trim().length < 2}
-        data-testid="button-create-account"
+        data-testid="button-register-direct"
       >
         {registerDirectMutation.isPending ? (
           <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري إنشاء الحساب...</>
@@ -434,12 +467,19 @@ export default function Auth() {
           <><CheckCircle className="h-4 w-4 ml-2" />إنشاء حسابي والدخول</>
         )}
       </Button>
+
+      {/* العودة لتغيير الرقم */}
+      <button
+        type="button"
+        onClick={() => { setStep("phone"); setNameError(""); }}
+        className="w-full text-xs text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 py-2"
+        data-testid="button-back-to-phone"
+      >
+        <ArrowRight className="h-3 w-3" />
+        تغيير رقم الهاتف
+      </button>
     </div>
   );
-
-  // ── الدالة الرئيسية للتسجيل المباشر ─────────────────────────────
-  const renderDirectRegisterStep = () =>
-    directStep === "phone" ? renderDirectPhoneStep() : renderDirectNameStep();
 
   // ── تسجيل دخول بالبريد ──────────────────────────────────────────
   const emailLoginMutation = useMutation({
@@ -895,8 +935,9 @@ export default function Auth() {
           {/* المحتوى */}
           {(enablePhone && (!enableEmail || loginMode === "phone")) ? (
             <>
-              {/* وضع التشغيل المجاني: تسجيل مباشر بدون OTP */}
-              {!OTP_REQUIRED && renderDirectRegisterStep()}
+              {/* وضع التشغيل المجاني: دخول/تسجيل مباشر بدون OTP */}
+              {!OTP_REQUIRED && step !== "name" && renderDirectPhoneStep()}
+              {!OTP_REQUIRED && step === "name" && renderDirectNameStep()}
 
               {/* وضع OTP: يُفعَّل عند توفر اعتماد للرسائل */}
               {OTP_REQUIRED && step === "phone" && renderPhoneStep()}

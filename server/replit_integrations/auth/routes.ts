@@ -252,6 +252,52 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
+  // ── دخول مباشر برقم الهاتف لمستخدم موجود مسبقاً (بدون OTP) ──────────
+  // يُستخدم في الوضع المجاني: العميل يُدخل رقمه أولاً، فإن كان مسجّلاً
+  // نسجّل دخوله مباشرة. إن لم يكن مسجّلاً نُعيد exists=false ليُكمل التسجيل.
+  app.post("/api/auth/phone-login", async (req: any, res) => {
+    try {
+      const { phone } = req.body || {};
+
+      if (!phone || String(phone).trim().length < 9) {
+        return res.status(400).json({ message: "رقم الهاتف مطلوب وغير صالح" });
+      }
+
+      const normalizedPhone = normalizePhone(String(phone).trim());
+      if (!normalizedPhone) {
+        return res.status(400).json({ message: "رقم الهاتف غير صالح. استخدم الصيغة الدولية مثل: +967777XXXXXX" });
+      }
+
+      const user = await authStorage.getUserByPhone(normalizedPhone);
+      if (!user) {
+        // رقم جديد — لم يُسجّل بعد. العميل يُكمل خطوة الاسم للتسجيل.
+        return res.json({ exists: false });
+      }
+
+      // رقم موجود — تسجيل الدخول عبر الجلسة مباشرة
+      const sessionUser = {
+        claims: { sub: user.id },
+        expires_at: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60, // أسبوع
+      };
+
+      req.login(sessionUser, (err: any) => {
+        if (err) {
+          console.error("[phone-login] Session error:", err);
+          return res.status(500).json({ message: "فشل في تسجيل الدخول" });
+        }
+        res.json({
+          exists: true,
+          isNewUser: false,
+          message: "أهلاً بعودتك",
+          user: { id: user.id, phone: user.phone, fullName: user.fullName },
+        });
+      });
+    } catch (err: any) {
+      console.error("[phone-login] Error:", err?.message || err);
+      res.status(500).json({ message: "حدث خطأ. أعد المحاولة." });
+    }
+  });
+
   // ── OTP: إرسال رمز التحقق للهاتف ──────────────────────────────────
   app.post("/api/auth/send-otp", async (req, res) => {
     try {
