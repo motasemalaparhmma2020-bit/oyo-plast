@@ -2076,26 +2076,53 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { pool: dbPool } = await import("./db");
       const supplierId = parseInt(req.params.id);
       const { amount, notes, orderIds, paymentMethod } = req.body;
-      if (!amount || Number(amount) <= 0) return res.status(400).json({ message: "المبلغ مطلوب" });
-      
-      // سجّل الدفعة
-      await dbPool.query(
-        `INSERT INTO supplier_payments (supplier_id, amount, payment_method, notes) VALUES ($1, $2, $3, $4)`,
-        [supplierId, amount, paymentMethod || null, notes || null]
-      );
-      // حدّث رصيد المورد
-      await dbPool.query(
-        `UPDATE suppliers SET balance_due=GREATEST(0, COALESCE(balance_due,0)-$1), total_paid=COALESCE(total_paid,0)+$1 WHERE id=$2`,
-        [amount, supplierId]
-      );
-      // إذا أُرسلت أرقام طلبات، علّم عليها كمدفوعة
-      if (Array.isArray(orderIds) && orderIds.length > 0) {
-        await dbPool.query(
-          `UPDATE orders SET supplier_paid=true WHERE id=ANY($1) AND supplier_id=$2`,
-          [orderIds, supplierId]
+      const amt = Number(amount);
+      if (!amount || amt <= 0) return res.status(400).json({ message: "المبلغ مطلوب" });
+
+      const client = await dbPool.connect();
+      try {
+        await client.query("BEGIN");
+        // قفل صف المورد واقرأ الرصيد الحالي
+        const lockRes = await client.query(
+          "SELECT balance_due FROM suppliers WHERE id=$1 FOR UPDATE",
+          [supplierId]
         );
+        if (!lockRes.rows.length) {
+          await client.query("ROLLBACK");
+          client.release();
+          return res.status(404).json({ message: "المورد غير موجود" });
+        }
+        const currentBalance = Number(lockRes.rows[0].balance_due || 0);
+        if (amt > currentBalance) {
+          await client.query("ROLLBACK");
+          client.release();
+          return res.status(400).json({ message: "المبلغ يتجاوز الرصيد المستحق" });
+        }
+        // سجّل الدفعة
+        await client.query(
+          `INSERT INTO supplier_payments (supplier_id, amount, payment_method, notes) VALUES ($1, $2, $3, $4)`,
+          [supplierId, amt, paymentMethod || null, notes || null]
+        );
+        // حدّث رصيد المورد
+        await client.query(
+          `UPDATE suppliers SET balance_due=GREATEST(0, COALESCE(balance_due,0)-$1), total_paid=COALESCE(total_paid,0)+$1 WHERE id=$2`,
+          [amt, supplierId]
+        );
+        // إذا أُرسلت أرقام طلبات، علّم عليها كمدفوعة
+        if (Array.isArray(orderIds) && orderIds.length > 0) {
+          await client.query(
+            `UPDATE orders SET supplier_paid=true WHERE id=ANY($1) AND supplier_id=$2`,
+            [orderIds, supplierId]
+          );
+        }
+        await client.query("COMMIT");
+        res.json({ success: true });
+      } catch (txErr: any) {
+        await client.query("ROLLBACK");
+        throw txErr;
+      } finally {
+        client.release();
       }
-      res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ message: "فشل تسجيل الدفعة" });
     }
@@ -2108,30 +2135,50 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { pool: dbPool } = await import("./db");
       const supplierId = parseInt(req.params.id);
       const { amount, currency, method, notes, orderIds } = req.body || {};
-      if (!amount || Number(amount) <= 0) return res.status(400).json({ message: "المبلغ مطلوب وأكبر من صفر" });
+      const amt = Number(amount);
+      if (!amount || amt <= 0) return res.status(400).json({ message: "المبلغ مطلوب وأكبر من صفر" });
 
-      const supRes = await dbPool.query("SELECT id, name FROM suppliers WHERE id=$1", [supplierId]);
-      if (!supRes.rows.length) return res.status(404).json({ message: "المورد غير موجود" });
-
-      const remRes = await dbPool.query(
-        `INSERT INTO supplier_remittances (supplier_id, amount, currency, method, notes, recorded_by, order_ids)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-        [supplierId, Number(amount), currency || "YER", method || null, notes || null, "admin", Array.isArray(orderIds) ? orderIds : []]
-      );
-      await dbPool.query(
-        `UPDATE suppliers SET balance_due=GREATEST(0, COALESCE(balance_due,0) - $1), total_paid=COALESCE(total_paid,0) + $1 WHERE id=$2`,
-        [Number(amount), supplierId]
-      );
+      const client = await dbPool.connect();
       try {
-        const { notifyStaff } = await import("./lib/staff-notify");
-        await notifyStaff({
-          roles: ["finance", "owner"],
-          type: "order",
-          title: `💰 توريد من مورد #${supplierId}`,
-          message: `${supRes.rows[0].name} ورّد ${Number(amount).toLocaleString()} ${currency || "ر.ي"}${method ? " · " + method : ""}`,
-        });
-      } catch {}
-      res.json({ success: true, remittance: remRes.rows[0] });
+        await client.query("BEGIN");
+        const supRes = await client.query("SELECT id, name, balance_due FROM suppliers WHERE id=$1 FOR UPDATE", [supplierId]);
+        if (!supRes.rows.length) {
+          await client.query("ROLLBACK");
+          client.release();
+          return res.status(404).json({ message: "المورد غير موجود" });
+        }
+        const currentBalance = Number(supRes.rows[0].balance_due || 0);
+        if (amt > currentBalance) {
+          await client.query("ROLLBACK");
+          client.release();
+          return res.status(400).json({ message: "المبلغ يتجاوز الرصيد المستحق" });
+        }
+        const remRes = await client.query(
+          `INSERT INTO supplier_remittances (supplier_id, amount, currency, method, notes, recorded_by, order_ids)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+          [supplierId, amt, currency || "YER", method || null, notes || null, "admin", Array.isArray(orderIds) ? orderIds : []]
+        );
+        await client.query(
+          `UPDATE suppliers SET balance_due=GREATEST(0, COALESCE(balance_due,0) - $1), total_paid=COALESCE(total_paid,0) + $1 WHERE id=$2`,
+          [amt, supplierId]
+        );
+        await client.query("COMMIT");
+        try {
+          const { notifyStaff } = await import("./lib/staff-notify");
+          await notifyStaff({
+            roles: ["finance", "owner"],
+            type: "order",
+            title: `💰 توريد من مورد #${supplierId}`,
+            message: `${supRes.rows[0].name} ورّد ${amt.toLocaleString()} ${currency || "ر.ي"}${method ? " · " + method : ""}`,
+          });
+        } catch {}
+        res.json({ success: true, remittance: remRes.rows[0] });
+      } catch (txErr: any) {
+        await client.query("ROLLBACK");
+        throw txErr;
+      } finally {
+        client.release();
+      }
     } catch (e: any) {
       console.error("[settle] error:", e.message);
       res.status(500).json({ message: "فشل تسجيل التوريد" });
@@ -6947,18 +6994,52 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const { pool: dbPool } = await import("./db");
       const m = (req as any).marketer;
       const { amount, paymentMethod, paymentDetails } = req.body;
-      if (!amount || Number(amount) <= 0) return res.status(400).json({ message: "المبلغ غير صالح" });
-      if (Number(amount) > Number(m.wallet_balance)) return res.status(400).json({ message: "المبلغ أكبر من رصيدك" });
+      const amt = Number(amount);
+      if (!amount || amt <= 0) return res.status(400).json({ message: "المبلغ غير صالح" });
       if (!paymentMethod) return res.status(400).json({ message: "طريقة الدفع مطلوبة" });
-      // تحقق من عدم وجود طلب معلق
-      const pending = await dbPool.query("SELECT id FROM marketer_withdrawal_requests WHERE marketer_id=$1 AND status='pending'", [m.id]);
-      if (pending.rows.length) return res.status(409).json({ message: "لديك طلب سحب في قيد المعالجة" });
-      await dbPool.query(
-        `INSERT INTO marketer_withdrawal_requests (marketer_id, amount, payment_method, payment_details)
-         VALUES ($1,$2,$3,$4)`,
-        [m.id, amount, paymentMethod, paymentDetails || null]
-      );
-      res.json({ success: true, message: "تم إرسال طلب السحب بنجاح" });
+
+      const client = await dbPool.connect();
+      try {
+        await client.query("BEGIN");
+        // قفل رصيد المسوّق وتحقق منه
+        const balRes = await client.query(
+          "SELECT wallet_balance FROM standalone_marketers WHERE id=$1 FOR UPDATE",
+          [m.id]
+        );
+        if (!balRes.rows.length) {
+          await client.query("ROLLBACK");
+          client.release();
+          return res.status(404).json({ message: "الحساب غير موجود" });
+        }
+        const currentBalance = Number(balRes.rows[0].wallet_balance || 0);
+        if (amt > currentBalance) {
+          await client.query("ROLLBACK");
+          client.release();
+          return res.status(400).json({ message: "المبلغ أكبر من رصيدك" });
+        }
+        // تحقق من عدم وجود طلب معلق
+        const pending = await client.query(
+          "SELECT id FROM marketer_withdrawal_requests WHERE marketer_id=$1 AND status='pending'",
+          [m.id]
+        );
+        if (pending.rows.length) {
+          await client.query("ROLLBACK");
+          client.release();
+          return res.status(409).json({ message: "لديك طلب سحب في قيد المعالجة" });
+        }
+        await client.query(
+          `INSERT INTO marketer_withdrawal_requests (marketer_id, amount, payment_method, payment_details)
+           VALUES ($1,$2,$3,$4)`,
+          [m.id, amt, paymentMethod, paymentDetails || null]
+        );
+        await client.query("COMMIT");
+        res.json({ success: true, message: "تم إرسال طلب السحب بنجاح" });
+      } catch (txErr: any) {
+        await client.query("ROLLBACK");
+        throw txErr;
+      } finally {
+        client.release();
+      }
     } catch (e: any) {
       res.status(500).json({ message: "فشل إرسال طلب السحب" });
     }
@@ -7189,22 +7270,53 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const { pool: dbPool } = await import("./db");
       const { status, adminNotes } = req.body;
       const id = parseInt(req.params.id);
-      const wRes = await dbPool.query("SELECT * FROM marketer_withdrawal_requests WHERE id=$1", [id]);
-      if (!wRes.rows.length) return res.status(404).json({ message: "الطلب غير موجود" });
-      const w = wRes.rows[0];
-      if (!["approved", "paid", "rejected"].includes(status)) return res.status(400).json({ message: "حالة غير صالحة" });
-      // إذا دُفع → اخصم من المحفظة
-      if (status === "paid" && w.status !== "paid") {
-        await dbPool.query(
-          "UPDATE standalone_marketers SET wallet_balance=GREATEST(0,wallet_balance-$1) WHERE id=$2",
-          [w.amount, w.marketer_id]
-        );
+      if (!["approved", "paid", "rejected"].includes(status)) {
+        return res.status(400).json({ message: "حالة غير صالحة" });
       }
-      await dbPool.query(
-        "UPDATE marketer_withdrawal_requests SET status=$1, admin_notes=$2, processed_at=NOW() WHERE id=$3",
-        [status, adminNotes || null, id]
-      );
-      res.json({ success: true });
+
+      const client = await dbPool.connect();
+      try {
+        await client.query("BEGIN");
+        const wRes = await client.query(
+          "SELECT * FROM marketer_withdrawal_requests WHERE id=$1 FOR UPDATE",
+          [id]
+        );
+        if (!wRes.rows.length) {
+          await client.query("ROLLBACK");
+          client.release();
+          return res.status(404).json({ message: "الطلب غير موجود" });
+        }
+        const w = wRes.rows[0];
+        // إذا دُفع → اخصم من المحفظة بعد قفل صف المسوّق
+        if (status === "paid" && w.status !== "paid") {
+          const balRes = await client.query(
+            "SELECT wallet_balance FROM standalone_marketers WHERE id=$1 FOR UPDATE",
+            [w.marketer_id]
+          );
+          const currentBalance = Number(balRes.rows[0]?.wallet_balance || 0);
+          const amt = Number(w.amount);
+          if (amt > currentBalance) {
+            await client.query("ROLLBACK");
+            client.release();
+            return res.status(400).json({ message: "الرصيد لا يكفي لتنفيذ السحب" });
+          }
+          await client.query(
+            "UPDATE standalone_marketers SET wallet_balance=GREATEST(0,wallet_balance-$1) WHERE id=$2",
+            [amt, w.marketer_id]
+          );
+        }
+        await client.query(
+          "UPDATE marketer_withdrawal_requests SET status=$1, admin_notes=$2, processed_at=NOW() WHERE id=$3",
+          [status, adminNotes || null, id]
+        );
+        await client.query("COMMIT");
+        res.json({ success: true });
+      } catch (txErr: any) {
+        await client.query("ROLLBACK");
+        throw txErr;
+      } finally {
+        client.release();
+      }
     } catch (e: any) {
       res.status(500).json({ message: "فشل" });
     }
@@ -8893,24 +9005,49 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const { pool: dbPool } = await import("./db");
       const userPhone = (user as any).phone || (user as any).claims?.phone || null;
       if (!userPhone) return res.status(403).json({ message: "لا يوجد رقم هاتف" });
-      const mRes = await dbPool.query(
-        "SELECT id, wallet_balance FROM standalone_marketers WHERE phone=$1 AND is_active=true",
-        [userPhone.replace(/\D/g, "")]
-      );
-      if (!mRes.rows.length) return res.status(403).json({ message: "لست مسوقاً" });
-      const m = mRes.rows[0];
       const { amount, paymentMethod, paymentDetails } = req.body;
-      if (!amount || Number(amount) <= 0) return res.status(400).json({ message: "المبلغ غير صالح" });
-      if (Number(amount) > Number(m.wallet_balance)) return res.status(400).json({ message: "الرصيد غير كافٍ" });
-      const pending = await dbPool.query(
-        "SELECT id FROM marketer_withdrawal_requests WHERE marketer_id=$1 AND status='pending'", [m.id]
-      );
-      if (pending.rows.length) return res.status(409).json({ message: "يوجد طلب سحب معلّق بالفعل" });
-      await dbPool.query(
-        "INSERT INTO marketer_withdrawal_requests (marketer_id, amount, payment_method, payment_details) VALUES ($1,$2,$3,$4)",
-        [m.id, Number(amount), paymentMethod || "bank", paymentDetails || null]
-      );
-      res.json({ success: true, message: "تم إرسال طلب السحب بنجاح" });
+      const amt = Number(amount);
+      if (!amount || amt <= 0) return res.status(400).json({ message: "المبلغ غير صالح" });
+
+      const client = await dbPool.connect();
+      try {
+        await client.query("BEGIN");
+        const mRes = await client.query(
+          "SELECT id, wallet_balance FROM standalone_marketers WHERE phone=$1 AND is_active=true FOR UPDATE",
+          [userPhone.replace(/\D/g, "")]
+        );
+        if (!mRes.rows.length) {
+          await client.query("ROLLBACK");
+          client.release();
+          return res.status(403).json({ message: "لست مسوقاً" });
+        }
+        const m = mRes.rows[0];
+        const currentBalance = Number(m.wallet_balance || 0);
+        if (amt > currentBalance) {
+          await client.query("ROLLBACK");
+          client.release();
+          return res.status(400).json({ message: "الرصيد غير كافٍ" });
+        }
+        const pending = await client.query(
+          "SELECT id FROM marketer_withdrawal_requests WHERE marketer_id=$1 AND status='pending'", [m.id]
+        );
+        if (pending.rows.length) {
+          await client.query("ROLLBACK");
+          client.release();
+          return res.status(409).json({ message: "يوجد طلب سحب معلّق بالفعل" });
+        }
+        await client.query(
+          "INSERT INTO marketer_withdrawal_requests (marketer_id, amount, payment_method, payment_details) VALUES ($1,$2,$3,$4)",
+          [m.id, amt, paymentMethod || "bank", paymentDetails || null]
+        );
+        await client.query("COMMIT");
+        res.json({ success: true, message: "تم إرسال طلب السحب بنجاح" });
+      } catch (txErr: any) {
+        await client.query("ROLLBACK");
+        throw txErr;
+      } finally {
+        client.release();
+      }
     } catch (e: any) {
       res.status(500).json({ message: "فشل إرسال طلب السحب" });
     }
