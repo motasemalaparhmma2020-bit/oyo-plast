@@ -69,6 +69,7 @@ export const products = pgTable("products", {
   // ── Feature toggles (May 19, 2026) — كل خيار يجب تفعيله يدوياً ───────────
   showLivePreview: boolean("show_live_preview").default(false).notNull(),       // معاينة الطباعة الحية (Canvas)
   enableVolumeOffers: boolean("enable_volume_offers").default(false).notNull(), // عروض الكميات (volume_offers)
+  enableQuantityTiers: boolean("enable_quantity_tiers").default(false).notNull(), // اختر الكمية (quantity_tiers) — مفتاح مستقل
   // ── حقول الخصم ──────────────────────────────────────────────────────────────
   originalPrice: numeric("original_price"),           // السعر الأصلي قبل الخصم (ر.ي)
   originalPriceSar: numeric("original_price_sar"),    // السعر الأصلي بالريال السعودي

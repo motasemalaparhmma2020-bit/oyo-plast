@@ -1,0 +1,1 @@
+- [Admin auth token](admin-auth-token.md) — admin routes need raw `fetch` with `x-admin-token`; `apiRequest` sends cookies only; real localStorage key is `admin_token` (not `adminToken`).

@@ -710,8 +710,8 @@ export default function ProductDetailV2() {
             </div>
           )}
 
-          {/* ⑧ Tiered Pricing */}
-          {quantityTiers.length > 0 && (
+          {/* ⑧ Tiered Pricing — اختر الكمية (يظهر فقط عند تفعيل مفتاحه) */}
+          {(product as any)?.enableQuantityTiers && quantityTiers.length > 0 && (
             <div data-testid="block-tiers">
               <div className="text-sm font-semibold text-gray-700 mb-1.5">📦 اختر الكمية:</div>
               <div className="flex gap-2">

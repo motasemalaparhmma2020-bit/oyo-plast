@@ -34,7 +34,8 @@ export const db = drizzle(pool, { schema });
     await pool.query(`
       ALTER TABLE products
         ADD COLUMN IF NOT EXISTS show_live_preview boolean NOT NULL DEFAULT false,
-        ADD COLUMN IF NOT EXISTS enable_volume_offers boolean NOT NULL DEFAULT false
+        ADD COLUMN IF NOT EXISTS enable_volume_offers boolean NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS enable_quantity_tiers boolean NOT NULL DEFAULT false
     `);
   } catch (e) {
     console.warn("[migrate] feature-toggle columns:", (e as Error).message);

@@ -22,6 +22,7 @@ import { AdminSubcategories } from "@/components/AdminSubcategories";
 import AdminCreditTiers from "@/components/AdminCreditTiers";
 import AdminCreditCustomers from "@/components/AdminCreditCustomers";
 import { FinancialAlertsBadge } from "@/components/FinancialAlertsBadge";
+import InlineVolumeOffers from "@/components/InlineVolumeOffers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -235,6 +236,7 @@ interface ProductFormData {
   enableSmartVariants: boolean;
   showLivePreview: boolean;
   enableVolumeOffers: boolean;
+  enableQuantityTiers: boolean;
   originalPrice: string;
   originalPriceSar: string;
   discountPercent: string;
@@ -283,6 +285,7 @@ const emptyProductForm: ProductFormData = {
   enableSmartVariants: false,
   showLivePreview: false,
   enableVolumeOffers: false,
+  enableQuantityTiers: false,
   originalPrice: "",
   originalPriceSar: "",
   discountPercent: "",
@@ -5658,6 +5661,7 @@ export default function Admin() {
           showInPrinting: data.showInPrinting,
           showLivePreview: data.showLivePreview,
           enableVolumeOffers: data.enableVolumeOffers,
+          enableQuantityTiers: data.enableQuantityTiers,
           enableVariantUI: data.enableVariantUI,
           colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
           enableSmartVariants: data.enableSmartVariants,
@@ -5747,6 +5751,7 @@ export default function Admin() {
         showInPrinting: data.showInPrinting,
         showLivePreview: data.showLivePreview,
         enableVolumeOffers: data.enableVolumeOffers,
+        enableQuantityTiers: data.enableQuantityTiers,
         enableVariantUI: data.enableVariantUI,
         colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
         enableSmartVariants: data.enableSmartVariants,
@@ -6020,6 +6025,7 @@ export default function Admin() {
       enableSmartVariants: (product as any).enableSmartVariants ?? false,
       showLivePreview: (product as any).showLivePreview ?? false,
       enableVolumeOffers: (product as any).enableVolumeOffers ?? false,
+      enableQuantityTiers: (product as any).enableQuantityTiers ?? false,
       originalPrice: (product as any).originalPrice != null ? String((product as any).originalPrice) : "",
       originalPriceSar: (product as any).originalPriceSar != null ? String((product as any).originalPriceSar) : "",
       discountPercent: (product as any).discountPercent != null ? String((product as any).discountPercent) : "",
@@ -7669,6 +7675,145 @@ export default function Admin() {
                             )}
                           </div>
                         )}
+
+                        {/* ══ عروض الكميات (داخل الخيارات الذكية — نفس بيانات /admin/volume-offers) ══ */}
+                        <div className="border rounded-lg overflow-hidden bg-cyan-50/40 dark:bg-cyan-900/10" data-testid="smart-panel-volume-offers">
+                          <label className="flex items-center justify-between gap-3 px-3 py-2.5 border-b bg-cyan-100/50 dark:bg-cyan-900/20 cursor-pointer">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">📦</span>
+                              <div>
+                                <span className="text-sm font-bold">عروض الكميات</span>
+                                <p className="text-[11px] text-muted-foreground">جدول أسعار تنازلية حسب الكمية — نفس بيانات صفحة «عروض الكميات».</p>
+                              </div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={productForm.enableVolumeOffers}
+                              onChange={(e) => setProductForm({ ...productForm, enableVolumeOffers: e.target.checked })}
+                              className="w-5 h-5 accent-cyan-600"
+                              data-testid="checkbox-smart-enable-volume-offers"
+                            />
+                          </label>
+                          {productForm.enableVolumeOffers && (
+                            <div className="p-3">
+                              {editingProduct ? (
+                                <InlineVolumeOffers productId={editingProduct.id} adminToken={adminToken} />
+                              ) : (
+                                <p className="text-xs text-muted-foreground text-center py-3" data-testid="note-save-product-first-offers">💾 احفظ المنتج أولاً ثم افتحه للتعديل لإضافة عروض الكميات.</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* ══ اختر الكمية (داخل الخيارات الذكية — نفس بيانات quantity_tiers) ══ */}
+                        <div className="border rounded-lg overflow-hidden bg-cyan-50/40 dark:bg-cyan-900/10" data-testid="smart-panel-quantity-tiers">
+                          <label className="flex items-center justify-between gap-3 px-3 py-2.5 border-b bg-cyan-100/50 dark:bg-cyan-900/20 cursor-pointer">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">🔢</span>
+                              <div>
+                                <span className="text-sm font-bold">اختر الكمية</span>
+                                <p className="text-[11px] text-muted-foreground">عروض كمية ثابتة يختار منها العميل — نفس بيانات «عروض الكميات» في قسم الطباعة.</p>
+                              </div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={productForm.enableQuantityTiers}
+                              onChange={(e) => setProductForm({ ...productForm, enableQuantityTiers: e.target.checked })}
+                              className="w-5 h-5 accent-cyan-600"
+                              data-testid="checkbox-smart-enable-quantity-tiers"
+                            />
+                          </label>
+                          {productForm.enableQuantityTiers && (
+                            <div className="p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <Label className="font-bold text-sm flex items-center gap-2">🔢 اختر الكمية</Label>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setProductForm({
+                                    ...productForm,
+                                    quantityTiers: [...productForm.quantityTiers, { qty: 0, totalPrice: 0, unitPrice: 0 }]
+                                  })}
+                                  disabled={productForm.quantityTiers.length >= 5}
+                                  className="text-xs h-7 gap-1"
+                                  data-testid="button-smart-add-tier"
+                                >
+                                  + إضافة عرض
+                                </Button>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground mb-2">يُنصح بـ ٣ عروض (مثلاً ١٠٠ / ٥٠٠ / ١٠٠٠). الافتراضي للعميل هو الأول.</p>
+                              <div className="space-y-2">
+                                {productForm.quantityTiers.map((t, idx) => (
+                                  <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-muted/30 p-2 rounded">
+                                    <div className="col-span-3">
+                                      <Label className="text-[10px] text-muted-foreground">الكمية</Label>
+                                      <Input
+                                        type="number"
+                                        min={1}
+                                        value={t.qty || ""}
+                                        onChange={e => {
+                                          const qty = Number(e.target.value) || 0;
+                                          const arr = [...productForm.quantityTiers];
+                                          arr[idx] = { ...arr[idx], qty, unitPrice: qty > 0 && arr[idx].totalPrice > 0 ? Math.round(arr[idx].totalPrice / qty) : arr[idx].unitPrice };
+                                          setProductForm({ ...productForm, quantityTiers: arr });
+                                        }}
+                                        placeholder="100"
+                                        className="text-sm h-8"
+                                        data-testid={`input-smart-tier-qty-${idx}`}
+                                      />
+                                    </div>
+                                    <div className="col-span-4">
+                                      <Label className="text-[10px] text-muted-foreground">السعر الإجمالي (ر.ي)</Label>
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        value={t.totalPrice || ""}
+                                        onChange={e => {
+                                          const totalPrice = Number(e.target.value) || 0;
+                                          const arr = [...productForm.quantityTiers];
+                                          arr[idx] = { ...arr[idx], totalPrice, unitPrice: arr[idx].qty > 0 ? Math.round(totalPrice / arr[idx].qty) : 0 };
+                                          setProductForm({ ...productForm, quantityTiers: arr });
+                                        }}
+                                        placeholder="6000"
+                                        className="text-sm h-8"
+                                        data-testid={`input-smart-tier-total-${idx}`}
+                                      />
+                                    </div>
+                                    <div className="col-span-4">
+                                      <Label className="text-[10px] text-muted-foreground">سعر الوحدة (تلقائي)</Label>
+                                      <Input
+                                        type="number"
+                                        value={t.unitPrice || ""}
+                                        readOnly
+                                        className="text-sm h-8 bg-muted font-bold text-cyan-700"
+                                        data-testid={`input-smart-tier-unit-${idx}`}
+                                      />
+                                    </div>
+                                    <div className="col-span-1 flex items-end justify-end h-full pb-0.5">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setProductForm({
+                                          ...productForm,
+                                          quantityTiers: productForm.quantityTiers.filter((_, i) => i !== idx)
+                                        })}
+                                        className="text-red-500 h-8 w-8 p-0"
+                                        data-testid={`button-smart-remove-tier-${idx}`}
+                                      >
+                                        ×
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                                {productForm.quantityTiers.length === 0 && (
+                                  <p className="text-xs text-muted-foreground py-2 text-center">لا توجد عروض — أضف عرضاً واحداً على الأقل</p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                         </div>
                       </div>
                       </div>
@@ -7717,6 +7862,23 @@ export default function Admin() {
                               onChange={(e) => setProductForm({ ...productForm, enableVolumeOffers: e.target.checked })}
                               className="w-5 h-5 accent-amber-600"
                               data-testid="checkbox-enable-volume-offers"
+                            />
+                          </label>
+                          {/* enableQuantityTiers */}
+                          <label className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 border rounded-lg p-2.5 cursor-pointer hover:border-amber-400">
+                            <div className="flex items-center gap-2">
+                              <span>🔢</span>
+                              <div>
+                                <span className="text-sm font-semibold">اختر الكمية</span>
+                                <p className="text-[11px] text-muted-foreground">إظهار عروض الكمية الثابتة (اختر الكمية) على صفحة المنتج.</p>
+                              </div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={productForm.enableQuantityTiers}
+                              onChange={(e) => setProductForm({ ...productForm, enableQuantityTiers: e.target.checked })}
+                              className="w-5 h-5 accent-amber-600"
+                              data-testid="checkbox-enable-quantity-tiers"
                             />
                           </label>
                           {/* allowDesignUpload — مرئي هنا للتنظيم */}
