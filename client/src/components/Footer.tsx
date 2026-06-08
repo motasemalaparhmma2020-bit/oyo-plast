@@ -1,4 +1,4 @@
-import { Phone, MapPin, FileText, Shield, Wallet } from "lucide-react";
+import { Phone, MapPin, FileText, Shield, Wallet, Trash2, Database } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -109,6 +109,14 @@ export function Footer() {
             <Link href="/returns" className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors" data-testid="link-returns">
               <Shield className="w-4 h-4" />
               {homeSettings?.footerReturnsText || "سياسة الاسترجاع"}
+            </Link>
+            <Link href="/delete-account" className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors" data-testid="link-delete-account">
+              <Trash2 className="w-4 h-4" />
+              حذف الحساب
+            </Link>
+            <Link href="/data-deletion" className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors" data-testid="link-data-deletion">
+              <Database className="w-4 h-4" />
+              حذف البيانات
             </Link>
             <a
               href={whatsappLink}
@@ -224,6 +232,12 @@ export function MobileFooter() {
           </Link>
           <Link href="/returns" className="text-sm text-muted-foreground hover:text-primary" data-testid="mobile-link-returns">
             {homeSettings?.footerReturnsText || "سياسة الاسترجاع"}
+          </Link>
+          <Link href="/delete-account" className="text-sm text-muted-foreground hover:text-primary" data-testid="mobile-link-delete-account">
+            حذف الحساب
+          </Link>
+          <Link href="/data-deletion" className="text-sm text-muted-foreground hover:text-primary" data-testid="mobile-link-data-deletion">
+            حذف البيانات
           </Link>
           <a
             href={whatsappLink}

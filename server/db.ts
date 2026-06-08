@@ -39,4 +39,23 @@ export const db = drizzle(pool, { schema });
   } catch (e) {
     console.warn("[migrate] feature-toggle columns:", (e as Error).message);
   }
+
+  // ── Auto-migrate: account deletion requests table (June 2026) ──
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS account_deletion_requests (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        data_types TEXT,
+        reason TEXT,
+        request_type VARCHAR(20) NOT NULL DEFAULT 'account',
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        ip_address VARCHAR(50),
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+  } catch (e) {
+    console.warn("[migrate] account_deletion_requests:", (e as Error).message);
+  }
 })();

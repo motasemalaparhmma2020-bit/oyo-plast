@@ -6454,6 +6454,43 @@ h1{font-size:18px;color:#222;margin:4px 0;}
     }
   });
 
+  // ── Account Deletion Request (Google Play requirement) ──
+  app.post("/api/account/delete-request", async (req, res) => {
+    try {
+      const { email, phone, reason } = req.body;
+      const { pool: dbPool } = await import("./db");
+      const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
+      await dbPool.query(
+        `INSERT INTO account_deletion_requests (email, phone, reason, request_type, status, ip_address)
+         VALUES ($1, $2, $3, 'account', 'pending', $4)`,
+        [email || null, phone || null, reason || null, ip]
+      );
+      res.json({ message: "تم إرسال طلب حذف الحساب. سنتواصل معك خلال 7 أيام عمل." });
+    } catch (e: any) {
+      console.error("[delete-request] error:", e?.message);
+      res.status(500).json({ message: "فشل في إرسال الطلب" });
+    }
+  });
+
+  // ── Data Deletion Request (Google Play requirement) ──
+  app.post("/api/account/data-deletion-request", async (req, res) => {
+    try {
+      const { email, phone, dataTypes, reason } = req.body;
+      const { pool: dbPool } = await import("./db");
+      const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
+      const dataTypesStr = Array.isArray(dataTypes) ? dataTypes.join(",") : String(dataTypes || "");
+      await dbPool.query(
+        `INSERT INTO account_deletion_requests (email, phone, data_types, reason, request_type, status, ip_address)
+         VALUES ($1, $2, $3, $4, 'data', 'pending', $5)`,
+        [email || null, phone || null, dataTypesStr, reason || null, ip]
+      );
+      res.json({ message: "تم إرسال طلب حذف البيانات. سنتواصل معك خلال 7 أيام عمل." });
+    } catch (e: any) {
+      console.error("[data-deletion-request] error:", e?.message);
+      res.status(500).json({ message: "فشل في إرسال الطلب" });
+    }
+  });
+
   // ═══════════════════════════════════════════════════════════════════
   // كوبونات العميل (للصفحة /my-coupons) — تجميع من أوامر سابقة
   // ═══════════════════════════════════════════════════════════════════

@@ -97,6 +97,8 @@ import About from "@/pages/About";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
 import Returns from "@/pages/Returns";
+import DeleteAccount from "@/pages/DeleteAccount";
+import DataDeletion from "@/pages/DataDeletion";
 import NotFound from "@/pages/not-found";
 
 import { Footer, MobileFooter } from "@/components/Footer";
@@ -572,6 +574,8 @@ function Router() {
             <Route path="/privacy" component={Privacy} />
             <Route path="/terms" component={Terms} />
             <Route path="/returns" component={Returns} />
+            <Route path="/delete-account" component={DeleteAccount} />
+            <Route path="/data-deletion" component={DataDeletion} />
             <Route path="/share">
               {() => {
                 const [, navigate] = useLocation();
