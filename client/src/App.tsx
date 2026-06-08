@@ -552,7 +552,7 @@ function Router() {
       <OfflineSyncProvider />
       <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16">
         <LoginTopBanner />
-        {!isProductDetail && location !== '/profile' && <Navbar />}
+        {!isProductDetail && location !== '/profile' && location !== '/account' && <Navbar />}
         <main className="flex-grow">
           <Switch>
             {/* Public pages - no auth required */}
@@ -639,9 +639,7 @@ function Router() {
               <RequireAccountType><RateOrder /></RequireAccountType>
             </Route>
             <Route path="/profile" component={Profile} />
-            <Route path="/account">
-              <RequireAccountType><MyAccount /></RequireAccountType>
-            </Route>
+            <Route path="/account" component={MyAccount} />
             <Route path="/addresses">
               <RequireAccountType><Addresses /></RequireAccountType>
             </Route>
