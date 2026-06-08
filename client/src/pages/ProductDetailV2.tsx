@@ -894,7 +894,7 @@ export default function ProductDetailV2() {
                 return (
                   <Link
                     key={rp.id}
-                    href={`/product/${rp.id}`}
+                    href={`/product-v2/${rp.id}`}
                     className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-cyan-400 transition active:scale-[0.98]"
                     data-testid={`related-product-${rp.id}`}
                   >
