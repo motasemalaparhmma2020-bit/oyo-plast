@@ -67,6 +67,7 @@ export default function Auth() {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [fullName, setFullName] = useState("");
   const [nameError, setNameError] = useState("");
+  const [directStep, setDirectStep] = useState<"phone" | "name">("phone");
 
   // العدّاد
   const [resendTimer, setResendTimer] = useState(0);
@@ -236,11 +237,13 @@ export default function Auth() {
     },
   });
 
-  // ── تسجيل/دخول مباشر بدون OTP (الوضع المجاني الحالي) ─────────────
+  // ── تسجيل/دخول مباشر بدون OTP — تدفق ثنائي المرحلة ──────────────
+  // المرحلة 1 (phone): إدخال الرقم فقط ← الخادم يكشف إن كان موجوداً أو جديداً
+  // المرحلة 2 (name): للمستخدمين الجدد فقط — إدخال الاسم ثم إنشاء الحساب
   const registerDirectMutation = useMutation({
     mutationFn: async () => {
       if (!validatePhone()) throw new Error("رقم الهاتف غير صالح");
-      if (fullName.trim().length < 2) {
+      if (directStep === "name" && fullName.trim().length < 2) {
         setNameError("الاسم يجب أن يكون حرفين على الأقل");
         throw new Error("الاسم مطلوب");
       }
@@ -249,17 +252,24 @@ export default function Auth() {
       if (cleanPhone.startsWith(codeDigits)) cleanPhone = cleanPhone.slice(codeDigits.length);
       if (cleanPhone.startsWith("0")) cleanPhone = cleanPhone.slice(1);
       const rawPhone = `${countryCode.code}${cleanPhone}`;
+      const body: Record<string, string> = { phone: rawPhone };
+      if (directStep === "name") body.fullName = fullName.trim();
       const res = await fetch("/api/auth/register-direct", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ phone: rawPhone, fullName: fullName.trim() }),
+        body: JSON.stringify(body),
       });
       const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.message || "تعذّر إنشاء الحساب");
+      if (!res.ok) throw new Error(data?.message || "تعذّر");
       return data;
     },
     onSuccess: (data) => {
+      if (data.needsName) {
+        // رقم جديد — انتقل لمرحلة إدخال الاسم
+        setDirectStep("name");
+        return;
+      }
       toast({
         title: data.isNewUser ? "🎉 أهلاً بك في أويو بلاست!" : "👋 أهلاً بعودتك",
         description: data.isNewUser
@@ -270,122 +280,90 @@ export default function Auth() {
     },
     onError: (err: Error) => {
       const message = extractErrorMessage(err);
-      if (!message.includes("الاسم")) {
-        toast({ title: "تعذّر إنشاء الحساب", description: message, variant: "destructive" });
-      }
+      toast({ title: "تعذّر", description: message, variant: "destructive" });
     },
   });
 
-  // ── واجهة التسجيل المباشر (اسم + هاتف، بدون OTP) ─────────────────
-  const renderDirectRegisterStep = () => (
+  // ── حقل كود الدولة + رقم الهاتف (مشترك بين المرحلتين) ──────────
+  const renderPhoneField = (onEnter?: () => void) => (
+    <div>
+      <label className="text-sm font-semibold text-foreground mb-1.5 block">رقم الهاتف</label>
+      <div className="flex gap-2">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowCountries(!showCountries)}
+            className="flex items-center gap-1.5 px-3 h-11 rounded-lg border-2 border-input bg-background hover:border-primary transition-colors text-sm font-bold min-w-[90px]"
+            data-testid="button-country-code"
+          >
+            <span className="text-lg">{countryCode.flag}</span>
+            <span className="text-xs">{countryCode.code}</span>
+            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+          </button>
+          {showCountries && (
+            <div className="absolute top-12 right-0 z-50 bg-background border rounded-xl shadow-xl overflow-hidden min-w-[180px]">
+              {COUNTRY_CODES.map(c => (
+                <button
+                  key={c.code}
+                  type="button"
+                  onClick={() => { setCountryCode(c); setShowCountries(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted text-sm"
+                >
+                  <span className="text-lg">{c.flag}</span>
+                  <span className="font-medium">{c.name}</span>
+                  <span className="text-muted-foreground mr-auto">{c.code}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <Input
+          type="tel"
+          value={phone}
+          onChange={e => { setPhone(e.target.value.replace(/\D/g, "")); setPhoneError(""); }}
+          placeholder={countryCode.code === "+967" ? "7XXXXXXXX" : "5XXXXXXXX"}
+          className={`flex-1 h-11 text-base font-mono ${phoneError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+          dir="ltr"
+          onKeyDown={e => { if (e.key === "Enter") onEnter?.(); }}
+          onBlur={validatePhone}
+          data-testid="input-phone"
+        />
+      </div>
+      {phoneError && (
+        <div className="flex items-center gap-1.5 mt-1.5 text-red-500 text-xs font-medium">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          <span>{phoneError}</span>
+        </div>
+      )}
+    </div>
+  );
+
+  // ── واجهة التسجيل المباشر — مرحلة 1: إدخال الهاتف فقط ──────────
+  const renderDirectPhoneStep = () => (
     <div className="space-y-5">
-      {/* رسالة ترحيبية */}
       <div className="text-center">
         <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-2">
-          <User className="h-7 w-7 text-primary" />
+          <Phone className="h-7 w-7 text-primary" />
         </div>
         <h3 className="font-extrabold text-base">أهلاً بك في أويو بلاست</h3>
-        <p className="text-xs text-muted-foreground mt-1">
-          أدخل اسمك ورقم هاتفك لبدء التسوق فوراً
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">أدخل رقم هاتفك للدخول أو إنشاء حساب</p>
       </div>
 
-      {/* الاسم */}
-      <div>
-        <label className="text-sm font-semibold text-foreground mb-1.5 block">الاسم الكامل</label>
-        <div className="relative">
-          <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="text"
-            value={fullName}
-            onChange={e => { setFullName(e.target.value); setNameError(""); }}
-            placeholder="مثال: محمد أحمد"
-            className={`h-11 pr-10 ${nameError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-            data-testid="input-full-name"
-          />
-        </div>
-        {nameError && (
-          <div className="flex items-center gap-1.5 mt-1.5 text-red-500 text-xs font-medium">
-            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-            <span>{nameError}</span>
-          </div>
-        )}
-      </div>
+      {renderPhoneField(() => { if (phone.length >= 7) registerDirectMutation.mutate(); })}
 
-      {/* رقم الهاتف */}
-      <div>
-        <label className="text-sm font-semibold text-foreground mb-1.5 block">رقم الهاتف</label>
-        <div className="flex gap-2">
-          {/* كود الدولة */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowCountries(!showCountries)}
-              className="flex items-center gap-1.5 px-3 h-11 rounded-lg border-2 border-input bg-background hover:border-primary transition-colors text-sm font-bold min-w-[90px]"
-              data-testid="button-country-code"
-            >
-              <span className="text-lg">{countryCode.flag}</span>
-              <span className="text-xs">{countryCode.code}</span>
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
-            </button>
-            {showCountries && (
-              <div className="absolute top-12 right-0 z-50 bg-background border rounded-xl shadow-xl overflow-hidden min-w-[180px]">
-                {COUNTRY_CODES.map(c => (
-                  <button
-                    key={c.code}
-                    type="button"
-                    onClick={() => { setCountryCode(c); setShowCountries(false); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted text-sm"
-                  >
-                    <span className="text-lg">{c.flag}</span>
-                    <span className="font-medium">{c.name}</span>
-                    <span className="text-muted-foreground mr-auto">{c.code}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* رقم الهاتف */}
-          <Input
-            type="tel"
-            value={phone}
-            onChange={e => { setPhone(e.target.value.replace(/\D/g, "")); setPhoneError(""); }}
-            placeholder={countryCode.code === "+967" ? "7XXXXXXXX" : "5XXXXXXXX"}
-            className={`flex-1 h-11 text-base font-mono ${phoneError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-            dir="ltr"
-            onKeyDown={e => {
-              if (e.key === "Enter" && fullName.trim().length >= 2 && phone.length >= 7) {
-                registerDirectMutation.mutate();
-              }
-            }}
-            onBlur={validatePhone}
-            data-testid="input-phone"
-          />
-        </div>
-        {phoneError && (
-          <div className="flex items-center gap-1.5 mt-1.5 text-red-500 text-xs font-medium">
-            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-            <span>{phoneError}</span>
-          </div>
-        )}
-      </div>
-
-      {/* زر التسجيل المباشر */}
       <Button
         className="w-full h-12 text-base font-extrabold rounded-xl shadow-lg"
         onClick={() => registerDirectMutation.mutate()}
-        disabled={registerDirectMutation.isPending || phone.length < 7 || fullName.trim().length < 2}
+        disabled={registerDirectMutation.isPending || phone.length < 7}
         data-testid="button-register-direct"
       >
         {registerDirectMutation.isPending ? (
-          <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري إنشاء الحساب...</>
+          <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري التحقق...</>
         ) : (
-          <><CheckCircle className="h-4 w-4 ml-2" />إنشاء حسابي والدخول</>
+          <><ArrowRight className="h-4 w-4 ml-2 rotate-180" />متابعة</>
         )}
       </Button>
 
-      {/* شارة الأمان */}
       <div className="rounded-xl bg-muted/40 border border-border/60 p-3 space-y-1.5">
         <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
           <CheckCircle className="h-3.5 w-3.5 text-green-600" />
@@ -399,6 +377,69 @@ export default function Auth() {
       </div>
     </div>
   );
+
+  // ── واجهة التسجيل المباشر — مرحلة 2: إدخال الاسم (مستخدم جديد) ──
+  const renderDirectNameStep = () => (
+    <div className="space-y-5">
+      <div className="text-center">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-500/10 mb-2">
+          <User className="h-7 w-7 text-green-600" />
+        </div>
+        <h3 className="font-extrabold text-base">أنت جديد! أخبرنا بإسمك</h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          رقمك: <span className="font-mono font-bold text-foreground">{countryCode.code} {phone}</span>
+          <button
+            type="button"
+            className="mr-2 text-primary underline underline-offset-2 text-xs"
+            onClick={() => { setDirectStep("phone"); setFullName(""); setNameError(""); }}
+            data-testid="button-change-phone"
+          >
+            تغيير
+          </button>
+        </p>
+      </div>
+
+      <div>
+        <label className="text-sm font-semibold text-foreground mb-1.5 block">الاسم الكامل</label>
+        <div className="relative">
+          <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            value={fullName}
+            onChange={e => { setFullName(e.target.value); setNameError(""); }}
+            onKeyDown={e => { if (e.key === "Enter" && fullName.trim().length >= 2) registerDirectMutation.mutate(); }}
+            placeholder="مثال: محمد أحمد"
+            className={`h-11 pr-10 ${nameError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+            autoFocus
+            data-testid="input-full-name"
+          />
+        </div>
+        {nameError && (
+          <div className="flex items-center gap-1.5 mt-1.5 text-red-500 text-xs font-medium">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            <span>{nameError}</span>
+          </div>
+        )}
+      </div>
+
+      <Button
+        className="w-full h-12 text-base font-extrabold rounded-xl shadow-lg"
+        onClick={() => registerDirectMutation.mutate()}
+        disabled={registerDirectMutation.isPending || fullName.trim().length < 2}
+        data-testid="button-create-account"
+      >
+        {registerDirectMutation.isPending ? (
+          <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري إنشاء الحساب...</>
+        ) : (
+          <><CheckCircle className="h-4 w-4 ml-2" />إنشاء حسابي والدخول</>
+        )}
+      </Button>
+    </div>
+  );
+
+  // ── الدالة الرئيسية للتسجيل المباشر ─────────────────────────────
+  const renderDirectRegisterStep = () =>
+    directStep === "phone" ? renderDirectPhoneStep() : renderDirectNameStep();
 
   // ── تسجيل دخول بالبريد ──────────────────────────────────────────
   const emailLoginMutation = useMutation({
@@ -830,7 +871,7 @@ export default function Auth() {
             <div className="flex rounded-xl overflow-hidden border mb-5">
               <button
                 type="button"
-                onClick={() => { setLoginMode("phone"); setStep("phone"); }}
+                onClick={() => { setLoginMode("phone"); setStep("phone"); setDirectStep("phone"); setFullName(""); setNameError(""); }}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold transition-colors ${
                   loginMode === "phone" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground"
                 }`}

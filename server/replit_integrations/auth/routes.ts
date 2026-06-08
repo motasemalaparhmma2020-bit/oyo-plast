@@ -151,10 +151,6 @@ export function registerAuthRoutes(app: Express): void {
       if (!phone || String(phone).trim().length < 9) {
         return res.status(400).json({ message: "رقم الهاتف مطلوب وغير صالح" });
       }
-      if (!fullName || String(fullName).trim().length < 2) {
-        return res.status(400).json({ message: "الاسم مطلوب (حرفان على الأقل)" });
-      }
-
       const normalizedPhone = normalizePhone(String(phone).trim());
       if (!normalizedPhone) {
         return res.status(400).json({ message: "رقم الهاتف غير صالح. استخدم الصيغة الدولية مثل: +967777XXXXXX" });
@@ -180,17 +176,29 @@ export function registerAuthRoutes(app: Express): void {
           });
         }
 
-        // 🛡️ منع تكرار رقم الهاتف — رفض التسجيل إن كان الرقم موجوداً
-        // (حتى لو كان الحساب معطلاً is_active=false، للحماية من إعادة استخدام أرقام محظورة)
+        // تحقق إن كان الرقم موجوداً → تسجيل دخول مباشر بدون إنشاء حساب جديد
         const existsCheck = await client.query(
           `SELECT id FROM users WHERE phone = $1 LIMIT 1`,
           [normalizedPhone]
         );
         if (existsCheck.rows.length > 0) {
-          return res.status(409).json({
-            message: "هذا الرقم مسجل بالفعل. يرجى استخدام رقم آخر أو تسجيل الدخول.",
-            code: "PHONE_ALREADY_REGISTERED",
+          const existingUserId = existsCheck.rows[0].id;
+          const sessionUser = {
+            claims: { sub: existingUserId },
+            expires_at: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60,
+          };
+          return req.login(sessionUser, (err: any) => {
+            if (err) {
+              console.error("[register-direct] Session login error:", err);
+              return res.status(500).json({ message: "فشل في تسجيل الدخول" });
+            }
+            res.json({ message: "أهلاً بعودتك", isNewUser: false });
           });
+        }
+
+        // رقم جديد: الاسم مطلوب لإنشاء الحساب
+        if (!fullName || String(fullName).trim().length < 2) {
+          return res.json({ needsName: true });
         }
 
         // إنشاء مستخدم جديد مباشرة — مع التقاط خطأ الـ UNIQUE INDEX (23505) كصمام أمان ضد race condition
