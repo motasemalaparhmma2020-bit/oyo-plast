@@ -128,7 +128,7 @@ export default function MyCredit() {
       {/* Header */}
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b">
         <div className="container mx-auto px-4 py-3 flex items-center gap-3">
-          <Link href="/account">
+          <Link href="/profile">
             <Button variant="ghost" size="icon" data-testid="button-back">
               <ChevronLeft className="h-5 w-5 rotate-180" />
             </Button>

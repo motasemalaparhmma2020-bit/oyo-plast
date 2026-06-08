@@ -17,7 +17,7 @@ function goBackSafe(setLocation: (p: string) => void) {
     const last = sessionStorage.getItem("lastSafePath");
     if (last && last !== "/settings") return setLocation(last);
   } catch {}
-  setLocation("/account");
+  setLocation("/profile");
 }
 
 export default function SettingsPage() {

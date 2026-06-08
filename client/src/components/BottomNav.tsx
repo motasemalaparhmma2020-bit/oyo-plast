@@ -15,7 +15,7 @@ export function BottomNav() {
     { id: 'home', label: 'الرئيسية', icon: Home, href: '/' },
     { id: 'categories', label: 'التصنيفات', icon: Grid3X3, href: '/products' },
     { id: 'cart', label: 'السلة', icon: ShoppingCart, href: '/cart', count: cartCount },
-    { id: 'account', label: 'حسابي', icon: User, href: '/account' },
+    { id: 'account', label: 'حسابي', icon: User, href: '/profile' },
   ];
 
   return (

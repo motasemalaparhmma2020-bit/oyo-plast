@@ -167,7 +167,7 @@ export default function Profile() {
     <div className="min-h-screen bg-[#f2f2f7] dark:bg-background pb-24" dir="rtl">
 
       {/* ═══════════════════════ ١. بطاقة الهوية ═══════════════════════ */}
-      <div className="bg-gradient-to-bl from-[#1a3a4a] to-[#0d2535] dark:from-[#0f2230] dark:to-[#070f17] pt-10 pb-5 px-5 relative">
+      <div className="bg-gradient-to-bl from-[#1a3a4a] to-[#0d2535] dark:from-[#0f2230] dark:to-[#070f17] pt-4 pb-5 px-5 relative">
         <button
           onClick={toggleDark}
           className="absolute top-4 left-4 w-9 h-9 flex items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 transition-colors"
@@ -240,7 +240,7 @@ export default function Profile() {
       {isAuthenticated && (
         <div className="mx-3 mt-3 grid grid-cols-4 gap-2" data-testid="financial-strip">
           <FinancialCard
-            href="/account"
+            href="/wallet"
             icon={<Wallet className="h-5 w-5 text-white" />}
             label="محفظتي"
             value={formatNum(walletBalance)}
@@ -248,7 +248,7 @@ export default function Profile() {
             testId="card-wallet"
           />
           <FinancialCard
-            href="/account"
+            href="/loyalty"
             icon={<Award className="h-5 w-5 text-white" />}
             label="نقاطي"
             value={formatNum(loyaltyPoints)}
@@ -256,7 +256,7 @@ export default function Profile() {
             testId="card-points"
           />
           <FinancialCard
-            href="/account/credit"
+            href="/credit"
             icon={<CreditCard className="h-5 w-5 text-white" />}
             label="ائتمان"
             value={creditLimit > 0 ? formatNum(creditAvailable) : "—"}
@@ -312,7 +312,7 @@ export default function Profile() {
         </div>
         <div className="grid grid-cols-3 gap-2">
           <ToolIcon
-            href="/account"
+            href="/addresses"
             icon={MapPin}
             label="العناوين"
             color="bg-orange-100 dark:bg-orange-900/30"
@@ -345,7 +345,7 @@ export default function Profile() {
             testId="tool-support"
           />
           <ToolIcon
-            href="/account"
+            href="/settings"
             icon={Settings}
             label="الإعدادات"
             color="bg-gray-100 dark:bg-gray-800"

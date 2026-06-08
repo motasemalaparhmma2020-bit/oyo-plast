@@ -71,7 +71,6 @@ import AdminStaff from "@/pages/AdminStaff";
 import Wishlist from "@/pages/Wishlist";
 import Notifications from "@/pages/Notifications";
 import NotificationSettings from "@/pages/NotificationSettings";
-import MyAccount from "@/pages/MyAccount";
 import WalletPage from "@/pages/Wallet";
 import LoyaltyPage from "@/pages/Loyalty";
 import SettingsPage from "@/pages/Settings";
@@ -552,7 +551,7 @@ function Router() {
       <OfflineSyncProvider />
       <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16">
         <LoginTopBanner />
-        {!isProductDetail && <Navbar />}
+        {!isProductDetail && location !== '/profile' && <Navbar />}
         <main className="flex-grow">
           <Switch>
             {/* Public pages - no auth required */}
@@ -651,10 +650,7 @@ function Router() {
             <Route path="/notification-settings">
               <RequireAccountType><NotificationSettings /></RequireAccountType>
             </Route>
-            <Route path="/account">
-              <RequireAccountType><MyAccount /></RequireAccountType>
-            </Route>
-            <Route path="/account/credit">
+            <Route path="/credit">
               <RequireAccountType><MyCredit /></RequireAccountType>
             </Route>
             <Route path="/my-debts">
