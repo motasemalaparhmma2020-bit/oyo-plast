@@ -6,14 +6,29 @@ import { Card } from "@/components/ui/card";
 import { Heart, Trash2, ShoppingCart, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import type { Product, WishlistItem } from "@shared/schema";
+
+const FALLBACK_IMG =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><rect width='96' height='96' fill='%23f3f4f6'/><text x='48' y='52' font-size='32' text-anchor='middle' fill='%239ca3af'>📦</text></svg>`
+  );
+
+type WishlistRow = {
+  id: number;
+  productId: number;
+  createdAt: string;
+  name: string;
+  imageUrl: string | null;
+  price: string | number | null;
+  priceSar: string | number | null;
+};
 
 export default function Wishlist() {
   const { isAuthenticated } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: wishlistItems = [], isLoading } = useQuery<(WishlistItem & { product: Product })[]>({
+  const { data: wishlistItems = [], isLoading } = useQuery<WishlistRow[]>({
     queryKey: ["/api/wishlist"],
     enabled: isAuthenticated,
   });
@@ -96,25 +111,30 @@ export default function Wishlist() {
             <Card key={item.id} className="flex gap-4 p-4" data-testid={`wishlist-item-${item.productId}`}>
               <Link href={`/product/${item.productId}`}>
                 <img
-                  src={item.product.imageUrl}
-                  alt={item.product.name}
-                  className="w-24 h-24 object-cover rounded-lg"
+                  src={item.imageUrl || FALLBACK_IMG}
+                  alt={item.name}
+                  className="w-24 h-24 object-cover rounded-lg bg-gray-100"
+                  onError={(e) => {
+                    const img = e.target as HTMLImageElement;
+                    img.onerror = null;
+                    img.src = FALLBACK_IMG;
+                  }}
                 />
               </Link>
               <div className="flex-1 flex flex-col justify-between">
                 <div>
                   <Link href={`/product/${item.productId}`}>
                     <h3 className="font-semibold hover:text-[#2196F3] transition-colors">
-                      {item.product.name}
+                      {item.name}
                     </h3>
                   </Link>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-lg font-bold text-[#2196F3]">
-                      {Number(item.product.price).toLocaleString()} ر.ي
+                      {Number(item.price ?? 0).toLocaleString()} ر.ي
                     </span>
-                    {item.product.priceSar && (
+                    {item.priceSar && (
                       <span className="text-sm text-muted-foreground">
-                        ({Number(item.product.priceSar).toLocaleString()} ر.س)
+                        ({Number(item.priceSar).toLocaleString()} ر.س)
                       </span>
                     )}
                   </div>
