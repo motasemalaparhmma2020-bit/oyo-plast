@@ -196,6 +196,14 @@ export const orders = pgTable("orders", {
   supplierNotified: boolean("supplier_notified").default(false), // هل أُرسل له إشعار؟
   supplierToken: text("supplier_token"),               // رمز خاص لبوابة المورد (رابط بدون تسجيل دخول)
   supplierStatus: text("supplier_status").default("pending"), // pending|accepted|shipped|delivered|cancelled
+  // ─── متابعة المورد (صحة مالية 1.0) ───────────────────────────────
+  supplierAssignedAt: timestamp("supplier_assigned_at"),         // وقت تعيين المورد
+  supplierResponseStatus: text("supplier_response_status").default("pending"), // pending|timed_out|accepted|rejected
+  triedSupplierIds: integer("tried_supplier_ids").array(),      // الموردين المجرَّبين
+  supplierReassignmentCount: integer("supplier_reassignment_count").default(0), // عدد مرات إعادة التعيين
+  // ─── موقع العميل (GPS) للتعيين الذكي ─────────────────────────────
+  customerLat: numeric("customer_lat"),                          // خط عرض العميل
+  customerLng: numeric("customer_lng"),                          // خط طول العميل
   marketerTableId: integer("marketer_table_id"),       // ID المسوق المستقل الذي جاء عبر كوبونه
   marketerCommissionAmount: numeric("marketer_commission_amount"), // مبلغ عمولة المسوق
   marketerCommissionPaid: boolean("marketer_commission_paid").default(false),
@@ -223,6 +231,15 @@ export const suppliers = pgTable("suppliers", {
   telegramLinkCode: text("telegram_link_code"),                // كود ربط مؤقت /start <code>
   // 🆕 (مايو 2026 - المرحلة 1) نوع الجهة: distributor (يوصّل للعميل) | vendor (نشتري منه البضاعة) | both
   type: text("type").default("distributor").notNull(),
+  // ─── صحة مالية 1.0 ─── ملاحقات التفاعل والموقع ─────────────────────
+  responseTimeoutHours: integer("response_timeout_hours").default(24), // مهلة استجابة المورد بالساعات
+  missedOrdersCount: integer("missed_orders_count").default(0),      // عدد الطلبات التي فات ملاحقته
+  pin: text("pin").default("1234"),                                   // باسورد بوابة المورد
+  lat: numeric("lat"),                                               // خط عرض المورد
+  lng: numeric("lng"),                                               // خط طول المورد
+  serviceRadiusKm: numeric("service_radius_km"),                     // نطاق الخدمة بالكم
+  province: text("province"),                                          // المحافظة
+  district: text("district"),                                          // المديرية/القرية
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -262,6 +279,19 @@ export const supplierPayments = pgTable("supplier_payments", {
   amount: numeric("amount").notNull(),
   paymentMethod: text("payment_method"),
   notes: text("notes"),
+  paidAt: timestamp("paid_at").defaultNow(),
+});
+
+// سجل توريدات الموردين (تسوية — المورد يرد مبلغًا للمنصة)
+export const supplierRemittances = pgTable("supplier_remittances", {
+  id: serial("id").primaryKey(),
+  supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
+  amount: numeric("amount").notNull(),
+  currency: text("currency").default("YER").notNull(),
+  method: text("method"),                                            // طريقة التسوية
+  notes: text("notes"),
+  orderIds: integer("order_ids").array(),                              // أرقام الطلبات المتعلقة
+  recordedBy: text("recorded_by"),                                   // من سجل التسوية
   paidAt: timestamp("paid_at").defaultNow(),
 });
 
@@ -1153,6 +1183,9 @@ export type Setting = typeof settings.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
 export type WishlistItem = typeof wishlist.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+export type Supplier = typeof suppliers.$inferSelect;
+export type SupplierPayment = typeof supplierPayments.$inferSelect;
+export type SupplierRemittance = typeof supplierRemittances.$inferSelect;
 export const insertNotificationPreferenceSchema = createInsertSchema(notificationPreferences).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertNotificationPreference = z.infer<typeof insertNotificationPreferenceSchema>;
 export type NotificationPreference = typeof notificationPreferences.$inferSelect;

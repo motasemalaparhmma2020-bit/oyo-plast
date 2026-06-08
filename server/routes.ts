@@ -2221,6 +2221,134 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── نقاط تفتيش مالية حرجة (صحة مالية 1.0) ─────────────────────────
+  app.get("/api/admin/financial-alerts", requireAdmin, async (_req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const alerts: any[] = [];
+
+      // 1. موردون فاتت مهلتهم (طلبات متأخرة)
+      const timedOut = await dbPool.query(`
+        SELECT o.id, o.customer_name, o.shipping_city, o.total, o.currency,
+               o.supplier_id, s.name AS supplier_name,
+               o.supplier_assigned_at, o.supplier_reassignment_count
+        FROM orders o
+        LEFT JOIN suppliers s ON o.supplier_id = s.id
+        WHERE o.supplier_response_status = 'timed_out'
+          AND o.status NOT IN ('cancelled', 'delivered', 'completed')
+        ORDER BY o.supplier_assigned_at DESC LIMIT 20
+      `);
+      for (const row of timedOut.rows) {
+        alerts.push({
+          id: `timeout-${row.id}`,
+          type: "supplier_timeout",
+          priority: "high",
+          title: `⏰ انتهت مهلة المورد للطلب #${row.id}`,
+          message: `${row.supplier_name || "مورد مشاوي"} في ${row.shipping_city || "—"} — ${Number(row.total || 0).toLocaleString()} ${row.currency || "ر.ي"}`,
+          orderId: row.id,
+          supplierId: row.supplier_id,
+          createdAt: row.supplier_assigned_at,
+        });
+      }
+
+      // 2. طلبات بدون مورد متاح (بانتظار الأدمن)
+      const pendingAdmin = await dbPool.query(`
+        SELECT o.id, o.customer_name, o.shipping_city, o.total, o.currency,
+               o.created_at, o.supplier_reassignment_count
+        FROM orders o
+        WHERE o.status = 'pending_admin'
+        ORDER BY o.created_at DESC LIMIT 20
+      `);
+      for (const row of pendingAdmin.rows) {
+        alerts.push({
+          id: `pending-admin-${row.id}`,
+          type: "pending_admin",
+          priority: "high",
+          title: `⚠️ طلب #${row.id} يحتاج تدخل أدمن`,
+          message: `${row.customer_name || "—"} في ${row.shipping_city || "—"} — ${Number(row.total || 0).toLocaleString()} ${row.currency || "ر.ي"}`,
+          orderId: row.id,
+          createdAt: row.created_at,
+        });
+      }
+
+      // 3. عمولات مسوقين معلقة (لم تتحرر بعد المهلة)
+      const heldCommissions = await dbPool.query(`
+        SELECT mc.id, mc.marketer_id, mc.order_id, mc.commission_amount, mc.currency,
+               mc.hold_until, mc.created_at,
+               COALESCE(u.full_name, sm.name) AS marketer_name
+        FROM marketer_commissions mc
+        LEFT JOIN users u ON mc.marketer_id = u.id
+        LEFT JOIN standalone_marketers sm ON sm.phone = mc.marketer_id
+        WHERE mc.status = 'held' AND mc.hold_until <= NOW() + INTERVAL '24 hours'
+        ORDER BY mc.hold_until ASC LIMIT 20
+      `);
+      for (const row of heldCommissions.rows) {
+        alerts.push({
+          id: `commission-${row.id}`,
+          type: "commission_overdue",
+          priority: "normal",
+          title: `💰 عمولة مسوق معلقة #${row.id}`,
+          message: `${row.marketer_name || "مسوق"} — ${Number(row.commission_amount || 0).toLocaleString()} ${row.currency || "ر.ي"} (طلب #${row.order_id})`,
+          orderId: row.order_id,
+          createdAt: row.hold_until,
+        });
+      }
+
+      // 4. موردون برصيد مستحقة عالية
+      const highBalance = await dbPool.query(`
+        SELECT s.id, s.name, s.balance_due, s.total_sales, s.missed_orders_count,
+               (SELECT COUNT(*) FROM orders WHERE supplier_id = s.id AND status NOT IN ('cancelled', 'delivered', 'completed')) AS active_orders
+        FROM suppliers s
+        WHERE s.balance_due > 50000
+        ORDER BY s.balance_due DESC LIMIT 10
+      `);
+      for (const row of highBalance.rows) {
+        alerts.push({
+          id: `balance-${row.id}`,
+          type: "supplier_high_balance",
+          priority: row.balance_due > 200000 ? "high" : "normal",
+          title: `💸 رصيد عالي للمورد ${row.name}`,
+          message: `مستحق: ${Number(row.balance_due || 0).toLocaleString()} ر.ي · طلبات نشطة: ${row.active_orders || 0} · فائت: ${row.missed_orders_count || 0}`,
+          supplierId: row.id,
+          createdAt: new Date(),
+        });
+      }
+
+      // 5. طلبات بدفع للموردين (مدفوعة)
+      const unpaidSuppliers = await dbPool.query(`
+        SELECT o.id, o.customer_name, o.supplier_id, s.name AS supplier_name,
+               o.supplier_amount, o.currency, o.created_at
+        FROM orders o
+        LEFT JOIN suppliers s ON o.supplier_id = s.id
+        WHERE o.supplier_paid = false
+          AND o.status IN ('delivered', 'completed')
+          AND o.supplier_id IS NOT NULL
+        ORDER BY o.created_at ASC LIMIT 20
+      `);
+      for (const row of unpaidSuppliers.rows) {
+        alerts.push({
+          id: `unpaid-${row.id}`,
+          type: "supplier_unpaid",
+          priority: "normal",
+          title: `🔴 طلب #${row.id} مدفوع للمورد`,
+          message: `${row.supplier_name || "مورد"} — ${Number(row.supplier_amount || 0).toLocaleString()} ${row.currency || "ر.ي"}`,
+          orderId: row.id,
+          supplierId: row.supplier_id,
+          createdAt: row.created_at,
+        });
+      }
+
+      res.json({
+        total: alerts.length,
+        highPriority: alerts.filter((a: any) => a.priority === "high").length,
+        alerts,
+      });
+    } catch (e: any) {
+      console.error("[financial-alerts] error:", e.message);
+      res.status(500).json({ message: "فشل الجلب" });
+    }
+  });
+
   // تعيين مورد يدوياً لطلب
   app.put("/api/admin/orders/:id/assign-supplier", requireAdmin, async (req, res) => {
     try {

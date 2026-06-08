@@ -58,4 +58,56 @@ export const db = drizzle(pool, { schema });
   } catch (e) {
     console.warn("[migrate] account_deletion_requests:", (e as Error).message);
   }
+
+  // ── Auto-migrate: صحة مالية 1.0 ──
+  // أعمدة حقول المورد في الطلبات
+  try {
+    await pool.query(`
+      ALTER TABLE orders
+        ADD COLUMN IF NOT EXISTS supplier_assigned_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS supplier_response_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        ADD COLUMN IF NOT EXISTS tried_supplier_ids INTEGER[],
+        ADD COLUMN IF NOT EXISTS supplier_reassignment_count INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS customer_lat NUMERIC,
+        ADD COLUMN IF NOT EXISTS customer_lng NUMERIC
+    `);
+  } catch (e) {
+    console.warn("[migrate] orders supplier columns:", (e as Error).message);
+  }
+
+  // أعمدة حقول التفاعل في الموردين
+  try {
+    await pool.query(`
+      ALTER TABLE suppliers
+        ADD COLUMN IF NOT EXISTS response_timeout_hours INTEGER DEFAULT 24,
+        ADD COLUMN IF NOT EXISTS missed_orders_count INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS pin TEXT DEFAULT '1234',
+        ADD COLUMN IF NOT EXISTS lat NUMERIC,
+        ADD COLUMN IF NOT EXISTS lng NUMERIC,
+        ADD COLUMN IF NOT EXISTS service_radius_km NUMERIC,
+        ADD COLUMN IF NOT EXISTS province TEXT,
+        ADD COLUMN IF NOT EXISTS district TEXT
+    `);
+  } catch (e) {
+    console.warn("[migrate] suppliers interaction columns:", (e as Error).message);
+  }
+
+  // جدول توريدات الموردين
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS supplier_remittances (
+        id SERIAL PRIMARY KEY,
+        supplier_id INTEGER REFERENCES suppliers(id) NOT NULL,
+        amount NUMERIC NOT NULL,
+        currency VARCHAR(10) NOT NULL DEFAULT 'YER',
+        method TEXT,
+        notes TEXT,
+        order_ids INTEGER[],
+        recorded_by TEXT,
+        paid_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+  } catch (e) {
+    console.warn("[migrate] supplier_remittances:", (e as Error).message);
+  }
 })();

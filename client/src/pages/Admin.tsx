@@ -21,6 +21,7 @@ import AdminPDPLayout from "@/components/AdminPDPLayout";
 import { AdminSubcategories } from "@/components/AdminSubcategories";
 import AdminCreditTiers from "@/components/AdminCreditTiers";
 import AdminCreditCustomers from "@/components/AdminCreditCustomers";
+import { FinancialAlertsBadge } from "@/components/FinancialAlertsBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6335,6 +6336,7 @@ export default function Admin() {
             <p className="text-primary-foreground/80 text-xs">إدارة الطلبات والمنتجات</p>
           </div>
           <div className="flex items-center gap-2">
+            <FinancialAlertsBadge adminToken={adminToken} />
             <Link href="/admin/broadcast">
               <Button size="sm" variant="secondary" className="gap-1.5" data-testid="button-open-broadcast">
                 <Megaphone className="h-4 w-4" /> بث إشعار
