@@ -93,7 +93,7 @@ export default function NotificationSettings() {
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
-            <Link href="/profile">
+            <Link href="/account">
               <Button variant="ghost" size="icon" data-testid="button-back">
                 <ArrowRight className="h-5 w-5" />
               </Button>

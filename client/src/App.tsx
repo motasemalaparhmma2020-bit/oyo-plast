@@ -56,6 +56,7 @@ import OrderTracking from "@/pages/OrderTracking";
 import Orders from "@/pages/Orders";
 import RateOrder from "@/pages/RateOrder";
 import Profile from "@/pages/Profile";
+import MyAccount from "@/pages/MyAccount";
 import Addresses from "@/pages/Addresses";
 import Auth from "@/pages/Auth";
 import Register from "@/pages/Register";
@@ -638,6 +639,9 @@ function Router() {
               <RequireAccountType><RateOrder /></RequireAccountType>
             </Route>
             <Route path="/profile" component={Profile} />
+            <Route path="/account">
+              <RequireAccountType><MyAccount /></RequireAccountType>
+            </Route>
             <Route path="/addresses">
               <RequireAccountType><Addresses /></RequireAccountType>
             </Route>

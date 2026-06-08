@@ -29,7 +29,7 @@ export function GlobalBottomNav() {
   });
 
   const primaryColor = homeSettings?.primaryColor || "#06B6D4";
-  const signupHref = "/profile";
+  const signupHref = "/account";
 
   const navItemClass = (active: boolean) =>
     `flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-colors flex-1 min-w-0`;
@@ -136,17 +136,17 @@ export function GlobalBottomNav() {
         {/* أنا */}
         <Link href={signupHref}>
           <button
-            className={navItemClass(location.startsWith("/profile"))}
+            className={navItemClass(location.startsWith("/account"))}
             data-testid="nav-profile"
-            style={{ color: location.startsWith("/profile") ? primaryColor : undefined }}
+            style={{ color: location.startsWith("/account") ? primaryColor : undefined }}
           >
             <User
               className="h-5 w-5"
-              style={{ color: location.startsWith("/profile") ? primaryColor : "#6b7280" }}
+              style={{ color: location.startsWith("/account") ? primaryColor : "#6b7280" }}
             />
             <span
               className="text-xs font-medium"
-              style={{ color: location.startsWith("/profile") ? primaryColor : "#6b7280" }}
+              style={{ color: location.startsWith("/account") ? primaryColor : "#6b7280" }}
             >
               أنا
             </span>

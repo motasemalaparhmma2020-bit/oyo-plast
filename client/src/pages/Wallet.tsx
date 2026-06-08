@@ -14,7 +14,7 @@ function goBackSafe(setLocation: (p: string) => void) {
     const last = sessionStorage.getItem("lastSafePath");
     if (last && last !== "/wallet") return setLocation(last);
   } catch {}
-  setLocation("/profile");
+  setLocation("/account");
 }
 
 export default function WalletPage() {

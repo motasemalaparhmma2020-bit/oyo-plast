@@ -143,7 +143,7 @@ export default function MyDebts() {
       <div className="bg-gradient-to-br from-rose-600 via-red-500 to-orange-500 text-white">
         <div className="container max-w-2xl mx-auto px-4 pt-4 pb-8">
           <div className="flex items-center gap-3 mb-3">
-            <Link href="/profile">
+            <Link href="/account">
               <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" data-testid="link-back">
                 <ChevronRight className="h-5 w-5" />
               </Button>
