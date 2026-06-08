@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +50,22 @@ export default function AdminVolumeOffers() {
   const [form, setForm] = useState({ ...emptyForm });
   const [editingId, setEditingId] = useState<number | null>(null);
 
+  const adminFetch = async (method: string, url: string, body?: any) => {
+    const res = await fetch(url, {
+      method,
+      headers: {
+        "x-admin-token": localStorage.getItem("admin_token") || "",
+        ...(body ? { "Content-Type": "application/json" } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      const text = (await res.text()) || res.statusText;
+      throw new Error(`${res.status}: ${text}`);
+    }
+    return res;
+  };
+
   const { data: products = [], isLoading: productsLoading } = useQuery<ProductLite[]>({
     queryKey: ["/api/admin/products"],
   });
@@ -58,10 +74,7 @@ export default function AdminVolumeOffers() {
     queryKey: ["/api/admin/volume-offers", selectedProductId],
     queryFn: async () => {
       if (!selectedProductId) return [];
-      const res = await fetch(`/api/admin/volume-offers?productId=${selectedProductId}`, {
-        headers: { "x-admin-token": localStorage.getItem("adminToken") || "" },
-      });
-      if (!res.ok) throw new Error("فشل جلب العروض");
+      const res = await adminFetch("GET", `/api/admin/volume-offers?productId=${selectedProductId}`);
       return res.json();
     },
     enabled: !!selectedProductId,
@@ -87,9 +100,9 @@ export default function AdminVolumeOffers() {
         sortOrder: parseInt(form.sortOrder) || 0,
       };
       if (editingId) {
-        return apiRequest("PATCH", `/api/admin/volume-offers/${editingId}`, body);
+        return adminFetch("PATCH", `/api/admin/volume-offers/${editingId}`, body);
       }
-      return apiRequest("POST", "/api/admin/volume-offers", body);
+      return adminFetch("POST", "/api/admin/volume-offers", body);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/volume-offers", selectedProductId] });
@@ -100,7 +113,7 @@ export default function AdminVolumeOffers() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest("DELETE", `/api/admin/volume-offers/${id}`),
+    mutationFn: async (id: number) => adminFetch("DELETE", `/api/admin/volume-offers/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/volume-offers", selectedProductId] });
       toast({ title: "تم الحذف" });
