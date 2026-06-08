@@ -80,6 +80,7 @@ import MyDebts from "@/pages/MyDebts";
 import MarketerCoupons from "@/pages/MarketerCoupons";
 import MyCouponsPage from "@/pages/MyCoupons";
 import Printing from "@/pages/Printing";
+import LiquiditySystem from "@/pages/liquidity/LiquiditySystem";
 import StaffPortal from "@/pages/StaffPortal";
 import SupplierPortal from "@/pages/SupplierPortal";
 import SupplierStatement from "@/pages/SupplierStatement";
@@ -530,6 +531,7 @@ function Router() {
   // صفحة الموظفين وبوابة الموردين مستقلة تماماً بدون navbar/footer
   if (location === '/staff') return <StaffGate />;
   if (location === '/supplier') return <SupplierPortal />;
+  if (location === '/liquidity') return <LiquiditySystem />;
 
   const isProductDetail = /^\/products?\/[^/]+$/.test(location);
   // إخفاء شريط التنقل السفلي في الصفحات التي لها شريط ثابت خاص بها

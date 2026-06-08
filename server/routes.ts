@@ -546,6 +546,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const { registerVolumeOfferRoutes } = await import("./routes/volume-offers");
   registerVolumeOfferRoutes(app, requireAdmin);
 
+  // ─── نظام السيولة والأتمتة (معاينة) — قراءة فقط، إضافي بالكامل ─────
+  const { registerLiquidityPreviewRoutes } = await import("./routes/liquidity-preview");
+  registerLiquidityPreviewRoutes(app);
+
   // ─── Cron: مهلة استجابة المورد + إعادة التعيين التلقائي (كل ١٥ دقيقة) ─────
   try {
     const cron = await import("node-cron");
