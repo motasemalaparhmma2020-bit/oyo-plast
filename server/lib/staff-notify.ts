@@ -20,8 +20,10 @@ export async function notifyStaff(opts: {
   telegramText?: string; // optional override; defaults to `${title}\n${message}`
 }): Promise<void> {
   const { roles, title, message, type = "order", orderId, telegramText } = opts;
+  const env = process.env.ENVIRONMENT || process.env.NODE_ENV || "development";
+  const isProd = env === "production";
 
-  // ─── 1. DB notifications (one per staff user) ───────────────
+  // ─── 1. DB notifications (one per staff user) — always ───────
   try {
     const { pool } = await import("../db");
     const placeholders = roles.map((_, i) => `$${i + 1}`).join(",");
@@ -47,6 +49,10 @@ export async function notifyStaff(opts: {
   }
 
   // ─── 2. Telegram (single broadcast to staff chat) ───────────
+  if (!isProd) {
+    console.log(`[DEV] 📵 Telegram skipped (${env}): ${title}`);
+    return;
+  }
   try {
     const tgText = telegramText || `<b>${title}</b>\n${message}`;
     await sendTelegramMessage(tgText);

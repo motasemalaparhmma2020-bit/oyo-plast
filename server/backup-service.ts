@@ -240,6 +240,12 @@ export async function startAutoCron(): Promise<void> {
   activeIntervalHours = interval;
   const cronExpr = interval === 1 ? "0 * * * *" : `0 */${interval} * * *`;
 
+  const isProdEnv = (process.env.ENVIRONMENT || process.env.NODE_ENV || "development") === "production";
+  if (!isProdEnv) {
+    console.log(`[DEV] ⏸️ Backup cron paused — not production environment`);
+    return;
+  }
+
   // النسخة الساعية (حسب الفترة المُعدّة)
   cronJob = cron.schedule(cronExpr, async () => {
     lastAutoBackupTime = new Date();

@@ -549,8 +549,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ─── Cron: مهلة استجابة المورد + إعادة التعيين التلقائي (كل ١٥ دقيقة) ─────
   try {
     const cron = await import("node-cron");
+    const isProdEnv = (process.env.ENVIRONMENT || process.env.NODE_ENV || "development") === "production";
     cron.schedule("*/15 * * * *", async () => {
       try {
+        if (!isProdEnv) {
+          console.log("[DEV] ⏸️ cron مهلة المورد متجاهل — ليس بيئة إنتاج");
+          return;
+        }
         const { pool: dbPool } = await import("./db");
         const expired = await dbPool.query(`
           SELECT o.id, o.supplier_id, o.shipping_city, o.total, o.currency,
@@ -649,8 +654,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ─── Cron: تحرير عمولات المسوقين تلقائياً (كل ساعة) ────────────────────
   try {
     const cron = await import("node-cron");
+    const isProdEnvComm = (process.env.ENVIRONMENT || process.env.NODE_ENV || "development") === "production";
     cron.schedule("0 * * * *", async () => {
       try {
+        if (!isProdEnvComm) {
+          console.log("[DEV] ⏸️ cron تحرير العمولات متجاهل — ليس بيئة إنتاج");
+          return;
+        }
         const { pool: dbPool } = await import("./db");
         const r = await dbPool.query(
           `UPDATE marketer_commissions
@@ -673,8 +683,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // تقرير راشد التلقائي يومياً الساعة 8:00 صباحاً (تقويم اليمن)
   try {
     const cron = await import("node-cron");
+    const isProdEnvCEO = (process.env.ENVIRONMENT || process.env.NODE_ENV || "development") === "production";
     cron.schedule("0 8 * * *", async () => {
       try {
+        if (!isProdEnvCEO) {
+          console.log("[DEV] ⏸️ cron تقرير راشد متجاهل — ليس بيئة إنتاج");
+          return;
+        }
         const { generateCEOReport, getAgent, setLastReport } = await import("./agent-team");
         const rashed = await getAgent("rashed");
         if (!rashed) return;
@@ -10576,8 +10591,13 @@ h1{font-size:18px;color:#222;margin:4px 0;}
 
   // جدولة cron يومية الساعة 8:00 صباحاً + تشغيل أولي تجريبي بعد 10 دقائق
   try {
+    const isProdEnvDebt = (process.env.ENVIRONMENT || process.env.NODE_ENV || "development") === "production";
     const cron = await import("node-cron");
     cron.schedule("0 8 * * *", async () => {
+      if (!isProdEnvDebt) {
+        console.log("[DEV] ⏸️ cron تذكير المديونيات متجاهل — ليس بيئة إنتاج");
+        return;
+      }
       console.log("[debt-reminder] cron تشغيل الساعة 8 صباحاً");
       await runDebtDueReminders();
     });
