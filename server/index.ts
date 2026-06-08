@@ -68,6 +68,19 @@ app.use('/products', express.static(path.resolve(rootDir, 'public', 'products'))
 // Serve admin-uploaded images (persistent across deploys)
 app.use('/uploads', express.static(path.resolve(rootDir, 'public', 'uploads')));
 
+// Serve static preview files (before Vite catch-all)
+app.get('/product-preview.html', (req, res) => {
+  const filePath = path.resolve(rootDir, 'public', 'product-preview.html');
+  if (fs.existsSync(filePath)) {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Cache-Control', 'no-cache');
+    res.send(content);
+  } else {
+    res.status(404).send('File not found');
+  }
+});
+
 // ── ضغط تلقائي لصور /assets/ ────────────────────────────────────────────────
 // يعترض طلبات الصور من attached_assets/ ويُرسل نسخة مضغوطة بدلاً من الملف الكامل
 app.get('/assets/:filename(*)', async (req: Request, res: Response, next: NextFunction) => {
