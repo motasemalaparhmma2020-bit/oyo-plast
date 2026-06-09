@@ -9,7 +9,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Product } from "@shared/schema";
 
 interface PrintColorOption { name: string; hex: string; }
-interface QuantityTier { qty: number; totalPrice: number; unitPrice: number; }
+interface QuantityTier { qty: number; totalPrice: number; unitPrice: number; costPrice?: number; }
 interface BagColor { name: string; hex: string; imageUrl?: string; }
 
 const DEFAULT_BAG_COLORS: BagColor[] = [

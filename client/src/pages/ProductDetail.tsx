@@ -65,6 +65,7 @@ const LazyImage = ({ src, alt, className, style }: { src: string; alt: string; c
 // ── Types ──────────────────────────────────────────────────────────────────
 interface BulkPricing { minQty: number; price: string; }
 interface SizePricing { size: string; price: string; priceSar?: string; colors?: string[]; stock?: number; }
+interface QuantityTier { qty: number; totalPrice: number; unitPrice: number; costPrice?: number; }
 interface ColorImageEntry { color: string; hex: string; imageUrl: string; }
 type SmartVType = "color" | "size" | "weight" | "image" | "bundle";
 interface SmartV { id: string; type: SmartVType; label: string; price: string; priceSar: string; discount: string; hex: string; imageUrl: string; count?: number; }
@@ -274,6 +275,7 @@ export default function ProductDetail() {
 
   // ── State ────────────────────────────────────────────────────────────────
   const [quantity, setQuantity]           = useState(1);
+  const [selectedTier, setSelectedTier]   = useState<QuantityTier | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [selectedSize, setSelectedSize]   = useState<string | null>(null);
   const [uploadedFile, setUploadedFile]   = useState<File | null>(null);
@@ -365,6 +367,7 @@ export default function ProductDetail() {
     setPreviewCountdown(3);
     setSelectedInkColor(null);
     setQuantityDefaultApplied(false);
+    setSelectedTier(null);
     setPrintColors([""]);
     setPrintWidth("");
     setPrintHeight("");
@@ -533,6 +536,17 @@ export default function ProductDetail() {
     try { return product?.sizePricing ? JSON.parse(product.sizePricing) : []; } catch { return []; }
   }, [product?.sizePricing]);
 
+  // ── Quantity Tiers (اختر الكمية) ──
+  const quantityTiers: QuantityTier[] = useMemo(() => {
+    try {
+      const qt = (product as any)?.quantityTiers;
+      if (!qt) return [];
+      const parsed = typeof qt === 'string' ? JSON.parse(qt) : qt;
+      return Array.isArray(parsed) ? parsed.filter((t: any) => t.qty > 0 && t.totalPrice > 0) : [];
+    } catch { return []; }
+  }, [(product as any)?.quantityTiers]);
+  const showQuantityTiers = !!(product as any)?.enableQuantityTiers && quantityTiers.length > 0;
+
   const currentSizeData = useMemo(() =>
     selectedSize && sizePricing.length ? sizePricing.find(sp => sp.size === selectedSize) || null : null,
     [selectedSize, sizePricing]);
@@ -648,6 +662,10 @@ export default function ProductDetail() {
     if (activeOffer) {
       return String(activeOffer.offerPriceYer);
     }
+    // ── Quantity Tiers (اختر الكمية) — أولوية بعد العروض ──
+    if (showQuantityTiers && selectedTier) {
+      return String(selectedTier.unitPrice);
+    }
     // الخيارات الذكية لها الأولوية الكاملة عند تفعيلها
     if (showSmartVariants && smartVariantPrice) return smartVariantPrice.price;
     if (currentSizeData) {
@@ -659,7 +677,7 @@ export default function ProductDetail() {
       if (applicable) base = applicable.price;
     }
     return base;
-  }, [product, quantity, currency, bulkPricing, currentSizeData, showSmartVariants, smartVariantPrice, activeOffer]);
+  }, [product, quantity, currency, bulkPricing, currentSizeData, showSmartVariants, smartVariantPrice, activeOffer, showQuantityTiers, selectedTier]);
 
   // ── حساب تكلفة الطباعة ─────────────────────────────────────────────────────
   const bagPrintingCost = useMemo(() => {
@@ -737,11 +755,13 @@ export default function ProductDetail() {
     };
   }, [enableCustomPrinting, hasPhase4Pricing, printingColors, printingSides, printingPricing, quantity]);
 
+  const effectiveQty = showQuantityTiers && selectedTier ? selectedTier.qty : quantity;
+
   const totalPrice = useMemo(() => {
     // عند تفعيل العرض، السعر شامل ويُلغي كل رسوم الطباعة والأقسام الأخرى
-    if (activeOffer) return Number(currentPrice) * quantity;
-    return (Number(currentPrice) * quantity) + printingCost + bagPrintingCost + (professionalPrintingUnitPrice * quantity) + phase4PrintingBreakdown.totalPrintingCost;
-  }, [currentPrice, quantity, printingCost, bagPrintingCost, professionalPrintingUnitPrice, phase4PrintingBreakdown.totalPrintingCost, activeOffer]);
+    if (activeOffer) return Number(currentPrice) * effectiveQty;
+    return (Number(currentPrice) * effectiveQty) + printingCost + bagPrintingCost + (professionalPrintingUnitPrice * effectiveQty) + phase4PrintingBreakdown.totalPrintingCost;
+  }, [currentPrice, effectiveQty, printingCost, bagPrintingCost, professionalPrintingUnitPrice, phase4PrintingBreakdown.totalPrintingCost, activeOffer]);
 
   const currentStock = useMemo(() =>
     currentSizeData?.stock !== undefined ? currentSizeData.stock : (product?.stock || 0),
@@ -786,7 +806,7 @@ export default function ProductDetail() {
     }
     return {
       productId: product?.id ?? 0,
-      quantity,
+      quantity: effectiveQty,
       selectedSize: svSize || selectedSize || undefined,
       selectedColor: svColor || selectedColor || undefined,
       customPrinting: enableCustomPrinting,
@@ -825,9 +845,18 @@ export default function ProductDetail() {
         },
       } : {}),
       // السعر الوحدوي المحسوب
-      unitPrice: totalPrice / quantity || undefined,
+      unitPrice: totalPrice / effectiveQty || undefined,
+      // ── Quantity Tier المختارة (للتكالف والأرباح) ──
+      ...(selectedTier ? {
+        quantityTier: {
+          qty: selectedTier.qty,
+          totalPrice: selectedTier.totalPrice,
+          unitPrice: selectedTier.unitPrice,
+          costPrice: selectedTier.costPrice,
+        },
+      } : {}),
     };
-  }, [product?.id, quantity, selectedSize, selectedColor, enableCustomPrinting, designNotes, uploadedDesignUrl,
+  }, [product?.id, effectiveQty, selectedSize, selectedColor, enableCustomPrinting, designNotes, uploadedDesignUrl,
       enableBagPrinting, selectedBagColor, printColors,
       productPrintingCat, printWidth, printHeight, printFinish, printColorSeparation, professionalPrintingUnitPrice,
       totalPrice, selectedSmartVariant, smartVariantsData, showSmartVariants,
@@ -1975,6 +2004,52 @@ export default function ProductDetail() {
       // ── QUANTITY ──────────────────────────────────────────────────────────
       case "quantity": {
         if (!sec["quantity"]?.visible) return null;
+        // ── Quantity Tiers (اختر الكمية) ──
+        if (showQuantityTiers && quantityTiers.length > 0) {
+          const chosen = selectedTier || quantityTiers[0];
+          return (
+            <div key="quantity" className="px-4 space-y-3" data-testid="section-quantity">
+              <div className="flex items-center justify-between">
+                <Label className="font-semibold text-sm">📦 اختر الكمية:</Label>
+                <span className="text-xs font-bold text-cyan-600">كمية: {chosen.qty} قطعة</span>
+              </div>
+              <div className="flex gap-2">
+                {quantityTiers.map((t) => {
+                  const active = (selectedTier || quantityTiers[0]).qty === t.qty;
+                  return (
+                    <button
+                      key={t.qty}
+                      onClick={() => { setSelectedTier(t); setQuantity(t.qty); }}
+                      className={`flex-1 border-2 rounded-xl p-2.5 text-center transition-all bg-white ${
+                        active
+                          ? "border-cyan-500 bg-cyan-50 shadow-md"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                      data-testid={`button-tier-${t.qty}`}
+                    >
+                      <div className="font-extrabold text-base">{t.qty}</div>
+                      <div className="text-[11px] text-gray-500 -mt-0.5">قطعة</div>
+                      <div className={`inline-block text-[10px] px-2 py-0.5 rounded-full mt-1 ${
+                        active ? "bg-cyan-500 text-white" : "bg-gray-100 text-gray-600"
+                      }`}>
+                        {t.unitPrice} ر/قطعة
+                      </div>
+                      <div className="text-[11px] font-bold text-gray-700 mt-1">
+                        {t.totalPrice} ر.ي
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedTier?.costPrice && selectedTier?.costPrice > 0 && (
+                <div className="text-[11px] text-muted-foreground">
+                  ربح المؤسسة: {selectedTier.totalPrice - selectedTier.costPrice} ر.ي (تكلفة الشراء {selectedTier.costPrice} ر.ي)
+                </div>
+              )}
+            </div>
+          );
+        }
+        // Legacy simple quantity input
         return (
           <div key="quantity" className="px-4" data-testid="section-quantity">
             <Label className="font-semibold text-sm mb-2 block">الكمية</Label>

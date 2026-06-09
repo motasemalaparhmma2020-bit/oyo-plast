@@ -246,7 +246,7 @@ interface ProductFormData {
   supplierId: number;
   // ── Phase 7: تخصيصات المنتج (Admin-controlled) ──────────────────────────
   printColorOptions: Array<{ name: string; hex: string }>;
-  quantityTiers: Array<{ qty: number; totalPrice: number; unitPrice: number }>;
+  quantityTiers: Array<{ qty: number; totalPrice: number; unitPrice: number; costPrice?: number }>;
   previewWidth: number;
   previewHeight: number;
 }
@@ -300,9 +300,9 @@ const emptyProductForm: ProductFormData = {
     { name: "ذهبي", hex: "#D4AF37" },
   ],
   quantityTiers: [
-    { qty: 100, totalPrice: 6000, unitPrice: 60 },
-    { qty: 500, totalPrice: 27000, unitPrice: 54 },
-    { qty: 1000, totalPrice: 50000, unitPrice: 50 },
+    { qty: 100, totalPrice: 6000, unitPrice: 60, costPrice: 0 },
+    { qty: 500, totalPrice: 27000, unitPrice: 54, costPrice: 0 },
+    { qty: 1000, totalPrice: 50000, unitPrice: 50, costPrice: 0 },
   ],
   previewWidth: 200,
   previewHeight: 250,
@@ -8440,7 +8440,7 @@ export default function Admin() {
                                         data-testid={`input-tier-total-${idx}`}
                                       />
                                     </div>
-                                    <div className="col-span-4">
+                                    <div className="col-span-3">
                                       <Label className="text-[10px] text-muted-foreground">سعر الوحدة (تلقائي)</Label>
                                       <Input
                                         type="number"
@@ -8448,6 +8448,23 @@ export default function Admin() {
                                         readOnly
                                         className="text-sm h-8 bg-muted font-bold text-cyan-700"
                                         data-testid={`input-tier-unit-${idx}`}
+                                      />
+                                    </div>
+                                    <div className="col-span-3">
+                                      <Label className="text-[10px] text-muted-foreground">تكلفة الشراء (ر.ي)</Label>
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        value={t.costPrice || ""}
+                                        onChange={e => {
+                                          const costPrice = Number(e.target.value) || 0;
+                                          const arr = [...productForm.quantityTiers];
+                                          arr[idx] = { ...arr[idx], costPrice };
+                                          setProductForm({ ...productForm, quantityTiers: arr });
+                                        }}
+                                        placeholder="مثال: 5000"
+                                        className="text-sm h-8"
+                                        data-testid={`input-tier-cost-${idx}`}
                                       />
                                     </div>
                                     <div className="col-span-1 flex items-end justify-end h-full pb-0.5">
