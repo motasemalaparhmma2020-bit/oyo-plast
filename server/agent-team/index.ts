@@ -7,6 +7,7 @@
  */
 import { GoogleGenAI } from "@google/genai";
 import { pool } from "../db";
+import { getToolsForAgent, buildToolInstructions, parseToolProposal, isToolAllowed } from "./tools";
 
 const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY;
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
@@ -141,18 +142,53 @@ async function buildAgentContext(agent: AgentRow): Promise<string> {
 export async function chatWithAgent(
   agent: AgentRow,
   message: string,
-  opts: { userId?: string; userName?: string; logConversation?: boolean } = {},
+  opts: { userId?: string; userName?: string; logConversation?: boolean; allowTools?: boolean } = {},
 ): Promise<ChatResult> {
   if (!agent.is_active) return { reply: "هذا الوكيل غير نشط حالياً.", error: "inactive" };
   try {
     const ctx = await buildAgentContext(agent);
-    let reply: string;
+
+    // أدوات الوكيل التنفيذية (إن وُجدت) تُلحَق بالـ system prompt
+    const tools = getToolsForAgent(agent.name);
+    const allowTools = opts.allowTools !== false && tools.length > 0;
+    const systemPrompt = allowTools
+      ? agent.system_prompt + buildToolInstructions(tools)
+      : agent.system_prompt;
+
+    let rawReply: string;
     if (agent.provider === "deepseek") {
-      reply = await deepseekChat(agent.model, agent.system_prompt, message, ctx);
+      rawReply = await deepseekChat(agent.model, systemPrompt, message, ctx);
     } else if (agent.provider === "gemini") {
-      reply = await geminiChat(agent.model, agent.system_prompt, message, ctx);
+      rawReply = await geminiChat(agent.model, systemPrompt, message, ctx);
     } else {
       return { reply: "مزوّد غير مدعوم.", error: "bad_provider" };
+    }
+
+    // استخراج اقتراح أداة (إن وُجد) وتسجيله كإجراء معلّق ينتظر موافقة الأدمن
+    let reply = rawReply;
+    let actionId: number | undefined;
+    if (allowTools) {
+      const { proposal, cleanReply } = parseToolProposal(rawReply);
+      if (proposal && !isToolAllowed(agent.name, proposal.tool)) {
+        // الوكيل اقترح أداة خارج صلاحياته — نتجاهل الاقتراح ولا نسجّل إجراءً
+        console.warn(`[AgentTeam] ${agent.name} proposed unauthorized tool ${proposal.tool} — ignored`);
+        reply = cleanReply;
+      } else if (proposal) {
+        reply = cleanReply;
+        try {
+          actionId = await logAgentAction({
+            agentId: agent.id,
+            actionType: `tool:${proposal.tool}`,
+            title: proposal.title,
+            description: [proposal.reason, `المعطيات: ${JSON.stringify(proposal.args)}`].filter(Boolean).join("\n"),
+            inputData: { tool: proposal.tool, args: proposal.args, reason: proposal.reason },
+            status: "pending",
+          });
+          reply += `\n\n📋 اقترحتُ إجراءً (${proposal.title}) — بانتظار موافقتك في تبويب «الإجراءات المعلّقة».`;
+        } catch (e) {
+          console.warn("[AgentTeam] log tool proposal failed:", (e as any)?.message);
+        }
+      }
     }
 
     // سجّل المحادثة
@@ -166,7 +202,7 @@ export async function chatWithAgent(
         console.warn("[AgentTeam] log conversation failed:", (e as any)?.message);
       }
     }
-    return { reply };
+    return { reply, actionId };
   } catch (e: any) {
     console.error(`[AgentTeam] chat failed (${agent.name}):`, e?.message);
     return { reply: `تعذّر الاتصال بالوكيل: ${e?.message || "خطأ غير معروف"}`, error: "api_error" };
@@ -281,6 +317,7 @@ export async function generateCEOReport(opts: { force?: boolean; asAgent: AgentR
         userId: "ceo",
         userName: "راشد",
         logConversation: false,
+        allowTools: false,
       });
       if (!r.error) self_report = r.reply;
     } catch {}

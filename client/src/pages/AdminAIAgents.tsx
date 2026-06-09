@@ -116,12 +116,24 @@ export default function AdminAIAgents() {
 
   const approveMutation = useMutation({
     mutationFn: async (p: { id: number; approved: boolean }) =>
-      adminApiRequest('POST', `/api/ai/actions/${p.id}/approve`, { approved: p.approved }),
-    onSuccess: () => {
+      (await adminApiRequest('POST', `/api/ai/actions/${p.id}/approve`, { approved: p.approved })).json(),
+    onSuccess: (res: any, vars) => {
       queryClient.invalidateQueries({ queryKey: ['/api/ai/agents'] });
       queryClient.invalidateQueries({ queryKey: ['/api/ai/agents/pending-actions'] });
-      toast({ title: 'تم التحديث' });
+      const exec = res?.execResult;
+      if (!vars.approved) {
+        toast({ title: 'تم رفض الإجراء' });
+      } else if (exec) {
+        toast({
+          title: exec.ok ? '✅ تم التنفيذ' : '❌ فشل التنفيذ',
+          description: exec.message,
+          variant: exec.ok ? undefined : 'destructive',
+        });
+      } else {
+        toast({ title: '✅ تمت الموافقة' });
+      }
     },
+    onError: (e: any) => toast({ title: 'خطأ', description: e?.message || '', variant: 'destructive' }),
   });
 
   if (isLoading) {
@@ -234,6 +246,23 @@ export default function AdminAIAgents() {
                           </div>
                         </div>
                         {act.description && <p className="text-sm mt-2 whitespace-pre-wrap">{act.description}</p>}
+                        {act.input_data?.tool && (
+                          <div className="mt-2 rounded-md bg-muted/60 p-2 text-xs space-y-1" data-testid={`tool-args-${act.id}`}>
+                            <div className="flex items-center gap-1 font-medium">
+                              <span className="rounded bg-primary/15 text-primary px-1.5 py-0.5">{act.input_data.tool}</span>
+                              <span className="text-muted-foreground">أداة تنفيذية</span>
+                            </div>
+                            {act.input_data.args && Object.keys(act.input_data.args).length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {Object.entries(act.input_data.args).map(([k, v]) => (
+                                  <span key={k} className="rounded border px-1.5 py-0.5 bg-background">
+                                    <span className="text-muted-foreground">{k}:</span> {String(v)}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         <Button size="sm" className="bg-green-600 hover:bg-green-700 gap-1" onClick={() => approveMutation.mutate({ id: act.id, approved: true })} data-testid={`approve-${act.id}`}>

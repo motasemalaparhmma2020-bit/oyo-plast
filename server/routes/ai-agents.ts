@@ -13,6 +13,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { pool } from "../db";
 import { chatWithAgent, generateCEOReport, getAgent, getLastReport, setLastReport, logAgentAction } from "../agent-team";
+import { executeTool, isToolAllowed } from "../agent-team/tools";
 
 type Admin = (req: Request, res: Response, next: NextFunction) => void;
 
@@ -148,22 +149,83 @@ export function registerAIAgentRoutes(app: Express, requireAdmin: Admin) {
     res.json(r);
   });
 
-  // 8. موافقة/رفض على إجراء
+  // 8. موافقة/رفض على إجراء — عند الموافقة تُنفَّذ الأداة فعلياً
   app.post("/api/ai/actions/:id/approve", requireAdmin, async (req, res) => {
     try {
       const id = Number(req.params.id);
       const approved = !!req.body?.approved;
       const notes = req.body?.notes ? String(req.body.notes).slice(0, 500) : null;
-      const status = approved ? "approved" : "rejected";
+
+      // اجلب الإجراء + اسم الوكيل المقترِح (للتحقق من الصلاحيات)
+      const cur = await pool.query(
+        `SELECT a.*, ag.name AS agent_name FROM ai_agent_actions a
+           LEFT JOIN ai_agents ag ON ag.id = a.agent_id WHERE a.id=$1`,
+        [id],
+      );
+      const action = cur.rows[0];
+      if (!action) return res.status(404).json({ error: "الإجراء غير موجود" });
+      if (action.status !== "pending") {
+        return res.status(409).json({ error: "تمت معالجة هذا الإجراء مسبقاً", status: action.status });
+      }
+
+      if (!approved) {
+        // رفض ذرّي: ينجح فقط إن كان لا يزال معلّقاً (يمنع الرفض المكرر)
+        const r = await pool.query(
+          `UPDATE ai_agent_actions
+             SET status='rejected', verified_by_ceo=true, verified_at=NOW(),
+                 description=COALESCE(description,'') || CASE WHEN $1::text IS NOT NULL THEN E'\n[مراجعة الأدمن]: ' || $1 ELSE '' END
+           WHERE id=$2 AND status='pending' RETURNING *`,
+          [notes, id],
+        );
+        if (!r.rows[0]) return res.status(409).json({ error: "تمت معالجة هذا الإجراء مسبقاً" });
+        return res.json(r.rows[0]);
+      }
+
+      // موافقة ذرّية: نطالب بالإجراء بنقله من 'pending' إلى 'processing' مرة واحدة فقط
+      // (يمنع التنفيذ المزدوج عند الضغط المتكرر أو الطلبات المتزامنة)
+      const claim = await pool.query(
+        `UPDATE ai_agent_actions
+           SET status='processing', verified_by_ceo=true, verified_at=NOW()
+         WHERE id=$1 AND status='pending' RETURNING *`,
+        [id],
+      );
+      if (!claim.rows[0]) return res.status(409).json({ error: "تمت معالجة هذا الإجراء مسبقاً" });
+
+      // نفّذ الأداة إن وُجدت — مع إعادة التحقق من صلاحية الوكيل على الخادم
+      const toolName: string | undefined =
+        action.input_data?.tool ||
+        (typeof action.action_type === "string" && action.action_type.startsWith("tool:")
+          ? action.action_type.slice(5)
+          : undefined);
+
+      let execResult: { ok: boolean; message: string; data?: any } | null = null;
+      let finalStatus = "approved";
+      if (toolName) {
+        if (!isToolAllowed(action.agent_name, toolName)) {
+          execResult = { ok: false, message: `الوكيل «${action.agent_name || "?"}» غير مخوّل لاستخدام الأداة ${toolName}` };
+          finalStatus = "failed";
+        } else {
+          execResult = await executeTool(toolName, action.input_data?.args || {});
+          finalStatus = execResult.ok ? "executed" : "failed";
+        }
+      }
+
+      const noteLine = [
+        notes ? `[مراجعة الأدمن]: ${notes}` : null,
+        execResult ? `[التنفيذ]: ${execResult.ok ? "✅" : "❌"} ${execResult.message}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
       const r = await pool.query(
         `UPDATE ai_agent_actions
            SET status=$1, verified_by_ceo=true, verified_at=NOW(),
-               description=COALESCE(description,'') || CASE WHEN $2::text IS NOT NULL THEN E'\n[مراجعة الأدمن]: ' || $2 ELSE '' END
-         WHERE id=$3 RETURNING *`,
-        [status, notes, id],
+               output_data=$2::jsonb,
+               description=COALESCE(description,'') || CASE WHEN $3::text <> '' THEN E'\n' || $3 ELSE '' END
+         WHERE id=$4 RETURNING *`,
+        [finalStatus, execResult ? JSON.stringify(execResult) : null, noteLine, id],
       );
-      if (!r.rows[0]) return res.status(404).json({ error: "الإجراء غير موجود" });
-      res.json(r.rows[0]);
+      res.json({ ...r.rows[0], execResult });
     } catch (e: any) {
       res.status(500).json({ error: e?.message });
     }

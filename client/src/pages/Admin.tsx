@@ -80,6 +80,7 @@ import {
   AlertTriangle,
   ShieldCheck,
   Megaphone,
+  GripVertical,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import PrintableInvoice from "@/components/PrintableInvoice";
@@ -1806,6 +1807,46 @@ function HomeSectionsSection({ adminToken }: { adminToken: string | null }) {
     },
   });
 
+  const reorderMutation = useMutation({
+    mutationFn: async (ordered: any[]) => {
+      await Promise.all(
+        ordered.map((s, i) =>
+          s.priority === i
+            ? Promise.resolve()
+            : fetch(`/api/admin/home-sections/${s.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+                body: JSON.stringify({ priority: i }),
+              })
+        )
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/home-sections'] });
+      toast({ title: 'تم حفظ الترتيب الجديد' });
+    },
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/home-sections'] });
+      toast({ title: 'فشل حفظ الترتيب', variant: 'destructive' });
+    },
+  });
+
+  const [dragId, setDragId] = useState<number | null>(null);
+  const [overId, setOverId] = useState<number | null>(null);
+
+  const handleSectionDrop = (sorted: any[], targetId: number) => {
+    if (dragId === null || dragId === targetId) { setDragId(null); setOverId(null); return; }
+    const from = sorted.findIndex((s) => s.id === dragId);
+    const to = sorted.findIndex((s) => s.id === targetId);
+    if (from < 0 || to < 0) { setDragId(null); setOverId(null); return; }
+    const next = [...sorted];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setDragId(null);
+    setOverId(null);
+    reorderMutation.mutate(next);
+  };
+
   const toggleEnabled = (section: any) => {
     updateMutation.mutate({ id: section.id, data: { enabled: !section.enabled } });
   };
@@ -1845,7 +1886,7 @@ function HomeSectionsSection({ adminToken }: { adminToken: string | null }) {
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-lg">أقسام الصفحة الرئيسية</CardTitle>
-            <p className="text-xs text-muted-foreground mt-1">أضف وأدر الأقسام التي تظهر في الصفحة الرئيسية تحت الأقسام الدائرية</p>
+            <p className="text-xs text-muted-foreground mt-1">أضف وأدر الأقسام التي تظهر في الصفحة الرئيسية تحت الأقسام الدائرية. اسحب من المقبض ⠿ لإعادة الترتيب.</p>
           </div>
           <Button size="sm" onClick={openNew} className="gap-2">
             <Plus className="h-4 w-4" /> إضافة قسم
@@ -1860,10 +1901,25 @@ function HomeSectionsSection({ adminToken }: { adminToken: string | null }) {
             </div>
           ) : (
             <div className="space-y-3">
-              {[...sections].sort((a, b) => a.priority - b.priority).map((section) => (
-                <div key={section.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${section.enabled ? 'border-primary/30 bg-primary/5' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
+              {(() => { const sorted = [...sections].sort((a, b) => a.priority - b.priority); return sorted.map((section) => (
+                <div
+                  key={section.id}
+                  onDragOver={(e) => { e.preventDefault(); if (overId !== section.id) setOverId(section.id); }}
+                  onDrop={(e) => { e.preventDefault(); handleSectionDrop(sorted, section.id); }}
+                  className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${dragId === section.id ? 'opacity-40' : ''} ${overId === section.id && dragId !== null && dragId !== section.id ? 'ring-2 ring-primary border-primary' : ''} ${section.enabled ? 'border-primary/30 bg-primary/5' : 'border-gray-200 bg-gray-50 opacity-60'}`}
+                >
+                  <div
+                    draggable
+                    onDragStart={() => setDragId(section.id)}
+                    onDragEnd={() => { setDragId(null); setOverId(null); }}
+                    className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground flex-shrink-0 touch-none"
+                    title="اسحب لإعادة الترتيب"
+                    data-testid={`drag-home-section-${section.id}`}
+                  >
+                    <GripVertical className="h-5 w-5" />
+                  </div>
                   <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                    <span className="text-xs text-muted-foreground">أولوية</span>
+                    <span className="text-xs text-muted-foreground">ترتيب</span>
                     <span className="font-bold text-lg w-8 text-center">{section.priority}</span>
                   </div>
                   <div className="flex-1 min-w-0">
@@ -1894,7 +1950,7 @@ function HomeSectionsSection({ adminToken }: { adminToken: string | null }) {
                     </Button>
                   </div>
                 </div>
-              ))}
+              )); })()}
             </div>
           )}
         </CardContent>

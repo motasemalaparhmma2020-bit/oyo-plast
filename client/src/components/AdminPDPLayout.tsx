@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronUp, ChevronDown, Save, Eye, EyeOff, Image, DollarSign, Type, Star, Shield, Palette, Tag, Hash, Truck, RefreshCcw, CreditCard, Printer, AlignLeft, MessageSquare, Grid, Layers, Settings } from "lucide-react";
+import { ChevronUp, ChevronDown, Save, Eye, EyeOff, Image, DollarSign, Type, Star, Shield, Palette, Tag, Hash, Truck, RefreshCcw, CreditCard, Printer, AlignLeft, MessageSquare, Grid, Layers, Settings, GripVertical } from "lucide-react";
 
 const SECTION_META: Record<string, { label: string; icon: any; hasDims?: boolean }> = {
   images:      { label: "صور المنتج",          icon: Image,        hasDims: true },
@@ -70,6 +70,24 @@ export default function AdminPDPLayout({ adminToken }: { adminToken: string | nu
   const { toast } = useToast();
   const [layout, setLayout] = useState<PdpLayout>(DEFAULT_LAYOUT);
   const [saving, setSaving] = useState(false);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+
+  const reorder = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0) return;
+    setLayout(l => {
+      const secs = [...l.sections];
+      const [moved] = secs.splice(from, 1);
+      secs.splice(to, 0, moved);
+      return { ...l, sections: secs };
+    });
+  };
+
+  const handleDrop = (to: number) => {
+    if (dragIdx !== null) reorder(dragIdx, to);
+    setDragIdx(null);
+    setOverIdx(null);
+  };
 
   const { data: serverLayout, isLoading } = useQuery<PdpLayout>({
     queryKey: ["/api/pdp-layout"],
@@ -155,13 +173,31 @@ export default function AdminPDPLayout({ adminToken }: { adminToken: string | nu
           return (
             <div
               key={section.id}
+              onDragOver={(e) => { e.preventDefault(); if (overIdx !== idx) setOverIdx(idx); }}
+              onDrop={(e) => { e.preventDefault(); handleDrop(idx); }}
               className={`border rounded-xl p-3 transition-all ${
+                dragIdx === idx ? "opacity-40" : ""
+              } ${
+                overIdx === idx && dragIdx !== null && dragIdx !== idx ? "ring-2 ring-primary border-primary" : ""
+              } ${
                 section.visible
                   ? "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700"
                   : "bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-800 opacity-60"
               }`}
             >
               <div className="flex items-center gap-3">
+                {/* Drag handle */}
+                <div
+                  draggable
+                  onDragStart={() => setDragIdx(idx)}
+                  onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+                  className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground touch-none"
+                  title="اسحب لإعادة الترتيب"
+                  data-testid={`drag-pdp-${section.id}`}
+                >
+                  <GripVertical className="h-5 w-5" />
+                </div>
+
                 {/* Up/Down */}
                 <div className="flex flex-col gap-0.5">
                   <button
@@ -337,7 +373,7 @@ export default function AdminPDPLayout({ adminToken }: { adminToken: string | nu
       </div>
 
       <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-        💡 <strong>تلميح:</strong> الأقسام المخفية لا تظهر للعملاء. الترتيب يؤثر على ترتيب الظهور في صفحة المنتج من الأعلى للأسفل.
+        💡 <strong>تلميح:</strong> اسحب الأقسام من المقبض <GripVertical className="inline h-3.5 w-3.5" /> لإعادة ترتيبها، أو استخدم الأسهم. الأقسام المخفية لا تظهر للعملاء. الترتيب يؤثر على ترتيب الظهور في صفحة المنتج من الأعلى للأسفل.
       </div>
     </div>
   );
