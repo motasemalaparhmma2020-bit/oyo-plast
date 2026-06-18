@@ -138,6 +138,42 @@ uri = "file://public/products/test_bag_green.png"
 type = "image"
 title = "tote bag green"
 
+[[generated]]
+id = "G1W5Lce41jqEU1MDbl6Fa"
+uri = "file://artifacts/mockup-sandbox/public/images/bag-plain.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "y8Ra09S_z-hhHhnK_-amW"
+uri = "file://artifacts/mockup-sandbox/public/images/bag-studio.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "-E0YKSHBL3BeUv8W250u4"
+uri = "file://artifacts/mockup-sandbox/public/images/alt-1.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "t-xPcukRZhTNXeFV2Ia3M"
+uri = "file://artifacts/mockup-sandbox/public/images/alt-2.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "rYtfv4wAz9crKlnt_dQW-"
+uri = "file://artifacts/mockup-sandbox/public/images/alt-3.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "UKkfhDOecQ7jCPInGLsAs"
+uri = "file://artifacts/mockup-sandbox/public/images/logo-sample.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "9khr7Nh71CvY-pKqMhryJ"
 uri = "file://oyo-plast-backup-20260407.tar.gz"
