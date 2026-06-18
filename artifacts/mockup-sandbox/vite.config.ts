@@ -55,6 +55,10 @@ export default defineConfig({
     outDir: path.resolve(import.meta.dirname, "dist"),
     emptyOutDir: true,
   },
+  optimizeDeps: {
+    include: ["react", "react-dom", "lucide-react"],
+    force: true,
+  },
   server: {
     port,
     strictPort: true,

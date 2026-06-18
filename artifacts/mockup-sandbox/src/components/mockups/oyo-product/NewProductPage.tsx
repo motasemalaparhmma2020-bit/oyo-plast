@@ -1,3 +1,4 @@
+import React from "react";
 import { useState, useRef, type ReactNode } from "react";
 import {
   ChevronRight, Star, Search, ShoppingCart, Heart, Share2,
