@@ -185,6 +185,7 @@ export async function runMigrations(): Promise<void> {
     // ─── الخيارات الذكية للمنتج ─────────────────────────────────────
     await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS enable_smart_variants BOOLEAN NOT NULL DEFAULT false;`);
     await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS smart_variants TEXT;`);
+    await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS enable_studio_preview BOOLEAN NOT NULL DEFAULT false;`);
 
     // ─── سديم الذكية ─────────────────────────────────────────────────
     await client.query(`ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS sadeem_show_old_price BOOLEAN NOT NULL DEFAULT true;`);

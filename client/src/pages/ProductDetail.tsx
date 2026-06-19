@@ -2443,8 +2443,8 @@ export default function ProductDetail() {
                   </div>
                 )}
 
-                {/* ── AI Studio Preview Engine (June 2026) ── */}
-                {uploadedDesignUrl && (
+                {/* ── AI Studio Preview Engine (June 2026) — يظهر فقط إذا فعّل الأدمن المفتاح ── */}
+                {uploadedDesignUrl && !!(product as any)?.enableStudioPreview && (
                   <div className="space-y-2">
                     {/* حقل إدخال النص مطوي */}
                     <button

@@ -244,6 +244,7 @@ interface ProductFormData {
   enableSmartVariants: boolean;
   showLivePreview: boolean;
   enableVolumeOffers: boolean;
+  enableStudioPreview: boolean;
   enableQuantityTiers: boolean;
   originalPrice: string;
   originalPriceSar: string;
@@ -293,6 +294,7 @@ const emptyProductForm: ProductFormData = {
   enableSmartVariants: false,
   showLivePreview: false,
   enableVolumeOffers: false,
+  enableStudioPreview: false,
   enableQuantityTiers: false,
   originalPrice: "",
   originalPriceSar: "",
@@ -5724,6 +5726,7 @@ export default function Admin() {
           showInPrinting: data.showInPrinting,
           showLivePreview: data.showLivePreview,
           enableVolumeOffers: data.enableVolumeOffers,
+          enableStudioPreview: data.enableStudioPreview,
           enableQuantityTiers: data.enableQuantityTiers,
           enableVariantUI: data.enableVariantUI,
           colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
@@ -5814,6 +5817,7 @@ export default function Admin() {
         showInPrinting: data.showInPrinting,
         showLivePreview: data.showLivePreview,
         enableVolumeOffers: data.enableVolumeOffers,
+        enableStudioPreview: data.enableStudioPreview,
         enableQuantityTiers: data.enableQuantityTiers,
         enableVariantUI: data.enableVariantUI,
         colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
@@ -6088,6 +6092,7 @@ export default function Admin() {
       enableSmartVariants: (product as any).enableSmartVariants ?? false,
       showLivePreview: (product as any).showLivePreview ?? false,
       enableVolumeOffers: (product as any).enableVolumeOffers ?? false,
+      enableStudioPreview: (product as any).enableStudioPreview ?? false,
       enableQuantityTiers: (product as any).enableQuantityTiers ?? false,
       originalPrice: (product as any).originalPrice != null ? String((product as any).originalPrice) : "",
       originalPriceSar: (product as any).originalPriceSar != null ? String((product as any).originalPriceSar) : "",
@@ -7908,6 +7913,23 @@ export default function Admin() {
                               onChange={(e) => setProductForm({ ...productForm, showLivePreview: e.target.checked })}
                               className="w-5 h-5 accent-amber-600"
                               data-testid="checkbox-show-live-preview"
+                            />
+                          </label>
+                          {/* enableStudioPreview */}
+                          <label className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 border rounded-lg p-2.5 cursor-pointer hover:border-indigo-400">
+                            <div className="flex items-center gap-2">
+                              <span>📸</span>
+                              <div>
+                                <span className="text-sm font-semibold">معاينة الاستوديو AI</span>
+                                <p className="text-[11px] text-muted-foreground">يظهر زر "أنشئ معاينة الاستوديو" للعميل بعد رفع الشعار — فعّله فقط للمنتجات القابلة للطباعة</p>
+                              </div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={productForm.enableStudioPreview}
+                              onChange={(e) => setProductForm({ ...productForm, enableStudioPreview: e.target.checked })}
+                              className="w-5 h-5 accent-indigo-600"
+                              data-testid="checkbox-enable-studio-preview"
                             />
                           </label>
                           {/* enableVolumeOffers */}
