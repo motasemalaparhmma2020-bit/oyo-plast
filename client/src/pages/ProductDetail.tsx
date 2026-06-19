@@ -1870,11 +1870,7 @@ export default function ProductDetail() {
 
                 {/* ── Volume Offers — داخل قسم الخيارات الذكية ── */}
                 {(() => {
-                  const productKind = ((product as any).productType ?? "ready");
-                  const variantsList = ((product as any).smartVariants?.variants || []) as Array<{ type?: string }>;
-                  const hasBundleVariant = Array.isArray(variantsList) && variantsList.some(v => v?.type === "bundle");
-                  const offersAllowedForKind = productKind === "customizable" || hasBundleVariant;
-                  const hasOffers = offersAllowedForKind && sortedOffers.length > 0;
+                  const hasOffers = sortedOffers.length > 0;
                   if (!hasOffers) return null;
                   return (
                     <div>
@@ -2081,12 +2077,7 @@ export default function ProductDetail() {
         // إذا كانت الخيارات الذكية مُفعّلة، تُعرض عروض الكمية داخل قسم variants الموحد
         if (showSmartVariants) return null;
         // نُدمج عرض العروض التحفيزية مع قسم bulk القديم — لو الاثنان فارغان، لا شيء يُرسم
-        // إخفاء عروض الكميات للمنتجات الجاهزة (ready) التي لا تملك متغيّر bundle
-        const productKind = ((product as any).productType ?? "ready");
-        const variantsList = ((product as any).smartVariants?.variants || []) as Array<{ type?: string }>;
-        const hasBundleVariant = Array.isArray(variantsList) && variantsList.some(v => v?.type === "bundle");
-        const offersAllowedForKind = productKind === "customizable" || hasBundleVariant;
-        const hasOffers = offersAllowedForKind && sortedOffers.length > 0;
+        const hasOffers = sortedOffers.length > 0;
         const hasBulk = sec["bulk"]?.visible && bulkPricing.length > 0;
         if (!hasOffers && !hasBulk) return null;
 
@@ -2374,8 +2365,8 @@ export default function ProductDetail() {
         if (!sec["printing"]?.visible) return null;
         const hasBagPrinting = product.hasPrintingOptions;
         const hasProfPrinting = !!(product as any).printingCategoryId && productPrintingCat;
-        // Live Preview يتطلب تفعيل صريح من الأدمن (showLivePreview) إلى جانب allowDesignUpload
-        const hasDesignUpload = product.allowDesignUpload && (product as any).showLivePreview === true;
+        // قسم رفع التصميم يكفي تفعيل allowDesignUpload فقط — showLivePreview تتحكم في Canvas فقط داخله
+        const hasDesignUpload = !!product.allowDesignUpload;
         // لون الكيس عبر Cloudinary خاص بالمنتجات القابلة للتخصيص
         const isCustomizableProduct = ((product as any).productType ?? "ready") === "customizable";
         const cloudBagColors = ((product as any).availableColors || []) as Array<{id:string;name:string;code:string}>;
