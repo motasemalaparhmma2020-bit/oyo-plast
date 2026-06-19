@@ -136,3 +136,88 @@
 .dark .product-card-img-bg {
   background: var(--card-img-bg-dark, #1f2937);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   OYO PLAST Brand Design System — Phase 2 (June 2026)
+   مستوحى من SHEIN · AliExpress · Lazada · Daraz
+   الهوية البصرية الموحدة لكامل تطبيق أويو بلاست
+════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── خلفية الصفحة — أزرق فاتح جداً كـ SHEIN ── */
+  --oyo-bg-page:    #EEF4FF;
+  --oyo-bg-card:    #FFFFFF;
+  --oyo-bg-section: #F0F6FF;
+
+  /* ── نصف قطر الزوايا الموحد ── */
+  --oyo-radius-card: 16px;
+  --oyo-radius-btn:  10px;
+  --oyo-radius-chip: 8px;
+  --oyo-radius-img:  14px;
+
+  /* ── الظلال الزرقاء الخفيفة ── */
+  --oyo-shadow-xs: 0 1px 4px rgba(33,150,243,0.06);
+  --oyo-shadow-sm: 0 2px 8px rgba(33,150,243,0.09);
+  --oyo-shadow-md: 0 4px 16px rgba(33,150,243,0.13);
+  --oyo-shadow-lg: 0 6px 28px rgba(33,150,243,0.18);
+
+  /* ── بطاقة المنتج ── */
+  --card-border-radius:  16px;
+  --card-padding-v:      10px;
+  --card-margin:         6px;
+  --price-font-size:     16px;
+  --qty-btn-height:      40px;
+  --card-name-font-size: 0.8rem;
+
+  /* ── بادج الخصم ── */
+  --discount-badge-bg:       #EF4444;
+  --discount-bubble-display: inline-block;
+}
+
+/* ── خلفية التطبيق الرئيسية (أزرق خفيف) ── */
+#root {
+  background: var(--oyo-bg-page);
+}
+
+/* ── بطاقات المحتوى تبقى بيضاء لتبرز على الخلفية ── */
+.oyo-card {
+  background: var(--oyo-bg-card);
+  border-radius: var(--oyo-radius-card);
+  box-shadow: var(--oyo-shadow-sm);
+}
+
+/* ── زر CTA الرئيسي بتدرج أويو ── */
+.oyo-btn-primary {
+  background: linear-gradient(135deg, #2196F3 0%, #1565C0 100%);
+  color: #fff;
+  border-radius: var(--oyo-radius-btn);
+  font-weight: 800;
+  box-shadow: 0 4px 14px rgba(33,150,243,0.32);
+  transition: opacity 0.15s, transform 0.12s;
+}
+.oyo-btn-primary:hover  { opacity: 0.92; transform: translateY(-1px); }
+.oyo-btn-primary:active { opacity: 0.85; transform: translateY(0);    }
+
+/* ── chip الاختيار (مقاس/وزن) ── */
+.oyo-chip {
+  border: 2px solid #E5E7EB;
+  border-radius: var(--oyo-radius-chip);
+  background: #fff;
+  font-weight: 700;
+  transition: all 0.15s;
+}
+.oyo-chip.selected {
+  border-color: #2196F3;
+  background: #2196F3;
+  color: #fff;
+}
+
+/* ── تأثير الرفع عند hover (نمط Premium) ── */
+.hover-elevate {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.hover-elevate:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--oyo-shadow-md);
+}
+.hover-elevate:active { transform: translateY(0); }

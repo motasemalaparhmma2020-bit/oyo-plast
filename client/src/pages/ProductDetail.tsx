@@ -1724,7 +1724,7 @@ export default function ProductDetail() {
         const hasVariants = sizePricing.length > 0 || sizes.length > 0 || colorImages.length > 0 || availableColors.length > 0 || showSmartVariants;
         if (!hasVariants) return null;
         return (
-          <div key="variants" className="px-4 space-y-4" data-testid="section-variants">
+          <div key="variants" className="mx-3 px-3 py-3 space-y-4 bg-white dark:bg-gray-900 rounded-2xl shadow-sm" style={{ boxShadow: 'var(--oyo-shadow-xs, 0 1px 6px rgba(33,150,243,0.07))' }} data-testid="section-variants">
 
             {/* ── Smart Variants (SHEIN style) — تستخدم إعدادات العرض الموحدة ── */}
             {showSmartVariants && smartVariantsData && (
@@ -1805,8 +1805,57 @@ export default function ProductDetail() {
                             );
                           })}
                         </div>
+                      ) : type === 'bundle' || type === 'strength' ? (
+                        /* ── Bundle/Strength → بطاقات 2-في-صف (Lazada/AliExpress style) ── */
+                        <div className="grid grid-cols-2 gap-2">
+                          {typeVariants.map(v => {
+                            const isSelected = selectedSmartVariant[type] === v.id;
+                            const priceNum = Number(currency === 'SAR' && v.priceSar ? v.priceSar : v.price || 0);
+                            const savings = Number((v as any).savings || 0);
+                            const count = Number((v as any).count || 0);
+                            const unitP = count > 0 && priceNum > 0 ? Math.round(priceNum / count) : 0;
+                            const discPct = Number(v.discount || 0);
+                            return (
+                              <button key={v.id}
+                                onClick={() => { setLastClickedType(type); setSelectedSmartVariant(p => ({ ...p, [type]: v.id })); }}
+                                className={`relative flex flex-col items-start gap-1 p-3 rounded-2xl border-2 transition-all text-right ${
+                                  isSelected
+                                    ? 'border-primary bg-primary/5 shadow-md shadow-primary/10'
+                                    : 'border-gray-200 bg-white dark:bg-gray-800 hover:border-primary/40'
+                                }`}
+                                data-testid={`button-smart-variant-${type}-${v.id}`}>
+                                {/* شارة التوفير */}
+                                {(savings > 0 || discPct > 0) && (
+                                  <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full leading-tight">
+                                    {savings > 0 ? `وفّر ${savings}%` : `-${discPct}%`}
+                                  </span>
+                                )}
+                                <span className={`font-extrabold text-sm leading-tight ${isSelected ? 'text-primary' : 'text-foreground'}`}>
+                                  🎁 {v.label}
+                                </span>
+                                {count > 0 && (
+                                  <span className="text-[11px] text-muted-foreground">{count} قطعة</span>
+                                )}
+                                <div className="flex flex-col mt-0.5">
+                                  {priceNum > 0 && (
+                                    <span className={`text-base font-extrabold price-num ${isSelected ? 'text-primary' : 'text-red-600 dark:text-red-400'}`}
+                                      style={{ fontFamily: 'var(--font-numbers)' }} data-price="true">
+                                      {formatPrice(priceNum)} {currLabel}
+                                    </span>
+                                  )}
+                                  {unitP > 0 && (
+                                    <span className={`text-[10px] price-num ${isSelected ? 'text-primary/70' : 'text-muted-foreground'}`}
+                                      style={{ fontFamily: 'var(--font-numbers)' }}>
+                                      {formatPrice(unitP)} {currLabel}/قطعة
+                                    </span>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
                       ) : (
-                        /* Size/Weight/Strength → أزرار بأبعاد وتخطيط قابلين للتحكم */
+                        /* Size/Weight → أزرار بأبعاد وتخطيط قابلين للتحكم */
                         <div className={sizeGridClass}>
                           {typeVariants.map(v => {
                             const isSelected = selectedSmartVariant[type] === v.id;
@@ -3419,39 +3468,60 @@ export default function ProductDetail() {
     </div>
   );
 
-  // ── Sticky Bar ───────────────────────────────────────────────────────────
+  // ── Sticky Bar — SHEIN/Lazada style: Price + Gradient Blue CTA ─────────
   const stickyBar = pdp.stickyBar.visible ? (
-    <div className="app-fixed-bar fixed bottom-0 left-0 right-0 z-[60] flex items-stretch shadow-2xl border-t bg-white dark:bg-gray-900"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    <div
+      className="app-fixed-bar fixed bottom-0 left-0 right-0 z-[60] bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800"
+      style={{
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        boxShadow: '0 -4px 24px rgba(33,150,243,0.12)',
+      }}
       data-testid="sticky-cart-bar">
-      {detailShowAddToCart && (
-        <button
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 text-white font-extrabold text-sm disabled:opacity-50 px-4 py-3"
-          style={{ background: '#111' }}
-          disabled={currentStock <= 0 || isPending}
-          onClick={handleAddToCart}
-          data-testid="sticky-button-add-to-cart">
-          {effectiveDiscount > 0 && (
-            <span className="text-yellow-400 text-xs font-bold leading-none mb-0.5 flex items-center gap-1">
-              <Zap className="h-3 w-3 inline" />{effectiveDiscount}% خصم!
-            </span>
-          )}
-          <span className="flex items-center gap-1.5">
-            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
-            {currentStock <= 0 ? "نفذ المخزون" : "أضف للسلة"}
+      <div className="flex items-center gap-2.5 px-3 pt-2.5 pb-3">
+        {/* ── ملخص السعر ── */}
+        <div className="flex flex-col min-w-[72px]">
+          <span className="text-[10px] text-muted-foreground leading-none mb-0.5">الإجمالي</span>
+          <span className="font-extrabold text-lg text-foreground leading-tight price-num"
+            style={{ fontFamily: 'var(--font-numbers)' }} data-price="true">
+            {formatPrice(totalPrice)}
           </span>
-        </button>
-      )}
-      {detailShowShopNow && (
-        <button
-          className="flex items-center justify-center gap-1.5 border-r border-gray-200 dark:border-gray-700 px-5 font-extrabold text-sm text-foreground bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
-          style={{ minWidth: 100 }}
-          disabled={currentStock <= 0}
-          onClick={handleBuyNow}
-          data-testid="sticky-button-buy-now">
-          <Zap className="h-4 w-4 text-primary" />تسوق الآن
-        </button>
-      )}
+          <span className="text-[10px] text-muted-foreground leading-none">{currLabel}</span>
+        </div>
+        {/* ── الأزرار ── */}
+        <div className="flex gap-2 flex-1">
+          {detailShowShopNow && (
+            <button
+              className="flex items-center justify-center gap-1.5 px-4 rounded-xl font-extrabold text-sm text-primary border-2 border-primary bg-transparent hover:bg-primary/5 disabled:opacity-50 shrink-0 transition-all"
+              style={{ height: 48 }}
+              disabled={currentStock <= 0}
+              onClick={handleBuyNow}
+              data-testid="sticky-button-buy-now">
+              <Zap className="h-4 w-4" />
+              اشتر الآن
+            </button>
+          )}
+          {detailShowAddToCart && (
+            <button
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl font-extrabold text-sm text-white disabled:opacity-50 transition-opacity"
+              style={{
+                height: 48,
+                background: currentStock <= 0
+                  ? '#9ca3af'
+                  : 'linear-gradient(135deg, #2196F3 0%, #1565C0 100%)',
+                boxShadow: currentStock <= 0 ? 'none' : '0 4px 14px rgba(33,150,243,0.35)',
+              }}
+              disabled={currentStock <= 0 || isPending}
+              onClick={handleAddToCart}
+              data-testid="sticky-button-add-to-cart">
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
+              <span>{currentStock <= 0 ? "نفذ المخزون" : "أضف للسلة"}</span>
+              {effectiveDiscount > 0 && (
+                <span className="text-yellow-300 text-xs font-bold">⚡{effectiveDiscount}%</span>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   ) : null;
 
