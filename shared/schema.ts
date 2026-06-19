@@ -70,6 +70,7 @@ export const products = pgTable("products", {
   showLivePreview: boolean("show_live_preview").default(false).notNull(),       // معاينة الطباعة الحية (Canvas)
   enableVolumeOffers: boolean("enable_volume_offers").default(false).notNull(), // عروض الكميات (volume_offers)
   enableQuantityTiers: boolean("enable_quantity_tiers").default(false).notNull(), // اختر الكمية (quantity_tiers) — مفتاح مستقل
+  enableStudioPreview: boolean("enable_studio_preview").default(false).notNull(), // معاينة الاستوديو AI (June 2026)
   // ── حقول الخصم ──────────────────────────────────────────────────────────────
   originalPrice: numeric("original_price"),           // السعر الأصلي قبل الخصم (ر.ي)
   originalPriceSar: numeric("original_price_sar"),    // السعر الأصلي بالريال السعودي
