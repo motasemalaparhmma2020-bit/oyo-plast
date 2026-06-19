@@ -111,4 +111,63 @@ export const db = drizzle(pool, { schema });
   } catch (e) {
     console.warn("[migrate] supplier_remittances:", (e as Error).message);
   }
+
+  // ── Auto-migrate: عمود enable_studio_preview في جدول المنتجات (June 2026) ──
+  try {
+    await pool.query(`
+      ALTER TABLE products
+        ADD COLUMN IF NOT EXISTS enable_studio_preview boolean NOT NULL DEFAULT false
+    `);
+  } catch (e) {
+    console.warn("[migrate] enable_studio_preview column:", (e as Error).message);
+  }
+
+  // ── Auto-migrate: جداول وكيل معاينة الاستوديو AI (June 2026) ──
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS studio_preview_settings (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        gemini_model VARCHAR(100) NOT NULL DEFAULT 'gemini-2.0-flash-exp-image-generation',
+        first_free_enabled BOOLEAN NOT NULL DEFAULT true,
+        preview_fee_price NUMERIC NOT NULL DEFAULT 100,
+        preview_fee_cost NUMERIC NOT NULL DEFAULT 0,
+        max_alternatives INTEGER NOT NULL DEFAULT 3,
+        quick_preview_enabled BOOLEAN NOT NULL DEFAULT true,
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      INSERT INTO studio_preview_settings (id) VALUES (1)
+      ON CONFLICT (id) DO NOTHING
+    `);
+  } catch (e) {
+    console.warn("[migrate] studio_preview_settings:", (e as Error).message);
+  }
+
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS studio_preview_logs (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT,
+        product_id INTEGER,
+        product_name TEXT,
+        logo_url TEXT,
+        product_image_url TEXT,
+        bag_color VARCHAR(30),
+        print_color VARCHAR(30),
+        text_content TEXT,
+        business_type VARCHAR(100),
+        generated_image_url TEXT,
+        alternatives TEXT,
+        is_quick_preview BOOLEAN NOT NULL DEFAULT false,
+        model_used VARCHAR(100),
+        generation_time_ms INTEGER,
+        status VARCHAR(20) NOT NULL DEFAULT 'success',
+        error_message TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+  } catch (e) {
+    console.warn("[migrate] studio_preview_logs:", (e as Error).message);
+  }
 })();
