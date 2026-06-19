@@ -49,6 +49,7 @@ import CategoryPage from "@/pages/CategoryPage";
 import CategoriesPage from "@/pages/CategoriesPage";
 import ProductDetail from "@/pages/ProductDetail";
 import ProductDetailV2 from "@/pages/ProductDetailV2";
+import ProductPreviewMockup from "@/pages/ProductPreviewMockup";
 import Cart from "@/pages/Cart";
 import Checkout from "@/pages/Checkout";
 import OrderConfirmation from "@/pages/OrderConfirmation";
@@ -592,6 +593,7 @@ function Router() {
             
             {/* Public pages - no auth required */}
             <Route path="/" component={Home} />
+            <Route path="/product-preview-mockup" component={ProductPreviewMockup} />
             <Route path="/products" component={Products} />
             <Route path="/categories" component={CategoriesPage} />
             <Route path="/category/:slug" component={CategoryPage} />
