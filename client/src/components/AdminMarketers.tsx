@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import {
-  Users, CheckCircle, XCircle, Clock, Wallet, Eye, Plus, Pencil,
+  Users, CheckCircle, XCircle, Clock, Wallet, Eye, Plus, Pencil, Trash2,
   ChevronDown, ChevronUp, ExternalLink, AlertCircle, FileText, Copy, UserPlus,
 } from "lucide-react";
 
@@ -349,6 +349,16 @@ function MarketersListTab({ adminToken }: { adminToken: string }) {
     onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) =>
+      adminFetch(`/api/admin/marketers/${id}`, adminToken, { method: "DELETE" }),
+    onSuccess: () => {
+      toast({ title: "تم إيقاف المسوق" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/marketers"] });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -379,7 +389,7 @@ function MarketersListTab({ adminToken }: { adminToken: string }) {
                 <th className="px-3 py-2.5 text-right">المحفظة</th>
                 <th className="px-3 py-2.5 text-right">انتظار</th>
                 <th className="px-3 py-2.5 text-right">الحالة</th>
-                <th className="px-3 py-2.5 text-right">تعديل</th>
+                <th className="px-3 py-2.5 text-right">إجراء</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -405,13 +415,30 @@ function MarketersListTab({ adminToken }: { adminToken: string }) {
                     </span>
                   </td>
                   <td className="px-3 py-2.5">
-                    <button
-                      data-testid={`button-edit-marketer-${m.id}`}
-                      onClick={() => { setEditDlg(m); setEditForm({ id: m.id, name: m.name, phone: m.phone, pin: m.pin, couponCode: m.coupon_code, commissionRate: m.commission_rate, discountRate: m.discount_rate, isActive: m.is_active, walletBalance: m.wallet_balance, notes: m.notes || "" }); }}
-                      className="p-1.5 hover:bg-gray-100 rounded-lg"
-                    >
-                      <Pencil className="w-3.5 h-3.5 text-gray-500" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        data-testid={`button-edit-marketer-${m.id}`}
+                        onClick={() => { setEditDlg(m); setEditForm({ id: m.id, name: m.name, phone: m.phone, pin: m.pin, couponCode: m.coupon_code, commissionRate: m.commission_rate, discountRate: m.discount_rate, isActive: m.is_active, walletBalance: m.wallet_balance, notes: m.notes || "" }); }}
+                        className="p-1.5 hover:bg-gray-100 rounded-lg"
+                        title="تعديل"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-gray-500" />
+                      </button>
+                      {m.is_active && (
+                        <button
+                          data-testid={`button-delete-marketer-${m.id}`}
+                          onClick={() => {
+                            if (window.confirm(`هل تريد إيقاف المسوق "${m.name}"؟`)) {
+                              deleteMutation.mutate(m.id);
+                            }
+                          }}
+                          className="p-1.5 hover:bg-red-50 rounded-lg"
+                          title="إيقاف"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

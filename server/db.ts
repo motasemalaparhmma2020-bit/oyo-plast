@@ -176,6 +176,47 @@ export const db = drizzle(pool, { schema });
     console.warn("[migrate] app_config/push_subscriptions:", (e as Error).message);
   }
 
+  // ── Auto-migrate: home_page_settings missing columns (June 2026) ──
+  try {
+    await pool.query(`
+      ALTER TABLE home_page_settings
+        ADD COLUMN IF NOT EXISTS stale_product_days INTEGER NOT NULL DEFAULT 60,
+        ADD COLUMN IF NOT EXISTS stale_discount_percent INTEGER NOT NULL DEFAULT 10,
+        ADD COLUMN IF NOT EXISTS fast_seller_threshold INTEGER NOT NULL DEFAULT 20,
+        ADD COLUMN IF NOT EXISTS fast_seller_uplift_percent INTEGER NOT NULL DEFAULT 5,
+        ADD COLUMN IF NOT EXISTS protect_margin_on_coupons BOOLEAN NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS privacy_content TEXT,
+        ADD COLUMN IF NOT EXISTS returns_content TEXT,
+        ADD COLUMN IF NOT EXISTS affiliate_content TEXT
+    `);
+  } catch (e) {
+    console.warn("[migrate] home_page_settings extra cols:", (e as Error).message);
+  }
+
+  // ── Auto-migrate: suppliers token columns ──
+  try {
+    await pool.query(`
+      ALTER TABLE suppliers
+        ADD COLUMN IF NOT EXISTS token TEXT,
+        ADD COLUMN IF NOT EXISTS token_expires_at TIMESTAMP
+    `);
+  } catch (e) {
+    console.warn("[migrate] suppliers token cols:", (e as Error).message);
+  }
+
+  // ── Auto-migrate: standalone_marketers token + channel_handle ──
+  try {
+    await pool.query(`
+      ALTER TABLE standalone_marketers
+        ADD COLUMN IF NOT EXISTS token TEXT,
+        ADD COLUMN IF NOT EXISTS channel_handle TEXT,
+        ADD COLUMN IF NOT EXISTS notes TEXT,
+        ADD COLUMN IF NOT EXISTS contract_accepted_at TIMESTAMP
+    `);
+  } catch (e) {
+    console.warn("[migrate] standalone_marketers extra cols:", (e as Error).message);
+  }
+
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS studio_preview_logs (

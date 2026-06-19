@@ -7597,6 +7597,22 @@ h1{font-size:18px;color:#222;margin:4px 0;}
     }
   });
 
+  // ── Admin: حذف مسوق ──────────────────────────────────────────────
+  app.delete("/api/admin/marketers/:id", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "معرّف غير صالح" });
+      await dbPool.query(
+        "UPDATE standalone_marketers SET is_active=false WHERE id=$1",
+        [id]
+      );
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حذف المسوق" });
+    }
+  });
+
   // ── Admin: طلبات السحب ────────────────────────────────────────────
   app.get("/api/admin/marketer-withdrawals", requireAdmin, async (_req, res) => {
     try {
