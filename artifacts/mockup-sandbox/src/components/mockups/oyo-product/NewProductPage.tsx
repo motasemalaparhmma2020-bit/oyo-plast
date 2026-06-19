@@ -225,29 +225,20 @@ export function NewProductPage() {
           <div className="relative aspect-square w-full overflow-hidden bg-gradient-to-b from-slate-50 to-slate-100">
             <img src={mainImage} alt="المنتج" className="h-full w-full object-cover transition-all duration-500" data-testid="img-product-main" />
 
-            {/* طبقة المعاينة السريعة (CSS overlay مجاني) — تتلوّن بلون الطباعة المختار */}
+            {/* طبقة المعاينة السريعة — صورة الشعار الحقيقي المرفوع + النص */}
             {preview === "fast" && (
               <div className="pointer-events-none absolute inset-0">
-                <div
-                  className="absolute left-1/2 top-[42%] aspect-square w-[34%] -translate-x-1/2 -translate-y-1/2"
-                  style={{
-                    WebkitMaskImage: `url(${uploadedFile || IMG("logo-cut.png")})`,
-                    maskImage: `url(${uploadedFile || IMG("logo-cut.png")})`,
-                    WebkitMaskRepeat: "no-repeat",
-                    maskRepeat: "no-repeat",
-                    WebkitMaskSize: "contain",
-                    maskSize: "contain",
-                    WebkitMaskPosition: "center",
-                    maskPosition: "center",
-                    backgroundColor: printColor.hex,
-                    filter: printColor.id === "white" ? "drop-shadow(0 0 1.5px rgba(0,0,0,.45))" : "none",
-                  }}
+                <img
+                  src={uploadedFile || IMG("logo-cut.png")}
+                  alt="logo preview"
+                  className="absolute left-1/2 top-[40%] w-[32%] -translate-x-1/2 -translate-y-1/2 object-contain"
+                  style={{ filter: printColor.id === "white" ? "drop-shadow(0 0 1.5px rgba(0,0,0,.45))" : "none" }}
                 />
                 {textMerged && (
-                  <div className="absolute bottom-[20%] left-1/2 -translate-x-1/2 text-center leading-tight">
-                    {txt.shop && <div className="text-[13px] font-extrabold" style={{ color: printColor.hex }}>{txt.shop}</div>}
-                    {txt.activity && <div className="text-[10px] font-bold" style={{ color: printColor.hex }}>{txt.activity}</div>}
-                    {txt.phone && <div className="text-[10px] font-bold" style={{ color: printColor.hex }}>{txt.phone}</div>}
+                  <div className="absolute bottom-[22%] left-1/2 -translate-x-1/2 text-center leading-tight">
+                    {txt.shop && <div className="text-[13px] font-extrabold drop-shadow" style={{ color: printColor.hex }}>{txt.shop}</div>}
+                    {txt.activity && <div className="text-[10px] font-bold drop-shadow" style={{ color: printColor.hex }}>{txt.activity}</div>}
+                    {txt.phone && <div className="text-[10px] font-bold drop-shadow" style={{ color: printColor.hex }}>{txt.phone}</div>}
                   </div>
                 )}
               </div>
