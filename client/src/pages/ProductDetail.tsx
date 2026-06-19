@@ -1781,7 +1781,7 @@ export default function ProductDetail() {
       // ── VARIANTS — أسلوب SHEIN ────────────────────────────────────────────
       case "variants": {
         if (!sec["variants"]?.visible) return null;
-        const hasVariants = sizePricing.length > 0 || sizes.length > 0 || colorImages.length > 0 || availableColors.length > 0 || showSmartVariants;
+        const hasVariants = sizePricing.length > 0 || sizes.length > 0 || colorImages.length > 0 || availableColors.length > 0 || showSmartVariants || showQuantityTiers;
         if (!hasVariants) return null;
         return (
           <div key="variants" className="mx-3 px-3 py-3 space-y-4 bg-white dark:bg-gray-900 rounded-2xl shadow-sm" style={{ boxShadow: 'var(--oyo-shadow-xs, 0 1px 6px rgba(33,150,243,0.07))' }} data-testid="section-variants">
@@ -1949,28 +1949,29 @@ export default function ProductDetail() {
                   );
                 })}
 
-                {/* ── Quantity Tiers — داخل قسم الخيارات الذكية ── */}
+                {/* ── اختر الكمية (داخل الخيارات الذكية) — نفس أسلوب الخيارات الذكية ── */}
                 {showQuantityTiers && quantityTiers.length > 0 && (
                   <div>
-                    <div className="flex items-center justify-between mb-2.5">
-                      <span className="text-sm font-semibold">📦 الكمية:</span>
-                      <span className="text-xs font-bold text-cyan-600">{selectedTier?.qty || quantity} قطعة</span>
+                    <div className="flex items-center gap-1.5 mb-2.5">
+                      <span className="text-sm font-semibold">📦 اختر الكمية:</span>
+                      <span className="text-sm text-muted-foreground">{(selectedTier || quantityTiers[0]).qty} قطعة</span>
+                      <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground mr-auto" />
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       {quantityTiers.map((t) => {
                         const active = (selectedTier || quantityTiers[0]).qty === t.qty;
                         return (
                           <button
                             key={t.qty}
                             onClick={() => { setSelectedTier(t); setQuantity(t.qty); }}
-                            className={`flex-1 border-2 rounded-xl p-2.5 text-center transition-all bg-white ${
-                              active ? "border-cyan-500 bg-cyan-50 shadow-md" : "border-gray-200 hover:border-gray-300"
+                            className={`flex-1 min-w-[72px] border-2 rounded-xl p-2.5 text-center transition-all ${
+                              active ? "border-primary bg-primary/5 dark:bg-primary/10 shadow-md" : "border-gray-200 dark:border-gray-700 hover:border-gray-300 bg-white dark:bg-gray-800"
                             }`}
                             data-testid={`button-tier-smart-${t.qty}`}
                           >
                             <div className="font-extrabold text-base">{t.qty}</div>
-                            <div className="text-[11px] text-gray-500 -mt-0.5">قطعة</div>
-                            <div className={`inline-block text-[10px] px-2 py-0.5 rounded-full mt-1 font-bold ${active ? "bg-red-500 text-white" : "bg-red-50 text-red-600"}`}>
+                            <div className="text-[11px] text-muted-foreground -mt-0.5">قطعة</div>
+                            <div className={`inline-block text-[10px] px-2 py-0.5 rounded-full mt-1 font-bold ${active ? "bg-primary text-white" : "bg-gray-100 dark:bg-gray-700 text-muted-foreground"}`}>
                               {t.unitPrice} ر/قطعة
                             </div>
                           </button>
@@ -2179,6 +2180,34 @@ export default function ProductDetail() {
                 </PdpCollapsible>
               );
             })()}
+
+            {/* ── اختر الكمية (عند إيقاف الخيارات الذكية) — نفس أسلوب الخيارات الذكية ── */}
+            {!showSmartVariants && showQuantityTiers && quantityTiers.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <span className="text-sm font-semibold">📦 اختر الكمية:</span>
+                  <span className="text-sm text-muted-foreground">{(selectedTier || quantityTiers[0]).qty} قطعة</span>
+                  <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground mr-auto" />
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {quantityTiers.map((t) => {
+                    const active = (selectedTier || quantityTiers[0]).qty === t.qty;
+                    return (
+                      <button key={t.qty}
+                        onClick={() => { setSelectedTier(t); setQuantity(t.qty); }}
+                        className={`flex-1 min-w-[72px] border-2 rounded-xl p-2.5 text-center transition-all ${active ? 'border-primary bg-primary/5 dark:bg-primary/10 shadow-md' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 bg-white dark:bg-gray-800'}`}
+                        data-testid={`button-tier-${t.qty}`}>
+                        <div className="font-extrabold text-base">{t.qty}</div>
+                        <div className="text-[11px] text-muted-foreground -mt-0.5">قطعة</div>
+                        <div className={`inline-block text-[10px] px-2 py-0.5 rounded-full mt-1 font-bold ${active ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-700 text-muted-foreground'}`}>
+                          {t.unitPrice} ر/قطعة
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         );
       }
@@ -2329,55 +2358,10 @@ export default function ProductDetail() {
 
       // ── QUANTITY ──────────────────────────────────────────────────────────
       case "quantity": {
-        // إذا كانت الخيارات الذكية مُفعّلة، تُعرض كميات التيير داخل قسم variants الموحد
-        if (showSmartVariants) return null;
+        // اختر الكمية تظهر الآن داخل بطاقة الخيارات (section-variants) سواء مع/بدون الخيارات الذكية
+        if (showQuantityTiers) return null;
         if (!sec["quantity"]?.visible) return null;
-        // ── Quantity Tiers (اختر الكمية) ──
-        if (showQuantityTiers && quantityTiers.length > 0) {
-          const chosen = selectedTier || quantityTiers[0];
-          return (
-            <div key="quantity" className="px-4 space-y-3" data-testid="section-quantity">
-              <div className="flex items-center justify-between">
-                <Label className="font-semibold text-sm">📦 اختر الكمية:</Label>
-                <span className="text-xs font-bold text-cyan-600">كمية: {chosen.qty} قطعة</span>
-              </div>
-              <div className="flex gap-2">
-                {quantityTiers.map((t) => {
-                  const active = (selectedTier || quantityTiers[0]).qty === t.qty;
-                  return (
-                    <button
-                      key={t.qty}
-                      onClick={() => { setSelectedTier(t); setQuantity(t.qty); }}
-                      className={`flex-1 border-2 rounded-xl p-2.5 text-center transition-all bg-white ${
-                        active
-                          ? "border-cyan-500 bg-cyan-50 shadow-md"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
-                      data-testid={`button-tier-${t.qty}`}
-                    >
-                      <div className="font-extrabold text-base">{t.qty}</div>
-                      <div className="text-[11px] text-gray-500 -mt-0.5">قطعة</div>
-                      <div className={`inline-block text-[10px] px-2 py-0.5 rounded-full mt-1 ${
-                        active ? "bg-cyan-500 text-white" : "bg-gray-100 text-gray-600"
-                      }`}>
-                        {t.unitPrice} ر/قطعة
-                      </div>
-                      <div className="text-[11px] font-bold text-gray-700 mt-1">
-                        {t.totalPrice} ر.ي
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-              {selectedTier?.costPrice && selectedTier?.costPrice > 0 && (
-                <div className="text-[11px] text-muted-foreground">
-                  ربح المؤسسة: {selectedTier.totalPrice - selectedTier.costPrice} ر.ي (تكلفة الشراء {selectedTier.costPrice} ر.ي)
-                </div>
-              )}
-            </div>
-          );
-        }
-        // Legacy simple quantity input
+        // مدخل الكمية اليدوي (+/-)
         return (
           <div key="quantity" className="px-4" data-testid="section-quantity">
             <Label className="font-semibold text-sm mb-2 block">الكمية</Label>

@@ -7814,65 +7814,94 @@ export default function Admin() {
                               <p className="text-[11px] text-muted-foreground mb-2">يُنصح بـ ٣ عروض (مثلاً ١٠٠ / ٥٠٠ / ١٠٠٠). الافتراضي للعميل هو الأول.</p>
                               <div className="space-y-2">
                                 {productForm.quantityTiers.map((t, idx) => (
-                                  <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-muted/30 p-2 rounded">
-                                    <div className="col-span-3">
-                                      <Label className="text-[10px] text-muted-foreground">الكمية</Label>
-                                      <Input
-                                        type="number"
-                                        min={1}
-                                        value={t.qty || ""}
-                                        onChange={e => {
-                                          const qty = Number(e.target.value) || 0;
-                                          const arr = [...productForm.quantityTiers];
-                                          arr[idx] = { ...arr[idx], qty, unitPrice: qty > 0 && arr[idx].totalPrice > 0 ? Math.round(arr[idx].totalPrice / qty) : arr[idx].unitPrice };
-                                          setProductForm({ ...productForm, quantityTiers: arr });
-                                        }}
-                                        placeholder="100"
-                                        className="text-sm h-8"
-                                        data-testid={`input-smart-tier-qty-${idx}`}
-                                      />
+                                  <div key={idx} className="bg-muted/30 p-2 rounded space-y-2">
+                                    <div className="grid grid-cols-12 gap-2 items-end">
+                                      <div className="col-span-3">
+                                        <Label className="text-[10px] text-muted-foreground">الكمية</Label>
+                                        <Input
+                                          type="number"
+                                          min={1}
+                                          value={t.qty || ""}
+                                          onChange={e => {
+                                            const qty = Number(e.target.value) || 0;
+                                            const arr = [...productForm.quantityTiers];
+                                            arr[idx] = { ...arr[idx], qty, unitPrice: qty > 0 && arr[idx].totalPrice > 0 ? Math.round(arr[idx].totalPrice / qty) : arr[idx].unitPrice };
+                                            setProductForm({ ...productForm, quantityTiers: arr });
+                                          }}
+                                          placeholder="100"
+                                          className="text-sm h-8"
+                                          data-testid={`input-smart-tier-qty-${idx}`}
+                                        />
+                                      </div>
+                                      <div className="col-span-4">
+                                        <Label className="text-[10px] text-muted-foreground">سعر البيع الإجمالي (ر.ي)</Label>
+                                        <Input
+                                          type="number"
+                                          min={0}
+                                          value={t.totalPrice || ""}
+                                          onChange={e => {
+                                            const totalPrice = Number(e.target.value) || 0;
+                                            const arr = [...productForm.quantityTiers];
+                                            arr[idx] = { ...arr[idx], totalPrice, unitPrice: arr[idx].qty > 0 ? Math.round(totalPrice / arr[idx].qty) : 0 };
+                                            setProductForm({ ...productForm, quantityTiers: arr });
+                                          }}
+                                          placeholder="6000"
+                                          className="text-sm h-8"
+                                          data-testid={`input-smart-tier-total-${idx}`}
+                                        />
+                                      </div>
+                                      <div className="col-span-4">
+                                        <Label className="text-[10px] text-muted-foreground">سعر الوحدة (تلقائي)</Label>
+                                        <Input
+                                          type="number"
+                                          value={t.unitPrice || ""}
+                                          readOnly
+                                          className="text-sm h-8 bg-muted font-bold text-primary"
+                                          data-testid={`input-smart-tier-unit-${idx}`}
+                                        />
+                                      </div>
+                                      <div className="col-span-1 flex items-end justify-end h-full">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => setProductForm({
+                                            ...productForm,
+                                            quantityTiers: productForm.quantityTiers.filter((_, i) => i !== idx)
+                                          })}
+                                          className="text-red-500 h-8 w-8 p-0"
+                                          data-testid={`button-smart-remove-tier-${idx}`}
+                                        >
+                                          ×
+                                        </Button>
+                                      </div>
                                     </div>
-                                    <div className="col-span-4">
-                                      <Label className="text-[10px] text-muted-foreground">السعر الإجمالي (ر.ي)</Label>
-                                      <Input
-                                        type="number"
-                                        min={0}
-                                        value={t.totalPrice || ""}
-                                        onChange={e => {
-                                          const totalPrice = Number(e.target.value) || 0;
-                                          const arr = [...productForm.quantityTiers];
-                                          arr[idx] = { ...arr[idx], totalPrice, unitPrice: arr[idx].qty > 0 ? Math.round(totalPrice / arr[idx].qty) : 0 };
-                                          setProductForm({ ...productForm, quantityTiers: arr });
-                                        }}
-                                        placeholder="6000"
-                                        className="text-sm h-8"
-                                        data-testid={`input-smart-tier-total-${idx}`}
-                                      />
-                                    </div>
-                                    <div className="col-span-4">
-                                      <Label className="text-[10px] text-muted-foreground">سعر الوحدة (تلقائي)</Label>
-                                      <Input
-                                        type="number"
-                                        value={t.unitPrice || ""}
-                                        readOnly
-                                        className="text-sm h-8 bg-muted font-bold text-cyan-700"
-                                        data-testid={`input-smart-tier-unit-${idx}`}
-                                      />
-                                    </div>
-                                    <div className="col-span-1 flex items-end justify-end h-full pb-0.5">
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => setProductForm({
-                                          ...productForm,
-                                          quantityTiers: productForm.quantityTiers.filter((_, i) => i !== idx)
-                                        })}
-                                        className="text-red-500 h-8 w-8 p-0"
-                                        data-testid={`button-smart-remove-tier-${idx}`}
-                                      >
-                                        ×
-                                      </Button>
+                                    {/* ── تكلفة الشراء (نفس نظام الخيارات الذكية) ── */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div>
+                                        <Label className="text-[10px] text-emerald-700 dark:text-emerald-400">تكلفة الشراء (ر.ي) — للربح</Label>
+                                        <Input
+                                          type="number"
+                                          min={0}
+                                          value={t.costPrice || ""}
+                                          onChange={e => {
+                                            const costPrice = Number(e.target.value) || 0;
+                                            const arr = [...productForm.quantityTiers];
+                                            arr[idx] = { ...arr[idx], costPrice };
+                                            setProductForm({ ...productForm, quantityTiers: arr });
+                                          }}
+                                          placeholder="مثال: 3000"
+                                          className="text-sm h-8 border-emerald-300"
+                                          data-testid={`input-smart-tier-cost-${idx}`}
+                                        />
+                                      </div>
+                                      <div className="flex items-end pb-0.5">
+                                        {t.totalPrice > 0 && t.costPrice && t.costPrice > 0 && (
+                                          <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                                            ربح: {t.totalPrice - t.costPrice} ر.ي ({Math.round(((t.totalPrice - t.costPrice) / t.totalPrice) * 100)}%)
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                 ))}
