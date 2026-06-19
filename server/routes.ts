@@ -3171,22 +3171,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── هل قيّم المستخدم هذا المنتج مسبقاً؟ ─────────────────────────────────
+  // ── هل قيّم المستخدم هذا المنتج مسبقاً؟ + هل يحقّ له التقييم؟ ─────────────
   app.get("/api/products/:id/my-review", async (req: any, res) => {
     try {
       const userId = req.user?.id || req.session?.userId;
-      if (!userId) return res.json({ reviewed: false });
+      if (!userId) return res.json({ reviewed: false, canReview: false });
       const { pool: dbPool } = await import("./db");
       const productId = parseInt(req.params.id);
+      if (Number.isNaN(productId)) return res.json({ reviewed: false, canReview: false });
+
+      // أهلية التقييم: يجب أن يكون لدى المستخدم طلب مُستَلَم يحتوي هذا المنتج
+      // (نفس منطق POST — حتى لا تختلف الواجهة عن الخادم)
+      const purchased = await dbPool.query(
+        `SELECT 1 FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+         WHERE oi.product_id = $1
+           AND o.user_id = $2
+           AND (o.status IN ('delivered', 'completed') OR o.delivery_status = 'delivered')
+         LIMIT 1`,
+        [productId, userId]
+      );
+      const canReview = purchased.rows.length > 0;
+
       const r = await dbPool.query(
         `SELECT id, rating, comment, is_approved FROM reviews WHERE product_id=$1 AND user_id=$2 LIMIT 1`,
         [productId, userId]
       );
-      if (r.rows.length === 0) return res.json({ reviewed: false });
+      if (r.rows.length === 0) return res.json({ reviewed: false, canReview });
       const row = r.rows[0];
-      res.json({ reviewed: true, rating: row.rating, comment: row.comment, isApproved: row.is_approved });
+      res.json({ reviewed: true, canReview, rating: row.rating, comment: row.comment, isApproved: row.is_approved });
     } catch {
-      res.json({ reviewed: false });
+      res.json({ reviewed: false, canReview: false });
     }
   });
 

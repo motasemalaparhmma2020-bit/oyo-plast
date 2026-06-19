@@ -178,33 +178,20 @@ export default function ProductDetail() {
     [product?.printingCategoryId, printingCategoriesData]
   );
 
-  // ── Check if user has a delivered order containing this product ──────────
-  const { data: userOrders = [] } = useQuery<any[]>({
-    queryKey: ["/api/orders"],
-    enabled: isAuthenticated,
-    staleTime: 2 * 60000,
-  });
-  const hasDeliveredOrder = useMemo(() => {
-    if (!isAuthenticated || !id) return false;
-    return userOrders.some(order =>
-      (order.status === "delivered" || order.status === "completed") &&
-      Array.isArray(order.items) &&
-      order.items.some((item: any) => item.product_id === Number(id) || item.productId === Number(id))
-    );
-  }, [userOrders, id, isAuthenticated]);
-
-  // ── هل قيّم المستخدم هذا المنتج مسبقاً؟ ─────────────────────────────────
-  const { data: myReviewData } = useQuery<{ reviewed: boolean; rating?: number; comment?: string; isApproved?: boolean }>({
+  // ── أهلية التقييم + هل قيّم المستخدم هذا المنتج مسبقاً؟ ────────────────────
+  // مصدر الحقيقة هو الخادم (canReview): يتحقق من وجود طلب مُستَلَم يحتوي المنتج.
+  const { data: myReviewData, refetch: refetchMyReview } = useQuery<{ reviewed: boolean; canReview?: boolean; rating?: number; comment?: string; isApproved?: boolean }>({
     queryKey: ['/api/products', id, 'my-review'],
     queryFn: async () => {
       const res = await fetch(`/api/products/${id}/my-review`, { credentials: 'include' });
-      if (!res.ok) return { reviewed: false };
+      if (!res.ok) return { reviewed: false, canReview: false };
       return res.json();
     },
     enabled: isAuthenticated && !!id,
     staleTime: 2 * 60000,
   });
   const alreadyReviewed = myReviewData?.reviewed === true;
+  const hasDeliveredOrder = isAuthenticated && myReviewData?.canReview === true;
 
   // ── PDP Layout ─────────────────────────────────────────────────────────
   const pdp: PdpLayout = useMemo(() => {
@@ -3326,7 +3313,7 @@ export default function ProductDetail() {
 
             {/* ── التقييمات ────────────────────────────────────────── */}
             <div id="reviews-section">
-              <button onClick={() => setOpenReviewsCol(o => !o)} className={sectionBtn} data-testid="button-toggle-reviews">
+              <button onClick={() => { const opening = !openReviewsCol; setOpenReviewsCol(opening); if (opening && isAuthenticated) refetchMyReview(); }} className={sectionBtn} data-testid="button-toggle-reviews">
                 <span className={sectionTitle}>⭐ التقييمات ({reviews.length})</span>
                 {chevron(openReviewsCol)}
               </button>

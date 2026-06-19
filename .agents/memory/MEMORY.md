@@ -5,3 +5,4 @@
 - [Agent executive tools](agent-tools-approval.md) — propose→approve→execute flow; gate tools server-side both at parse & approve, make approval idempotent, WhatsApp is disabled (use in-app notifications).
 - [Dev preview stale bundle](dev-preview-stale-bundle.md) — PWA service worker + failing Vite HMR can serve old UI; verify FE changes via curl/tsc, not one screenshot.
 - [Push Notifications VAPID Native](push-notifications-vapid.md) — web-push package unavailable; use Node.js native crypto (createECDH prime256v1 + createSign ES256 + JWK); sends payload-less push; sw.js already has handlers.
+- [Product review eligibility](review-eligibility.md) — reviews need a logged-in buyer with a delivered/completed order; compute canReview server-side (`/my-review`), never from `/api/orders` (no items); guests (user_id NULL) can't review.
