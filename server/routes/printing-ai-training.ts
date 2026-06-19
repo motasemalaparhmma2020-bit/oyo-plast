@@ -147,24 +147,31 @@ export function registerPrintingAITrainingRoutes(app: Express, requireAdmin: any
     try {
       const id = parseInt(req.params.id);
       const { type, title, content, image_url, tags, origin_market, is_active, sort_order } = req.body || {};
+      // image_url: explicit null clears it; undefined means "keep existing"
       const r = await pool.query(
         `UPDATE printing_ai_training
          SET type = COALESCE($1, type),
              title = COALESCE($2, title),
              content = COALESCE($3, content),
-             image_url = $4,
-             tags = COALESCE($5, tags),
-             origin_market = COALESCE($6, origin_market),
-             is_active = COALESCE($7, is_active),
-             sort_order = COALESCE($8, sort_order),
+             image_url = CASE WHEN $4::boolean THEN $5 ELSE image_url END,
+             tags = COALESCE($6, tags),
+             origin_market = COALESCE($7, origin_market),
+             is_active = COALESCE($8, is_active),
+             sort_order = COALESCE($9, sort_order),
              updated_at = NOW()
-         WHERE id = $9 RETURNING *`,
-        [type || null, title?.trim() || null, content?.trim() || null,
-         image_url !== undefined ? (image_url || null) : undefined,
-         tags !== undefined ? (tags?.trim() ?? "") : null,
-         origin_market !== undefined ? (origin_market?.trim() ?? "") : null,
-         is_active !== undefined ? is_active : null,
-         sort_order !== undefined ? Number(sort_order) : null, id]
+         WHERE id = $10 RETURNING *`,
+        [
+          type || null,
+          title?.trim() || null,
+          content?.trim() || null,
+          image_url !== undefined,       // $4: should we update image_url?
+          image_url !== undefined ? (image_url || null) : null,  // $5: the new value
+          tags !== undefined ? (tags?.trim() ?? "") : null,
+          origin_market !== undefined ? (origin_market?.trim() ?? "") : null,
+          is_active !== undefined ? is_active : null,
+          sort_order !== undefined ? Number(sort_order) : null,
+          id,
+        ]
       );
       if (!r.rows.length) return res.status(404).json({ message: "العنصر غير موجود" });
       res.json({ success: true, item: r.rows[0] });

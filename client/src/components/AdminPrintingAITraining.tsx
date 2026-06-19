@@ -303,12 +303,14 @@ export function AdminPrintingAITraining({ adminToken }: AdminPrintingAITrainingP
                 </div>
                 <div>
                   <Label className="text-xs font-semibold mb-1 block">سوق المنشأ</Label>
-                  <Select value={form.origin_market} onValueChange={v => setForm(f => ({ ...f, origin_market: v }))}>
+                  <Select
+                    value={form.origin_market || "_none_"}
+                    onValueChange={v => setForm(f => ({ ...f, origin_market: v === "_none_" ? "" : v }))}>
                     <SelectTrigger className="h-9 text-xs" data-testid="select-origin-market">
                       <SelectValue placeholder="اختر السوق" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">— غير محدد</SelectItem>
+                      <SelectItem value="_none_">— غير محدد</SelectItem>
                       {ORIGIN_MARKET_OPTIONS.map(o => (
                         <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                       ))}
