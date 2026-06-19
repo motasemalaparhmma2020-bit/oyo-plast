@@ -6154,8 +6154,9 @@ export default function Admin() {
       toast({ title: "يرجى إدخال اسم المنتج", variant: "destructive" });
       return;
     }
-    if (!productForm.price) {
-      toast({ title: "يرجى إدخال سعر المنتج", variant: "destructive" });
+    const hasSmartVariantPrice = productForm.enableSmartVariants && smartVariantsList.some(v => Number(v.price) > 0);
+    if (!productForm.price && !hasSmartVariantPrice) {
+      toast({ title: "يرجى إدخال سعر المنتج أو إضافة شدة بسعر", variant: "destructive" });
       return;
     }
     if (!productForm.categoryId) {
