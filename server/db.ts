@@ -144,6 +144,16 @@ export const db = drizzle(pool, { schema });
     console.warn("[migrate] studio_preview_settings:", (e as Error).message);
   }
 
+  // ── Auto-migrate: selected_preview column in cart_items ──
+  try {
+    await pool.query(`
+      ALTER TABLE cart_items
+        ADD COLUMN IF NOT EXISTS selected_preview TEXT
+    `);
+  } catch (e) {
+    console.warn("[migrate] cart_items.selected_preview:", (e as Error).message);
+  }
+
   // ── Auto-migrate: app_config + push_subscriptions (June 2026) ──
   try {
     await pool.query(`

@@ -1,8 +1,7 @@
 /**
- * Web Push Notifications — Native VAPID Implementation
- * Uses Node.js built-in `crypto` (P-256 / ES256) — no external packages needed.
- * Push messages are payload-less (wake-up signal). The SW shows default Arabic notification.
- * When web-push package becomes available, swap sendWebPush() body with webpush.sendNotification().
+ * Web Push Notifications — web-push library (encrypted payload)
+ * Uses web-push npm package for RFC 8291-compliant AES-128-GCM payload encryption.
+ * VAPID keys auto-generated on first startup and stored in app_config table.
  */
 import crypto from "crypto";
 import { pool } from "../db";
@@ -12,8 +11,15 @@ export interface PushSubscription {
   keys: { auth: string; p256dh: string };
 }
 
+export interface PushPayload {
+  title?: string;
+  body?: string;
+  url?: string;
+  icon?: string;
+}
+
 interface VapidKeys {
-  publicKey: string;  // base64url, 65-byte uncompressed P-256 point (04 || x || y)
+  publicKey: string;  // base64url, 65-byte uncompressed P-256 point
   privateKey: string; // base64url, 32-byte EC scalar
 }
 
@@ -33,24 +39,30 @@ export async function getOrCreateVapidKeys(): Promise<VapidKeys> {
     }
   } catch {}
 
-  const ecdh = crypto.createECDH("prime256v1");
-  ecdh.generateKeys();
-
-  const keys: VapidKeys = {
-    publicKey: ecdh.getPublicKey().toString("base64url"),   // 65 bytes
-    privateKey: ecdh.getPrivateKey().toString("base64url"), // 32 bytes
-  };
+  // Generate using web-push (VAPID spec)
+  try {
+    const webpush = await import("web-push");
+    const keys = webpush.generateVAPIDKeys();
+    _cachedKeys = { publicKey: keys.publicKey, privateKey: keys.privateKey };
+  } catch {
+    // Fallback: generate with Node.js native crypto
+    const ecdh = crypto.createECDH("prime256v1");
+    ecdh.generateKeys();
+    _cachedKeys = {
+      publicKey: ecdh.getPublicKey().toString("base64url"),
+      privateKey: ecdh.getPrivateKey().toString("base64url"),
+    };
+  }
 
   try {
     await pool.query(
       `INSERT INTO app_config (key, value) VALUES ('vapid_keys', $1)
        ON CONFLICT (key) DO NOTHING`,
-      [JSON.stringify(keys)],
+      [JSON.stringify(_cachedKeys)],
     );
   } catch {}
 
-  _cachedKeys = keys;
-  return keys;
+  return _cachedKeys!;
 }
 
 export async function getVapidPublicKey(): Promise<string> {
@@ -58,86 +70,48 @@ export async function getVapidPublicKey(): Promise<string> {
   return k.publicKey;
 }
 
-// ── VAPID JWT (ES256 / P-256) ───────────────────────────────────────────────
-function buildVapidJWT(privB64: string, pubB64: string, audience: string): string {
-  const hdr = Buffer.from(JSON.stringify({ alg: "ES256", typ: "JWT" })).toString("base64url");
-  const now = Math.floor(Date.now() / 1000);
-  const pld = Buffer.from(JSON.stringify({
-    aud: audience,
-    exp: now + 43_200, // 12h
-    sub: "mailto:info@oyoplast.com",
-  })).toString("base64url");
-
-  const unsigned = `${hdr}.${pld}`;
-
-  const pubRaw = Buffer.from(pubB64, "base64url"); // 65 bytes: 04 || x || y
-  const jwk = {
-    kty: "EC", crv: "P-256",
-    d: privB64,
-    x: pubRaw.slice(1, 33).toString("base64url"),
-    y: pubRaw.slice(33, 65).toString("base64url"),
-  };
-  const privKey = crypto.createPrivateKey({ key: jwk as any, format: "jwk" });
-
-  const signer = crypto.createSign("SHA256");
-  signer.update(unsigned);
-  const der = signer.sign(privKey);
-
-  // DER → raw r‖s (64 bytes)
-  // SEQUENCE: 30 LL, then INTEGER: 02 LL [00?] r, then INTEGER: 02 LL [00?] s
-  // P-256 max total length ≤ 72 bytes — always short form (single-byte length)
-  let off = 2; // skip 0x30 (SEQUENCE tag) + 1-byte length
-  off++;        // skip 0x02 (INTEGER tag)
-  const rLen = der[off++];
-  const r = der.slice(off, off + rLen); off += rLen;
-  off++;        // skip 0x02 (INTEGER tag)
-  const sLen = der[off++];
-  const s = der.slice(off, off + sLen);
-
-  // Remove potential 0x00 sign-extension prefix that DER adds when MSB is 1
-  const rClean = r.length > 32 ? r.slice(r.length - 32) : r;
-  const sClean = s.length > 32 ? s.slice(s.length - 32) : s;
-
-  const rBuf = Buffer.alloc(32); rClean.copy(rBuf, 32 - rClean.length);
-  const sBuf = Buffer.alloc(32); sClean.copy(sBuf, 32 - sClean.length);
-
-  return `${unsigned}.${Buffer.concat([rBuf, sBuf]).toString("base64url")}`;
-}
-
-// ── Send a single payload-less push (wake-up signal) ───────────────────────
-export async function sendWebPush(sub: PushSubscription): Promise<void> {
+// ── Send a push notification with encrypted payload (RFC 8291) ──────────────
+export async function sendWebPush(sub: PushSubscription, payload?: PushPayload): Promise<void> {
   try {
     const keys = await getOrCreateVapidKeys();
-    const url = new URL(sub.endpoint);
-    const audience = `${url.protocol}//${url.host}`;
-    const jwt = buildVapidJWT(keys.privateKey, keys.publicKey, audience);
+    const webpush = await import("web-push");
 
-    const res = await fetch(sub.endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `vapid t=${jwt},k=${keys.publicKey}`,
-        TTL: "86400",
-        Urgency: "normal",
+    webpush.setVapidDetails("mailto:info@oyoplast.com", keys.publicKey, keys.privateKey);
+
+    const data = {
+      title: payload?.title || "أويو بلاست",
+      body: payload?.body || "لديك إشعار جديد",
+      icon: payload?.icon || "/icons/icon-192x192.png",
+      badge: "/icons/icon-96x96.png",
+      url: payload?.url || "/",
+      dir: "rtl",
+      lang: "ar",
+    };
+
+    await webpush.sendNotification(
+      {
+        endpoint: sub.endpoint,
+        keys: { auth: sub.keys.auth, p256dh: sub.keys.p256dh },
       },
-    });
-
-    if (res.status === 404 || res.status === 410) {
+      JSON.stringify(data),
+      { TTL: 86400, urgency: "normal" },
+    );
+  } catch (e: any) {
+    const msg: string = e?.message || String(e);
+    if (e?.statusCode === 404 || e?.statusCode === 410) {
       await pool.query(
         `DELETE FROM push_subscriptions WHERE endpoint=$1`,
         [sub.endpoint],
       ).catch(() => {});
       console.info("[push] removed expired subscription");
-    } else if (!res.ok && res.status !== 201) {
-      const txt = await res.text().catch(() => "");
-      console.warn(`[push] ${res.status}:`, txt.slice(0, 120));
+    } else {
+      console.warn("[push] send error:", msg.slice(0, 120));
     }
-  } catch (e) {
-    console.warn("[push] send error:", (e as Error).message?.slice(0, 80));
   }
 }
 
 // ── Send push to every subscription of a user ──────────────────────────────
-export async function sendPushToUser(userId: string): Promise<void> {
+export async function sendPushToUser(userId: string, payload?: PushPayload): Promise<void> {
   try {
     const r = await pool.query(
       `SELECT endpoint, auth_key, p256dh_key FROM push_subscriptions WHERE user_id=$1`,
@@ -146,7 +120,10 @@ export async function sendPushToUser(userId: string): Promise<void> {
     if (!r.rows.length) return;
     await Promise.allSettled(
       r.rows.map((row) =>
-        sendWebPush({ endpoint: row.endpoint, keys: { auth: row.auth_key, p256dh: row.p256dh_key } }),
+        sendWebPush(
+          { endpoint: row.endpoint, keys: { auth: row.auth_key, p256dh: row.p256dh_key } },
+          payload,
+        ),
       ),
     );
   } catch (e) {

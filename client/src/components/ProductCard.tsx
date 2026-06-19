@@ -120,9 +120,9 @@ export function ProductCard({ product, cardWidth, imageHeight, bannerNameFontSiz
         {/* ════════ شريط السعر — نمط SHEIN ════════ */}
         <div className="space-y-0.5 mb-1">
           <div className="flex items-baseline gap-1.5 flex-wrap">
-            {/* السعر الجديد (بارز) */}
+            {/* السعر الجديد (بارز) — أحمر عند وجود خصم */}
             <span
-              className="font-extrabold price-num text-gray-900 dark:text-white"
+              className={`font-extrabold price-num ${effectiveDiscount > 0 || showOriginalPrice ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-white"}`}
               style={{ fontSize: bannerPriceFontSize ? `${bannerPriceFontSize}px` : 'var(--price-font-size, 16px)', fontFamily: 'var(--font-numbers)' }}
               data-testid={`price-${product.id}`}
               data-price="true"
