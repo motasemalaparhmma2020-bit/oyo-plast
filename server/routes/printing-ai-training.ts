@@ -18,11 +18,22 @@ export const TRAINING_TYPE_LABELS: Record<TrainingType, string> = {
   preference: "تفضيل",
 };
 
+const ORIGIN_MARKET_LABELS: Record<string, string> = {
+  "الصين": "🇨🇳 الصين",
+  "أمريكا": "🇺🇸 أمريكا",
+  "اليابان": "🇯🇵 اليابان",
+  "أوروبا": "🇪🇺 أوروبا",
+  "الشرق الأوسط": "🌙 الشرق الأوسط",
+  "محلي": "🇾🇪 محلي",
+};
+
+export const ORIGIN_MARKET_OPTIONS = Object.keys(ORIGIN_MARKET_LABELS);
+
 // ─── بناء سياق التدريب (يُستخدم في system prompt) ──────────────────────────
 export async function buildTrainingContext(): Promise<string> {
   try {
     const r = await pool.query(
-      `SELECT type, title, content, image_url
+      `SELECT type, title, content, image_url, tags, origin_market
        FROM printing_ai_training
        WHERE is_active = true
        ORDER BY type, sort_order ASC, id ASC`
@@ -50,7 +61,13 @@ export async function buildTrainingContext(): Promise<string> {
       parts.push(`## أسئلة وأجوبة شائعة:\n${grouped["faq"].map(i => `س: ${i.title}\nج: ${i.content}`).join("\n\n")}`);
     }
     if (grouped["reference_item"]?.length) {
-      parts.push(`## أمثلة مرجعية ناجحة:\n${grouped["reference_item"].map(i => `- ${i.title}: ${i.content}${i.image_url ? ` [صورة مرجعية]` : ""}`).join("\n")}`);
+      const refs = grouped["reference_item"].map(i => {
+        const tagsStr = i.tags ? ` | وسوم: ${i.tags}` : "";
+        const marketStr = i.origin_market ? ` | سوق المنشأ: ${ORIGIN_MARKET_LABELS[i.origin_market] || i.origin_market}` : "";
+        const imgStr = i.image_url ? ` [صورة مرجعية]` : "";
+        return `- **${i.title}**: ${i.content}${tagsStr}${marketStr}${imgStr}`;
+      }).join("\n");
+      parts.push(`## أمثلة مرجعية ناجحة:\n${refs}`);
     }
 
     return parts.length ? `\n\n## معلومات إضافية من تدريب الوكيل:\n${parts.join("\n\n")}` : "";
@@ -108,14 +125,16 @@ export function registerPrintingAITrainingRoutes(app: Express, requireAdmin: any
   // ─── POST create training item ───────────────────────────────────────────
   app.post("/api/admin/printing-ai/training", requireAdmin, async (req, res) => {
     try {
-      const { type, title, content, image_url, is_active, sort_order } = req.body || {};
+      const { type, title, content, image_url, tags, origin_market, is_active, sort_order } = req.body || {};
       if (!type || !title || !content) {
         return res.status(400).json({ message: "النوع والعنوان والمحتوى مطلوبة" });
       }
       const r = await pool.query(
-        `INSERT INTO printing_ai_training (type, title, content, image_url, is_active, sort_order)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [type, title.trim(), content.trim(), image_url || null, is_active !== false, Number(sort_order ?? 0)]
+        `INSERT INTO printing_ai_training (type, title, content, image_url, tags, origin_market, is_active, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [type, title.trim(), content.trim(), image_url || null,
+         tags?.trim() || "", origin_market?.trim() || "",
+         is_active !== false, Number(sort_order ?? 0)]
       );
       res.json({ success: true, item: r.rows[0] });
     } catch (e: any) {
@@ -127,19 +146,23 @@ export function registerPrintingAITrainingRoutes(app: Express, requireAdmin: any
   app.patch("/api/admin/printing-ai/training/:id", requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const { type, title, content, image_url, is_active, sort_order } = req.body || {};
+      const { type, title, content, image_url, tags, origin_market, is_active, sort_order } = req.body || {};
       const r = await pool.query(
         `UPDATE printing_ai_training
          SET type = COALESCE($1, type),
              title = COALESCE($2, title),
              content = COALESCE($3, content),
              image_url = $4,
-             is_active = COALESCE($5, is_active),
-             sort_order = COALESCE($6, sort_order),
+             tags = COALESCE($5, tags),
+             origin_market = COALESCE($6, origin_market),
+             is_active = COALESCE($7, is_active),
+             sort_order = COALESCE($8, sort_order),
              updated_at = NOW()
-         WHERE id = $7 RETURNING *`,
+         WHERE id = $9 RETURNING *`,
         [type || null, title?.trim() || null, content?.trim() || null,
          image_url !== undefined ? (image_url || null) : undefined,
+         tags !== undefined ? (tags?.trim() ?? "") : null,
+         origin_market !== undefined ? (origin_market?.trim() ?? "") : null,
          is_active !== undefined ? is_active : null,
          sort_order !== undefined ? Number(sort_order) : null, id]
       );

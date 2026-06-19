@@ -23,18 +23,29 @@ const TYPE_LABELS: Record<string, { label: string; color: string; emoji: string 
   reference_item:     { label: "مثال مرجعي",     color: "bg-amber-100 text-amber-800 border-amber-300",      emoji: "📸" },
 };
 
+const ORIGIN_MARKET_OPTIONS = [
+  { value: "الصين", label: "🇨🇳 الصين" },
+  { value: "أمريكا", label: "🇺🇸 أمريكا" },
+  { value: "اليابان", label: "🇯🇵 اليابان" },
+  { value: "أوروبا", label: "🇪🇺 أوروبا" },
+  { value: "الشرق الأوسط", label: "🌙 الشرق الأوسط" },
+  { value: "محلي", label: "🇾🇪 محلي" },
+];
+
 interface TrainingItem {
   id: number;
   type: string;
   title: string;
   content: string;
   image_url: string | null;
+  tags: string;
+  origin_market: string;
   is_active: boolean;
   sort_order: number;
   created_at: string;
 }
 
-const EMPTY_FORM = { type: "rule", title: "", content: "", image_url: "", is_active: true, sort_order: 0 };
+const EMPTY_FORM = { type: "rule", title: "", content: "", image_url: "", tags: "", origin_market: "", is_active: true, sort_order: 0 };
 
 export function AdminPrintingAITraining({ adminToken }: AdminPrintingAITrainingProps) {
   const { toast } = useToast();
@@ -131,7 +142,7 @@ export function AdminPrintingAITraining({ adminToken }: AdminPrintingAITrainingP
 
   function handleEdit(item: TrainingItem) {
     setEditingId(item.id);
-    setForm({ type: item.type, title: item.title, content: item.content, image_url: item.image_url || "", is_active: item.is_active, sort_order: item.sort_order });
+    setForm({ type: item.type, title: item.title, content: item.content, image_url: item.image_url || "", tags: item.tags || "", origin_market: item.origin_market || "", is_active: item.is_active, sort_order: item.sort_order });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -272,6 +283,42 @@ export function AdminPrintingAITraining({ adminToken }: AdminPrintingAITrainingP
             </div>
           </div>
 
+          {/* حقول مخصصة للمثال المرجعي */}
+          {form.type === "reference_item" && (
+            <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/20 p-3 space-y-3">
+              <p className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                📸 بيانات المثال المرجعي
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-semibold mb-1 block">الوسوم (tags)</Label>
+                  <Input
+                    value={form.tags}
+                    onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
+                    placeholder="مثال: أكياس، طباعة ملونة، حجم متوسط"
+                    className="h-9 text-xs"
+                    data-testid="input-tags"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-0.5">افصل بين الوسوم بفاصلة</p>
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold mb-1 block">سوق المنشأ</Label>
+                  <Select value={form.origin_market} onValueChange={v => setForm(f => ({ ...f, origin_market: v }))}>
+                    <SelectTrigger className="h-9 text-xs" data-testid="select-origin-market">
+                      <SelectValue placeholder="اختر السوق" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">— غير محدد</SelectItem>
+                      {ORIGIN_MARKET_OPTIONS.map(o => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             <Switch checked={form.is_active} onCheckedChange={v => setForm(f => ({ ...f, is_active: v }))} data-testid="switch-is-active" />
             <Label className="text-sm">مفعّل</Label>
@@ -342,6 +389,18 @@ export function AdminPrintingAITraining({ adminToken }: AdminPrintingAITrainingP
                       </div>
                       <p className="font-bold text-sm">{item.title}</p>
                       <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{item.content}</p>
+                      {item.type === "reference_item" && (item.tags || item.origin_market) && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {item.origin_market && (
+                            <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-700 bg-amber-50">
+                              {ORIGIN_MARKET_OPTIONS.find(o => o.value === item.origin_market)?.label || item.origin_market}
+                            </Badge>
+                          )}
+                          {item.tags && item.tags.split(",").map(tag => tag.trim()).filter(Boolean).map(tag => (
+                            <Badge key={tag} variant="outline" className="text-[10px] border-blue-300 text-blue-700 bg-blue-50">#{tag}</Badge>
+                          ))}
+                        </div>
+                      )}
                       {item.image_url && (
                         <img src={item.image_url} alt={item.title} className="mt-2 h-16 w-16 object-cover rounded-lg border" />
                       )}

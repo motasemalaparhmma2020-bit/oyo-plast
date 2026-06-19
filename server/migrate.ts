@@ -913,12 +913,16 @@ export async function runMigrations(): Promise<void> {
           title TEXT NOT NULL,
           content TEXT NOT NULL,
           image_url TEXT,
+          tags TEXT DEFAULT '',
+          origin_market TEXT DEFAULT '',
           is_active BOOLEAN NOT NULL DEFAULT true,
           sort_order INTEGER NOT NULL DEFAULT 0,
           created_at TIMESTAMP DEFAULT NOW(),
           updated_at TIMESTAMP DEFAULT NOW()
         );
       `);
+      await client.query(`ALTER TABLE printing_ai_training ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT ''`);
+      await client.query(`ALTER TABLE printing_ai_training ADD COLUMN IF NOT EXISTS origin_market TEXT DEFAULT ''`);
       await client.query(`
         CREATE INDEX IF NOT EXISTS idx_printing_ai_training_type
         ON printing_ai_training(type, is_active);
