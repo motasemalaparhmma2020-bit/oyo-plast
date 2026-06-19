@@ -7898,13 +7898,53 @@ export default function Admin() {
                           </div>
                         </div>
                         <div className="p-3 space-y-2">
+
+                          {/* ── قسم الطباعة (الأساس أولاً) ── */}
+                          <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400 px-1 pb-0.5">— ميزات الطباعة والتصميم —</p>
+
+                          {/* allowDesignUpload — الأساس، يجب تفعيله أولاً */}
+                          <label className={`flex items-center justify-between gap-3 border-2 rounded-lg p-2.5 cursor-pointer transition-colors ${productForm.allowDesignUpload ? 'border-purple-500 bg-purple-50 dark:bg-purple-950/30' : 'bg-white dark:bg-gray-800 border-purple-300 hover:border-purple-500'}`}>
+                            <div className="flex items-center gap-2">
+                              <span>🎨</span>
+                              <div>
+                                <span className="text-sm font-bold text-purple-700 dark:text-purple-300">السماح برفع التصميم ← ابدأ من هنا</span>
+                                <p className="text-[11px] text-muted-foreground">يُظهر زر "ارفع شعارك" في صفحة المنتج. يجب تفعيله لتعمل باقي ميزات الطباعة.</p>
+                              </div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={productForm.allowDesignUpload}
+                              onChange={(e) => setProductForm({ ...productForm, allowDesignUpload: e.target.checked })}
+                              className="w-5 h-5 accent-purple-600"
+                              data-testid="checkbox-toggle-allow-design-upload"
+                            />
+                          </label>
+
+                          {/* hasPrintingOptions — حاسبة الطباعة */}
+                          <label className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 border rounded-lg p-2.5 cursor-pointer hover:border-purple-400">
+                            <div className="flex items-center gap-2">
+                              <span>🧮</span>
+                              <div>
+                                <span className="text-sm font-semibold">حاسبة الطباعة الذكية</span>
+                                <p className="text-[11px] text-muted-foreground">يُظهر منتقي لون الطباعة وحاسبة السعر (ألوان + وجوه + رسوم تصميم).</p>
+                              </div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={productForm.hasPrintingOptions}
+                              onChange={(e) => setProductForm({ ...productForm, hasPrintingOptions: e.target.checked })}
+                              className="w-5 h-5 accent-purple-600"
+                              data-testid="checkbox-toggle-has-printing-options"
+                            />
+                          </label>
+
                           {/* showLivePreview */}
                           <label className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 border rounded-lg p-2.5 cursor-pointer hover:border-amber-400">
                             <div className="flex items-center gap-2">
                               <span>🖼️</span>
                               <div>
-                                <span className="text-sm font-semibold">معاينة الطباعة الحية</span>
-                                <p className="text-[11px] text-muted-foreground">يسمح للعميل برفع شعار ومعاينته فوراً على المنتج (يتطلب أيضاً "السماح بالطباعة المخصصة")</p>
+                                <span className="text-sm font-semibold">معاينة الطباعة الحية (Canvas)</span>
+                                <p className="text-[11px] text-muted-foreground">يُظهر الشعار مباشرة فوق صورة المنتج بعد الرفع. يتطلب تفعيل "رفع التصميم" أعلاه.</p>
                               </div>
                             </div>
                             <input
@@ -7915,13 +7955,14 @@ export default function Admin() {
                               data-testid="checkbox-show-live-preview"
                             />
                           </label>
+
                           {/* enableStudioPreview */}
                           <label className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 border rounded-lg p-2.5 cursor-pointer hover:border-indigo-400">
                             <div className="flex items-center gap-2">
                               <span>📸</span>
                               <div>
                                 <span className="text-sm font-semibold">معاينة الاستوديو AI</span>
-                                <p className="text-[11px] text-muted-foreground">يظهر زر "أنشئ معاينة الاستوديو" للعميل بعد رفع الشعار — فعّله فقط للمنتجات القابلة للطباعة</p>
+                                <p className="text-[11px] text-muted-foreground">يُظهر زر "أنشئ معاينة الاستوديو" بعد رفع الشعار — يولّد صورة احترافية بالذكاء الاصطناعي. يتطلب تفعيل "رفع التصميم".</p>
                               </div>
                             </div>
                             <input
@@ -7932,6 +7973,10 @@ export default function Admin() {
                               data-testid="checkbox-enable-studio-preview"
                             />
                           </label>
+
+                          {/* ── قسم الكميات والعروض ── */}
+                          <p className="text-[10px] font-bold text-orange-600 dark:text-orange-400 px-1 pt-1 pb-0.5">— عروض الكميات —</p>
+
                           {/* enableVolumeOffers */}
                           <label className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 border rounded-lg p-2.5 cursor-pointer hover:border-amber-400">
                             <div className="flex items-center gap-2">
@@ -7949,6 +7994,7 @@ export default function Admin() {
                               data-testid="checkbox-enable-volume-offers"
                             />
                           </label>
+
                           {/* enableQuantityTiers */}
                           <label className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 border rounded-lg p-2.5 cursor-pointer hover:border-amber-400">
                             <div className="flex items-center gap-2">
@@ -7966,40 +8012,7 @@ export default function Admin() {
                               data-testid="checkbox-enable-quantity-tiers"
                             />
                           </label>
-                          {/* allowDesignUpload — مرئي هنا للتنظيم */}
-                          <label className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 border rounded-lg p-2.5 cursor-pointer hover:border-amber-400">
-                            <div className="flex items-center gap-2">
-                              <span>🎨</span>
-                              <div>
-                                <span className="text-sm font-semibold">السماح بالطباعة المخصصة (رفع تصميم)</span>
-                                <p className="text-[11px] text-muted-foreground">يسمح للعميل برفع ملف التصميم (PDF/PNG/AI/PSD).</p>
-                              </div>
-                            </div>
-                            <input
-                              type="checkbox"
-                              checked={productForm.allowDesignUpload}
-                              onChange={(e) => setProductForm({ ...productForm, allowDesignUpload: e.target.checked })}
-                              className="w-5 h-5 accent-amber-600"
-                              data-testid="checkbox-toggle-allow-design-upload"
-                            />
-                          </label>
-                          {/* hasPrintingOptions — حاسبة الطباعة */}
-                          <label className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 border rounded-lg p-2.5 cursor-pointer hover:border-amber-400">
-                            <div className="flex items-center gap-2">
-                              <span>🧮</span>
-                              <div>
-                                <span className="text-sm font-semibold">حاسبة الطباعة الذكية</span>
-                                <p className="text-[11px] text-muted-foreground">إظهار حاسبة سعر الطباعة (رسوم تصميم + ألوان + وجوه).</p>
-                              </div>
-                            </div>
-                            <input
-                              type="checkbox"
-                              checked={productForm.hasPrintingOptions}
-                              onChange={(e) => setProductForm({ ...productForm, hasPrintingOptions: e.target.checked })}
-                              className="w-5 h-5 accent-amber-600"
-                              data-testid="checkbox-toggle-has-printing-options"
-                            />
-                          </label>
+
                         </div>
                       </div>
 
