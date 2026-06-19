@@ -565,6 +565,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const { registerLiquidityPreviewRoutes } = await import("./routes/liquidity-preview");
   registerLiquidityPreviewRoutes(app);
 
+  // ─── وكيل المعاينة الاستوديو بالذكاء الاصطناعي (AI Studio Preview Engine) ───
+  const { registerStudioPreviewRoutes } = await import("./routes/studio-preview");
+  registerStudioPreviewRoutes(app, requireAdmin);
+
   // ─── Cron: مهلة استجابة المورد + إعادة التعيين التلقائي (كل ١٥ دقيقة) ─────
   try {
     const cron = await import("node-cron");

@@ -121,7 +121,7 @@ export default function ProductDetail() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const reviewImageRef = useRef<HTMLInputElement>(null);
 
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   // ── Data fetching ───────────────────────────────────────────────────────
   const { data: product, isLoading } = useQuery<Product>({ queryKey: ['/api/products', id], staleTime: 5 * 60000, gcTime: 10 * 60000 });
@@ -306,6 +306,14 @@ export default function ProductDetail() {
   const [previewPhase, setPreviewPhase] = useState<'idle' | 'countdown' | 'active'>('idle');
   const [previewCountdown, setPreviewCountdown] = useState(3);
   const [selectedInkColor, setSelectedInkColor] = useState<{ name: string; hex: string } | null>(null);
+  // ── AI Studio Preview Engine (June 2026) ──
+  const [studioPreviewUrl, setStudioPreviewUrl] = useState<string | null>(null);
+  const [studioPreviewLoading, setStudioPreviewLoading] = useState(false);
+  const [studioPreviewText, setStudioPreviewText] = useState("");
+  const [showStudioTextInput, setShowStudioTextInput] = useState(false);
+  const [alternativeUrls, setAlternativeUrls] = useState<string[]>([]);
+  const [altLoading, setAltLoading] = useState(false);
+  const [quickPreviewUrl, setQuickPreviewUrl] = useState<string | null>(null);
   const [quantityDefaultApplied, setQuantityDefaultApplied] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [variantActiveImg, setVariantActiveImg]   = useState<string | null>(null);
@@ -1169,6 +1177,90 @@ export default function ProductDetail() {
     reader.readAsDataURL(file);
     setIsUploadingDesign(false);
     e.target.value = '';
+  };
+
+  // ── AI Studio Preview Engine handlers ──
+  const generateStudioPreview = async () => {
+    if (!product || !uploadedDesignUrl) return;
+    setStudioPreviewLoading(true);
+    setAlternativeUrls([]);
+    try {
+      const r = await apiRequest('POST', '/api/studio-preview/generate', {
+        productId: product.id,
+        productImage: product.imageUrl || product.images?.[0],
+        logoUrl: uploadedDesignUrl,
+        bagColor: selectedDynamicBagColor?.name || selectedBagColor || 'white',
+        printColor: selectedInkColor?.name || 'black',
+        textContent: studioPreviewText || undefined,
+        businessType: user?.businessType || undefined,
+      });
+      const d = await r.json();
+      if (d.success) {
+        setStudioPreviewUrl(d.imageUrl);
+        toast({ title: "\u2705 \u062a\u0645 \u0625\u0646\u0634\u0627\u0621 \u0645\u0639\u0627\u064a\u0646\u0629 \u0627\u0644\u0627\u0633\u062a\u0648\u062f\u064a\u0648" });
+        if (d.recommendation) {
+          toast({ title: `\u0646\u0635\u064a\u062d\u0629: ${d.recommendation}` });
+        }
+      } else {
+        toast({ title: d.error || "\u0641\u0634\u0644 \u0641\u064a \u0627\u0644\u0645\u0639\u0627\u064a\u0646\u0629", variant: "destructive" });
+      }
+    } catch (e: any) {
+      toast({ title: e?.message || "\u0641\u0634\u0644 \u0641\u064a \u0627\u0644\u0645\u0639\u0627\u064a\u0646\u0629", variant: "destructive" });
+    } finally {
+      setStudioPreviewLoading(false);
+    }
+  };
+
+  const generateQuickPreview = async () => {
+    if (!product || !uploadedDesignUrl) return;
+    setStudioPreviewLoading(true);
+    try {
+      const r = await apiRequest('POST', '/api/studio-preview/quick', {
+        productImage: product.imageUrl || product.images?.[0],
+        logoUrl: uploadedDesignUrl,
+        bagColor: selectedDynamicBagColor?.name || selectedBagColor || 'white',
+        printColor: selectedInkColor?.name || 'black',
+        textContent: studioPreviewText || undefined,
+      });
+      const d = await r.json();
+      if (d.success) {
+        setQuickPreviewUrl(d.imageUrl);
+        toast({ title: "\u2705 \u0645\u0639\u0627\u064a\u0646\u0629 \u0633\u0631\u064a\u0639\u0629 \u062c\u0627\u0647\u0632\u0629" });
+      } else {
+        toast({ title: d.error || "\u0641\u0634\u0644 \u0641\u064a \u0627\u0644\u0645\u0639\u0627\u064a\u0646\u0629 \u0627\u0644\u0633\u0631\u064a\u0639\u0629", variant: "destructive" });
+      }
+    } catch (e: any) {
+      toast({ title: e?.message || "\u0641\u0634\u0644 \u0641\u064a \u0627\u0644\u0645\u0639\u0627\u064a\u0646\u0629 \u0627\u0644\u0633\u0631\u064a\u0639\u0629", variant: "destructive" });
+    } finally {
+      setStudioPreviewLoading(false);
+    }
+  };
+
+  const generateAlternatives = async () => {
+    if (!product || !uploadedDesignUrl) return;
+    setAltLoading(true);
+    try {
+      const r = await apiRequest('POST', '/api/studio-preview/alternatives', {
+        productId: product.id,
+        productImage: product.imageUrl || product.images?.[0],
+        logoUrl: uploadedDesignUrl,
+        bagColor: selectedDynamicBagColor?.name || selectedBagColor || 'white',
+        printColor: selectedInkColor?.name || 'black',
+        textContent: studioPreviewText || undefined,
+        businessType: user?.businessType || undefined,
+      });
+      const d = await r.json();
+      if (d.success && d.alternatives) {
+        setAlternativeUrls(d.alternatives.map((a: any) => a.imageUrl));
+        toast({ title: `\u2705 \u062a\u0645 \u062a\u0648\u0644\u064a\u062f ${d.alternatives.length} \u062a\u0635\u0627\u0645\u064a\u0645 \u0628\u062f\u064a\u0644\u0629` });
+      } else {
+        toast({ title: d.error || "\u0641\u0634\u0644 \u0641\u064a \u0627\u0644\u062a\u0635\u0627\u0645\u064a\u0645 \u0627\u0644\u0628\u062f\u064a\u0644\u0629", variant: "destructive" });
+      }
+    } catch (e: any) {
+      toast({ title: e?.message || "\u0641\u0634\u0644 \u0641\u064a \u0627\u0644\u062a\u0635\u0627\u0645\u064a\u0645 \u0627\u0644\u0628\u062f\u064a\u0644\u0629", variant: "destructive" });
+    } finally {
+      setAltLoading(false);
+    }
   };
 
   const handleReviewImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2355,6 +2447,148 @@ export default function ProductDetail() {
                         <Upload className="h-6 w-6 mx-auto mb-1" />
                         <p className="text-sm font-bold">اضغط لرفع التصميم</p>
                         <p className="text-[10px] text-muted-foreground mt-1">PDF · PNG · JPG · AI · PSD</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── AI Studio Preview Engine (June 2026) ── */}
+                {uploadedDesignUrl && (
+                  <div className="space-y-2">
+                    {/* حقل إدخال النص مطوي */}
+                    <button
+                      type="button"
+                      onClick={() => setShowStudioTextInput(s => !s)}
+                      className="flex items-center gap-2 text-xs font-bold text-sky-700 dark:text-sky-300 hover:underline"
+                      data-testid="button-toggle-studio-text">
+                      <span>📝</span>
+                      {showStudioTextInput ? 'إخفاء تفاصيل المتجر' : 'أضف تفاصيل المتجر (اسم / هاتف / عنوان)'}
+                    </button>
+                    {showStudioTextInput && (
+                      <div className="space-y-2">
+                        <Textarea
+                          placeholder="مثال: محل أبو علي للأسماك • 777123456 • صنعاء • توصيل للأمانة"
+                          value={studioPreviewText}
+                          onChange={e => setStudioPreviewText(e.target.value)}
+                          rows={2}
+                          className="text-xs"
+                          data-testid="textarea-studio-text"
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                          سيتم دمج هذا النص في صورة المعاينة المولدة
+                        </p>
+                      </div>
+                    )}
+
+                    {/* أزرار المعاينات */}
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={generateQuickPreview}
+                        disabled={studioPreviewLoading}
+                        className="flex-1 text-xs font-bold border-sky-300 text-sky-700 hover:bg-sky-50"
+                        data-testid="button-quick-preview">
+                        <Zap className="h-3.5 w-3.5 ml-1" />
+                        معاينة سريعة مجانية
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={generateStudioPreview}
+                        disabled={studioPreviewLoading}
+                        className="flex-1 text-xs font-bold bg-gradient-to-l from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white"
+                        data-testid="button-studio-preview">
+                        {studioPreviewLoading ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 ml-1 animate-spin" />
+                            جارٍ التوليد...
+                          </>
+                        ) : (
+                          <>
+                            <Camera className="h-3.5 w-3.5 ml-1" />
+                            أنشئ معاينة الاستوديو
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    {/* عرض المعاينات المولدة */}
+                    {studioPreviewUrl && (
+                      <div className="rounded-xl border border-indigo-200 dark:border-indigo-800 overflow-hidden">
+                        <img
+                          src={studioPreviewUrl}
+                          alt="معاينة الاستوديو"
+                          className="w-full h-auto object-contain"
+                          loading="lazy"
+                          data-testid="img-studio-preview"
+                        />
+                        <div className="bg-indigo-50 dark:bg-indigo-950/30 p-2 text-center">
+                          <p className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                            معاينة الاستوديو الواقعية — الوجهان أمام / خلف
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {quickPreviewUrl && !studioPreviewUrl && (
+                      <div className="rounded-xl border border-sky-200 dark:border-sky-800 overflow-hidden">
+                        <img
+                          src={quickPreviewUrl}
+                          alt="معاينة سريعة"
+                          className="w-full h-auto object-contain"
+                          loading="lazy"
+                          data-testid="img-quick-preview"
+                        />
+                        <div className="bg-sky-50 dark:bg-sky-950/30 p-2 text-center">
+                          <p className="text-[10px] font-bold text-sky-700 dark:text-sky-300">
+                            معاينة سريعة — عرض فوري عبر Cloudinary
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 3 تصاميم بديلة */}
+                    {studioPreviewUrl && (
+                      <div className="space-y-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={generateAlternatives}
+                          disabled={altLoading}
+                          className="w-full text-xs font-bold"
+                          data-testid="button-alternatives">
+                          {altLoading ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 ml-1 animate-spin" />
+                              جارٍ توليد البدائل...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCcw className="h-3.5 w-3.5 ml-1" />
+                              أرني 3 تصاميم بديلة
+                            </>
+                          )}
+                        </Button>
+                        {alternativeUrls.length > 0 && (
+                          <div className="grid grid-cols-3 gap-2">
+                            {alternativeUrls.map((url, i) => (
+                              <div key={i} className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                <img
+                                  src={url}
+                                  alt={`بديل ${i + 1}`}
+                                  className="w-full h-auto object-contain"
+                                  loading="lazy"
+                                  data-testid={`img-alternative-${i}`}
+                                />
+                                <div className="bg-gray-50 dark:bg-gray-900 p-1 text-center">
+                                  <p className="text-[10px] font-bold text-gray-600 dark:text-gray-300">بديل {i + 1}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

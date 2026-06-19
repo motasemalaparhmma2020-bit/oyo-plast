@@ -997,6 +997,42 @@ export const aiSalesSettings = pgTable("ai_sales_settings", {
 });
 export type AiSalesSettings = typeof aiSalesSettings.$inferSelect;
 
+// ─── إعدادات وكيل المعاينة الاستوديو (AI Studio Preview) ───────────────────────
+export const studioPreviewSettings = pgTable("studio_preview_settings", {
+  id: serial("id").primaryKey(),
+  geminiModel: text("gemini_model").default("gemini-2.0-flash-exp-image-generation").notNull(),
+  firstFreeEnabled: boolean("first_free_enabled").default(true).notNull(),
+  previewFeePrice: numeric("preview_fee_price").default("100").notNull(),
+  previewFeeCost: numeric("preview_fee_cost").default("0").notNull(),
+  maxAlternatives: integer("max_alternatives").default(3).notNull(),
+  quickPreviewEnabled: boolean("quick_preview_enabled").default(true).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type StudioPreviewSettings = typeof studioPreviewSettings.$inferSelect;
+
+// ─── سجلّات المعاينة الاستوديو (للمراجعة والتحليل) ─────────────────────────────
+export const studioPreviewLogs = pgTable("studio_preview_logs", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id"),
+  productId: integer("product_id"),
+  productName: text("product_name"),
+  logoUrl: text("logo_url"),
+  productImageUrl: text("product_image_url"),
+  bagColor: text("bag_color"),
+  printColor: text("print_color"),
+  textContent: text("text_content"),
+  businessType: text("business_type"),
+  generatedImageUrl: text("generated_image_url"),
+  alternatives: text("alternatives"), // JSON array of URLs
+  isQuickPreview: boolean("is_quick_preview").default(false).notNull(),
+  modelUsed: text("model_used"),
+  generationTimeMs: integer("generation_time_ms"),
+  status: text("status").default("success").notNull(), // success | failed | cached
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export type StudioPreviewLog = typeof studioPreviewLogs.$inferSelect;
+
 // ─── سجل محادثات الموظف الذكي ─────────────────────────────────────────────────
 export const aiConversations = pgTable("ai_conversations", {
   id: serial("id").primaryKey(),

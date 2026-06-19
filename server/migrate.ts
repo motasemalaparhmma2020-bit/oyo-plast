@@ -859,6 +859,51 @@ export async function runMigrations(): Promise<void> {
       console.warn("[WARN] reviews unique index migration:", e instanceof Error ? e.message : e);
     }
 
+    // ─── Studio Preview Engine tables (AI Studio Preview Agent) ───
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS studio_preview_settings (
+          id SERIAL PRIMARY KEY,
+          gemini_model TEXT NOT NULL DEFAULT 'gemini-2.0-flash-exp-image-generation',
+          first_free_enabled BOOLEAN NOT NULL DEFAULT true,
+          preview_fee_price NUMERIC NOT NULL DEFAULT '100',
+          preview_fee_cost NUMERIC NOT NULL DEFAULT '0',
+          max_alternatives INTEGER NOT NULL DEFAULT 3,
+          quick_preview_enabled BOOLEAN NOT NULL DEFAULT true,
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+      `);
+      await client.query(`
+        INSERT INTO studio_preview_settings (id) VALUES (1)
+        ON CONFLICT (id) DO NOTHING;
+      `);
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS studio_preview_logs (
+          id SERIAL PRIMARY KEY,
+          user_id VARCHAR(255),
+          product_id INTEGER,
+          product_name TEXT,
+          logo_url TEXT,
+          product_image_url TEXT,
+          bag_color TEXT,
+          print_color TEXT,
+          text_content TEXT,
+          business_type TEXT,
+          generated_image_url TEXT,
+          alternatives TEXT,
+          is_quick_preview BOOLEAN NOT NULL DEFAULT false,
+          model_used TEXT,
+          generation_time_ms INTEGER,
+          status TEXT NOT NULL DEFAULT 'success',
+          error_message TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        );
+      `);
+      console.log("[INFO] studio_preview tables ready");
+    } catch (e) {
+      console.warn("[WARN] studio_preview migration:", e instanceof Error ? e.message : e);
+    }
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));
