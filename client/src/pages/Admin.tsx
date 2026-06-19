@@ -16,7 +16,7 @@ import AdminPayroll from "@/components/AdminPayroll";
 import AdminContracts from "@/components/AdminContracts";
 import AdminBackup from "@/components/AdminBackup";
 import AdminAISales from "@/components/AdminAISales";
-import AdminStudioPreviewSettings from "@/components/AdminStudioPreviewSettings";
+import { AdminStudioPreviewSettings } from "@/components/AdminStudioPreviewSettings";
 import AdminSectionSettings from "@/components/AdminSectionSettings";
 import AdminPDPLayout from "@/components/AdminPDPLayout";
 import { AdminSubcategories } from "@/components/AdminSubcategories";
