@@ -1,5 +1,6 @@
 - [Admin auth token](admin-auth-token.md) — admin routes need raw `fetch` with `x-admin-token`; `apiRequest` sends cookies only; real localStorage key is `admin_token` (not `adminToken`).
 - [Phone auth no-OTP mode](phone-auth-no-otp.md) — free mode is phone-first 2-step: phone-login (existing→session, new→{exists:false}) then register-direct; login-by-phone is intentionally unverified.
+- [Gemini image-generation model](gemini-image-model.md) — only `gemini-2.5-flash-image` supports image output; wrong model = opaque 500 = "preview doesn't show". Keep DB+code+migrate in sync.
 - [Mockup sandbox preview verification](mockup-sandbox-preview-verification.md) — `screenshot` hits the main app, not `/__mockup/`; verify sandbox via curl+typecheck+logs+canvas iframe; CSS-mask tinting needs a transparent logo.
 - [Agent executive tools](agent-tools-approval.md) — propose→approve→execute flow; gate tools server-side both at parse & approve, make approval idempotent, WhatsApp is disabled (use in-app notifications).
 - [Dev preview stale bundle](dev-preview-stale-bundle.md) — PWA service worker + failing Vite HMR can serve old UI; verify FE changes via curl/tsc, not one screenshot.

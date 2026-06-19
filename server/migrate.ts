@@ -865,7 +865,7 @@ export async function runMigrations(): Promise<void> {
       await client.query(`
         CREATE TABLE IF NOT EXISTS studio_preview_settings (
           id SERIAL PRIMARY KEY,
-          gemini_model TEXT NOT NULL DEFAULT 'gemini-2.0-flash-exp-image-generation',
+          gemini_model TEXT NOT NULL DEFAULT 'gemini-2.5-flash-image',
           first_free_enabled BOOLEAN NOT NULL DEFAULT true,
           preview_fee_price NUMERIC NOT NULL DEFAULT '100',
           preview_fee_cost NUMERIC NOT NULL DEFAULT '0',

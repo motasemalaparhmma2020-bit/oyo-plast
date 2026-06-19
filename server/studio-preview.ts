@@ -28,7 +28,7 @@ async function getSettings(): Promise<{
     const s = r.rows[0];
     if (s) {
       return {
-        geminiModel: s.gemini_model || "gemini-2.0-flash-exp-image-generation",
+        geminiModel: s.gemini_model || "gemini-2.5-flash-image",
         firstFreeEnabled: s.first_free_enabled !== false,
         previewFeePrice: Number(s.preview_fee_price ?? 100),
         previewFeeCost: Number(s.preview_fee_cost ?? 0),
@@ -40,7 +40,7 @@ async function getSettings(): Promise<{
     console.warn("[Studio Preview] فشل جلب الإعدادات:", e?.message);
   }
   return {
-    geminiModel: "gemini-2.0-flash-exp-image-generation",
+    geminiModel: "gemini-2.5-flash-image",
     firstFreeEnabled: true,
     previewFeePrice: 100,
     previewFeeCost: 0,
@@ -137,8 +137,8 @@ async function generateStudioImage(params: {
 
   const start = Date.now();
 
-  // الصيغ العربي لتخييلات النموذج
-  const models = [modelName, "gemini-2.0-flash-exp-image-generation", "gemini-2.0-flash"];
+  // نماذج توليد الصور — gemini-2.5-flash-image هو النموذج الوحيد المدعوم حالياً
+  const models = Array.from(new Set([modelName, "gemini-2.5-flash-image"]));
   let lastError: any = null;
 
   const altStyles = [
