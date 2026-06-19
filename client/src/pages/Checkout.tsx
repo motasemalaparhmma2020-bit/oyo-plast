@@ -293,14 +293,18 @@ export default function Checkout() {
     if (!couponCode.trim()) { setCouponError("أدخل كود الخصم"); return; }
     setIsValidatingCoupon(true); setCouponError("");
     try {
-      const res = await fetch(`/api/coupons/validate/${encodeURIComponent(couponCode.trim())}`);
+      const res = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: couponCode.trim().toUpperCase() }),
+      });
       const data = await res.json();
-      if (data.valid) {
-        setCouponData(data.coupon);
+      if (res.ok && data.code) {
+        setCouponData({ code: data.code, discountPercent: Number(data.discountPercent) });
         setShowCoupon(false);
-        toast({ title: `✅ خصم ${data.coupon.discountPercent}% تم تطبيقه` });
+        toast({ title: `✅ خصم ${data.discountPercent}% تم تطبيقه` });
       } else {
-        setCouponError(data.error || "كود الخصم غير صالح");
+        setCouponError(data.message || "كود الخصم غير صالح");
       }
     } catch { setCouponError("خطأ في التحقق"); }
     finally { setIsValidatingCoupon(false); }

@@ -292,25 +292,69 @@ export default function Cart() {
     ? !cartItems || cartItems.length === 0
     : guestCart.length === 0;
 
+  const { data: suggestedProducts } = useQuery<Product[]>({
+    queryKey: ["/api/products", "empty-cart-suggestions"],
+    queryFn: () => fetch("/api/products?limit=8").then(r => r.json()),
+    enabled: isEmpty,
+    staleTime: 1000 * 60 * 5,
+  });
+
   if (isEmpty) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-        <div className="bg-primary/5 p-6 rounded-full mb-5">
-          <ShoppingBag className="h-14 w-14 text-primary" />
+      <div className="px-4 pt-8 pb-24" dir="rtl">
+        {/* رسالة السلة الفارغة */}
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <div className="bg-primary/5 p-6 rounded-full mb-5">
+            <ShoppingBag className="h-14 w-14 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold mb-3">سلة التسوق فارغة</h1>
+          <p className="text-muted-foreground mb-6 text-sm max-w-xs">
+            لم تقم بإضافة أي منتجات بعد. تصفح منتجاتنا وابدأ التسوق!
+          </p>
+          <Link href="/products">
+            <Button
+              size="lg"
+              className="rounded-full px-8"
+              data-testid="button-browse-products"
+            >
+              تصفح المنتجات
+            </Button>
+          </Link>
         </div>
-        <h1 className="text-2xl font-bold mb-3">سلة التسوق فارغة</h1>
-        <p className="text-muted-foreground mb-6 text-sm max-w-xs">
-          لم تقم بإضافة أي منتجات بعد. تصفح منتجاتنا وابدأ التسوق!
-        </p>
-        <Link href="/products">
-          <Button
-            size="lg"
-            className="rounded-full px-8"
-            data-testid="button-browse-products"
-          >
-            تصفح المنتجات
-          </Button>
-        </Link>
+
+        {/* منتجات قد تعجبك */}
+        {suggestedProducts && suggestedProducts.length > 0 && (
+          <div className="mt-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-bold">قد يعجبك أيضاً</h2>
+              <Link href="/products" className="text-xs text-primary">
+                عرض الكل
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {suggestedProducts.slice(0, 8).map((p) => (
+                <Link key={p.id} href={`/product/${p.id}`} data-testid={`card-suggested-${p.id}`}>
+                  <div className="bg-white dark:bg-card rounded-xl border border-border/50 overflow-hidden shadow-sm hover:shadow-md transition-shadow active:scale-[0.97]">
+                    <div className="aspect-square bg-muted overflow-hidden">
+                      <img
+                        src={(p as any).imageUrl || "/placeholder.png"}
+                        alt={p.name}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                    <div className="p-2">
+                      <p className="text-xs font-medium line-clamp-2 leading-tight mb-1">{p.name}</p>
+                      <p className="text-sm font-bold text-primary">
+                        {Number(p.price).toLocaleString("ar-YE")} ر.ي
+                      </p>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
