@@ -154,6 +154,8 @@ export const cartItems = pgTable("cart_items", {
   aiDesignFee: numeric("ai_design_fee").default("0"), // رسوم التصميم المضافة من الموظف الذكي
   // ── خيارات الطباعة الفورية (Phase 4) — JSON ────────────────────────────
   designOptions: text("design_options"),
+  // ── المعاينة الفورية (preview fee) — معرّف المتغيّر المختار ──
+  selectedPreview: text("selected_preview"),
 });
 
 export const orders = pgTable("orders", {

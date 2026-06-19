@@ -67,10 +67,10 @@ interface BulkPricing { minQty: number; price: string; }
 interface SizePricing { size: string; price: string; priceSar?: string; colors?: string[]; stock?: number; }
 interface QuantityTier { qty: number; totalPrice: number; unitPrice: number; costPrice?: number; }
 interface ColorImageEntry { color: string; hex: string; imageUrl: string; }
-type SmartVType = "color" | "size" | "weight" | "image" | "bundle";
-interface SmartV { id: string; type: SmartVType; label: string; price: string; priceSar: string; discount: string; hex: string; imageUrl: string; count?: number; }
+type SmartVType = "color" | "size" | "weight" | "image" | "bundle" | "strength" | "preview";
+interface SmartV { id: string; type: SmartVType; label: string; price: string; priceSar: string; discount: string; hex: string; imageUrl: string; count?: number; costPriceY?: string; costPriceSar?: string; }
 interface SmartVData { activeTypes: SmartVType[]; variants: SmartV[]; }
-const SMART_V_LABELS: Record<SmartVType, string> = { color: "اللون", size: "المقاس", weight: "الوزن", image: "الصورة", bundle: "الشدة" };
+const SMART_V_LABELS: Record<SmartVType, string> = { color: "اللون", size: "المقاس", weight: "الوزن", image: "الصورة", bundle: "الشدة", strength: "الشدة", preview: "معاينة فورية" };
 
 interface PdpSection {
   id: string; visible: boolean; height?: number; thumbSize?: number; mode?: string;
@@ -643,17 +643,32 @@ export default function ProductDetail() {
     const weightV = getV('weight');
     const weightP = pick(weightV);
     if (weightP) return { price: weightP, label: weightV?.label || '', type: 'weight' };
-    // 3) المقاس
+    // 4) المقاس
     const sizeV = getV('size');
     const sizeP = pick(sizeV);
     if (sizeP) return { price: sizeP, label: sizeV?.label || '', type: 'size' };
-    // 4) اللون أو الصورة (نادراً)
+    // 5) الشدة (سرة)
+    const strengthV = getV('strength');
+    const strengthP = pick(strengthV);
+    if (strengthP) return { price: strengthP, label: strengthV?.label || '', type: 'strength' };
+    // 6) اللون أو الصورة (نادراً)
     for (const type of ['color', 'image']) {
       const v = getV(type); const p = pick(v);
       if (p) return { price: p, label: v?.label || '', type };
     }
     return null;
   }, [smartVariantsData, showSmartVariants, selectedSmartVariant, lastClickedType, currency]);
+
+  // ── Preview Fee: رسم إضافي للمعاينة الفورية — لا يؤثر على السعر الأساسي ──────
+  const previewFee = useMemo(() => {
+    if (!showSmartVariants || !smartVariantsData) return 0;
+    const previewId = selectedSmartVariant['preview'];
+    if (!previewId) return 0;
+    const v = smartVariantsData.variants.find(x => x.id === previewId && x.type === 'preview');
+    if (!v) return 0;
+    const price = Number(currency === 'SAR' && v.priceSar ? v.priceSar : v.price || 0);
+    return price;
+  }, [showSmartVariants, smartVariantsData, selectedSmartVariant, currency]);
 
   const currentPrice = useMemo(() => {
     if (!product) return '0';
@@ -760,8 +775,8 @@ export default function ProductDetail() {
   const totalPrice = useMemo(() => {
     // عند تفعيل العرض، السعر شامل ويُلغي كل رسوم الطباعة والأقسام الأخرى
     if (activeOffer) return Number(currentPrice) * effectiveQty;
-    return (Number(currentPrice) * effectiveQty) + printingCost + bagPrintingCost + (professionalPrintingUnitPrice * effectiveQty) + phase4PrintingBreakdown.totalPrintingCost;
-  }, [currentPrice, effectiveQty, printingCost, bagPrintingCost, professionalPrintingUnitPrice, phase4PrintingBreakdown.totalPrintingCost, activeOffer]);
+    return (Number(currentPrice) * effectiveQty) + printingCost + bagPrintingCost + (professionalPrintingUnitPrice * effectiveQty) + phase4PrintingBreakdown.totalPrintingCost + (previewFee * effectiveQty);
+  }, [currentPrice, effectiveQty, printingCost, bagPrintingCost, professionalPrintingUnitPrice, phase4PrintingBreakdown.totalPrintingCost, previewFee, activeOffer]);
 
   const currentStock = useMemo(() =>
     currentSizeData?.stock !== undefined ? currentSizeData.stock : (product?.stock || 0),
@@ -790,6 +805,7 @@ export default function ProductDetail() {
         const v = smartVariantsData.variants.find(x => x.id === vid);
         if (!v) continue;
         if (type === 'size' || type === 'weight') svSize = v.label;
+        if (type === 'strength') svSize = svSize ? `${svSize} | ${v.label}` : v.label;
         if (type === 'color' || type === 'image') svColor = v.label;
         if (type === 'bundle') {
           svBundleLabel = v.label;
@@ -854,6 +870,10 @@ export default function ProductDetail() {
           unitPrice: selectedTier.unitPrice,
           costPrice: selectedTier.costPrice,
         },
+      } : {}),
+      // ── Preview Fee (معاينة فورية) — يُمرّر للخادم للتحقق ──
+      ...(showSmartVariants && smartVariantsData && selectedSmartVariant['preview'] ? {
+        selectedPreview: selectedSmartVariant['preview'],
       } : {}),
     };
   }, [product?.id, effectiveQty, selectedSize, selectedColor, enableCustomPrinting, designNotes, uploadedDesignUrl,
@@ -1021,18 +1041,29 @@ export default function ProductDetail() {
     }).catch(() => { /* silent */ });
   }, [product?.id, product?.name, volumeOffersLoaded, sortedOffers.length]);
 
-  // ── Phase 2: قائمة ألوان حبر الطباعة الجاهزة (chips) ────────────────────
-  const inkColorPalette = useMemo(() => ([
-    { name: 'أسود',  hex: '#1a1a1a' },
-    { name: 'أبيض',  hex: '#FFFFFF' },
-    { name: 'ذهبي',  hex: '#D4AF37' },
-    { name: 'فضي',   hex: '#C0C0C0' },
-    { name: 'أحمر',  hex: '#EF4444' },
-    { name: 'أزرق',  hex: '#3B82F6' },
-    { name: 'أخضر',  hex: '#22C55E' },
-    { name: 'وردي',  hex: '#EC4899' },
-    { name: 'برتقالي', hex: '#F97316' },
-  ]), []);
+  // ── Phase 2: ألوان حبر الطباعة — من إعدادات المنتج (printColorOptions) ──
+  const productPrintColorOptions: Array<{ name: string; hex: string }> = useMemo(() => {
+    try {
+      const raw = (product as any)?.printColorOptions;
+      if (!raw) return [];
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return Array.isArray(parsed) ? parsed.filter((c: any) => c?.name && c?.hex) : [];
+    } catch { return []; }
+  }, [(product as any)?.printColorOptions]);
+  // fallback: لو لم يُعيّن الأدمن ألواناً، نعرض لوحة افتراضية
+  const inkColorPalette = useMemo(() => (
+    productPrintColorOptions.length > 0 ? productPrintColorOptions : [
+      { name: 'أسود', hex: '#1a1a1a' },
+      { name: 'أبيض', hex: '#FFFFFF' },
+      { name: 'ذهبي', hex: '#D4AF37' },
+      { name: 'فضي', hex: '#C0C0C0' },
+      { name: 'أحمر', hex: '#EF4444' },
+      { name: 'أزرق', hex: '#3B82F6' },
+      { name: 'أخضر', hex: '#22C55E' },
+      { name: 'وردي', hex: '#EC4899' },
+      { name: 'برتقالي', hex: '#F97316' },
+    ]
+  ), [productPrintColorOptions]);
 
   // ── Phase 2: نصيحة التباين الذكية ───────────────────────────────────────
   const isHexDark = (hex: string): boolean => {
@@ -1660,8 +1691,30 @@ export default function ProductDetail() {
                             );
                           })}
                         </div>
+                      ) : type === 'preview' ? (
+                        /* Preview → بطاقة خاصة (رسوم إضافية) */
+                        <div className={sizeGridClass}>
+                          {typeVariants.map(v => {
+                            const isSelected = selectedSmartVariant[type] === v.id;
+                            const priceNum = Number(currency === 'SAR' && v.priceSar ? v.priceSar : v.price || 0);
+                            return (
+                              <button key={v.id}
+                                onClick={() => { setLastClickedType(type); setSelectedSmartVariant(p => ({ ...p, [type]: isSelected ? '' : v.id })); }}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 font-bold transition-all ${isSelected ? 'border-primary bg-primary text-white shadow' : 'border-gray-300 bg-white dark:bg-gray-800 text-foreground hover:border-gray-400'}`}
+                                data-testid={`button-smart-variant-${type}-${v.id}`}>
+                                <span className="text-lg">🎨</span>
+                                <span className="text-sm">{v.label}</span>
+                                {priceNum > 0 && (
+                                  <span className={`text-[10px] font-normal mr-auto ${isSelected ? 'text-white/80' : 'text-muted-foreground'}`}>
+                                    +{formatPrice(priceNum)} {currLabel}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
                       ) : (
-                        /* Size/Weight → أزرار بأبعاد وتخطيط قابلين للتحكم */
+                        /* Size/Weight/Strength → أزرار بأبعاد وتخطيط قابلين للتحكم */
                         <div className={sizeGridClass}>
                           {typeVariants.map(v => {
                             const isSelected = selectedSmartVariant[type] === v.id;
@@ -1691,6 +1744,82 @@ export default function ProductDetail() {
                     </div>
                   );
                 })}
+
+                {/* ── Quantity Tiers — داخل قسم الخيارات الذكية ── */}
+                {showQuantityTiers && quantityTiers.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="text-sm font-semibold">📦 الكمية:</span>
+                      <span className="text-xs font-bold text-cyan-600">{selectedTier?.qty || quantity} قطعة</span>
+                    </div>
+                    <div className="flex gap-2">
+                      {quantityTiers.map((t) => {
+                        const active = (selectedTier || quantityTiers[0]).qty === t.qty;
+                        return (
+                          <button
+                            key={t.qty}
+                            onClick={() => { setSelectedTier(t); setQuantity(t.qty); }}
+                            className={`flex-1 border-2 rounded-xl p-2.5 text-center transition-all bg-white ${
+                              active ? "border-cyan-500 bg-cyan-50 shadow-md" : "border-gray-200 hover:border-gray-300"
+                            }`}
+                            data-testid={`button-tier-smart-${t.qty}`}
+                          >
+                            <div className="font-extrabold text-base">{t.qty}</div>
+                            <div className="text-[11px] text-gray-500 -mt-0.5">قطعة</div>
+                            <div className={`inline-block text-[10px] px-2 py-0.5 rounded-full mt-1 ${active ? "bg-cyan-500 text-white" : "bg-gray-100 text-gray-600"}`}>
+                              {t.unitPrice} ر/قطعة
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Volume Offers — داخل قسم الخيارات الذكية ── */}
+                {(() => {
+                  const productKind = ((product as any).productType ?? "ready");
+                  const variantsList = ((product as any).smartVariants?.variants || []) as Array<{ type?: string }>;
+                  const hasBundleVariant = Array.isArray(variantsList) && variantsList.some(v => v?.type === "bundle");
+                  const offersAllowedForKind = productKind === "customizable" || hasBundleVariant;
+                  const hasOffers = offersAllowedForKind && sortedOffers.length > 0;
+                  if (!hasOffers) return null;
+                  return (
+                    <div>
+                      <div className="flex items-center justify-between mb-2.5">
+                        <span className="text-sm font-semibold">🔥 عروض الكمية:</span>
+                        {activeOffer && (
+                          <span className="text-xs font-bold text-orange-600">
+                            {activeOffer.displayLabel || `سعر ${activeOffer.offerPriceYer} ر.ي`}
+                          </span>
+                        )}
+                      </div>
+                      {activeOffer && (
+                        <div className="rounded-xl border-2 border-orange-400 bg-gradient-to-l from-orange-50 to-amber-50 p-3 shadow-sm mb-2" data-testid="banner-active-offer-smart">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            {activeOffer.badgeText && (
+                              <Badge className="bg-orange-500 text-white text-xs animate-pulse">🔥 {activeOffer.badgeText}</Badge>
+                            )}
+                            {activeOffer.hasFreeShipping && (
+                              <Badge className="bg-green-500 text-white text-xs">🚚 شحن مجاني</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-baseline gap-2 flex-wrap">
+                            <span className="text-xl font-bold text-orange-600">{formatPrice(activeOffer.offerPriceYer)} ر.ي / قطعة</span>
+                            {activeOffer.originalPriceYer && activeOffer.originalPriceYer > activeOffer.offerPriceYer && (
+                              <span className="text-sm line-through text-gray-400">{formatPrice(activeOffer.originalPriceYer)} ر.ي</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {nextOffer && (nextOffer.minQuantity - (activeOffer?.maxQuantity ?? 0)) > 0 && (
+                        <div className="rounded-xl border border-blue-300 bg-blue-50 p-2 text-xs text-blue-900">
+                          أضِف {nextOffer.minQuantity - quantity} قطعة للحصول على سعر <strong>{formatPrice(nextOffer.offerPriceYer)} ر.ي</strong>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -1857,6 +1986,8 @@ export default function ProductDetail() {
       // ── VOLUME OFFERS (May 17, 2026) — Anchor / Progress / Badge / Tiers ─
       case "volume-offers":
       case "bulk": {
+        // إذا كانت الخيارات الذكية مُفعّلة، تُعرض عروض الكمية داخل قسم variants الموحد
+        if (showSmartVariants) return null;
         // نُدمج عرض العروض التحفيزية مع قسم bulk القديم — لو الاثنان فارغان، لا شيء يُرسم
         // إخفاء عروض الكميات للمنتجات الجاهزة (ready) التي لا تملك متغيّر bundle
         const productKind = ((product as any).productType ?? "ready");
@@ -2003,6 +2134,8 @@ export default function ProductDetail() {
 
       // ── QUANTITY ──────────────────────────────────────────────────────────
       case "quantity": {
+        // إذا كانت الخيارات الذكية مُفعّلة، تُعرض كميات التيير داخل قسم variants الموحد
+        if (showSmartVariants) return null;
         if (!sec["quantity"]?.visible) return null;
         // ── Quantity Tiers (اختر الكمية) ──
         if (showQuantityTiers && quantityTiers.length > 0) {
@@ -2147,21 +2280,15 @@ export default function ProductDetail() {
       // ── PRINTING ──────────────────────────────────────────────────────────
       case "printing": {
         if (!sec["printing"]?.visible) return null;
-        // 🛡️ إخفاء قسم الطباعة/التخصيص بالكامل للمنتجات الجاهزة
-        if (((product as any)?.productType ?? "ready") === "ready") return null;
         const hasBagPrinting = product.hasPrintingOptions;
         const hasProfPrinting = !!(product as any).printingCategoryId && productPrintingCat;
         // Live Preview يتطلب تفعيل صريح من الأدمن (showLivePreview) إلى جانب allowDesignUpload
         const hasDesignUpload = product.allowDesignUpload && (product as any).showLivePreview === true;
-        if (!hasBagPrinting && !hasProfPrinting && !hasDesignUpload) return null;
-
-        // ── Phase 2 UX Revamp: ألوان الكيس Cloudinary المتاحة ─────────────
-        const cloudBagColors = ((product as any).availableColors || []) as Array<{id:string;name:string;code:string}>;
+        // لون الكيس عبر Cloudinary خاص بالمنتجات القابلة للتخصيص
         const isCustomizableProduct = ((product as any).productType ?? "ready") === "customizable";
-        const hasCloudBagColors = isCustomizableProduct
-          && cloudBagColors.length > 0
-          && !!(product as any).baseImagePublicId
-          && !!(product as any).cloudinaryCloudName;
+        const cloudBagColors = ((product as any).availableColors || []) as Array<{id:string;name:string;code:string}>;
+        const hasCloudBagColors = isCustomizableProduct && cloudBagColors.length > 0 && !!(product as any).baseImagePublicId && !!(product as any).cloudinaryCloudName;
+        if (!hasBagPrinting && !hasProfPrinting && !hasDesignUpload && !hasCloudBagColors) return null;
 
         return (
           <div key="printing" className="px-4 space-y-3" data-testid="section-printing">

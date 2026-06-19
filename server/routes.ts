@@ -196,10 +196,12 @@ export function computeBaseFromSmartVariants(
         return { ...v, _price: p, _discount: isNaN(disc) ? 0 : disc, _cost: cost };
       })
       .filter((v: any) => !isNaN(v._price) && v._price > 0);
-    if (priced.length === 0) return null;
+    // إستبعاد نوع preview (رسم إضافي) من تحديد السعر الأساسي
+    const baseVariants = priced.filter((v: any) => v.type !== 'preview');
+    if (baseVariants.length === 0) return null;
     // الأرخص يحدّد السعر الأساسي
-    priced.sort((a: any, b: any) => a._price - b._price);
-    const cheapest = priced[0];
+    baseVariants.sort((a: any, b: any) => a._price - b._price);
+    const cheapest = baseVariants[0];
     const finalPrice = cheapest._price;
     const rate = exchangeRate > 0 ? exchangeRate : 140;
     const priceSar = (finalPrice / rate).toFixed(2);
@@ -440,13 +442,26 @@ export async function computeServerUnitPrice(
   if (proPrintingPerUnit < 0) proPrintingPerUnit = 0;
   if (proPrintingPerUnit > 100000) proPrintingPerUnit = 0; // sanity cap
 
-  const lineTotal = (basePrice + proPrintingPerUnit + customPrintingPerUnit) * qty + phase4Total;
+  // (5) معاينة فورية (preview fee) — رسم إضافي من smart variants
+  let previewFee = 0;
+  try {
+    const sv = typeof row.smart_variants === "string" ? JSON.parse(row.smart_variants) : row.smart_variants;
+    const previewId = item.selectedPreview;
+    if (sv && Array.isArray(sv.variants) && previewId) {
+      const v = sv.variants.find((x: any) => x.id === previewId && x.type === 'preview');
+      if (v) {
+        previewFee = parseFloat(String(v.price ?? "0")) || 0;
+      }
+    }
+  } catch { /* ignore */ }
+
+  const lineTotal = (basePrice + proPrintingPerUnit + customPrintingPerUnit + previewFee) * qty + phase4Total;
   const unitPrice = lineTotal / qty;
 
   return {
     unitPrice: Math.max(0, Math.round(unitPrice * 100) / 100),
     lineTotal: Math.max(0, Math.round(lineTotal * 100) / 100),
-    breakdown: { basePrice, proPrintingPerUnit, customPrintingPerUnit, phase4Total, designFee, colorTotal, sideTotal, qty },
+    breakdown: { basePrice, proPrintingPerUnit, customPrintingPerUnit, phase4Total, designFee, colorTotal, sideTotal, previewFee, qty },
   };
 }
 
@@ -6468,6 +6483,265 @@ h1{font-size:18px;color:#222;margin:4px 0;}
     }
   });
 
+  // ─── تحليل اتجاهات السوق ─────────────────────────────────────────────────────────
+  app.get("/api/admin/market-trends", requireAdmin, async (req, res) => {
+    try {
+      const { pool: dbPool } = await import("./db");
+
+      // ── Summary ──
+      const summaryQ = await dbPool.query(`
+        SELECT
+          COALESCE(SUM(total::numeric), 0) as total_revenue,
+          COUNT(*) as total_orders,
+          COALESCE(AVG(total::numeric), 0) as avg_order_value,
+          COALESCE(SUM(CASE WHEN DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE) THEN total::numeric END), 0) as this_month,
+          COALESCE(SUM(CASE WHEN DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' THEN total::numeric END), 0) as last_month,
+          COUNT(CASE WHEN DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE) THEN 1 END) as this_month_orders,
+          COUNT(CASE WHEN DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' THEN 1 END) as last_month_orders
+        FROM orders WHERE status != 'cancelled'
+      `);
+      const s = summaryQ.rows[0];
+      const revenueGrowth = s.last_month > 0 ? ((s.this_month - s.last_month) / s.last_month * 100) : 0;
+      const ordersGrowth = s.last_month_orders > 0 ? ((s.this_month_orders - s.last_month_orders) / s.last_month_orders * 100) : 0;
+
+      // Top product
+      const topProductQ = await dbPool.query(`
+        SELECT oi.product_name, SUM(oi.price::numeric * oi.quantity) as revenue
+        FROM order_items oi JOIN orders o ON oi.order_id = o.id
+        WHERE o.status != 'cancelled'
+        GROUP BY oi.product_name ORDER BY revenue DESC LIMIT 1
+      `);
+      const topProduct = topProductQ.rows[0] || { product_name: "—", revenue: 0 };
+
+      // Best / worst day
+      const bestDayQ = await dbPool.query(`
+        SELECT DATE(created_at) as day, SUM(total::numeric) as revenue
+        FROM orders WHERE status != 'cancelled' AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY DATE(created_at) ORDER BY revenue DESC LIMIT 1
+      `);
+      const worstDayQ = await dbPool.query(`
+        SELECT DATE(created_at) as day, SUM(total::numeric) as revenue
+        FROM orders WHERE status != 'cancelled' AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY DATE(created_at) ORDER BY revenue ASC LIMIT 1
+      `);
+      const bestDay = bestDayQ.rows[0] || { day: "—", revenue: 0 };
+      const worstDay = worstDayQ.rows[0] || { day: "—", revenue: 0 };
+
+      // ── Daily Trends (30 days) ──
+      const dailyQ = await dbPool.query(`
+        SELECT DATE(created_at) as day,
+               SUM(total::numeric) as revenue,
+               COUNT(*) as orders,
+               COALESCE(AVG(total::numeric), 0) as avg_value,
+               TO_CHAR(created_at, 'Day') as day_of_week
+        FROM orders
+        WHERE status != 'cancelled' AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY DATE(created_at), TO_CHAR(created_at, 'Day')
+        ORDER BY day DESC
+      `);
+
+      // ── Weekly Trends (12 weeks) ──
+      const weeklyQ = await dbPool.query(`
+        SELECT TO_CHAR(DATE_TRUNC('week', created_at), 'YYYY-MM-DD') as week,
+               SUM(total::numeric) as revenue,
+               COUNT(*) as orders
+        FROM orders
+        WHERE status != 'cancelled' AND created_at >= NOW() - INTERVAL '12 weeks'
+        GROUP BY DATE_TRUNC('week', created_at)
+        ORDER BY DATE_TRUNC('week', created_at)
+      `);
+
+      // ── Monthly Trends (12 months) ──
+      const monthlyQ = await dbPool.query(`
+        SELECT TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as month,
+               SUM(total::numeric) as revenue,
+               COUNT(*) as orders
+        FROM orders
+        WHERE status != 'cancelled' AND created_at >= NOW() - INTERVAL '12 months'
+        GROUP BY DATE_TRUNC('month', created_at)
+        ORDER BY DATE_TRUNC('month', created_at)
+      `);
+
+      // ── Product Demand (last 30 days vs previous 30 days) ──
+      const productDemandQ = await dbPool.query(`
+        WITH current AS (
+          SELECT oi.product_name, oi.product_id,
+                 SUM(oi.price::numeric * oi.quantity) as revenue,
+                 SUM(oi.quantity) as units,
+                 COUNT(*) as orders
+          FROM order_items oi JOIN orders o ON oi.order_id = o.id
+          WHERE o.status != 'cancelled' AND o.created_at >= NOW() - INTERVAL '30 days'
+          GROUP BY oi.product_name, oi.product_id
+        ),
+        previous AS (
+          SELECT oi.product_id, SUM(oi.price::numeric * oi.quantity) as revenue
+          FROM order_items oi JOIN orders o ON oi.order_id = o.id
+          WHERE o.status != 'cancelled' AND o.created_at >= NOW() - INTERVAL '60 days' AND o.created_at < NOW() - INTERVAL '30 days'
+          GROUP BY oi.product_id
+        )
+        SELECT c.product_name, c.product_id, c.revenue, c.units, c.orders,
+               COALESCE(p.revenue, 0) as last_week_revenue,
+               CASE WHEN COALESCE(p.revenue, 0) = 0 THEN 100 ELSE ROUND(((c.revenue - p.revenue) / p.revenue * 100)::numeric, 1) END as trend_change
+        FROM current c LEFT JOIN previous p ON c.product_id = p.product_id
+        ORDER BY c.revenue DESC LIMIT 15
+      `);
+
+      // ── Category Trends ──
+      const categoryQ = await dbPool.query(`
+        WITH cat AS (
+          SELECT p.category_id, c.name as category_name,
+                 SUM(oi.price::numeric * oi.quantity) as revenue,
+                 COUNT(*) as orders
+          FROM order_items oi
+          JOIN orders o ON oi.order_id = o.id
+          LEFT JOIN products p ON oi.product_id = p.id
+          LEFT JOIN categories c ON p.category_id = c.id
+          WHERE o.status != 'cancelled' AND o.created_at >= NOW() - INTERVAL '30 days'
+          GROUP BY p.category_id, c.name
+        ),
+        prev AS (
+          SELECT p.category_id, SUM(oi.price::numeric * oi.quantity) as revenue
+          FROM order_items oi
+          JOIN orders o ON oi.order_id = o.id
+          LEFT JOIN products p ON oi.product_id = p.id
+          WHERE o.status != 'cancelled' AND o.created_at >= NOW() - INTERVAL '60 days' AND o.created_at < NOW() - INTERVAL '30 days'
+          GROUP BY p.category_id
+        ),
+        total AS (SELECT COALESCE(SUM(revenue), 1) as total_revenue FROM cat)
+        SELECT c.category_id, COALESCE(c.category_name, 'غير مصنف') as category_name,
+               c.revenue, c.orders,
+               CASE WHEN COALESCE(p.revenue, 0) = 0 THEN 100 ELSE ROUND(((c.revenue - p.revenue) / p.revenue * 100)::numeric, 1) END as trend_change,
+               ROUND((c.revenue / t.total_revenue * 100)::numeric, 1) as share_percent
+        FROM cat c
+        LEFT JOIN prev p ON c.category_id = p.category_id
+        CROSS JOIN total t
+        ORDER BY c.revenue DESC LIMIT 8
+      `);
+
+      // ── Hourly Heatmap ──
+      const hourlyQ = await dbPool.query(`
+        SELECT TO_CHAR(EXTRACT(hour FROM created_at), 'FM00') || ':00' as hour,
+               COUNT(*) as orders,
+               SUM(total::numeric) as revenue
+        FROM orders
+        WHERE status != 'cancelled' AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY EXTRACT(hour FROM created_at)
+        ORDER BY EXTRACT(hour FROM created_at)
+      `);
+
+      // ── Seasonal Insights ──
+      const dowQ = await dbPool.query(`
+        SELECT TO_CHAR(created_at, 'Day') as day, COUNT(*) as orders
+        FROM orders WHERE status != 'cancelled' AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY TO_CHAR(created_at, 'Day') ORDER BY orders DESC
+      `);
+      const hourQ = await dbPool.query(`
+        SELECT EXTRACT(hour FROM created_at)::int as hour, COUNT(*) as orders
+        FROM orders WHERE status != 'cancelled' AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY EXTRACT(hour FROM created_at) ORDER BY orders DESC LIMIT 1
+      `);
+      const weekendQ = await dbPool.query(`
+        SELECT SUM(CASE WHEN EXTRACT(dow FROM created_at) IN (5,6) THEN total::numeric ELSE 0 END) as weekend,
+               SUM(CASE WHEN EXTRACT(dow FROM created_at) NOT IN (5,6) THEN total::numeric ELSE 0 END) as weekday
+        FROM orders WHERE status != 'cancelled' AND created_at >= NOW() - INTERVAL '30 days'
+      `);
+      const prevMonthQ = await dbPool.query(`
+        SELECT COALESCE(SUM(total::numeric), 0) as revenue
+        FROM orders WHERE status != 'cancelled' AND created_at >= NOW() - INTERVAL '60 days' AND created_at < NOW() - INTERVAL '30 days'
+      `);
+      const currMonthQ = await dbPool.query(`
+        SELECT COALESCE(SUM(total::numeric), 0) as revenue
+        FROM orders WHERE status != 'cancelled' AND created_at >= NOW() - INTERVAL '30 days'
+      `);
+
+      const peakDay = dowQ.rows[0] || { day: "—", orders: 0 };
+      const slowDay = dowQ.rows[dowQ.rows.length - 1] || { day: "—", orders: 0 };
+      const peakHour = hourQ.rows[0] || { hour: 0, orders: 0 };
+      const weekend = weekendQ.rows[0] || { weekend: 0, weekday: 0 };
+      const currM = Number(currMonthQ.rows[0]?.revenue || 0);
+      const prevM = Number(prevMonthQ.rows[0]?.revenue || 0);
+      const trendPercent = prevM > 0 ? ((currM - prevM) / prevM * 100) : 0;
+      const trendDirection = trendPercent > 5 ? "rising" : trendPercent < -5 ? "falling" : "stable";
+
+      res.json({
+        summary: {
+          totalRevenue: Number(s.total_revenue),
+          totalOrders: Number(s.total_orders),
+          avgOrderValue: Number(s.avg_order_value),
+          revenueGrowth,
+          ordersGrowth,
+          topProductRevenue: Number(topProduct.revenue),
+          topProductName: topProduct.product_name,
+          bestDayRevenue: Number(bestDay.revenue),
+          bestDayName: String(bestDay.day),
+          worstDayRevenue: Number(worstDay.revenue),
+          worstDayName: String(worstDay.day),
+        },
+        dailyTrends: dailyQ.rows.map((r: any) => ({
+          day: r.day,
+          revenue: Number(r.revenue),
+          orders: Number(r.orders),
+          avgValue: Number(r.avg_value),
+          dayOfWeek: String(r.day_of_week).trim(),
+        })),
+        weeklyTrends: weeklyQ.rows.map((r: any, i: number, arr: any[]) => {
+          const prev = i > 0 ? arr[i - 1] : null;
+          const growth = prev ? ((Number(r.revenue) - Number(prev.revenue)) / Number(prev.revenue) * 100) : 0;
+          return { week: r.week, revenue: Number(r.revenue), orders: Number(r.orders), growthRate: Number(growth.toFixed(1)) };
+        }),
+        monthlyTrends: monthlyQ.rows.map((r: any, i: number, arr: any[]) => {
+          const prev = i > 0 ? arr[i - 1] : null;
+          const growth = prev ? ((Number(r.revenue) - Number(prev.revenue)) / Number(prev.revenue) * 100) : 0;
+          return { month: r.month, revenue: Number(r.revenue), orders: Number(r.orders), growthRate: Number(growth.toFixed(1)) };
+        }),
+        productDemand: productDemandQ.rows.map((r: any) => {
+          const change = Number(r.trend_change);
+          return {
+            productName: r.product_name,
+            productId: r.product_id,
+            revenue: Number(r.revenue),
+            units: Number(r.units),
+            orders: Number(r.orders),
+            trend: change > 10 ? "rising" : change < -10 ? "falling" : "stable",
+            trendChange: change,
+            lastWeekRevenue: Number(r.last_week_revenue),
+          };
+        }),
+        categoryTrends: categoryQ.rows.map((r: any) => {
+          const change = Number(r.trend_change);
+          return {
+            categoryName: r.category_name,
+            categoryId: r.category_id,
+            revenue: Number(r.revenue),
+            orders: Number(r.orders),
+            trend: change > 10 ? "rising" : change < -10 ? "falling" : "stable",
+            trendChange: change,
+            sharePercent: Number(r.share_percent),
+          };
+        }),
+        hourlyHeatmap: hourlyQ.rows.map((r: any) => ({
+          hour: r.hour,
+          orders: Number(r.orders),
+          revenue: Number(r.revenue),
+        })),
+        seasonalInsights: {
+          peakDay: String(peakDay.day).trim(),
+          peakDayOrders: Number(peakDay.orders),
+          peakHour: String(peakHour.hour) + ":00",
+          peakHourOrders: Number(peakHour.orders),
+          slowestDay: String(slowDay.day).trim(),
+          slowestDayOrders: Number(slowDay.orders),
+          weekendRevenue: Number(weekend.weekend),
+          weekdayRevenue: Number(weekend.weekday),
+          trendDirection,
+          trendPercent: Number(trendPercent.toFixed(1)),
+        },
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب تحليلات الاتجاهات", details: e.message });
+    }
+  });
+
   // ─── نقاط الولاء (Loyalty Points) ────────────────────────────────────────────
   // قراءة نقاط المستخدم
   app.get("/api/points", async (req, res) => {
@@ -8670,6 +8944,8 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         aiDesignFee,
         // ── Phase 4: خيارات الطباعة الفورية ──
         designOptions,
+        // ── Preview fee (معاينة فورية) ──
+        selectedPreview,
       } = req.body;
 
       // 🔒 إعادة حساب unitPrice على الخادم لمنع تلاعب العميل
@@ -8678,6 +8954,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         const computed = await computeServerUnitPrice(Number(productId), {
           quantity, selectedSize, selectedColor, selectedBagColor,
           customPrinting, designOptions, printingUnitPrice,
+          selectedPreview,
         });
         serverUnitPrice = computed.unitPrice;
       } catch (e: any) {
@@ -8712,7 +8989,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         } catch { /* fallback to current serverUnitPrice */ }
         const [updated] = await dbInstance
           .update(cartTable)
-          .set({ quantity: newQty, unitPrice: mergedUnitPrice != null ? String(mergedUnitPrice) : existingItem.unitPrice })
+          .set({ quantity: newQty, unitPrice: mergedUnitPrice != null ? String(mergedUnitPrice) : existingItem.unitPrice, selectedPreview: selectedPreview || null })
           .where(eqFn(cartTable.id, existingItem.id))
           .returning();
         return res.status(201).json(updated);
@@ -8743,6 +9020,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
           printingUnitPrice: printingUnitPrice || null,
           unitPrice: serverUnitPrice != null ? String(serverUnitPrice) : null,
           aiDesignFee: aiDesignFee || null,
+          selectedPreview: selectedPreview || null,
           designOptions: designOptions
             ? (typeof designOptions === "string" ? designOptions : JSON.stringify(designOptions))
             : null,
@@ -8765,10 +9043,11 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const { cartItems: cartTable } = await import("@shared/schema");
       const { eq: eqFn } = await import("drizzle-orm");
       
-      const { quantity, designFileUrl } = req.body;
+      const { quantity, designFileUrl, selectedPreview: patchSelectedPreview } = req.body;
       const updateData: Record<string, any> = {};
       if (quantity !== undefined) updateData.quantity = quantity;
       if (designFileUrl !== undefined) updateData.designFileUrl = designFileUrl;
+      let curPreview: string | null = null;
 
       // إعادة حساب unitPrice عند تغيير الكمية (لتحديث tier pricing)
       if (quantity !== undefined) {
@@ -8777,6 +9056,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
           const existRows = await dbInstance.select().from(cartTable).where(eqFn(cartTable.id, cartId));
           const cur = existRows[0];
           if (cur) {
+            curPreview = cur.selectedPreview || null;
             const recomputed = await computeServerUnitPrice(Number(cur.productId), {
               quantity: Number(quantity), selectedSize: cur.selectedSize, selectedColor: cur.selectedColor,
               selectedBagColor: cur.selectedBagColor, customPrinting: cur.customPrinting,
@@ -8788,7 +9068,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       }
       const [updated] = await dbInstance
         .update(cartTable)
-        .set(updateData)
+        .set({ ...updateData, selectedPreview: patchSelectedPreview || curPreview || null })
         .where(eqFn(cartTable.id, parseInt(req.params.id)))
         .returning();
       

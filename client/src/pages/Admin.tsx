@@ -23,6 +23,7 @@ import AdminCreditTiers from "@/components/AdminCreditTiers";
 import AdminCreditCustomers from "@/components/AdminCreditCustomers";
 import { FinancialAlertsBadge } from "@/components/FinancialAlertsBadge";
 import InlineVolumeOffers from "@/components/InlineVolumeOffers";
+import MarketTrends from "@/pages/MarketTrends";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -172,7 +173,7 @@ interface ColorImageEntry {
   imageUrl: string;
 }
 
-type SmartVariantType = "color" | "size" | "weight" | "image" | "bundle";
+type SmartVariantType = "color" | "size" | "weight" | "image" | "bundle" | "strength" | "preview";
 interface SmartVariant {
   id: string;
   type: SmartVariantType;
@@ -194,6 +195,8 @@ const SMART_VARIANT_TYPE_LABELS: Record<SmartVariantType, string> = {
   weight: "وزن",
   image: "صورة",
   bundle: "شدة",
+  strength: "شدة",
+  preview: "معاينة فورية",
 };
 const SMART_VARIANT_TYPE_ICONS: Record<SmartVariantType, string> = {
   color: "🎨",
@@ -201,6 +204,8 @@ const SMART_VARIANT_TYPE_ICONS: Record<SmartVariantType, string> = {
   weight: "⚖️",
   image: "🖼️",
   bundle: "🎁",
+  strength: "💪",
+  preview: "🎨",
 };
 
 interface ProductFormData {
@@ -9224,6 +9229,11 @@ export default function Admin() {
 
           <TabsContent value="reports">
             <FinancialReports adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── Market Trends Tab ───────────────────────────────────── */}
+          <TabsContent value="market-trends">
+            <MarketTrends adminToken={adminToken} />
           </TabsContent>
 
           <TabsContent value="settings">

@@ -113,6 +113,7 @@ const navGroups: AdminNavGroup[] = [
     groupColor: "border-indigo-200 bg-indigo-50 dark:bg-indigo-950/30 dark:border-indigo-800",
     items: [
       { id: "reports", label: "تقارير المبيعات", icon: <BarChart3 className="h-6 w-6" />, color: "from-indigo-400 to-indigo-600" },
+      { id: "market-trends", label: "اتجاهات السوق", icon: <TrendingUp className="h-6 w-6" />, color: "from-pink-400 to-rose-600", badge: "جديد" },
     ],
   },
   {
