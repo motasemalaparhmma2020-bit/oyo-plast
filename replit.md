@@ -15,6 +15,9 @@ OYO PLAST is a comprehensive RTL Arabic e-commerce platform for plastic printing
 - Iterative development. Ask before making major changes. Prefer detailed explanations.
 - Do not make changes to the folder `Z` or to the file `Y`.
 - Communicate in Arabic when the user is writing Arabic.
+- **Device:** User works from a Galaxy Note 8 (small mobile screen, ~411px). Always design mobile-first for small screens.
+- **No Replit Canvas:** The Replit Canvas board / mockup-sandbox does NOT open on the user's device. NEVER deliver previews via Canvas. Instead, provide an interactive preview as a real in-app route (e.g. `/product-preview-mockup`) reachable from the normal app URL on their phone.
+- Avoid wide markdown tables in replies (they render poorly on the small screen) — use vertical bullet lists.
 
 ## System Architecture
 
