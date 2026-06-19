@@ -105,6 +105,8 @@ export function NewProductPage() {
   const [designTab, setDesignTab] = useState<"upload" | "text">("upload");
   const [txt, setTxt] = useState({ shop: "", phone: "", addr: "", activity: "" });
   const [textMerged, setTextMerged] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [preview, setPreview] = useState<"plain" | "fast" | "studio">("plain");
   const [studioImg, setStudioImg] = useState("bag-studio.png");
@@ -136,8 +138,25 @@ export function NewProductPage() {
   const busy = generating !== null;
 
   const handleUpload = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setUploadedFile(url);
     setUploaded(true);
     showToast("تم رفع التصميم ✓ — جاهز للمعاينة");
+  };
+
+  const clearUpload = () => {
+    setUploaded(false);
+    setUploadedFile(null);
+    setPreview("plain");
+    setStudioCount(0);
+    setTextMerged(false);
+    if (uploadedFile) URL.revokeObjectURL(uploadedFile);
   };
 
   const runFast = () => {
@@ -212,8 +231,8 @@ export function NewProductPage() {
                 <div
                   className="absolute left-1/2 top-[42%] aspect-square w-[34%] -translate-x-1/2 -translate-y-1/2"
                   style={{
-                    WebkitMaskImage: `url(${IMG("logo-cut.png")})`,
-                    maskImage: `url(${IMG("logo-cut.png")})`,
+                    WebkitMaskImage: `url(${uploadedFile || IMG("logo-cut.png")})`,
+                    maskImage: `url(${uploadedFile || IMG("logo-cut.png")})`,
                     WebkitMaskRepeat: "no-repeat",
                     maskRepeat: "no-repeat",
                     WebkitMaskSize: "contain",
@@ -424,6 +443,14 @@ export function NewProductPage() {
                 </span>
                 <span className="text-sm font-extrabold text-slate-700">ارفع شعارك أو تصميمك</span>
                 <span className="text-[11px] text-slate-400">PDF · PNG · AI · PSD</span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.ai,.psd"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  data-testid="input-file"
+                />
               </button>
             ) : (
               <>
@@ -442,12 +469,12 @@ export function NewProductPage() {
 
                 {designTab === "upload" ? (
                   <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-2.5">
-                    <img src={IMG("logo-cut.png")} alt="logo" className="h-14 w-14 rounded-lg border border-slate-200 bg-white object-contain p-1" />
+                    <img src={uploadedFile || IMG("logo-cut.png")} alt="logo" className="h-14 w-14 rounded-lg border border-slate-200 bg-white object-contain p-1" />
                     <div className="flex-1">
-                      <div className="flex items-center gap-1 text-sm font-bold text-slate-700"><BadgeCheck className="h-4 w-4 text-green-600" /> logo-cafe.png</div>
-                      <div className="text-[11px] text-slate-400">تم الرفع بنجاح · 512×512</div>
+                      <div className="flex items-center gap-1 text-sm font-bold text-slate-700"><BadgeCheck className="h-4 w-4 text-green-600" /> تصميم مرفوع</div>
+                      <div className="text-[11px] text-slate-400">تم الرفع بنجاح · جاهز للمعاينة</div>
                     </div>
-                    <button onClick={() => { setUploaded(false); setPreview("plain"); setStudioCount(0); setTextMerged(false); }} className="grid h-8 w-8 place-items-center rounded-full hover:bg-slate-200">
+                    <button onClick={clearUpload} className="grid h-8 w-8 place-items-center rounded-full hover:bg-slate-200">
                       <X className="h-4 w-4 text-slate-400" />
                     </button>
                   </div>
