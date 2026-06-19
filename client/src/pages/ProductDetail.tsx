@@ -314,6 +314,7 @@ export default function ProductDetail() {
   const [alternativeUrls, setAlternativeUrls] = useState<string[]>([]);
   const [altLoading, setAltLoading] = useState(false);
   const [quickPreviewUrl, setQuickPreviewUrl] = useState<string | null>(null);
+  const [activePreviewTab, setActivePreviewTab] = useState<'product' | 'quick' | 'studio'>('product');
   const [quantityDefaultApplied, setQuantityDefaultApplied] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [variantActiveImg, setVariantActiveImg]   = useState<string | null>(null);
@@ -1004,7 +1005,7 @@ export default function ProductDetail() {
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
   };
 
-  // ── Phase 2: عدّاد 3 ثواني بعد رفع التصميم ──────────────────────────────
+  // ── Phase 2: عدّاد 3 ثواني بعد رفع التصميم + تشغيل المعاينة السريعة تلقائياً ──
   useEffect(() => {
     if (!uploadedDesignUrl) { setPreviewPhase('idle'); setPreviewCountdown(3); return; }
     if (previewPhase !== 'idle') return;
@@ -1313,6 +1314,16 @@ export default function ProductDetail() {
   // عرض تدريجي: 12 ثم +12 عند الوصول للأسفل (Infinite Scroll)
   const [relatedShown, setRelatedShown] = useState(12);
   useEffect(() => { setRelatedShown(12); }, [product?.id]);
+  useEffect(() => {
+    if (!product?.id) return;
+    setStudioPreviewUrl(null);
+    setQuickPreviewUrl(null);
+    setActivePreviewTab('product');
+    setUploadedDesignUrl(null);
+    setUploadedFile(null);
+    setLogoPosition(null);
+    setPreviewPhase('idle');
+  }, [product?.id]);
   const relatedSentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!relatedSentinelRef.current) return;
@@ -1424,6 +1435,55 @@ export default function ProductDetail() {
             {effectiveDiscount > 0 && (
               <div className="absolute top-3 left-3 bg-red-500 text-white rounded-full w-10 h-10 flex items-center justify-center font-extrabold text-xs shadow-lg">
                 -{effectiveDiscount}%
+              </div>
+            )}
+            {/* ── badge معاينة استوديو AI — يظهر عند توفر معاينة ── */}
+            {(studioPreviewUrl || quickPreviewUrl) && !effectiveDiscount && (
+              <div className="absolute top-3 left-3 bg-indigo-600 text-white text-[10px] px-2.5 py-1 rounded-full font-bold shadow-lg flex items-center gap-1 z-10">
+                ✨ معاينة استوديو AI
+              </div>
+            )}
+            {/* ── تبويبات المعاينة (استوديو / سريعة / المنتج) ── */}
+            {(studioPreviewUrl || quickPreviewUrl) && (
+              <div className="absolute bottom-14 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10 bg-black/60 backdrop-blur-sm px-2 py-1.5 rounded-full">
+                {studioPreviewUrl && (
+                  <button type="button"
+                    onClick={() => setActivePreviewTab('studio')}
+                    className={`text-[10px] px-2.5 py-1 rounded-full font-bold transition-all ${activePreviewTab === 'studio' ? 'bg-indigo-500 text-white' : 'bg-white/20 text-white/80 hover:bg-white/30'}`}
+                    data-testid="tab-studio-preview">
+                    استوديو
+                  </button>
+                )}
+                {quickPreviewUrl && (
+                  <button type="button"
+                    onClick={() => setActivePreviewTab('quick')}
+                    className={`text-[10px] px-2.5 py-1 rounded-full font-bold transition-all ${activePreviewTab === 'quick' ? 'bg-sky-500 text-white' : 'bg-white/20 text-white/80 hover:bg-white/30'}`}
+                    data-testid="tab-quick-preview">
+                    سريعة
+                  </button>
+                )}
+                <button type="button"
+                  onClick={() => setActivePreviewTab('product')}
+                  className={`text-[10px] px-2.5 py-1 rounded-full font-bold transition-all ${activePreviewTab === 'product' ? 'bg-gray-500 text-white' : 'bg-white/20 text-white/80 hover:bg-white/30'}`}
+                  data-testid="tab-product-image">
+                  المنتج
+                </button>
+              </div>
+            )}
+            {/* ── عرض صورة المعاينة (استوديو أو سريعة) فوق صورة المنتج ── */}
+            {activePreviewTab !== 'product' && (studioPreviewUrl || quickPreviewUrl) && (
+              <div className="absolute inset-0 z-[4] bg-white dark:bg-gray-900" style={{ height: imgH }}>
+                <img
+                  src={activePreviewTab === 'studio' ? (studioPreviewUrl || quickPreviewUrl)! : (quickPreviewUrl || studioPreviewUrl)!}
+                  alt="معاينة الطباعة"
+                  className="w-full h-full object-contain"
+                  data-testid="img-preview-overlay-main"
+                />
+                <div className="absolute bottom-2 left-2 right-2 flex justify-center">
+                  <span className="bg-black/60 text-white text-[10px] px-2 py-1 rounded-full">
+                    {activePreviewTab === 'studio' ? '✨ معاينة استوديو Gemini AI' : '⚡ معاينة سريعة Cloudinary'}
+                  </span>
+                </div>
               </div>
             )}
             {/* ── Phase 3: مؤشر تحميل لون Cloudinary الجديد (shimmer overlay) ── */}
@@ -2431,12 +2491,18 @@ export default function ProductDetail() {
             {/* ════════ Phase 2 UX: لوحة الطباعة البسيطة الجديدة ════════ */}
             {hasDesignUpload && (
               <div className="rounded-2xl border-2 border-purple-300 dark:border-purple-700 bg-gradient-to-br from-purple-50 via-white to-pink-50 dark:from-purple-950/30 dark:via-gray-900 dark:to-pink-950/30 p-4 space-y-3 shadow-sm" data-testid="section-quick-print">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">🖨️</span>
-                  <div>
-                    <h3 className="font-extrabold text-sm">طباعة شعارك على المنتج</h3>
-                    <p className="text-[11px] text-muted-foreground">ارفع شعارك وشاهد المعاينة الفورية مباشرة على المنتج</p>
+                {/* ─── رأس القسم: صمم واطبع شعارك ─── */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">✨</span>
+                    <div>
+                      <h3 className="font-extrabold text-sm">صمم واطبع شعارك</h3>
+                      <p className="text-[10px] text-muted-foreground">ارفع شعارك وشاهد المعاينة الفورية</p>
+                    </div>
                   </div>
+                  <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-full font-bold flex items-center gap-1">
+                    ✨ معاينة AI — Gemini
+                  </span>
                 </div>
 
                 {/* الزر الأساسي — يظهر فقط قبل بدء الرفع */}
@@ -2444,9 +2510,9 @@ export default function ProductDetail() {
                   <Button
                     size="lg"
                     onClick={() => { setShowUploadZone(true); setTimeout(() => fileInputRef.current?.click(), 100); }}
-                    className="w-full h-14 text-base font-extrabold bg-gradient-to-l from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-lg shadow-purple-500/30 rounded-xl"
+                    className="w-full h-14 text-base font-extrabold bg-gradient-to-l from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-lg shadow-indigo-500/30 rounded-xl"
                     data-testid="button-start-preview">
-                    📸 اضغط هنا للمعاينة الفورية
+                    📸 ارفع شعارك وشاهد المعاينة
                   </Button>
                 )}
 
@@ -2495,53 +2561,50 @@ export default function ProductDetail() {
                   </div>
                 )}
 
-                {/* ── AI Studio Preview Engine (June 2026) — يظهر فقط إذا فعّل الأدمن المفتاح ── */}
-                {uploadedDesignUrl && !!(product as any)?.enableStudioPreview && (
+                {/* ── AI Studio Preview (يظهر لكل منتجات الطباعة بعد رفع التصميم) ── */}
+                {uploadedDesignUrl && (
                   <div className="space-y-2">
-                    {/* حقل إدخال النص مطوي */}
+                    {/* حقل نص اختياري */}
                     <button
                       type="button"
                       onClick={() => setShowStudioTextInput(s => !s)}
                       className="flex items-center gap-2 text-xs font-bold text-sky-700 dark:text-sky-300 hover:underline"
                       data-testid="button-toggle-studio-text">
                       <span>📝</span>
-                      {showStudioTextInput ? 'إخفاء تفاصيل المتجر' : 'أضف تفاصيل المتجر (اسم / هاتف / عنوان)'}
+                      {showStudioTextInput ? 'إخفاء تفاصيل المتجر' : 'أضف اسم متجرك / رقم / عنوان (اختياري)'}
                     </button>
                     {showStudioTextInput && (
                       <div className="space-y-2">
                         <Textarea
-                          placeholder="مثال: محل أبو علي للأسماك • 777123456 • صنعاء • توصيل للأمانة"
+                          placeholder="مثال: متجر الرحمة • 777123456 • صنعاء"
                           value={studioPreviewText}
                           onChange={e => setStudioPreviewText(e.target.value)}
                           rows={2}
                           className="text-xs"
                           data-testid="textarea-studio-text"
                         />
-                        <p className="text-[10px] text-muted-foreground">
-                          سيتم دمج هذا النص في صورة المعاينة المولدة
-                        </p>
                       </div>
                     )}
 
                     {/* أزرار المعاينات */}
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={generateQuickPreview}
+                        onClick={() => { generateQuickPreview(); setActivePreviewTab('quick'); }}
                         disabled={studioPreviewLoading}
-                        className="flex-1 text-xs font-bold border-sky-300 text-sky-700 hover:bg-sky-50"
+                        className="text-xs font-bold border-sky-300 text-sky-700 hover:bg-sky-50 dark:hover:bg-sky-950/30"
                         data-testid="button-quick-preview">
                         <Zap className="h-3.5 w-3.5 ml-1" />
-                        معاينة سريعة مجانية
+                        ⚡ سريعة مجانية
                       </Button>
                       <Button
                         type="button"
                         size="sm"
-                        onClick={generateStudioPreview}
+                        onClick={() => { generateStudioPreview(); setActivePreviewTab('studio'); }}
                         disabled={studioPreviewLoading}
-                        className="flex-1 text-xs font-bold bg-gradient-to-l from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white"
+                        className="text-xs font-bold bg-gradient-to-l from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-md"
                         data-testid="button-studio-preview">
                         {studioPreviewLoading ? (
                           <>
@@ -2551,7 +2614,7 @@ export default function ProductDetail() {
                         ) : (
                           <>
                             <Camera className="h-3.5 w-3.5 ml-1" />
-                            أنشئ معاينة الاستوديو
+                            ✨ استوديو Gemini
                           </>
                         )}
                       </Button>
