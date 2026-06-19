@@ -2871,7 +2871,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     printing_design_fee_override, printing_color_price_override, printing_side_price_override,
     print_area, base_image_public_id, available_colors,
     print_color_options, quantity_tiers, preview_width, preview_height,
-    show_live_preview, enable_volume_offers, enable_quantity_tiers`;
+    show_live_preview, enable_volume_offers, enable_quantity_tiers, enable_studio_preview`;
 
   // عند أوّل تحميل، نُسخّن الكاش حتّى mapProductRow يستخدم السعر الصحيح
   getExchangeRate().catch(() => {});
@@ -2970,6 +2970,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       showLivePreview: r.show_live_preview ?? false,
       enableVolumeOffers: r.enable_volume_offers ?? false,
       enableQuantityTiers: r.enable_quantity_tiers ?? false,
+      enableStudioPreview: r.enable_studio_preview ?? false,
       // 💰 COGS — يُكشف فقط لمسارات الأدمن (opts.includeCogs=true). البيانات سرّية ولا تُرسل في الـ API العام.
       ...(opts?.includeCogs ? (() => {
         if (!r.smart_variants) return { costPriceY: null, costPriceSar: null, profitMarginY: null, profitPercent: null };
@@ -3551,6 +3552,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         showLivePreview: data.showLivePreview ?? false,
         enableVolumeOffers: data.enableVolumeOffers ?? false,
         enableQuantityTiers: data.enableQuantityTiers ?? false,
+        enableStudioPreview: data.enableStudioPreview ?? false,
         enableVariantUI: data.enableVariantUI ?? false,
         colorImages: data.colorImages || null,
         // ── Phase 7: تخصيصات الأدمن ─────────────────────────────────────
@@ -3623,7 +3625,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "promotionalTags",
         "hasFreeShipping", "productType", "enableSmartVariants", "smartVariants",
         // Feature toggles (May 19, 2026)
-        "showLivePreview", "enableVolumeOffers", "enableQuantityTiers",
+        "showLivePreview", "enableVolumeOffers", "enableQuantityTiers", "enableStudioPreview",
         // Phase 7
         "printColorOptions", "quantityTiers", "previewWidth", "previewHeight",
       ];
