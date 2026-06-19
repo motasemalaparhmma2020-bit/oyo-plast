@@ -904,6 +904,30 @@ export async function runMigrations(): Promise<void> {
       console.warn("[WARN] studio_preview migration:", e instanceof Error ? e.message : e);
     }
 
+    // ─── printing_ai_training ──────────────────────────────────────────────
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS printing_ai_training (
+          id SERIAL PRIMARY KEY,
+          type TEXT NOT NULL DEFAULT 'rule',
+          title TEXT NOT NULL,
+          content TEXT NOT NULL,
+          image_url TEXT,
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_printing_ai_training_type
+        ON printing_ai_training(type, is_active);
+      `);
+      console.log("[INFO] printing_ai_training table ready");
+    } catch (e) {
+      console.warn("[WARN] printing_ai_training migration:", e instanceof Error ? e.message : e);
+    }
+
     console.log("[SUCCESS] Database migrations completed");
   } catch (error) {
     console.error("[WARN] Migration error (non-fatal):", error instanceof Error ? error.message : String(error));

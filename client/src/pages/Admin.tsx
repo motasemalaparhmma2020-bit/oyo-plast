@@ -17,6 +17,7 @@ import AdminContracts from "@/components/AdminContracts";
 import AdminBackup from "@/components/AdminBackup";
 import AdminAISales from "@/components/AdminAISales";
 import { AdminStudioPreviewSettings } from "@/components/AdminStudioPreviewSettings";
+import { AdminPrintingAITraining } from "@/components/AdminPrintingAITraining";
 import AdminSectionSettings from "@/components/AdminSectionSettings";
 import AdminPDPLayout from "@/components/AdminPDPLayout";
 import { AdminSubcategories } from "@/components/AdminSubcategories";
@@ -9476,6 +9477,11 @@ export default function Admin() {
           {/* ─── AI Studio Preview Settings ───────────────────────────── */}
           <TabsContent value="studio-preview">
             <AdminStudioPreviewSettings adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── لوحة تدريب وكيل الطباعة ──────────────────────────────── */}
+          <TabsContent value="printing-ai-training">
+            <AdminPrintingAITraining adminToken={adminToken} />
           </TabsContent>
 
         </Tabs>

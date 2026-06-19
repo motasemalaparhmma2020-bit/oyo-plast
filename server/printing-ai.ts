@@ -159,7 +159,15 @@ const DESIGN_DESCRIPTION_GUIDE = `
 
 // ─── بناء System Prompt ديناميكي ─────────────────────────────────────────────
 async function buildPrintingSystemPrompt(): Promise<string> {
-  const liveProducts = await fetchPrintingProducts();
+  const [liveProducts, trainingCtx] = await Promise.all([
+    fetchPrintingProducts(),
+    (async () => {
+      try {
+        const { buildTrainingContext } = await import("./routes/printing-ai-training");
+        return await buildTrainingContext();
+      } catch { return ""; }
+    })(),
+  ]);
 
   return `أنت "أويو" — موظف مبيعات ذكي ومتخصص في الطباعة بشركة أويو بلاست في اليمن.
 
@@ -230,7 +238,7 @@ ${DESIGN_DESCRIPTION_GUIDE}
 - لا تخترع منتجات أو أسعاراً غير موجودة في القائمة أعلاه
 - إذا كان المخزون غير كافٍ، أعلم العميل بأدب
 - الأسعار المعروضة تقديرية — السعر الدقيق يُحدد عند إتمام الطلب
-- استخدم الإيموجي باعتدال`;
+- استخدم الإيموجي باعتدال${trainingCtx}`;
 }
 
 // ─── واجهة handlePrintingChat ─────────────────────────────────────────────────

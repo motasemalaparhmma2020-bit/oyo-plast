@@ -88,8 +88,8 @@ export function AdminStudioPreviewSettings({ adminToken }: AdminStudioPreviewSet
   const [maxAlternatives, setMaxAlternatives] = useState(3);
   const [quickPreviewEnabled, setQuickPreviewEnabled] = useState(true);
 
-  // Sync local state with query data
-  const settings = settingsQuery.data?.settings;
+  // Sync local state with query data (API returns settings directly, not wrapped)
+  const settings = settingsQuery.data;
   if (settings && geminiModel === "" && settings.geminiModel) {
     setGeminiModel(settings.geminiModel);
     setFirstFreeEnabled(settings.firstFreeEnabled ?? true);
@@ -110,8 +110,8 @@ export function AdminStudioPreviewSettings({ adminToken }: AdminStudioPreviewSet
     });
   };
 
-  const stats = statsQuery.data?.stats;
-  const logs = logsQuery.data?.logs || [];
+  const stats = statsQuery.data;
+  const logs: any[] = Array.isArray(logsQuery.data) ? logsQuery.data : [];
 
   return (
     <div className="space-y-6">
