@@ -2698,6 +2698,37 @@ export default function ProductDetail() {
               </div>
             )}
 
+            {/* ════════ Phase 2 UX: لون الكيس (availableBagColors) ════════ */}
+            {hasBagPrinting && (product.availableBagColors || []).length > 0 && (
+              <div className="rounded-2xl border border-sky-300 dark:border-sky-700 bg-sky-50/60 dark:bg-sky-950/20 p-4 space-y-2" data-testid="section-simple-bag-color">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🎨</span>
+                  <span className="font-bold text-sm">لون الكيس</span>
+                  {selectedBagColor && (
+                    <span className="text-[11px] bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 px-2 py-0.5 rounded-full font-semibold mr-auto flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full border border-black/20 shadow-sm" style={{ backgroundColor: ({"أبيض":"#FFFFFF","أسود":"#1a1a1a","بيج":"#D4A574","أزرق":"#3B82F6","أحمر":"#EF4444","أخضر":"#22C55E","رمادي":"#6B7280","بني":"#92400E","وردي":"#EC4899"} as Record<string,string>)[selectedBagColor] || '#ccc' }} />
+                      {selectedBagColor}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(product.availableBagColors || []).map((color: string) => {
+                    const isSelected = selectedBagColor === color;
+                    const hex = ({"أبيض":"#FFFFFF","أسود":"#1a1a1a","بيج":"#D4A574","أزرق":"#3B82F6","أحمر":"#EF4444","أخضر":"#22C55E","رمادي":"#6B7280","بني":"#92400E","وردي":"#EC4899"} as Record<string,string>)[color] || "#9CA3AF";
+                    return (
+                      <button key={color} type="button"
+                        onClick={() => setSelectedBagColor(isSelected ? null : color)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-all ${isSelected ? "border-sky-500 shadow-md ring-2 ring-sky-200 dark:ring-sky-800 bg-white dark:bg-gray-900" : "border-border bg-white/80 dark:bg-gray-900/60 hover:border-sky-400"}`}
+                        data-testid={`bag-color-${color}`}>
+                        <span className="w-4 h-4 rounded-full border border-black/15 shadow-sm" style={{ backgroundColor: hex }} />
+                        {color}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* ════════ Phase 2 UX: لون الحبر (chips بدل text input) ════════ */}
             {hasBagPrinting && (
               <div className="rounded-2xl border border-orange-300 dark:border-orange-700 bg-orange-50/60 dark:bg-orange-950/20 p-4 space-y-2" data-testid="section-ink-color">
