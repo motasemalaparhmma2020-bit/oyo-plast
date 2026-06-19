@@ -1820,11 +1820,14 @@ export default function ProductDetail() {
                               <button key={v.id}
                                 onClick={() => { setLastClickedType(type); setSelectedSmartVariant(p => ({ ...p, [type]: v.id })); }}
                                 style={btnStyle}
-                                className={`flex flex-col items-center justify-center px-3 py-2 ${sizeRadius} border-2 font-bold transition-all ${isSelected ? 'border-primary bg-primary text-white shadow' : 'border-gray-300 bg-white dark:bg-gray-800 text-foreground hover:border-gray-400'}`}
+                                className={`relative flex flex-col items-center justify-center px-3 py-2 ${sizeRadius} border-2 font-bold transition-all ${isSelected ? 'border-primary bg-primary text-white shadow' : 'border-gray-300 bg-white dark:bg-gray-800 text-foreground hover:border-gray-400'}`}
                                 data-testid={`button-smart-variant-${type}-${v.id}`}>
+                                {Number(v.discount || 0) > 0 && (
+                                  <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] font-bold px-1 rounded">-{v.discount}%</span>
+                                )}
                                 <span className="text-sm">{v.label}</span>
                                 {priceNum > 0 && (
-                                  <span className={`text-[10px] font-normal mt-0.5 ${isSelected ? 'text-white/80' : 'text-muted-foreground'}`}>
+                                  <span className={`text-[10px] font-normal mt-0.5 ${isSelected ? 'text-white/80' : Number(v.discount || 0) > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
                                     {formatPrice(priceNum)} {currLabel}
                                   </span>
                                 )}
@@ -1858,7 +1861,7 @@ export default function ProductDetail() {
                           >
                             <div className="font-extrabold text-base">{t.qty}</div>
                             <div className="text-[11px] text-gray-500 -mt-0.5">قطعة</div>
-                            <div className={`inline-block text-[10px] px-2 py-0.5 rounded-full mt-1 ${active ? "bg-cyan-500 text-white" : "bg-gray-100 text-gray-600"}`}>
+                            <div className={`inline-block text-[10px] px-2 py-0.5 rounded-full mt-1 font-bold ${active ? "bg-red-500 text-white" : "bg-red-50 text-red-600"}`}>
                               {t.unitPrice} ر/قطعة
                             </div>
                           </button>
@@ -1893,7 +1896,7 @@ export default function ProductDetail() {
                             )}
                           </div>
                           <div className="flex items-baseline gap-2 flex-wrap">
-                            <span className="text-xl font-bold text-orange-600">{formatPrice(activeOffer.offerPriceYer)} ر.ي / قطعة</span>
+                            <span className="text-xl font-bold text-red-600 dark:text-red-400">{formatPrice(activeOffer.offerPriceYer)} ر.ي / قطعة</span>
                             {activeOffer.originalPriceYer && activeOffer.originalPriceYer > activeOffer.offerPriceYer && (
                               <span className="text-sm line-through text-gray-400">{formatPrice(activeOffer.originalPriceYer)} ر.ي</span>
                             )}
@@ -2111,7 +2114,7 @@ export default function ProductDetail() {
                   </div>
                 </div>
                 <div className="flex items-baseline gap-2 flex-wrap">
-                  <span className="text-2xl font-bold text-orange-600 dark:text-orange-400" data-testid="text-offer-price">
+                  <span className="text-2xl font-bold text-red-600 dark:text-red-400" data-testid="text-offer-price">
                     {formatPrice(activeOffer.offerPriceYer)} ر.ي / قطعة
                   </span>
                   {activeOffer.originalPriceYer && activeOffer.originalPriceYer > activeOffer.offerPriceYer && (

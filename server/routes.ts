@@ -1087,15 +1087,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const base64 = compressed.toString("base64");
 
       // prompt واضح ومحدد = استجابة دقيقة + يتعامل مع لقطات الشاشة
-      const prompt = `أنت محلل صور لمتجر تغليف يمني (أكياس، شنط بلاستيك/قماش/ورق، علاقي، تغليف، طباعة، آلات إغلاق).
-انظر إلى الصورة (حتى لو كانت لقطة شاشة من تطبيق آخر) وركّز على المنتج الرئيسي فيها.
-أرجع وصفاً مختصراً جداً (2 إلى 4 كلمات عربية) يحدّد:
-- نوع المنتج (كيس / شنطة / علاقي / لفافة / علبة / آلة …)
-- المادة (بلاستيك / قماش / ورق / كرتون / نايلون …) إن أمكن
-- اللون أو الميزة الأبرز إن أمكن
-أرجع الكلمات فقط بدون جمل أو ترقيم أو شرح أو أكواد.
-إن كانت الصورة لا تحتوي أي منتج تغليف على الإطلاق (مثل سيارة، شخص، طبيعة)، أرجع: غير_معروف
-أمثلة: "كيس بلاستيك شفاف" — "شنطة قماش حمراء" — "علاقي بلاستيك" — "كيس مكسرات شفاف" — "آلة إغلاق أكياس"`;
+      const prompt = `أنت محرّك بحث بصري متخصص في منتجات التغليف اليمنية (أكياس، شنط بلاستيك/قماش/ورق/نايلون، علاقي، لفائف، علب، آلات إغلاق، أوراق، كرتون).
+انظر إلى الصورة بعناية وحدّد المنتج الرئيسي. أرجع 3 إلى 6 كلمات عربية مفتاحية تصف:
+1. نوع الحاوية/المنتج (كيس / شنطة / علاقي / لفافة / علبة / آلة / ورقة / كرتون …)
+2. المادة الرئيسية (بلاستيك / قماش / ورق / كرتون / نايلون / ألومنيوم / شفاف / مطبوع …)
+3. الحجم إن ظهر واضحاً (صغير / متوسط / كبير / ضخم)
+4. اللون أو الطباعة إن كانت ميزة بارزة (أحمر / أبيض / شفاف / مطبوع)
+5. الاستخدام إن كان واضحاً (مواد غذائية / ملابس / هدايا / تجارة …)
+فصل الكلمات بمسافات فقط. لا جمل، لا ترقيم، لا أكواد، لا شرح.
+إن كانت الصورة لا تحتوي أي منتج تغليف على الإطلاق، أرجع فقط: غير_معروف
+أمثلة:
+صورة كيس بلاستيك شفاف صغير → "كيس بلاستيك شفاف صغير"
+صورة شنطة قماش حمراء كبيرة → "شنطة قماش حمراء كبيرة ملابس"
+صورة آلة إغلاق أكياس → "آلة إغلاق حرارية أكياس"
+صورة كيس ورق بني مطبوع → "كيس ورق بني مطبوع هدايا"
+صورة لفافة نايلون شفافة → "لفافة نايلون شفاف تغليف"
+صورة علبة كرتون صغيرة → "علبة كرتون صغيرة هدايا"
+صورة علاقي بلاستيك أبيض → "علاقي بلاستيك أبيض ملابس"`;
 
       // ✅ نماذج Gemini الحديثة (يناير 2026): القديمة gemini-2.0-flash و gemini-1.5-flash-latest
       // لم تعد متاحة لمفاتيح API الجديدة. نستخدم 2.5-flash كأساس + flash-latest كاحتياط.
@@ -5549,6 +5557,57 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       res.json({ ok: true, mutedUntil: until });
     } catch (e: any) {
       res.status(500).json({ message: "فشل الإيقاف المؤقت" });
+    }
+  });
+
+  // ─── Push Notifications (Web Push / VAPID) ──────────────────────────────────
+
+  app.get("/api/push/vapid-key", async (_req, res) => {
+    try {
+      const { getVapidPublicKey } = await import("./lib/push-sender");
+      const publicKey = await getVapidPublicKey();
+      res.json({ publicKey });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحميل مفتاح Push" });
+    }
+  });
+
+  app.post("/api/push/subscribe", async (req: any, res) => {
+    const userId = getUserId(req.user) || req.session?.userId;
+    if (!userId) return res.status(401).json({ message: "يجب تسجيل الدخول" });
+    const { endpoint, keys } = req.body || {};
+    if (!endpoint || !keys?.auth || !keys?.p256dh) {
+      return res.status(400).json({ message: "بيانات الاشتراك ناقصة" });
+    }
+    try {
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query(
+        `INSERT INTO push_subscriptions (user_id, endpoint, auth_key, p256dh_key, updated_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (endpoint) DO UPDATE
+           SET user_id=$1, auth_key=$3, p256dh_key=$4, updated_at=NOW()`,
+        [userId, endpoint, keys.auth, keys.p256dh],
+      );
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل حفظ الاشتراك" });
+    }
+  });
+
+  app.delete("/api/push/subscribe", async (req: any, res) => {
+    const userId = getUserId(req.user) || req.session?.userId;
+    if (!userId) return res.status(401).json({ message: "يجب تسجيل الدخول" });
+    const { endpoint } = req.body || {};
+    if (!endpoint) return res.status(400).json({ message: "endpoint مطلوب" });
+    try {
+      const { pool: dbPool } = await import("./db");
+      await dbPool.query(
+        `DELETE FROM push_subscriptions WHERE user_id=$1 AND endpoint=$2`,
+        [userId, endpoint],
+      );
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل إزالة الاشتراك" });
     }
   });
 

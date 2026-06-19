@@ -137,12 +137,14 @@ export default function Checkout() {
   const creditTierName = creditInfo?.tier_name_ar || "";
   const creditTierIcon = creditInfo?.tier_icon || "";
   const creditTierColor = creditInfo?.tier_color || "#666";
+  // الائتمان مستقل تماماً — يظهر لأي مستخدم مسجّل له فئة ائتمانية غير محظورة
+  // لا يرتبط ظهوره بالمحافظ أو الدفع عند الاستلام
   const creditEnabled =
     isAuthenticated &&
     !!creditInfo &&
     !creditFrozen &&
-    creditLimit > 0 &&
     creditInfo?.tier !== "blocked";
+  const creditHasLimit = creditLimit > 0;
 
   // تهيئة نسبة المقدّم من الإعدادات عند تحميلها
   useEffect(() => {
@@ -906,14 +908,18 @@ export default function Checkout() {
                 </button>
               )}
 
-              {/* ─── الشراء بالأجل (الائتمان) ──────────────────────────── */}
+              {/* ─── الشراء بالأجل (الائتمان) — مستقل تماماً عن المحافظ ──────── */}
               {creditEnabled && (
                 <button
                   type="button"
+                  disabled={!creditHasLimit}
                   className={`w-full flex items-center gap-3 px-4 py-3 transition-colors ${
-                    formData.paymentMethod === "credit" ? "bg-primary/5" : "hover:bg-muted/50"
+                    !creditHasLimit
+                      ? "opacity-60 cursor-not-allowed bg-muted/20"
+                      : formData.paymentMethod === "credit" ? "bg-primary/5" : "hover:bg-muted/50"
                   }`}
                   onClick={() => {
+                    if (!creditHasLimit) return;
                     setFormData({ ...formData, paymentMethod: "credit", purchaseCode: "" });
                     setReceiptFile(null); setReceiptAmountClaimed("");
                   }}
@@ -935,13 +941,19 @@ export default function Checkout() {
                   <div className="flex-1 text-right">
                     <p className="text-sm font-medium flex items-center gap-1">
                       <span>{creditTierIcon}</span>
-                      شراء بالأجل ({creditTierName})
+                      شراء بالأجل ({creditTierName || "برونزي"})
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      المتاح: {creditAvailable.toLocaleString()} ر.ي · مدة {creditPaymentTerm} يوم
-                    </p>
+                    {creditHasLimit ? (
+                      <p className="text-xs text-muted-foreground">
+                        المتاح: {creditAvailable.toLocaleString()} ر.ي · مدة {creditPaymentTerm} يوم
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        لا يتوفر رصيد ائتماني — تواصل مع الإدارة لتفعيله
+                      </p>
+                    )}
                   </div>
-                  {formData.paymentMethod === "credit" && (
+                  {formData.paymentMethod === "credit" && creditHasLimit && (
                     <CheckCircle className="h-4 w-4 text-primary shrink-0" />
                   )}
                 </button>

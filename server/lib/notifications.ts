@@ -145,6 +145,13 @@ export async function createNotification(opts: CreateNotificationOpts): Promise<
       } catch { /* non-fatal */ }
     }
 
+    // ─── 5. Web Push (fire-and-forget — non-blocking) ───────────────────────
+    if (id && type !== "promo") {
+      import("./push-sender").then(({ sendPushToUser }) => {
+        sendPushToUser(userId).catch(() => {});
+      }).catch(() => {});
+    }
+
     return id;
   } catch (e: any) {
     console.error("[createNotification] error:", e.message);

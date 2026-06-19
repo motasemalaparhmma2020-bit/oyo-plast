@@ -104,24 +104,8 @@ export function useAddToCart() {
         }
       }
 
-      // Fallback to guest cart on repeated failures
-      addToGuestCart({
-        productId: data.productId,
-        quantity: data.quantity,
-        selectedSize: data.selectedSize,
-        selectedColor: data.selectedColor,
-        customPrinting: data.customPrinting,
-        designNotes: data.designNotes,
-        designFileUrl: data.designFileUrl,
-        selectedBagColor: data.selectedBagColor,
-        printColor1: data.printColor1,
-        printColor2: data.printColor2,
-        printColor3: data.printColor3,
-        printColorCount: data.printColorCount,
-        unitPrice: data.unitPrice,
-        designOptions: (data as any).designOptions,
-      });
-      return { success: true, guest: true, fallback: true };
+      // For authenticated users: throw error — do NOT silently fallback to guest cart
+      throw lastError ?? new Error("فشل الاتصال بالخادم بعد عدة محاولات");
     },
     onSuccess: (result: unknown) => {
       const isGuest = !!(result && typeof result === "object" && "guest" in result && (result as any).guest);

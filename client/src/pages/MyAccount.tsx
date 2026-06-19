@@ -5,11 +5,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
 import {
   ShoppingBag, Wallet, Award, ChevronRight, Package, Clock,
   CheckCircle2, Truck, RefreshCcw, LogIn, UserPlus, Bell, Heart,
   MapPin, Settings as SettingsIcon, MessageCircle, Handshake,
   CreditCard, User, Ticket, ShieldCheck, HelpCircle, LogOut, ExternalLink, AlertTriangle,
+  Smartphone, BellRing, BellOff,
 } from "lucide-react";
 import type { Order } from "@shared/schema";
 import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
@@ -25,6 +27,7 @@ function goBackSafe(setLocation: (p: string) => void) {
 export default function MyAccount() {
   const { isAuthenticated, user, logout, isLoggingOut } = useAuth();
   const [, setLocation] = useLocation();
+  const push = usePushNotifications(isAuthenticated);
 
   const { data: marketerAccount } = useQuery<any>({
     queryKey: ["/api/marketer/linked-account"],
@@ -339,6 +342,79 @@ export default function MyAccount() {
             </Card>
           </Link>
         )}
+
+        {/* ──────── تطبيق Google Play ──────── */}
+        <a
+          href="https://play.google.com/store/apps/details?id=com.oyoplast.app"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="link-google-play"
+        >
+          <Card className="border border-gray-200 dark:border-gray-700 hover-elevate cursor-pointer" data-testid="card-google-play">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center shrink-0">
+                <Smartphone className="h-6 w-6 text-green-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm">حمّل تطبيق أويو بلاست</p>
+                <p className="text-xs text-muted-foreground">متاح الآن على Google Play</p>
+              </div>
+              <div className="flex flex-col items-end gap-0.5 shrink-0">
+                <span className="text-[10px] text-muted-foreground">تنزيل مجاني</span>
+                <ExternalLink className="h-4 w-4 text-green-600" />
+              </div>
+            </CardContent>
+          </Card>
+        </a>
+
+        {/* ──────── إشعارات التطبيق (Web Push) ──────── */}
+        {push.isSupported && push.permission !== "denied" && (
+          <Card className="border border-gray-200 dark:border-gray-700" data-testid="card-push-notifications">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${push.isSubscribed ? "bg-blue-500/10" : "bg-gray-100 dark:bg-gray-800"}`}>
+                {push.isSubscribed
+                  ? <BellRing className="h-6 w-6 text-[#2196F3]" />
+                  : <BellOff className="h-6 w-6 text-gray-400" />
+                }
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm">إشعارات التطبيق</p>
+                <p className="text-xs text-muted-foreground">
+                  {push.isSubscribed ? "الإشعارات مفعّلة على هذا الجهاز" : "فعّل لتصلك تنبيهات الطلبات والعروض"}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant={push.isSubscribed ? "outline" : "default"}
+                className={push.isSubscribed ? "text-xs h-8" : "text-xs h-8 bg-[#2196F3] hover:bg-[#1976D2]"}
+                onClick={push.isSubscribed ? push.unsubscribe : push.subscribe}
+                disabled={push.isLoading}
+                data-testid={push.isSubscribed ? "button-push-unsubscribe" : "button-push-subscribe"}
+              >
+                {push.isLoading ? "..." : push.isSubscribed ? "إيقاف" : "تفعيل"}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ──────── تذييل الصفحة ──────── */}
+        <div className="flex flex-col items-center gap-2 py-4 pb-2" data-testid="footer-account">
+          <div className="flex items-center gap-2">
+            <img src={oyoLogo} alt="OYO PLAST" className="w-7 h-7 rounded-lg object-contain" />
+            <span className="text-sm font-bold text-foreground">OYO PLAST</span>
+          </div>
+          <p className="text-[11px] text-muted-foreground text-center">
+            متجر الطباعة واللوازم البلاستيكية · اليمن
+          </p>
+          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+            <Link href="/privacy"><span className="hover:text-primary">الخصوصية</span></Link>
+            <span>·</span>
+            <Link href="/terms"><span className="hover:text-primary">الشروط</span></Link>
+            <span>·</span>
+            <Link href="/contact"><span className="hover:text-primary">تواصل معنا</span></Link>
+          </div>
+          <p className="text-[10px] text-muted-foreground">© 2025 OYO PLAST · جميع الحقوق محفوظة</p>
+        </div>
       </div>
     </div>
   );

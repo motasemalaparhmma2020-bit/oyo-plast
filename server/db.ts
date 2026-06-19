@@ -144,6 +144,28 @@ export const db = drizzle(pool, { schema });
     console.warn("[migrate] studio_preview_settings:", (e as Error).message);
   }
 
+  // ── Auto-migrate: app_config + push_subscriptions (June 2026) ──
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS app_config (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id          SERIAL PRIMARY KEY,
+        user_id     TEXT NOT NULL,
+        endpoint    TEXT NOT NULL UNIQUE,
+        auth_key    TEXT NOT NULL,
+        p256dh_key  TEXT NOT NULL,
+        created_at  TIMESTAMP DEFAULT NOW(),
+        updated_at  TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions (user_id);
+    `);
+  } catch (e) {
+    console.warn("[migrate] app_config/push_subscriptions:", (e as Error).message);
+  }
+
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS studio_preview_logs (
