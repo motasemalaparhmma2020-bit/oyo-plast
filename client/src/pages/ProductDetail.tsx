@@ -2417,8 +2417,8 @@ export default function ProductDetail() {
         if (!sec["printing"]?.visible) return null;
         const hasBagPrinting = product.hasPrintingOptions;
         const hasProfPrinting = !!(product as any).printingCategoryId && productPrintingCat;
-        // قسم رفع التصميم يكفي تفعيل allowDesignUpload فقط — showLivePreview تتحكم في Canvas فقط داخله
-        const hasDesignUpload = !!product.allowDesignUpload;
+        // قسم رفع التصميم يظهر لأي منتج طباعة (allowDesignUpload أو hasPrintingOptions)
+        const hasDesignUpload = !!product.allowDesignUpload || !!(product as any).hasPrintingOptions;
         // لون الكيس عبر Cloudinary خاص بالمنتجات القابلة للتخصيص
         const isCustomizableProduct = ((product as any).productType ?? "ready") === "customizable";
         const cloudBagColors = ((product as any).availableColors || []) as Array<{id:string;name:string;code:string}>;

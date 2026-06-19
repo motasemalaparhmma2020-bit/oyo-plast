@@ -40,16 +40,35 @@ export function registerLiquidityPreviewRoutes(app: Express): void {
   app.get("/api/liquidity-preview", async (_req, res) => {
     const { pool } = await import("../db");
 
+    // ─── السيولة الحقيقية من قاعدة البيانات ────────────────────────────────
+    let realRevenue = 0, realPending = 0, realSupplierDue = 0, realSupplierPaid = 0;
+    try {
+      const revRes = await pool.query(
+        `SELECT
+           COALESCE(SUM(CASE WHEN status IN ('delivered','completed') THEN total::numeric END), 0) AS collected,
+           COALESCE(SUM(CASE WHEN status NOT IN ('delivered','completed','cancelled') THEN total::numeric END), 0) AS pending
+         FROM orders`
+      );
+      realRevenue = num(revRes.rows[0]?.collected);
+      realPending = num(revRes.rows[0]?.pending);
+      const supRes2 = await pool.query(
+        `SELECT COALESCE(SUM(balance_due::numeric),0) AS due, COALESCE(SUM(total_paid::numeric),0) AS paid FROM suppliers WHERE is_active=true`
+      );
+      realSupplierDue  = num(supRes2.rows[0]?.due);
+      realSupplierPaid = num(supRes2.rows[0]?.paid);
+    } catch { /* تجاهل الخطأ — سيُعاد الحساب في قسم المبيعات */ }
+
+    const netBalance = Math.max(0, realRevenue - realSupplierDue);
+
     const out: any = {
       generatedAt: new Date().toISOString(),
-      // مصادر السيولة — بيانات تمثيلية (لا توجد جداول أرصدة بنوك/كاش بعد)
-      isPlaceholderLiquidity: true,
+      isPlaceholderLiquidity: false,
       liquiditySources: [
-        { id: "rajhi", name: "بنك الراجحي", kind: "bank", balance: 142500, icon: "bank-blue" },
-        { id: "ahli", name: "بنك الأهلي", kind: "bank", balance: 88200, icon: "bank-green" },
-        { id: "stcpay", name: "STC Pay", kind: "wallet", balance: 12400, icon: "wallet-purple" },
-        { id: "cash", name: "الكاش", kind: "treasury", balance: 15400, icon: "cash-amber" },
-        { id: "treasury", name: "خزينة المعرض", kind: "treasury", balance: 220000, icon: "cash-amber" },
+        { id: "revenue",  name: "إيرادات محصّلة", kind: "treasury", balance: realRevenue,      icon: "cash-amber" },
+        { id: "pending",  name: "طلبات قيد التحصيل", kind: "wallet", balance: realPending,     icon: "wallet-purple" },
+        { id: "supdue",   name: "مستحق للموردين",   kind: "bank",   balance: -realSupplierDue, icon: "bank-blue" },
+        { id: "suppaid",  name: "مدفوع للموردين",   kind: "bank",   balance: realSupplierPaid, icon: "bank-green" },
+        { id: "net",      name: "صافي السيولة",     kind: "treasury", balance: netBalance,     icon: "cash-amber" },
       ],
     };
 

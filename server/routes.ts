@@ -2546,7 +2546,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const token = req.params.token;
       const { status, note } = req.body as { status: string; note?: string };
 
-      const ALLOWED = ["accepted", "shipped", "delivered", "cancelled"];
+      const ALLOWED = ["accepted", "in_production", "shipped", "delivered", "cancelled"];
       if (!ALLOWED.includes(status)) return res.status(400).json({ message: "حالة غير صالحة" });
 
       const orderRes = await dbPool.query(
@@ -2558,10 +2558,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // خريطة حالات المورد → حالة الطلب الرئيسية
       const statusMap: Record<string, string> = {
-        accepted:  "processing",
-        shipped:   "shipped",
-        delivered: "delivered",
-        cancelled: "cancelled",
+        accepted:      "processing",
+        in_production: "processing",
+        shipped:       "shipped",
+        delivered:     "delivered",
+        cancelled:     "cancelled",
       };
       const newOrderStatus = statusMap[status];
 
@@ -2602,10 +2603,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
 
       const arabicStatus: Record<string, string> = {
-        accepted: "تم قبول الطلب",
-        shipped: "تم الشحن",
-        delivered: "تم التوصيل",
-        cancelled: "تم الإلغاء",
+        accepted:      "تم قبول الطلب",
+        in_production: "قيد الإنتاج 🔄",
+        shipped:       "تم الشحن",
+        delivered:     "تم التوصيل",
+        cancelled:     "تم الإلغاء",
       };
       res.json({ ok: true, message: arabicStatus[status] || status });
     } catch (e: any) {
@@ -5869,6 +5871,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
            oi.print_color_2     AS "printColor2",
            oi.print_color_3     AS "printColor3",
            oi.custom_printing   AS "customPrinting",
+           oi.design_options    AS "designOptions",
            oi.design_notes      AS "designNotes",
            oi.design_file_url   AS "designFileUrl"
          FROM order_items oi
@@ -5895,7 +5898,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const supplier = (req as any).supplier;
       const orderId = parseInt(req.params.id);
       const { deliveryStatus, notes } = req.body;
-      const validStatuses = ["pending", "picked_up", "shipped", "delivered", "failed"];
+      const validStatuses = ["pending", "picked_up", "in_production", "shipped", "delivered", "failed"];
       if (!validStatuses.includes(deliveryStatus)) return res.status(400).json({ message: "حالة غير صالحة" });
       const orderCheck = await dbPool.query("SELECT id FROM orders WHERE id=$1 AND supplier_id=$2", [orderId, supplier.id]);
       if (!orderCheck.rows.length) return res.status(403).json({ message: "غير مصرح" });

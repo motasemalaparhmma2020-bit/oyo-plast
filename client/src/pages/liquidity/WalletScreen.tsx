@@ -22,7 +22,7 @@ export default function WalletScreen({ data }: { data: LiquidityData }) {
   const incoming = data.sales.today;
   const outgoing = Math.round(data.suppliers.totalDue * 0.15);
 
-  // آخر العمليات: الواردة من طلبات حقيقية + صادرة تمثيلية (موردون)
+  // آخر العمليات: الواردة من طلبات حقيقية + مستحقات موردين
   const ops = [
     ...data.orders.list.slice(0, 8).map((o) => ({
       dir: "in" as const,
@@ -31,11 +31,11 @@ export default function WalletScreen({ data }: { data: LiquidityData }) {
       amount: o.total,
       at: o.createdAt,
     })),
-    ...data.suppliers.list.slice(0, 4).map((s) => ({
+    ...data.suppliers.list.filter(s => s.balanceDue > 0).slice(0, 4).map((s) => ({
       dir: "out" as const,
-      title: `دفعة مورد — ${s.name}`,
-      sub: "بيانات تمثيلية",
-      amount: Math.round(s.balanceDue || 1000),
+      title: `مستحق للمورد — ${s.name}`,
+      sub: "مدفوعات الموردين",
+      amount: Math.round(s.balanceDue),
       at: "",
     })),
   ];
@@ -84,8 +84,8 @@ export default function WalletScreen({ data }: { data: LiquidityData }) {
       {/* المصادر */}
       <div className="rounded-2xl border bg-white p-4">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-[11px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">بيانات تمثيلية</span>
-          <h3 className="font-bold text-right">المصادر</h3>
+          <span className="text-[11px] text-green-600 bg-green-50 px-2 py-0.5 rounded-full">بيانات حقيقية ✓</span>
+          <h3 className="font-bold text-right">ملخص السيولة</h3>
         </div>
         <div className="divide-y">
           {data.liquiditySources.map((s) => (

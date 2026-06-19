@@ -62,7 +62,7 @@ export default function ReportsScreen({ data }: { data: LiquidityData }) {
       chipTime: "لحظي",
       detail: (
         <div className="space-y-2 pt-1">
-          <p className="text-[11px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full w-fit">بيانات تمثيلية</p>
+          <p className="text-[11px] text-green-600 bg-green-50 px-2 py-0.5 rounded-full w-fit">بيانات حقيقية ✓</p>
           {data.liquiditySources.map((s) => (
             <Row key={s.id} label={s.name} value={`${fmt(s.balance)} ر.ي`} />
           ))}

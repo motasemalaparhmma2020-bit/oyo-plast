@@ -19,7 +19,8 @@ import {
   MapPin, Phone, DollarSign, ChevronLeft, User,
   Clock, AlertCircle, RefreshCw, Plus, ImageIcon,
   Pencil, Trash2, ShoppingBag, ClipboardList, Wallet,
-  Lock, PlayCircle, TrendingUp, Receipt,
+  Lock, PlayCircle, TrendingUp, Receipt, Palette,
+  FileImage, StickyNote, Layers,
 } from "lucide-react";
 
 const STORAGE_KEY = "supplier_session";
@@ -27,11 +28,12 @@ const STORAGE_KEY = "supplier_session";
 type SupplierSession = { token: string; supplier: any };
 
 const DELIVERY_STATUS_OPTIONS = [
-  { value: "pending",   label: "قيد الانتظار" },
-  { value: "picked_up", label: "استلمته" },
-  { value: "shipped",   label: "في الطريق" },
-  { value: "delivered", label: "تم التسليم ✅" },
-  { value: "failed",    label: "فشل التوصيل ❌" },
+  { value: "pending",       label: "قيد الانتظار" },
+  { value: "picked_up",     label: "استلمته" },
+  { value: "in_production", label: "🔄 قيد الإنتاج" },
+  { value: "shipped",       label: "في الطريق" },
+  { value: "delivered",     label: "تم التسليم ✅" },
+  { value: "failed",        label: "فشل التوصيل ❌" },
 ];
 
 const STATUS_BADGE: Record<string, { label: string; variant: "default"|"secondary"|"destructive"|"outline" }> = {
@@ -44,19 +46,21 @@ const STATUS_BADGE: Record<string, { label: string; variant: "default"|"secondar
 };
 
 const DELIVERY_BADGE: Record<string, string> = {
-  pending:    "bg-gray-100 text-gray-600",
-  picked_up:  "bg-blue-100 text-blue-700",
-  shipped:    "bg-indigo-100 text-indigo-700",
-  delivered:  "bg-green-100 text-green-700",
-  failed:     "bg-red-100 text-red-700",
+  pending:       "bg-gray-100 text-gray-600",
+  picked_up:     "bg-blue-100 text-blue-700",
+  in_production: "bg-amber-100 text-amber-700",
+  shipped:       "bg-indigo-100 text-indigo-700",
+  delivered:     "bg-green-100 text-green-700",
+  failed:        "bg-red-100 text-red-700",
 };
 
 const DELIVERY_LABEL: Record<string, string> = {
-  pending:    "قيد الانتظار",
-  picked_up:  "استلمته",
-  shipped:    "في الطريق",
-  delivered:  "تم التسليم",
-  failed:     "فشل التوصيل",
+  pending:       "قيد الانتظار",
+  picked_up:     "استلمته",
+  in_production: "🔄 قيد الإنتاج",
+  shipped:       "في الطريق",
+  delivered:     "تم التسليم",
+  failed:        "فشل التوصيل",
 };
 
 function getAuthHeaders(session: SupplierSession) {
@@ -251,19 +255,107 @@ function OrderDetailDialog({
             {itemsLoading ? (
               <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
             ) : (
-              <div className="space-y-2">
-                {(items || []).map((item: any, i: number) => (
-                  <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-lg p-2.5">
-                    {item.product_image && (
-                      <img src={item.product_image} alt="" className="w-10 h-10 rounded object-cover" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{item.product_name || item.product_name_db}</p>
-                      <p className="text-xs text-gray-500">× {item.quantity}</p>
+              <div className="space-y-3">
+                {(items || []).map((item: any, i: number) => {
+                  const dOpts = item.designOptions
+                    ? (typeof item.designOptions === "string" ? JSON.parse(item.designOptions) : item.designOptions)
+                    : null;
+                  const hasPrinting = item.customPrinting || item.printColorCount > 0 || dOpts;
+                  return (
+                    <div key={i} className="bg-gray-50 rounded-xl overflow-hidden border border-gray-100">
+                      {/* صف المنتج */}
+                      <div className="flex items-center gap-3 p-2.5">
+                        {(item.productImage || item.product_image) && (
+                          <img src={item.productImage || item.product_image} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{item.productName || item.product_name}</p>
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            <span className="text-xs text-gray-500">× {item.quantity}</span>
+                            {item.selectedSize && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 rounded-full">مقاس: {item.selectedSize}</span>}
+                            {item.selectedColor && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 rounded-full">لون: {item.selectedColor}</span>}
+                          </div>
+                        </div>
+                        <span className="text-sm font-bold whitespace-nowrap text-green-700">{Number(item.price || 0).toLocaleString()} {currency}</span>
+                      </div>
+
+                      {/* ── تفاصيل الطباعة والتصميم ── */}
+                      {hasPrinting && (
+                        <div className="border-t border-dashed border-purple-200 bg-purple-50/60 px-3 py-2.5 space-y-2">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <Palette className="h-3.5 w-3.5 text-purple-600" />
+                            <span className="text-xs font-bold text-purple-700">تفاصيل الطباعة</span>
+                          </div>
+
+                          {/* ألوان الطباعة */}
+                          {item.printColorCount > 0 && (
+                            <div className="flex items-start gap-2">
+                              <Layers className="h-3.5 w-3.5 text-purple-500 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <span className="text-[11px] font-semibold text-purple-700">{item.printColorCount} لون طباعة: </span>
+                                <div className="flex flex-wrap gap-1 mt-0.5">
+                                  {[item.printColor1, item.printColor2, item.printColor3].filter(Boolean).map((c: string, ci: number) => (
+                                    <span key={ci} className="text-[11px] bg-white border border-purple-200 text-purple-800 px-1.5 py-0.5 rounded-full font-medium">{c}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* لون الكيس */}
+                          {(item.selectedBagColor || dOpts?.bagColor) && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] font-semibold text-purple-700">🎨 لون الكيس:</span>
+                              <span className="text-[11px] bg-white border border-purple-200 text-purple-800 px-2 py-0.5 rounded-full font-medium">
+                                {(item.selectedBagColor || dOpts?.bagColor?.name || dOpts?.bagColor) as string}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* عدد الألوان والأوجه من design_options */}
+                          {dOpts && (dOpts.colors > 0 || dOpts.sides > 0) && (
+                            <div className="flex items-center gap-3 text-[11px] text-purple-800">
+                              {dOpts.colors > 0 && <span className="bg-white border border-purple-200 px-1.5 py-0.5 rounded-full font-semibold">{dOpts.colors} لون</span>}
+                              {dOpts.sides > 0 && <span className="bg-white border border-purple-200 px-1.5 py-0.5 rounded-full font-semibold">{dOpts.sides} وجه</span>}
+                              {dOpts.designFee > 0 && <span className="bg-white border border-purple-200 px-1.5 py-0.5 rounded-full font-semibold">رسم تصميم: {dOpts.designFee}</span>}
+                            </div>
+                          )}
+
+                          {/* موضع الشعار */}
+                          {dOpts?.logoPosition && (
+                            <div className="text-[11px] text-purple-700 bg-white border border-purple-200 rounded-lg px-2 py-1.5">
+                              📍 <span className="font-semibold">موضع الشعار:</span> يسار {Math.round(dOpts.logoPosition.x)}% · أعلى {Math.round(dOpts.logoPosition.y)}% · حجم {Math.round(dOpts.logoPosition.width)}%
+                            </div>
+                          )}
+
+                          {/* ملف التصميم */}
+                          {item.designFileUrl && item.designFileUrl !== "🔒 يظهر عند الاستلام" && (
+                            <a href={item.designFileUrl} target="_blank" rel="noreferrer"
+                               className="flex items-center gap-1.5 text-[11px] font-bold text-blue-700 hover:text-blue-800 bg-white border border-blue-200 rounded-lg px-2 py-1.5 w-fit"
+                               data-testid={`link-design-file-${i}`}>
+                              <FileImage className="h-3.5 w-3.5" />
+                              عرض ملف التصميم
+                            </a>
+                          )}
+                          {item.designFileUrl === "🔒 يظهر عند الاستلام" && (
+                            <div className="flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                              <Lock className="h-3 w-3" />
+                              ملف التصميم يظهر عند استلام الطلب
+                            </div>
+                          )}
+
+                          {/* ملاحظات التصميم */}
+                          {item.designNotes && item.designNotes !== "🔒 يظهر عند الاستلام" && (
+                            <div className="flex items-start gap-1.5 bg-white border border-purple-200 rounded-lg px-2 py-1.5">
+                              <StickyNote className="h-3.5 w-3.5 text-purple-500 mt-0.5 flex-shrink-0" />
+                              <p className="text-[11px] text-purple-900">{item.designNotes}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <span className="text-sm font-bold whitespace-nowrap">{Number(item.price || 0).toLocaleString()} {currency}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
