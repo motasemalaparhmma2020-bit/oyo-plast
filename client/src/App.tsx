@@ -106,6 +106,7 @@ const DeleteAccount = lazy(() => import("@/pages/DeleteAccount"));
 const DataDeletion = lazy(() => import("@/pages/DataDeletion"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 const Compare = lazy(() => import("@/pages/Compare"));
+const MarketingPlan = lazy(() => import("@/pages/MarketingPlan"));
 
 import { Footer, MobileFooter } from "@/components/Footer";
 import { GlobalBottomNav } from "@/components/GlobalBottomNav";
@@ -587,6 +588,7 @@ function Router() {
             <Route path="/admin/staff" component={AdminStaff} />
             <Route path="/admin/pdp-builder" component={AdminPdpBuilder} />
             <Route path="/about" component={About} />
+            <Route path="/marketing-plan" component={MarketingPlan} />
             <Route path="/privacy" component={Privacy} />
             <Route path="/terms" component={Terms} />
             <Route path="/returns" component={Returns} />
