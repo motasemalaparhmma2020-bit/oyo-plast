@@ -16,6 +16,7 @@ import AdminPayroll from "@/components/AdminPayroll";
 import AdminContracts from "@/components/AdminContracts";
 import AdminBackup from "@/components/AdminBackup";
 import AdminAISales from "@/components/AdminAISales";
+import AdminCommandCenter from "@/components/AdminCommandCenter";
 import { AdminStudioPreviewSettings } from "@/components/AdminStudioPreviewSettings";
 import { AdminPrintingAITraining } from "@/components/AdminPrintingAITraining";
 import AdminSectionSettings from "@/components/AdminSectionSettings";
@@ -9559,6 +9560,11 @@ export default function Admin() {
           {/* ─── Printing Categories Tab ────────────────────────────────── */}
           <TabsContent value="printing-categories">
             <AdminPrintingCategories adminToken={adminToken} />
+          </TabsContent>
+
+          {/* ─── العقل المدبّر (Command Center) ─────────────────────────── */}
+          <TabsContent value="command-center">
+            <AdminCommandCenter adminToken={adminToken} />
           </TabsContent>
 
           {/* ─── AI Sales Agent Tab ─────────────────────────────────────── */}

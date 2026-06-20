@@ -13,7 +13,13 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { pool } from "../db";
 import { chatWithAgent, generateCEOReport, getAgent, getLastReport, setLastReport, logAgentAction } from "../agent-team";
-import { executeTool, isToolAllowed } from "../agent-team/tools";
+import { executeTool, isToolAllowed, loadMastermindConfig, invalidateMastermindConfigCache } from "../agent-team/tools";
+import { runStrategy } from "../agent-team/mastermind";
+import {
+  mastermindConfigSchema,
+  mergeMastermindConfig,
+  MASTERMIND_CONFIG_SETTINGS_KEY,
+} from "@shared/mastermind-config";
 
 type Admin = (req: Request, res: Response, next: NextFunction) => void;
 
@@ -191,27 +197,62 @@ export function registerAIAgentRoutes(app: Express, requireAdmin: Admin) {
       );
       if (!claim.rows[0]) return res.status(409).json({ error: "تمت معالجة هذا الإجراء مسبقاً" });
 
-      // نفّذ الأداة إن وُجدت — مع إعادة التحقق من صلاحية الوكيل على الخادم
-      const toolName: string | undefined =
-        action.input_data?.tool ||
-        (typeof action.action_type === "string" && action.action_type.startsWith("tool:")
-          ? action.action_type.slice(5)
-          : undefined);
+      // force=true: تجاوز صريح من المالك للخطوط الحمراء عند تنفيذ الأداة
+      const force = !!req.body?.force;
+
+      // نفّذ الإجراء حسب نوعه — directive (توجيه وكيل) أو tool (أداة)
+      const isDirective = action.action_type === "directive";
+      const toolName: string | undefined = isDirective
+        ? undefined
+        : action.input_data?.tool ||
+          (typeof action.action_type === "string" && action.action_type.startsWith("tool:")
+            ? action.action_type.slice(5)
+            : undefined);
 
       let execResult: { ok: boolean; message: string; data?: any } | null = null;
       let finalStatus = "approved";
-      if (toolName) {
+
+      if (isDirective) {
+        // توجيه: شغّل الوكيل المستهدف مرّة واحدة بالتعليمات المرفقة
+        const targetName = String(action.input_data?.targetAgent || "").trim();
+        const instruction = String(action.input_data?.instruction || action.title || "").trim();
+        if (!targetName) {
+          execResult = { ok: false, message: "التوجيه لا يحدّد وكيلاً مستهدفاً" };
+          finalStatus = "failed";
+        } else {
+          const target = await getAgent(targetName);
+          if (!target) {
+            execResult = { ok: false, message: `الوكيل المستهدف «${targetName}» غير موجود` };
+            finalStatus = "failed";
+          } else if (!target.is_active) {
+            execResult = { ok: false, message: `الوكيل «${targetName}» غير نشط` };
+            finalStatus = "failed";
+          } else {
+            const r2 = await chatWithAgent(target, instruction, {
+              userId: "rashed",
+              userName: "العقل المدبّر",
+              allowTools: true,
+            });
+            execResult = r2.error
+              ? { ok: false, message: r2.reply }
+              : { ok: true, message: r2.reply.slice(0, 600), data: { subActionId: r2.actionId } };
+            finalStatus = execResult.ok ? "executed" : "failed";
+          }
+        }
+      } else if (toolName) {
+        // أداة: أعِد التحقق من صلاحية الوكيل على الخادم ثم نفّذ (مع/بدون تجاوز الخطوط الحمراء)
         if (!isToolAllowed(action.agent_name, toolName)) {
           execResult = { ok: false, message: `الوكيل «${action.agent_name || "?"}» غير مخوّل لاستخدام الأداة ${toolName}` };
           finalStatus = "failed";
         } else {
-          execResult = await executeTool(toolName, action.input_data?.args || {});
+          execResult = await executeTool(toolName, action.input_data?.args || {}, { skipRedLines: force });
           finalStatus = execResult.ok ? "executed" : "failed";
         }
       }
 
       const noteLine = [
         notes ? `[مراجعة الأدمن]: ${notes}` : null,
+        force && toolName ? `[تجاوز صريح]: وافق المالك على تنفيذ ${toolName} مع تجاوز الخطوط الحمراء (force).` : null,
         execResult ? `[التنفيذ]: ${execResult.ok ? "✅" : "❌"} ${execResult.message}` : null,
       ]
         .filter(Boolean)
@@ -226,6 +267,95 @@ export function registerAIAgentRoutes(app: Express, requireAdmin: Admin) {
         [finalStatus, execResult ? JSON.stringify(execResult) : null, noteLine, id],
       );
       res.json({ ...r.rows[0], execResult });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // العقل المدبّر (Mastermind) — إعدادات + تشغيل استراتيجية + لوحة الفريق
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // 9. جلب إعدادات العقل المدبّر (مدموجة مع الافتراضي)
+  app.get("/api/ai/mastermind/config", requireAdmin, async (_req, res) => {
+    try {
+      res.json(await loadMastermindConfig(true));
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message });
+    }
+  });
+
+  // 10. حفظ إعدادات العقل المدبّر (تحقق Zod ثم upsert + إبطال الكاش)
+  app.put("/api/ai/mastermind/config", requireAdmin, async (req, res) => {
+    try {
+      const merged = mergeMastermindConfig(req.body);
+      const parsed = mastermindConfigSchema.parse(merged);
+      const value = JSON.stringify(parsed);
+      await pool.query(
+        `INSERT INTO settings (key, value) VALUES ($1, $2)
+         ON CONFLICT (key) DO UPDATE SET value=$2`,
+        [MASTERMIND_CONFIG_SETTINGS_KEY, value],
+      );
+      invalidateMastermindConfigCache();
+      res.json(parsed);
+    } catch (e: any) {
+      if (e?.name === "ZodError") return res.status(400).json({ error: "إعداد غير صالح", details: e.errors });
+      res.status(500).json({ error: e?.message });
+    }
+  });
+
+  // 11. تشغيل الاستراتيجية — راشد يُصدر اقتراحات معلّقة (لا تنفيذ)
+  app.post("/api/ai/mastermind/run-strategy", requireAdmin, async (req, res) => {
+    try {
+      const extraInstruction = req.body?.instruction ? String(req.body.instruction).slice(0, 1000) : undefined;
+      const result = await runStrategy({ extraInstruction });
+      res.json(result);
+    } catch (e: any) {
+      res.status(400).json({ error: e?.message || "تعذّر تشغيل الاستراتيجية" });
+    }
+  });
+
+  // 12. لوحة الفريق الموحّدة — وكلاء AI + موظفون بشر + أقسام + إجراءات معلّقة
+  app.get("/api/ai/mastermind/team", requireAdmin, async (_req, res) => {
+    try {
+      const cfg = await loadMastermindConfig(true);
+
+      const agentsR = await pool.query(`
+        SELECT a.id, a.name, a.display_name, a.role, a.model, a.provider, a.avatar_url, a.is_active,
+               (SELECT COUNT(*)::int FROM ai_agent_actions WHERE agent_id=a.id AND status='pending') AS pending_actions,
+               (SELECT COUNT(*)::int FROM ai_agent_actions WHERE agent_id=a.id AND created_at >= NOW() - INTERVAL '1 day') AS actions_24h
+        FROM ai_agents a ORDER BY a.id
+      `);
+
+      let staff: any[] = [];
+      try {
+        const staffR = await pool.query(
+          `SELECT id, full_name, phone, role
+           FROM users
+           WHERE role IS NOT NULL AND role NOT IN ('customer','marketer')
+           ORDER BY role`,
+        );
+        staff = staffR.rows;
+      } catch {
+        staff = [];
+      }
+
+      const pendingR = await pool.query(`
+        SELECT a.id, a.agent_id, ag.name AS agent_name, ag.display_name AS agent_display_name,
+               a.action_type, a.title, a.description, a.input_data, a.created_at
+        FROM ai_agent_actions a
+        LEFT JOIN ai_agents ag ON ag.id = a.agent_id
+        WHERE a.status='pending'
+        ORDER BY a.created_at DESC LIMIT 100
+      `);
+
+      res.json({
+        enabled: cfg.enabled,
+        departments: cfg.departments,
+        agents: agentsR.rows,
+        staff,
+        pending: pendingR.rows,
+      });
     } catch (e: any) {
       res.status(500).json({ error: e?.message });
     }

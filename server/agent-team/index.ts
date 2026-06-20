@@ -89,6 +89,18 @@ async function geminiChat(
   return String(text).trim() || "(لا يوجد رد)";
 }
 
+// ─── استدعاء نموذج الوكيل مباشرة (لاستخدامات خاصة مثل العقل المدبّر) ─────────
+export async function callAgentModel(
+  agent: AgentRow,
+  systemPrompt: string,
+  userMessage: string,
+  contextBlock?: string,
+): Promise<string> {
+  if (agent.provider === "deepseek") return deepseekChat(agent.model, systemPrompt, userMessage, contextBlock);
+  if (agent.provider === "gemini") return geminiChat(agent.model, systemPrompt, userMessage, contextBlock);
+  throw new Error(`مزوّد غير مدعوم: ${agent.provider}`);
+}
+
 // ─── جلب سياق ديناميكي من قاعدة البيانات حسب صلاحيات الوكيل ────────────────
 async function buildAgentContext(agent: AgentRow): Promise<string> {
   const scope: string[] = agent.permissions?.db_scope || [];

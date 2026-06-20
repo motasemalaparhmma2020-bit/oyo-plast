@@ -7,6 +7,11 @@
  */
 import { pool } from "../db";
 import { createNotification, broadcastPromo } from "../lib/notifications";
+import {
+  mergeMastermindConfig,
+  MASTERMIND_CONFIG_SETTINGS_KEY,
+  type MastermindConfig,
+} from "@shared/mastermind-config";
 
 export interface ToolExecResult {
   ok: boolean;
@@ -132,7 +137,12 @@ export const AGENT_TOOLS: AgentTool[] = [
       const tag = String(args?.tag || "").trim();
       const valid = ["bestsellers", "new", "offers", "exclusive", "discounts", "deals", "clearance", "featured"];
       if (!productId || !valid.includes(tag)) return { ok: false, message: `productId غير صالح أو tag خارج: ${valid.join("، ")}` };
-      const r = await pool.query(`UPDATE products SET promotional_tag=$1 WHERE id=$2 RETURNING id, name, promotional_tag`, [tag, productId]);
+      const r = await pool.query(
+        `UPDATE products
+           SET promotional_tags = ARRAY(SELECT DISTINCT unnest(COALESCE(promotional_tags, '{}'::text[]) || ARRAY[$1::text]))
+         WHERE id=$2 RETURNING id, name, promotional_tags`,
+        [tag, productId],
+      );
       if (!r.rows[0]) return { ok: false, message: `المنتج #${productId} غير موجود` };
       return { ok: true, message: `تم تعيين تصنيف «${r.rows[0].name}» إلى ${tag}`, data: r.rows[0] };
     },
@@ -226,10 +236,156 @@ export function parseToolProposal(reply: string): { proposal: ParsedProposal | n
   }
 }
 
-/** تنفيذ أداة فعلياً (يُستدعى فقط بعد موافقة الأدمن) */
-export async function executeTool(toolName: string, args: any): Promise<ToolExecResult> {
+// ═══════════════════════════════════════════════════════════════════════════
+// الخطوط الحمراء (Red Lines) — ضوابط صارمة تُطبَّق على الخادم قبل تنفيذ أي أداة.
+// لا يمكن لأي إجراء (حتى الموافق عليه) تجاوزها إلا بتوجيه صريح من المالك (force).
+// ═══════════════════════════════════════════════════════════════════════════
+let _mmCfg: { value: MastermindConfig; at: number } | null = null;
+const MM_CFG_TTL = 60_000;
+
+/** تحميل إعدادات العقل المدبّر (مع كاش 60 ثانية) من جدول settings. */
+export async function loadMastermindConfig(force = false): Promise<MastermindConfig> {
+  if (!force && _mmCfg && Date.now() - _mmCfg.at < MM_CFG_TTL) return _mmCfg.value;
+  let stored: any = null;
+  try {
+    const r = await pool.query(`SELECT value FROM settings WHERE key=$1 LIMIT 1`, [MASTERMIND_CONFIG_SETTINGS_KEY]);
+    if (r.rows[0]?.value) {
+      try {
+        stored = typeof r.rows[0].value === "string" ? JSON.parse(r.rows[0].value) : r.rows[0].value;
+      } catch {
+        stored = null;
+      }
+    }
+  } catch {
+    // الجدول قد لا يكون موجوداً بعد — نرجع للافتراضي الآمن
+  }
+  const cfg = mergeMastermindConfig(stored);
+  _mmCfg = { value: cfg, at: Date.now() };
+  return cfg;
+}
+
+export function invalidateMastermindConfigCache() {
+  _mmCfg = null;
+}
+
+const RED = "🚫 تجاوز خط أحمر";
+
+function findBlockedWord(text: string, words: string[]): string | null {
+  const t = (text || "").toLowerCase();
+  for (const w of words) {
+    const ww = String(w || "").trim().toLowerCase();
+    if (ww && t.includes(ww)) return w;
+  }
+  return null;
+}
+
+/**
+ * يفحص ما إذا كان تنفيذ الأداة بهذه المعطيات يتجاوز خطاً أحمر.
+ * يُرجِع رسالة عربية بالمخالفة، أو null إن كان آمناً.
+ */
+export async function checkRedLines(toolName: string, args: any, cfg: MastermindConfig): Promise<string | null> {
+  const rl = cfg.redLines;
+  const productId = Number(args?.productId) || 0;
+
+  // المنتجات المحميّة: تُمنع كل عمليات التعديل عليها عبر الوكلاء
+  const productMutators = ["adjust_product_price", "toggle_product_active", "promote_product", "set_promo_tag"];
+  if (productId && rl.protectedProductIds.includes(productId) && productMutators.includes(toolName)) {
+    return `${RED}: المنتج #${productId} محميّ ولا يُسمح بأي تعديل عليه عبر الوكلاء.`;
+  }
+
+  if (toolName === "adjust_product_price") {
+    const price = Number(args?.price);
+    if (price > 0) {
+      if (rl.minPriceYer > 0 && price < rl.minPriceYer) {
+        return `${RED}: السعر ${price.toLocaleString()} ر.ي أقل من الحد الأدنى المسموح ${rl.minPriceYer.toLocaleString()} ر.ي.`;
+      }
+      if (productId) {
+        try {
+          const r = await pool.query(`SELECT price, original_price FROM products WHERE id=$1`, [productId]);
+          const cur = Number(r.rows[0]?.price) || 0;
+          const orig = Number(r.rows[0]?.original_price) || 0;
+          if (cur > 0 && rl.maxPriceDecreasePercent < 100) {
+            const floor = cur * (1 - rl.maxPriceDecreasePercent / 100);
+            if (price < floor) {
+              const dropPct = Math.round((1 - price / cur) * 100);
+              return `${RED}: تخفيض السعر بنسبة ${dropPct}٪ يتجاوز الحد المسموح ${rl.maxPriceDecreasePercent}٪ (السعر الحالي ${cur.toLocaleString()} ر.ي).`;
+            }
+          }
+          // الخصم الناتج مقابل السعر الأصلي يجب ألا يتجاوز السقف المسموح
+          if (rl.maxDiscountPercent < 100) {
+            const base = orig > 0 ? orig : cur;
+            if (base > 0 && price < base) {
+              const discPct = Math.round((1 - price / base) * 100);
+              if (discPct > rl.maxDiscountPercent) {
+                return `${RED}: الخصم الناتج ${discPct}٪ يتجاوز الحد الأقصى المسموح للخصم ${rl.maxDiscountPercent}٪.`;
+              }
+            }
+          }
+        } catch {}
+      }
+    }
+  }
+
+  if (toolName === "promote_product" && productId && rl.maxDiscountPercent < 100) {
+    try {
+      const r = await pool.query(`SELECT discount_percent FROM products WHERE id=$1`, [productId]);
+      const disc = Number(r.rows[0]?.discount_percent) || 0;
+      if (disc > rl.maxDiscountPercent) {
+        return `${RED}: لا يمكن الترويج لمنتج خصمه الحالي ${disc}٪ يتجاوز الحد الأقصى المسموح للخصم ${rl.maxDiscountPercent}٪.`;
+      }
+    } catch {}
+  }
+
+  if (toolName === "toggle_product_active") {
+    const active = !!args?.active;
+    if (!active && !rl.allowProductDeactivation) {
+      return `${RED}: إخفاء/إيقاف المنتجات عبر الوكلاء غير مسموح حالياً.`;
+    }
+  }
+
+  // الكلمات الممنوعة في نصوص الإشعارات/الحملات
+  if (rl.blockedWords.length && ["notify_customer", "broadcast_notification", "promote_product"].includes(toolName)) {
+    const text = [args?.title, args?.message, args?.headline].filter(Boolean).join(" ");
+    const hit = findBlockedWord(text, rl.blockedWords);
+    if (hit) return `${RED}: النص يحتوي كلمة ممنوعة «${hit}».`;
+  }
+
+  // سقف الإشعارات الجماعية/الحملات اليومي
+  if (["broadcast_notification", "promote_product"].includes(toolName)) {
+    try {
+      const r = await pool.query(
+        `SELECT COUNT(*)::int AS n FROM ai_agent_actions
+           WHERE status='executed'
+             AND action_type IN ('tool:broadcast_notification','tool:promote_product')
+             AND created_at >= date_trunc('day', NOW())`,
+      );
+      const sentToday = r.rows[0]?.n || 0;
+      if (sentToday >= rl.maxBroadcastsPerDay) {
+        return `${RED}: بلغت الحد الأقصى للإشعارات الجماعية اليوم (${rl.maxBroadcastsPerDay}). ارفع الحد من الإعدادات أو انتظر للغد.`;
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
+/** تنفيذ أداة فعلياً (يُستدعى فقط بعد موافقة الأدمن) — مع تطبيق الخطوط الحمراء. */
+export async function executeTool(
+  toolName: string,
+  args: any,
+  opts: { skipRedLines?: boolean } = {},
+): Promise<ToolExecResult> {
   const tool = TOOLS_BY_NAME.get(toolName);
   if (!tool) return { ok: false, message: `أداة غير معروفة: ${toolName}` };
+  if (!opts.skipRedLines) {
+    try {
+      const cfg = await loadMastermindConfig();
+      const violation = await checkRedLines(toolName, args || {}, cfg);
+      if (violation) return { ok: false, message: violation };
+    } catch (e: any) {
+      console.warn("[Mastermind] redline check error:", e?.message);
+    }
+  }
   try {
     return await tool.execute(args || {});
   } catch (e: any) {
