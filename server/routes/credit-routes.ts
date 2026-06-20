@@ -31,6 +31,23 @@ function getUserIdFromReq(req: any): string | undefined {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// المفتاح الرئيسي: هل نظام الائتمان (الشراء بالأجل) مُفعّل كاملاً؟
+// عند الإيقاف يبقى البيع كاش فقط لجميع العملاء — يخفي الخيار ويرفض الطلبات بالأجل.
+// مُفعّل فقط عندما تكون القيمة "true" (مطابقة لمنطق الأدمن). أي قيمة أخرى = موقوف.
+// ──────────────────────────────────────────────────────────────────────────────
+export async function isCreditSystemEnabled(): Promise<boolean> {
+  try {
+    const r = await pool.query(
+      `SELECT value FROM settings WHERE key = 'credit_system_enabled' LIMIT 1`,
+    );
+    return r.rows[0]?.value === "true";
+  } catch {
+    // عند تعذّر القراءة، الأكثر أماناً هو الإيقاف (كاش فقط)
+    return false;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // واجهة معلومات الائتمان الفعّالة لعميل
 // ──────────────────────────────────────────────────────────────────────────────
 export interface CustomerCreditInfo {
@@ -120,6 +137,10 @@ export async function precheckCreditPurchase(
   amount: number,
   currency?: string | null,
 ): Promise<CreditPrecheckResult> {
+  // المفتاح الرئيسي: إن كان نظام الائتمان موقوفاً، لا شراء بالأجل لأي عميل
+  if (!(await isCreditSystemEnabled())) {
+    return { allowed: false, reason: "نظام الشراء بالأجل متوقف حالياً" };
+  }
   // تحقق من صلاحية المبلغ
   if (!Number.isFinite(amount) || amount <= 0) {
     return { allowed: false, reason: "المبلغ غير صالح" };
@@ -776,12 +797,14 @@ export function registerCreditRoutes(
 
       const currentBalance = Number(row.current_balance ?? 0);
       const available = Math.max(0, Number(effectiveLimit) - currentBalance);
+      const systemEnabled = await isCreditSystemEnabled();
 
       res.json({
         ...row,
         effective_credit_limit: effectiveLimit,
         effective_cash_discount: effectiveDiscount,
         available_credit: available.toString(),
+        system_enabled: systemEnabled,
       });
     } catch (e: any) {
       res.status(500).json({ message: e.message });

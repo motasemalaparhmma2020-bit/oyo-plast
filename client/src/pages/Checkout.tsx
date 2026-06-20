@@ -141,7 +141,10 @@ export default function Checkout() {
   // الائتمان مستقل تماماً — يظهر لأي مستخدم مسجّل له فئة ائتمانية غير محظورة
   // لا يرتبط ظهوره بالمحافظ أو الدفع عند الاستلام
   const creditOptionEnabled: boolean = displaySettings?.creditOptionEnabled ?? true;
+  // المفتاح الرئيسي من الأدمن: عند إيقاف نظام الائتمان كاملاً يختفي خيار الأجل للجميع
+  const creditSystemEnabled = creditInfo?.system_enabled !== false;
   const creditEnabled =
+    creditSystemEnabled &&
     creditOptionEnabled &&
     isAuthenticated &&
     !!creditInfo &&

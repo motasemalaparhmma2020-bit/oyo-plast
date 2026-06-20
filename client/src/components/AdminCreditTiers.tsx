@@ -139,6 +139,30 @@ export default function AdminCreditTiers({ adminToken }: { adminToken: string | 
     }
   };
 
+  // ── المفتاح الرئيسي: حفظ فوري عند التبديل (لا يحتاج زر حفظ منفصل) ──
+  const toggleSystemEnabled = async (v: boolean) => {
+    if (!settings) return;
+    const prev = settings;
+    setSettings({ ...settings, credit_system_enabled: v ? "true" : "false" });
+    try {
+      const r = await fetch("/api/admin/credit/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-admin-token": adminToken || "" },
+        body: JSON.stringify({ credit_system_enabled: v ? "true" : "false" }),
+      });
+      if (!r.ok) throw new Error((await r.json()).message || "فشل الحفظ");
+      toast({
+        title: v
+          ? "✅ تم تفعيل نظام الائتمان"
+          : "🚫 تم إيقاف نظام الائتمان — البيع كاش فقط لجميع العملاء",
+      });
+      qc.invalidateQueries({ queryKey: ["/api/admin/credit/settings"] });
+    } catch (e: any) {
+      setSettings(prev); // استرجاع الحالة السابقة عند فشل الحفظ
+      toast({ title: "❌ فشل حفظ الحالة", description: e.message, variant: "destructive" });
+    }
+  };
+
   const openEdit = (tier: Tier) => {
     setEditTier(tier);
     setTierForm({
@@ -387,9 +411,7 @@ export default function AdminCreditTiers({ adminToken }: { adminToken: string | 
                 </div>
                 <Switch
                   checked={isSystemOn}
-                  onCheckedChange={(v) =>
-                    setSettings({ ...settings, credit_system_enabled: v ? "true" : "false" })
-                  }
+                  onCheckedChange={toggleSystemEnabled}
                   data-testid="switch-system-enabled"
                 />
               </div>
