@@ -841,14 +841,14 @@ export default function SupplierManagement({ adminToken }: SupplierManagementPro
           <Users className="w-5 h-5 text-primary" />
           قائمة الموردين
         </h2>
-        <Dialog open={showAdd} onOpenChange={setShowAdd}>
+        <Dialog open={showAdd} onOpenChange={setShowAdd} modal={false}>
           <DialogTrigger asChild>
             <Button className="gap-2" data-testid="button-add-supplier">
               <Plus className="w-4 h-4" />
               إضافة مورد
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl" onOpenAutoFocus={(e) => e.preventDefault()}>
             <DialogHeader>
               <DialogTitle>إضافة مورد جديد</DialogTitle>
             </DialogHeader>
@@ -1005,8 +1005,8 @@ export default function SupplierManagement({ adminToken }: SupplierManagementPro
 
       {/* تعديل المورد */}
       {editSupplier && (
-        <Dialog open onOpenChange={() => setEditSupplier(null)}>
-          <DialogContent className="max-w-2xl" dir="rtl">
+        <Dialog open onOpenChange={() => setEditSupplier(null)} modal={false}>
+          <DialogContent className="max-w-2xl" dir="rtl" onOpenAutoFocus={(e) => e.preventDefault()}>
             <DialogHeader>
               <DialogTitle>تعديل بيانات المورد</DialogTitle>
             </DialogHeader>

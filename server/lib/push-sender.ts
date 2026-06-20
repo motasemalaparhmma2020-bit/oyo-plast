@@ -41,7 +41,8 @@ export async function getOrCreateVapidKeys(): Promise<VapidKeys> {
 
   // Generate using web-push (VAPID spec)
   try {
-    const webpush = await import("web-push");
+    const wp: any = await import("web-push");
+    const webpush = wp.default ?? wp;
     const keys = webpush.generateVAPIDKeys();
     _cachedKeys = { publicKey: keys.publicKey, privateKey: keys.privateKey };
   } catch {
@@ -74,7 +75,8 @@ export async function getVapidPublicKey(): Promise<string> {
 export async function sendWebPush(sub: PushSubscription, payload?: PushPayload): Promise<void> {
   try {
     const keys = await getOrCreateVapidKeys();
-    const webpush = await import("web-push");
+    const wp: any = await import("web-push");
+    const webpush = wp.default ?? wp;
 
     webpush.setVapidDetails("mailto:info@oyoplast.com", keys.publicKey, keys.privateKey);
 

@@ -9296,11 +9296,11 @@ export default function Admin() {
                 <h3 className="font-bold text-sm text-blue-900 dark:text-blue-100">أوامر الشراء (Purchase Orders)</h3>
                 <p className="text-xs text-blue-700 dark:text-blue-300">إنشاء أوامر شراء، تسجيل الاستلام، وحساب متوسط التكلفة (WAC) تلقائياً</p>
               </div>
-              <a href="/admin/purchase-orders" data-testid="link-purchase-orders">
+              <Link href="/admin/purchase-orders" data-testid="link-purchase-orders">
                 <Button className="gap-1 bg-blue-600 hover:bg-blue-700">
                   فتح
                 </Button>
-              </a>
+              </Link>
             </div>
             <div className="mb-4 p-4 bg-gradient-to-l from-purple-50 to-pink-50 dark:from-purple-950/40 dark:to-pink-950/40 border border-purple-200 dark:border-purple-800 rounded-lg flex items-center justify-between gap-3">
               <div>
@@ -9309,11 +9309,11 @@ export default function Admin() {
                 </h3>
                 <p className="text-xs text-purple-700 dark:text-purple-300">9 وكلاء (سفر، نور، ليلى، هدى، ماجد، رامي، عمر، أوبو) + المدير التنفيذي راشد الذي يتفقد قاعدة البيانات</p>
               </div>
-              <a href="/admin/ai-agents" data-testid="link-ai-agents">
+              <Link href="/admin/ai-agents" data-testid="link-ai-agents">
                 <Button className="gap-1 bg-purple-600 hover:bg-purple-700">
                   فتح
                 </Button>
-              </a>
+              </Link>
             </div>
             <div className="mb-4 p-4 bg-gradient-to-l from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/40 border border-orange-200 dark:border-orange-800 rounded-lg flex items-center justify-between gap-3">
               <div>
@@ -9322,11 +9322,11 @@ export default function Admin() {
                 </h3>
                 <p className="text-xs text-orange-700 dark:text-orange-300">عروض شاملة (سعر/كمية + شحن + Anchor + Badge + عمولة مسوّق لكل عرض). يلغي smart variants ورسوم الطباعة عند تطابق الكمية.</p>
               </div>
-              <a href="/admin/volume-offers" data-testid="link-volume-offers">
+              <Link href="/admin/volume-offers" data-testid="link-volume-offers">
                 <Button className="gap-1 bg-orange-600 hover:bg-orange-700">
                   فتح
                 </Button>
-              </a>
+              </Link>
             </div>
             <div className="mb-4 p-4 bg-gradient-to-l from-cyan-50 to-sky-50 dark:from-cyan-950/40 dark:to-sky-950/40 border border-cyan-200 dark:border-cyan-800 rounded-lg flex items-center justify-between gap-3">
               <div>
@@ -9335,11 +9335,11 @@ export default function Admin() {
                 </h3>
                 <p className="text-xs text-cyan-700 dark:text-cyan-300">تحكّم كامل بالصفحة الجديدة: مفتاح رئيسي، نطاق التفعيل (الكل/الطباعة/منتجات محددة)، إظهار/إخفاء وترتيب كل قسم، وتفعيل/تعطيل كل عنصر.</p>
               </div>
-              <a href="/admin/pdp-builder" data-testid="link-pdp-builder">
+              <Link href="/admin/pdp-builder" data-testid="link-pdp-builder">
                 <Button className="gap-1 bg-cyan-600 hover:bg-cyan-700">
                   فتح
                 </Button>
-              </a>
+              </Link>
             </div>
             <div className="mb-4 p-4 bg-gradient-to-l from-blue-50 to-sky-50 dark:from-blue-950/40 dark:to-sky-950/40 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center justify-between gap-3">
               <div>
@@ -9348,11 +9348,11 @@ export default function Admin() {
                 </h3>
                 <p className="text-xs text-blue-700 dark:text-blue-300">إضافة/تعديل/تعطيل أعضاء الفريق + ضبط الأدوار (مدير منتجات، طلبات، مالية، مندوب توصيل). الدخول لاحقاً من <code>/staff</code>.</p>
               </div>
-              <a href="/admin/staff" data-testid="link-admin-staff">
+              <Link href="/admin/staff" data-testid="link-admin-staff">
                 <Button className="gap-1 bg-blue-600 hover:bg-blue-700">
                   فتح
                 </Button>
-              </a>
+              </Link>
             </div>
             <InventorySection
               productsList={productsList}
@@ -9524,11 +9524,11 @@ export default function Admin() {
                 <h3 className="font-bold text-sm text-green-900 dark:text-green-100">💰 سداد مستحقات الموردين</h3>
                 <p className="text-xs text-green-700 dark:text-green-300">عرض الموردين بمستحقات، تسجيل دفعات، وسجل المدفوعات السابقة</p>
               </div>
-              <a href="/admin/supplier-payments" data-testid="link-supplier-payments">
+              <Link href="/admin/supplier-payments" data-testid="link-supplier-payments">
                 <Button className="gap-1 bg-green-600 hover:bg-green-700">
                   فتح
                 </Button>
-              </a>
+              </Link>
             </div>
             <SupplierManagement adminToken={adminToken} />
             <AdminServiceAreas adminToken={adminToken} />
