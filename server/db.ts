@@ -51,6 +51,16 @@ export const db = drizzle(pool, { schema });
     console.warn("[migrate] credit_option_enabled column:", (e as Error).message);
   }
 
+  // ── Auto-migrate: show_customer_chat toggle (June 2026) ──
+  try {
+    await pool.query(`
+      ALTER TABLE display_settings
+        ADD COLUMN IF NOT EXISTS show_customer_chat boolean DEFAULT true
+    `);
+  } catch (e) {
+    console.warn("[migrate] show_customer_chat column:", (e as Error).message);
+  }
+
   // ── Auto-migrate: account deletion requests table (June 2026) ──
   try {
     await pool.query(`

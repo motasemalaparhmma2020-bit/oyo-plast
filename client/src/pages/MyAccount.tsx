@@ -62,6 +62,11 @@ export default function MyAccount() {
     staleTime: 30_000,
   });
 
+  const { data: displaySettings } = useQuery<any>({
+    queryKey: ["/api/display-settings"],
+    staleTime: 60_000,
+  });
+
   // Guest view
   if (!isAuthenticated) {
     return (
@@ -400,16 +405,18 @@ export default function MyAccount() {
         )}
 
         {/* ──────── تواصل مع المبيعات ──────── */}
-        <div className="space-y-2" data-testid="section-customer-chat">
-          <div className="flex items-center gap-2 px-1">
-            <MessageCircle className="h-5 w-5 text-[#2196F3]" />
-            <h2 className="font-bold text-sm">تواصل مع المبيعات</h2>
+        {displaySettings?.showCustomerChat !== false && (
+          <div className="space-y-2" data-testid="section-customer-chat">
+            <div className="flex items-center gap-2 px-1">
+              <MessageCircle className="h-5 w-5 text-[#2196F3]" />
+              <h2 className="font-bold text-sm">تواصل مع المبيعات</h2>
+            </div>
+            <p className="text-xs text-muted-foreground px-1">
+              راسل فريق المبيعات مباشرة — نرد عليك في أقرب وقت.
+            </p>
+            <CustomerChatWidget inline />
           </div>
-          <p className="text-xs text-muted-foreground px-1">
-            راسل فريق المبيعات مباشرة — نرد عليك في أقرب وقت.
-          </p>
-          <CustomerChatWidget inline />
-        </div>
+        )}
 
         {/* ──────── تذييل الصفحة ──────── */}
         <div className="flex flex-col items-center gap-2 py-4 pb-2" data-testid="footer-account">

@@ -4002,6 +4002,26 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                     )}
                   </div>
 
+                  {/* تواصل مع المبيعات */}
+                  <div className="rounded-xl border bg-white dark:bg-background p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                          <span className="text-white text-lg">💬</span>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm">تواصل مع المبيعات</p>
+                          <p className="text-xs text-muted-foreground">قسم الدردشة في صفحة حسابي</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={settings?.showCustomerChat !== false}
+                        onCheckedChange={v => handleUpdate('showCustomerChat', v)}
+                        data-testid="switch-show-customer-chat"
+                      />
+                    </div>
+                  </div>
+
                   {/* واتساب */}
                   <div className="rounded-xl border bg-white dark:bg-background p-4 space-y-3">
                     <div className="flex items-center justify-between">
