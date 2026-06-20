@@ -14,6 +14,7 @@ import {
   Smartphone, BellRing, BellOff,
 } from "lucide-react";
 import type { Order } from "@shared/schema";
+import CustomerChatWidget from "@/components/CustomerChatWidget";
 import oyoLogo from "@assets/FB_IMG_1748731871206_1766877101101.jpg";
 
 function goBackSafe(setLocation: (p: string) => void) {
@@ -396,6 +397,18 @@ export default function MyAccount() {
             </CardContent>
           </Card>
         )}
+
+        {/* ──────── تواصل مع المبيعات ──────── */}
+        <div className="space-y-2" data-testid="section-customer-chat">
+          <div className="flex items-center gap-2 px-1">
+            <MessageCircle className="h-5 w-5 text-[#2196F3]" />
+            <h2 className="font-bold text-sm">تواصل مع المبيعات</h2>
+          </div>
+          <p className="text-xs text-muted-foreground px-1">
+            راسل فريق المبيعات مباشرة — نرد عليك في أقرب وقت.
+          </p>
+          <CustomerChatWidget inline />
+        </div>
 
         {/* ──────── تذييل الصفحة ──────── */}
         <div className="flex flex-col items-center gap-2 py-4 pb-2" data-testid="footer-account">

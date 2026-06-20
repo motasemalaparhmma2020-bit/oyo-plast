@@ -178,7 +178,8 @@ export async function createForMany(userIds: string[], base: Omit<CreateNotifica
 
 /**
  * Broadcast a promotional notification.
- *  - mode='opt_in': only users who explicitly enabled promo (in_app_enabled=true for type='promo').
+ *  - mode='opt_in': OPT-OUT model — everyone EXCEPT users who explicitly disabled
+ *    or muted promo (users with no preference row are included by default).
  *  - mode='bypass': everyone, ignoring preferences. Use sparingly (platform-critical announcements).
  */
 export async function broadcastPromo(opts: {
@@ -198,21 +199,25 @@ export async function broadcastPromo(opts: {
       sql += ` AND role = ANY($${params.length})`;
     }
     if (mode === "opt_in") {
-      sql += ` AND id IN (
+      // Opt-OUT model: reach everyone EXCEPT users who explicitly disabled or
+      // muted promo. Users with no preference row are INCLUDED by default.
+      // (Previously this required an explicit opt-in row, so broadcasts reached
+      //  almost no one because most users never open notification settings.)
+      sql += ` AND id NOT IN (
         SELECT user_id FROM notification_preferences
-        WHERE type='promo' AND in_app_enabled=true
-          AND (muted_until IS NULL OR muted_until < NOW())
+        WHERE type='promo'
+          AND (in_app_enabled = false
+               OR (muted_until IS NOT NULL AND muted_until > NOW()))
       )`;
     }
     const r = await pool.query(sql, params);
     const ids = r.rows.map((row: any) => row.id);
     if (!ids.length) return { recipients: 0 };
 
-    // Build bulk insert
+    // Build bulk insert (in-app notification for every recipient)
     const values: any[] = [];
     const rows: string[] = [];
     let i = 1;
-    const bypass = mode === "bypass";
     for (const uid of ids) {
       rows.push(`($${i++}, $${i++}, $${i++}, 'promo', 'normal', $${i++}, false)`);
       values.push(uid, title, message, actionUrl || null);
@@ -222,6 +227,16 @@ export async function broadcastPromo(opts: {
        VALUES ${rows.join(",")}`,
       values,
     );
+
+    // Also deliver as external Web Push (fire-and-forget, non-blocking).
+    try {
+      const { sendPushToUser } = await import("./push-sender");
+      const pushPayload = { title, body: message, url: actionUrl || "/notifications" };
+      Promise.allSettled(
+        ids.map((uid: string) => sendPushToUser(uid, pushPayload)),
+      ).catch(() => {});
+    } catch { /* push optional */ }
+
     return { recipients: ids.length };
   } catch (e: any) {
     console.error("[broadcastPromo] error:", e.message);

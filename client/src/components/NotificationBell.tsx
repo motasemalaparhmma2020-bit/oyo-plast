@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, Package, CheckCheck, Wallet, MessageCircle, Megaphone, Settings, AlertCircle } from "lucide-react";
+import { Bell, Package, CheckCheck, Wallet, MessageCircle, Megaphone, Settings, AlertCircle, Volume2, VolumeX } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
@@ -40,17 +40,46 @@ function colorForType(type: string) {
   }
 }
 
-// Short pleasant beep — base64 WAV (~10kb) so we don't ship an asset file.
-const BEEP_DATA_URL =
-  "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+// ── صوت تنبيه لطيف عبر Web Audio API (بدون ملف صوت — الـWAV القديم كان صامتاً) ──
+const SOUND_KEY = "notif_sound_enabled";
+function isSoundEnabled() {
+  return localStorage.getItem(SOUND_KEY) !== "false";
+}
+let _audioCtx: AudioContext | null = null;
+function playChime() {
+  try {
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!Ctx) return;
+    if (!_audioCtx) _audioCtx = new Ctx();
+    const ctx = _audioCtx;
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    const now = ctx.currentTime;
+    // نغمتان صاعدتان قصيرتان (دينج لطيف)
+    const notes: Array<[number, number]> = [[880, 0], [1174.66, 0.12]];
+    for (const [freq, offset] of notes) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const t = now + offset;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(0.2, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.22);
+    }
+  } catch {}
+}
 
 export function NotificationBell() {
   const { isAuthenticated, user } = useAuth();
   const qc = useQueryClient();
   const [, setLocation] = useLocation();
   const [open, setOpen] = useState(false);
+  const [soundOn, setSoundOn] = useState<boolean>(() => isSoundEnabled());
   const lastCountRef = useRef<number>(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const initedRef = useRef(false);
 
   const role = (user as any)?.role;
   const isStaff = ["owner", "order_manager", "finance", "product_manager", "delivery"].includes(role);
@@ -68,17 +97,24 @@ export function NotificationBell() {
 
   const unreadCount = countData?.count ?? 0;
 
-  // Play sound when count grows
+  // Play sound only when count GROWS after first load (no chime on initial mount)
   useEffect(() => {
-    if (unreadCount > lastCountRef.current && lastCountRef.current >= 0) {
-      try {
-        if (!audioRef.current) audioRef.current = new Audio(BEEP_DATA_URL);
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(() => {});
-      } catch {}
+    if (countData === undefined) return; // ننتظر أول تحميل فعلي للعدّاد
+    if (!initedRef.current) {
+      initedRef.current = true;
+      lastCountRef.current = unreadCount; // ضبط الأساس بصمت عند أول قيمة
+      return;
     }
+    if (unreadCount > lastCountRef.current && isSoundEnabled()) playChime();
     lastCountRef.current = unreadCount;
-  }, [unreadCount]);
+  }, [countData, unreadCount]);
+
+  const toggleSound = () => {
+    const next = !soundOn;
+    setSoundOn(next);
+    localStorage.setItem(SOUND_KEY, next ? "true" : "false");
+    if (next) playChime(); // معاينة فورية + يفك قفل صوت المتصفح على الجوال
+  };
 
   const markAllRead = useMutation({
     mutationFn: async () => apiRequest("PATCH", "/api/notifications/read-all"),
@@ -149,6 +185,20 @@ export function NotificationBell() {
                 قراءة الكل
               </Button>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={toggleSound}
+              data-testid="button-bell-sound-toggle"
+              title={soundOn ? "كتم صوت الإشعارات" : "تفعيل صوت الإشعارات"}
+            >
+              {soundOn ? (
+                <Volume2 className="h-3.5 w-3.5 text-[#2196F3]" />
+              ) : (
+                <VolumeX className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+            </Button>
             <Link href="/notification-settings">
               <Button
                 variant="ghost"

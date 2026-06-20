@@ -20,6 +20,8 @@ interface Props {
   relatedProductId?: number;
   /** نص الزر العائم */
   buttonLabel?: string;
+  /** وضع مضمّن داخل الصفحة (بدون تعويم) — يظهر مفتوحاً دائماً */
+  inline?: boolean;
 }
 
 /**
@@ -27,10 +29,10 @@ interface Props {
  * العميل يدخل رقم هاتفه واسمه أول مرة، ثم يبدأ المحادثة.
  * الردود من الإدارة تُرسل عبر واتساب (UltraMSG) إن أُعدّت.
  */
-export default function CustomerChatWidget({ relatedOrderId, relatedProductId, buttonLabel = "تواصل مع المبيعات" }: Props) {
+export default function CustomerChatWidget({ relatedOrderId, relatedProductId, buttonLabel = "تواصل مع المبيعات", inline = false }: Props) {
   const { toast } = useToast();
   const [location] = useLocation();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(inline);
   const [phone, setPhone] = useState<string>(() => localStorage.getItem(STORAGE_KEY) || "");
   const [name, setName] = useState<string>(() => localStorage.getItem(NAME_KEY) || "");
   const [draft, setDraft] = useState("");
@@ -88,12 +90,12 @@ export default function CustomerChatWidget({ relatedOrderId, relatedProductId, b
 
   const canSend = phone.trim().length >= 9 && draft.trim().length > 0;
 
-  if (HIDE_PATHS.some((p) => location.startsWith(p))) return null;
+  if (!inline && HIDE_PATHS.some((p) => location.startsWith(p))) return null;
 
   return (
     <>
       {/* الزر العائم */}
-      {!open && (
+      {!inline && !open && (
         <button onClick={() => setOpen(true)}
           className="fixed bottom-20 left-4 z-40 bg-primary text-white rounded-full shadow-lg p-3 hover:scale-105 transition-transform flex items-center gap-2 px-4"
           data-testid="button-open-chat">
@@ -104,15 +106,25 @@ export default function CustomerChatWidget({ relatedOrderId, relatedProductId, b
 
       {/* النافذة */}
       {open && (
-        <div className="fixed bottom-4 left-4 right-4 sm:right-auto sm:w-[360px] z-50 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border flex flex-col max-h-[80vh]" dir="rtl">
+        <div
+          className={
+            inline
+              ? "w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg border flex flex-col max-h-[70vh]"
+              : "fixed bottom-4 left-4 right-4 sm:right-auto sm:w-[360px] z-50 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border flex flex-col max-h-[80vh]"
+          }
+          dir="rtl"
+          data-testid={inline ? "inline-customer-chat" : "floating-customer-chat"}
+        >
           <div className="bg-primary text-white px-3 py-2.5 rounded-t-xl flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5" />
               <span className="font-semibold text-sm">المحادثة مع الإدارة</span>
             </div>
-            <button onClick={() => setOpen(false)} className="hover:bg-white/20 rounded p-1" data-testid="button-close-chat">
-              <X className="h-4 w-4" />
-            </button>
+            {!inline && (
+              <button onClick={() => setOpen(false)} className="hover:bg-white/20 rounded p-1" data-testid="button-close-chat">
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
           {/* بيانات العميل (مرة واحدة) */}

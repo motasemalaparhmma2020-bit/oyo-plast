@@ -1271,8 +1271,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       };
 
       const finalize = async (list: any[]) => {
-        // ✅ زيادة الحد من 6 إلى 40 لتجربة أشبه بـ AliExpress
-        const top = list.slice(0, 40);
+        // ✅ بلا حد عملي — الـpayload خفيف (روابط بروكسي للصور لا base64).
+        // سقف أمان 200 نتيجة يكفي حتى لو كبر الكتالوج كثيراً.
+        const top = list.slice(0, 200);
         const imgs = await fetchImagesFor(top.map(p => p.id));
         return top.map(p => ({
           id: p.id, name: p.name, image: imgs.get(p.id) || "", price: p.price,

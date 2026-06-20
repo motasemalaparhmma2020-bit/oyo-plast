@@ -5,6 +5,8 @@
 - [Agent executive tools](agent-tools-approval.md) — propose→approve→execute flow; gate tools server-side both at parse & approve, make approval idempotent, WhatsApp is disabled (use in-app notifications).
 - [Dev preview stale bundle](dev-preview-stale-bundle.md) — PWA service worker + failing Vite HMR can serve old UI; verify FE changes via curl/tsc, not one screenshot.
 - [Push Notifications VAPID Native](push-notifications-vapid.md) — web-push package unavailable; use Node.js native crypto (createECDH prime256v1 + createSign ES256 + JWK); sends payload-less push; sw.js already has handlers.
+- [Pre-existing tsc errors vs tsx runtime](repo-precommit-typecheck.md) — `npm run check` has known pre-existing errors; app runs via tsx; filter check output to your edited files to judge regressions.
+- [Polling-count sound effects](polling-count-sound.md) — chime/alert on a growing query count must gate on first load (data===undefined + init ref) or it fires on every mount when unread already exist.
 - [Credit system toggles](credit-system-toggles.md) — two similar admin switches: master `credit_system_enabled` (settings KV, gate everywhere) vs per-display `credit_option_enabled`; don't confuse them.
 - [Cloudinary preview compositing](cloudinary-preview-compositing.md) — Cloudinary fetch delivery returns 401 here; product imgs are local/proxy, not upload URLs → do logo-on-product previews client-side with canvas, not the Cloudinary overlay.
 - [Products schema drift](schema-drift-products.md) — live DB is source of truth, schema.ts is stale; promo col is `promotional_tags` (array), users has no `is_active`; bare catch{} hides wrong-column SQL.
