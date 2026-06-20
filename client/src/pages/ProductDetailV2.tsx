@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { useParams, useLocation, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { ChevronRight, Heart, ShoppingCart, MoreVertical, Camera, Sparkles, X, Upload, Check, Loader2, Star, ArrowLeft } from "lucide-react";
@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Product } from "@shared/schema";
+import { DEFAULT_PDP_CONFIG, visibleSectionsSorted, type PdpConfig } from "@shared/pdp-config";
 
 interface PrintColorOption { name: string; hex: string; }
 interface QuantityTier { qty: number; totalPrice: number; unitPrice: number; costPrice?: number; }
@@ -60,7 +61,7 @@ function buildBagImageUrl(product: any, color: BagColor): string {
   return product?.imageUrl || product?.mainImage || "/placeholder.png";
 }
 
-export default function ProductDetailV2() {
+export default function ProductDetailV2({ config }: { config?: PdpConfig } = {}) {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const { isAuthenticated } = useAuth();
@@ -463,205 +464,117 @@ export default function ProductDetailV2() {
   const rating = (product as any).rating || (product as any).averageRating || 4.8;
   const reviewCount = (product as any).reviewCount || 0;
 
-  return (
-    <div className="min-h-screen bg-gray-100 pb-24" dir="rtl" data-testid="product-detail-v2">
-      <div className="max-w-[480px] mx-auto bg-white min-h-screen shadow-xl">
+  // ── إعدادات التخطيط (يتحكم بها الأدمن من /admin/pdp-builder) ──
+  const cfg = config ?? DEFAULT_PDP_CONFIG;
+  const el = cfg.elements;
+  const ordered = visibleSectionsSorted(cfg).filter((s) => s.id !== "stickyCart");
+  const showSticky = cfg.sections.find((s) => s.id === "stickyCart")?.visible !== false;
 
-        {/* ── ① Header ── */}
-        <header className="sticky top-0 bg-white/95 backdrop-blur z-40 flex items-center justify-between px-4 h-14 border-b border-gray-100">
-          <button
-            onClick={() => setLocation("/products")}
-            className="p-2 -mr-2 text-gray-700"
-            data-testid="button-back"
-          >
-            <ArrowLeft className="w-5 h-5 -scale-x-100" />
-          </button>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => toggleWishlist.mutate()}
-              className="p-2 relative"
-              data-testid="button-wishlist"
-            >
-              <Heart className={`w-5 h-5 ${inWishlist ? "fill-red-500 text-red-500" : "text-gray-700"}`} />
-            </button>
-            <Link href="/cart" className="p-2 relative" data-testid="link-cart-header">
-              <ShoppingCart className="w-5 h-5 text-gray-700" />
-              {cartCount > 0 && (
-                <span className="absolute -top-0.5 -left-0.5 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
-                  {cartCount}
-                </span>
-              )}
-            </Link>
-            <button className="p-2 -ml-2 text-gray-700" data-testid="button-more">
-              <MoreVertical className="w-5 h-5" />
-            </button>
-          </div>
-        </header>
-
-        {/* ── ② Main Image (1:1) ── */}
-        <div className="relative bg-gray-50">
-          <div
-            className="w-full aspect-square flex items-center justify-center relative overflow-hidden"
-            style={{ background: `linear-gradient(135deg, ${selectedBagColor.hex}22, ${selectedBagColor.hex}44)` }}
-            data-testid="img-main"
-          >
-            <img
-              src={currentBagImage}
-              alt={product.name}
-              className="max-w-[80%] max-h-[80%] object-contain transition-all"
-              onError={(e) => { (e.target as HTMLImageElement).src = product.mainImage || "/placeholder.png"; }}
+  // ── سجل الأقسام (registry): كل قسم محتوى مستقل يُرتَّب ويُظهر/يُخفى من الإعدادات ──
+  const sectionNodes: Record<string, JSX.Element | null> = {
+    // ② معرض الصورة + المعاينة الحية
+    gallery: (
+      <div className="relative bg-gray-50" data-testid="section-gallery">
+        <div
+          className="w-full aspect-square flex items-center justify-center relative overflow-hidden"
+          style={{ background: `linear-gradient(135deg, ${selectedBagColor.hex}22, ${selectedBagColor.hex}44)` }}
+          data-testid="img-main"
+        >
+          <img
+            src={currentBagImage}
+            alt={product.name}
+            className="max-w-[80%] max-h-[80%] object-contain transition-all"
+            onError={(e) => { (e.target as HTMLImageElement).src = product.mainImage || "/placeholder.png"; }}
+          />
+          {/* Logo overlay on print area — tinted via CSS mask so any color works */}
+          {logoDataUrl && (
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                left: `${printArea.x}%`,
+                top: `${printArea.y}%`,
+                width: `${printArea.width}%`,
+                height: `${printArea.height}%`,
+                background: selectedPrintColor?.hex || "#000000",
+                WebkitMaskImage: `url(${logoDataUrl})`,
+                maskImage: `url(${logoDataUrl})`,
+                WebkitMaskRepeat: "no-repeat",
+                maskRepeat: "no-repeat",
+                WebkitMaskSize: "contain",
+                maskSize: "contain",
+                WebkitMaskPosition: "center",
+                maskPosition: "center",
+              }}
+              data-testid="logo-overlay-main"
             />
-            {/* Logo overlay on print area — tinted via CSS mask so any color works */}
-            {logoDataUrl && (
-              <div
-                className="absolute pointer-events-none"
-                style={{
-                  left: `${printArea.x}%`,
-                  top: `${printArea.y}%`,
-                  width: `${printArea.width}%`,
-                  height: `${printArea.height}%`,
-                  background: selectedPrintColor?.hex || "#000000",
-                  WebkitMaskImage: `url(${logoDataUrl})`,
-                  maskImage: `url(${logoDataUrl})`,
-                  WebkitMaskRepeat: "no-repeat",
-                  maskRepeat: "no-repeat",
-                  WebkitMaskSize: "contain",
-                  maskSize: "contain",
-                  WebkitMaskPosition: "center",
-                  maskPosition: "center",
-                }}
-                data-testid="logo-overlay-main"
-              />
-            )}
-            {/* Image counter dots */}
-            {images.length > 1 && (
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                {images.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setImageIdx(i)}
-                    className={`w-2 h-2 rounded-full transition ${i === imageIdx ? "bg-cyan-500" : "bg-gray-300"}`}
-                    data-testid={`button-img-dot-${i}`}
-                  />
-                ))}
-              </div>
-            )}
-            {/* Discount badge */}
-            {discountPercent > 0 && (
-              <div className="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-md">
-                -{discountPercent}%
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Content body ── */}
-        <div className="px-4 pt-3 pb-4 space-y-3">
-
-          {/* ③ Title + Rating */}
-          <div>
-            <h1 className="text-base font-bold text-gray-900 leading-tight" data-testid="text-product-name">
-              {product.name}
-            </h1>
-            <div className="flex items-center gap-2 mt-1 text-xs">
-              <span className="flex items-center gap-0.5 text-amber-500 font-bold">
-                <Star className="w-3 h-3 fill-amber-500" /> {Number(rating).toFixed(1)}
-                {reviewCount > 0 && <span className="text-gray-500 font-normal">({formatNum(reviewCount)})</span>}
-              </span>
-              {(product as any).isHot && <span className="text-orange-500 font-bold">🔥 رائج</span>}
-            </div>
-          </div>
-
-          {/* ⑤ Price block */}
-          <div className="flex items-baseline gap-2 flex-wrap" data-testid="block-price">
-            <span className="text-2xl font-extrabold text-red-600 transition-transform" data-testid="text-price-total">
-              {formatNum(selectedTier.totalPrice)} ر.ي
-            </span>
-            {originalPrice && (
-              <span className="text-sm text-gray-400 line-through">{formatNum(Number(originalPrice))}</span>
-            )}
-            {discountPercent > 0 && (
-              <span className="bg-red-100 text-red-700 text-xs font-bold px-1.5 py-0.5 rounded">-{discountPercent}%</span>
-            )}
-            <span className="block w-full text-xs text-gray-600 mt-0.5" data-testid="text-price-unit">
-              {formatNum(selectedTier.unitPrice)} ر.ي / كيس
-            </span>
-          </div>
-
-          {/* ⑤b Volume Offers — عروض الكميات */}
-          {sortedOffers.length > 0 && (
-            <div className="space-y-2" data-testid="section-volume-offers">
-              {activeOffer && (
-                <div className="rounded-xl border-2 border-orange-400 bg-gradient-to-l from-orange-50 to-amber-50 p-3 shadow-sm" data-testid={`banner-active-offer-${activeOffer.id}`}>
-                  <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                    {activeOffer.badgeText && (
-                      <span className="bg-orange-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full animate-pulse">
-                        🔥 {activeOffer.badgeText}
-                      </span>
-                    )}
-                    {activeOffer.hasFreeShipping && (
-                      <span className="bg-green-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">🚚 شحن مجاني</span>
-                    )}
-                  </div>
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="text-xl font-extrabold text-orange-600" data-testid="text-offer-price">
-                      {formatNum(Number(activeOffer.offerPriceYer))} ر.ي / قطعة
-                    </span>
-                    {activeOffer.originalPriceYer && Number(activeOffer.originalPriceYer) > Number(activeOffer.offerPriceYer) && (
-                      <>
-                        <span className="text-xs line-through text-gray-400">
-                          {formatNum(Number(activeOffer.originalPriceYer))} ر.ي
-                        </span>
-                        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
-                          -{Math.round(((Number(activeOffer.originalPriceYer) - Number(activeOffer.offerPriceYer)) / Number(activeOffer.originalPriceYer)) * 100)}%
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  {activeOffer.displayLabel && (
-                    <p className="text-[11px] text-orange-700 mt-1">{activeOffer.displayLabel}</p>
-                  )}
-                </div>
-              )}
-              {nextOffer && (selectedTier?.qty ?? 0) < (nextOffer.minQuantity ?? 0) && (
-                <div className="rounded-xl border border-blue-300 bg-blue-50 p-2.5 text-[11px] text-blue-900" data-testid="banner-next-offer">
-                  أضِف <strong>{(nextOffer.minQuantity ?? 0) - (selectedTier?.qty ?? 0)}</strong> قطعة لتحصل على سعر <strong>{formatNum(Number(nextOffer.offerPriceYer))} ر.ي</strong>
-                </div>
-              )}
-              <div className="rounded-xl border border-cyan-200 bg-cyan-50/50 p-2.5">
-                <p className="text-xs font-bold text-cyan-700 mb-2">🎯 عروض الكمية</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {sortedOffers.map((o: any) => {
-                    const isActive = activeOffer?.id === o.id;
-                    return (
-                      <button
-                        key={o.id}
-                        onClick={() => {
-                          const minQ = o.minQuantity ?? 1;
-                          const match = quantityTiers.find((t) => t.qty >= minQ) || quantityTiers[quantityTiers.length - 1];
-                          if (match) setSelectedTier(match);
-                        }}
-                        className={`text-right rounded-lg border-2 p-2 transition-all bg-white ${isActive ? "border-orange-500 bg-orange-100 shadow-md" : "border-gray-200 hover:border-cyan-400"}`}
-                        data-testid={`button-volume-tier-${o.id}`}
-                      >
-                        <div className="text-[11px] font-bold text-gray-700">
-                          {o.minQuantity}{o.maxQuantity ? `–${o.maxQuantity}` : "+"} قطعة
-                        </div>
-                        <div className="text-sm font-extrabold text-orange-600">
-                          {formatNum(Number(o.offerPriceYer))} ر.ي
-                        </div>
-                        {o.badgeText && <div className="text-[10px] text-orange-700 mt-0.5">{o.badgeText}</div>}
-                        {o.hasFreeShipping && <div className="text-[10px] text-green-700">🚚 مجاني</div>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+          )}
+          {/* Image counter dots */}
+          {images.length > 1 && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+              {images.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setImageIdx(i)}
+                  className={`w-2 h-2 rounded-full transition ${i === imageIdx ? "bg-cyan-500" : "bg-gray-300"}`}
+                  data-testid={`button-img-dot-${i}`}
+                />
+              ))}
             </div>
           )}
+          {/* Discount badge */}
+          {discountPercent > 0 && (
+            <div className="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-md">
+              -{discountPercent}%
+            </div>
+          )}
+        </div>
+      </div>
+    ),
 
-          {/* ⑥ Bag Colors */}
-          {bagColors.length > 0 && (
+    // ③+⑤ الاسم والتقييم والسعر (+ شارات الثقة)
+    summary: (
+      <div className="px-4 pt-3 space-y-3" data-testid="section-summary">
+        <div>
+          <h1 className="text-base font-bold text-gray-900 leading-tight" data-testid="text-product-name">
+            {product.name}
+          </h1>
+          <div className="flex items-center gap-2 mt-1 text-xs">
+            <span className="flex items-center gap-0.5 text-amber-500 font-bold">
+              <Star className="w-3 h-3 fill-amber-500" /> {Number(rating).toFixed(1)}
+              {reviewCount > 0 && <span className="text-gray-500 font-normal">({formatNum(reviewCount)})</span>}
+            </span>
+            {(product as any).isHot && <span className="text-orange-500 font-bold">🔥 رائج</span>}
+          </div>
+        </div>
+        <div className="flex items-baseline gap-2 flex-wrap" data-testid="block-price">
+          <span className="text-2xl font-extrabold text-red-600 transition-transform" data-testid="text-price-total">
+            {formatNum(selectedTier.totalPrice)} ر.ي
+          </span>
+          {originalPrice && (
+            <span className="text-sm text-gray-400 line-through">{formatNum(Number(originalPrice))}</span>
+          )}
+          {discountPercent > 0 && (
+            <span className="bg-red-100 text-red-700 text-xs font-bold px-1.5 py-0.5 rounded">-{discountPercent}%</span>
+          )}
+          <span className="block w-full text-xs text-gray-600 mt-0.5" data-testid="text-price-unit">
+            {formatNum(selectedTier.unitPrice)} ر.ي / كيس
+          </span>
+        </div>
+        {el.trustBadges && (
+          <div className="flex items-center justify-around bg-gray-50 rounded-xl py-2 text-[11px] text-gray-600" data-testid="block-trust-badges">
+            <span className="flex items-center gap-1">🚚 شحن سريع</span>
+            <span className="flex items-center gap-1">💵 دفع عند الاستلام</span>
+            <span className="flex items-center gap-1">✅ جودة مضمونة</span>
+          </div>
+        )}
+      </div>
+    ),
+
+    // ⑥+⑦ ألوان الكيس ولون الطباعة
+    smartVariants:
+      (el.bagColor && bagColors.length > 0) || (el.printColor && printColorOptions.length > 0) ? (
+        <div className="px-4 pt-3 space-y-3" data-testid="section-smart-variants">
+          {el.bagColor && bagColors.length > 0 && (
             <div data-testid="block-bag-colors">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-sm font-semibold text-gray-700">🎨 لون الكيس:</span>
@@ -687,9 +600,7 @@ export default function ProductDetailV2() {
               </div>
             </div>
           )}
-
-          {/* ⑦ Print Color */}
-          {printColorOptions.length > 0 && (
+          {el.printColor && printColorOptions.length > 0 && (
             <div className="flex items-center justify-between" data-testid="block-print-color">
               <span className="text-sm font-semibold text-gray-700">✏️ لون الطباعة:</span>
               <select
@@ -709,61 +620,140 @@ export default function ProductDetailV2() {
               </select>
             </div>
           )}
+        </div>
+      ) : null,
 
-          {/* ⑧ Tiered Pricing */}
-          {quantityTiers.length > 0 && (
-            <div data-testid="block-tiers">
-              <div className="text-sm font-semibold text-gray-700 mb-1.5">📦 اختر الكمية:</div>
-              <div className="flex gap-2">
-                {quantityTiers.map((t) => {
-                  const active = selectedTier.qty === t.qty;
-                  return (
-                    <button
-                      key={t.qty}
-                      onClick={() => setSelectedTier(t)}
-                      className={`flex-1 border-2 rounded-xl p-2.5 text-center transition-all bg-white ${
-                        active
-                          ? "border-cyan-500 bg-cyan-50 shadow-md"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
-                      data-testid={`button-tier-${t.qty}`}
-                    >
-                      <div className="font-extrabold text-base">{formatNum(t.qty)}</div>
-                      <div className="text-[11px] text-gray-500 -mt-0.5">كيس</div>
-                      <div className={`inline-block text-[10px] px-2 py-0.5 rounded-full mt-1 ${
-                        active ? "bg-cyan-500 text-white" : "bg-gray-100 text-gray-600"
-                      }`}>
-                        {formatNum(t.unitPrice)} ر/كيس
-                      </div>
-                      <div className="text-[11px] font-bold text-gray-700 mt-1">
-                        {formatNum(t.totalPrice)} ر.ي
-                      </div>
-                    </button>
-                  );
-                })}
+    // ⑤b عروض الكميات
+    volumeOffers:
+      sortedOffers.length > 0 ? (
+        <div className="px-4 pt-3 space-y-2" data-testid="section-volume-offers">
+          {activeOffer && (
+            <div className="rounded-xl border-2 border-orange-400 bg-gradient-to-l from-orange-50 to-amber-50 p-3 shadow-sm" data-testid={`banner-active-offer-${activeOffer.id}`}>
+              <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                {activeOffer.badgeText && (
+                  <span className="bg-orange-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+                    🔥 {activeOffer.badgeText}
+                  </span>
+                )}
+                {activeOffer.hasFreeShipping && (
+                  <span className="bg-green-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">🚚 شحن مجاني</span>
+                )}
               </div>
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-xl font-extrabold text-orange-600" data-testid="text-offer-price">
+                  {formatNum(Number(activeOffer.offerPriceYer))} ر.ي / قطعة
+                </span>
+                {activeOffer.originalPriceYer && Number(activeOffer.originalPriceYer) > Number(activeOffer.offerPriceYer) && (
+                  <>
+                    <span className="text-xs line-through text-gray-400">
+                      {formatNum(Number(activeOffer.originalPriceYer))} ر.ي
+                    </span>
+                    <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                      -{Math.round(((Number(activeOffer.originalPriceYer) - Number(activeOffer.offerPriceYer)) / Number(activeOffer.originalPriceYer)) * 100)}%
+                    </span>
+                  </>
+                )}
+              </div>
+              {activeOffer.displayLabel && (
+                <p className="text-[11px] text-orange-700 mt-1">{activeOffer.displayLabel}</p>
+              )}
             </div>
           )}
+          {nextOffer && (selectedTier?.qty ?? 0) < (nextOffer.minQuantity ?? 0) && (
+            <div className="rounded-xl border border-blue-300 bg-blue-50 p-2.5 text-[11px] text-blue-900" data-testid="banner-next-offer">
+              أضِف <strong>{(nextOffer.minQuantity ?? 0) - (selectedTier?.qty ?? 0)}</strong> قطعة لتحصل على سعر <strong>{formatNum(Number(nextOffer.offerPriceYer))} ر.ي</strong>
+            </div>
+          )}
+          <div className="rounded-xl border border-cyan-200 bg-cyan-50/50 p-2.5">
+            <p className="text-xs font-bold text-cyan-700 mb-2">🎯 عروض الكمية</p>
+            <div className="grid grid-cols-2 gap-2">
+              {sortedOffers.map((o: any) => {
+                const isActive = activeOffer?.id === o.id;
+                return (
+                  <button
+                    key={o.id}
+                    onClick={() => {
+                      const minQ = o.minQuantity ?? 1;
+                      const match = quantityTiers.find((t) => t.qty >= minQ) || quantityTiers[quantityTiers.length - 1];
+                      if (match) setSelectedTier(match);
+                    }}
+                    className={`text-right rounded-lg border-2 p-2 transition-all bg-white ${isActive ? "border-orange-500 bg-orange-100 shadow-md" : "border-gray-200 hover:border-cyan-400"}`}
+                    data-testid={`button-volume-tier-${o.id}`}
+                  >
+                    <div className="text-[11px] font-bold text-gray-700">
+                      {o.minQuantity}{o.maxQuantity ? `–${o.maxQuantity}` : "+"} قطعة
+                    </div>
+                    <div className="text-sm font-extrabold text-orange-600">
+                      {formatNum(Number(o.offerPriceYer))} ر.ي
+                    </div>
+                    {o.badgeText && <div className="text-[10px] text-orange-700 mt-0.5">{o.badgeText}</div>}
+                    {o.hasFreeShipping && <div className="text-[10px] text-green-700">🚚 مجاني</div>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null,
 
-          {/* ⑨ Upload Logo Button */}
-          <button
-            onClick={() => setUploadModalOpen(true)}
-            className="w-full bg-gradient-to-l from-cyan-500 to-blue-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-cyan-200 flex items-center justify-center gap-2 text-sm hover:from-cyan-600 hover:to-blue-600 transition animate-pulse"
-            data-testid="button-open-upload"
-          >
-            <Camera className="w-5 h-5" />
-            {logoDataUrl ? "تغيير الشعار" : "ارفع شعارك وشاهد المعاينة فوراً"}
-          </button>
+    // ⑧ اختيار الكمية والسعر (tiers)
+    printingCalculator:
+      el.quantityStepper && quantityTiers.length > 0 ? (
+        <div className="px-4 pt-3" data-testid="section-printing-calculator">
+          <div className="text-sm font-semibold text-gray-700 mb-1.5">📦 اختر الكمية:</div>
+          <div className="flex gap-2">
+            {quantityTiers.map((t) => {
+              const active = selectedTier.qty === t.qty;
+              return (
+                <button
+                  key={t.qty}
+                  onClick={() => setSelectedTier(t)}
+                  className={`flex-1 border-2 rounded-xl p-2.5 text-center transition-all bg-white ${
+                    active
+                      ? "border-cyan-500 bg-cyan-50 shadow-md"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  data-testid={`button-tier-${t.qty}`}
+                >
+                  <div className="font-extrabold text-base">{formatNum(t.qty)}</div>
+                  <div className="text-[11px] text-gray-500 -mt-0.5">كيس</div>
+                  <div className={`inline-block text-[10px] px-2 py-0.5 rounded-full mt-1 ${
+                    active ? "bg-cyan-500 text-white" : "bg-gray-100 text-gray-600"
+                  }`}>
+                    {formatNum(t.unitPrice)} ر/كيس
+                  </div>
+                  <div className="text-[11px] font-bold text-gray-700 mt-1">
+                    {formatNum(t.totalPrice)} ر.ي
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null,
 
-          {/* ⑩ Preview (visible when logo uploaded) */}
-          {logoDataUrl && (
+    // ⑨+⑩ رفع الشعار + المعاينة الفورية
+    designStudio:
+      el.logoUpload || el.quickPreview ? (
+        <div className="px-4 pt-3 space-y-3" data-testid="section-design-studio">
+          {el.logoUpload && (
+            <button
+              onClick={() => setUploadModalOpen(true)}
+              className="w-full bg-gradient-to-l from-cyan-500 to-blue-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-cyan-200 flex items-center justify-center gap-2 text-sm hover:from-cyan-600 hover:to-blue-600 transition animate-pulse"
+              data-testid="button-open-upload"
+            >
+              <Camera className="w-5 h-5" />
+              {logoDataUrl ? "تغيير الشعار" : "ارفع شعارك وشاهد المعاينة فوراً"}
+            </button>
+          )}
+          {el.quickPreview && logoDataUrl && (
             <div data-testid="block-preview">
               <div className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5 justify-between">
                 <span className="flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-cyan-500" />
                   معاينتك الفورية:
                 </span>
-                {originalLogoUrl && (
+                {el.studioPreview && originalLogoUrl && (
                   <button
                     onClick={handleAiEnhance}
                     disabled={isAiEnhancing}
@@ -830,89 +820,136 @@ export default function ProductDetailV2() {
               </p>
             </div>
           )}
-
         </div>
+      ) : null,
 
-        {/* Description */}
-        {product.description && (
-          <div className="border-t border-gray-100 mt-2 px-4 py-4 space-y-3">
-            <div>
-              <h3 className="font-bold text-sm mb-1.5">📝 وصف المنتج</h3>
-              <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line" data-testid="text-description">
-                {product.description}
-              </p>
-            </div>
-          </div>
-        )}
+    // الوصف
+    description: product.description ? (
+      <div className="border-t border-gray-100 mt-2 px-4 py-4 space-y-3" data-testid="section-description">
+        <div>
+          <h3 className="font-bold text-sm mb-1.5">📝 وصف المنتج</h3>
+          <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line" data-testid="text-description">
+            {product.description}
+          </p>
+        </div>
+      </div>
+    ) : null,
 
-        {/* Reviews */}
-        <div className="border-t border-gray-100 mt-2 px-4 py-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold text-sm">⭐ التقييمات والمراجعات</h3>
-            <div className="flex items-center gap-1" data-testid="rating-summary">
-              <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-              <span className="text-sm font-bold">{avgRating.toFixed(1)}</span>
-              <span className="text-xs text-gray-500">({reviews.length})</span>
-            </div>
+    // التقييمات
+    reviews: (
+      <div className="border-t border-gray-100 mt-2 px-4 py-4" data-testid="section-reviews">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-bold text-sm">⭐ التقييمات والمراجعات</h3>
+          <div className="flex items-center gap-1" data-testid="rating-summary">
+            <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+            <span className="text-sm font-bold">{avgRating.toFixed(1)}</span>
+            <span className="text-xs text-gray-500">({reviews.length})</span>
           </div>
-          {reviews.length === 0 ? (
-            <p className="text-xs text-gray-500 text-center py-3" data-testid="text-no-reviews">
-              لا توجد مراجعات بعد. كن أول من يقيّم هذا المنتج ✨
-            </p>
-          ) : (
-            <div className="space-y-3 max-h-64 overflow-y-auto">
-              {reviews.slice(0, 10).map((rv: any) => (
-                <div key={rv.id} className="bg-gray-50 rounded-lg p-2.5" data-testid={`review-${rv.id}`}>
-                  <div className="flex items-center gap-1 mb-1">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-3 h-3 ${i < (Number(rv.rating) || 0) ? "fill-amber-400 text-amber-400" : "text-gray-300"}`}
-                      />
-                    ))}
-                    <span className="text-[11px] text-gray-500 mr-auto">
-                      {rv.userName || rv.user_name || "زبون"}
-                    </span>
-                  </div>
-                  {rv.comment && (
-                    <p className="text-xs text-gray-700 leading-relaxed">{rv.comment}</p>
-                  )}
+        </div>
+        {reviews.length === 0 ? (
+          <p className="text-xs text-gray-500 text-center py-3" data-testid="text-no-reviews">
+            لا توجد مراجعات بعد. كن أول من يقيّم هذا المنتج ✨
+          </p>
+        ) : (
+          <div className="space-y-3 max-h-64 overflow-y-auto">
+            {reviews.slice(0, 10).map((rv: any) => (
+              <div key={rv.id} className="bg-gray-50 rounded-lg p-2.5" data-testid={`review-${rv.id}`}>
+                <div className="flex items-center gap-1 mb-1">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star
+                      key={i}
+                      className={`w-3 h-3 ${i < (Number(rv.rating) || 0) ? "fill-amber-400 text-amber-400" : "text-gray-300"}`}
+                    />
+                  ))}
+                  <span className="text-[11px] text-gray-500 mr-auto">
+                    {rv.userName || rv.user_name || "زبون"}
+                  </span>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Related Products */}
-        {relatedProducts.length > 0 && (
-          <div className="border-t border-gray-100 mt-2 px-4 py-4">
-            <h3 className="font-bold text-sm mb-3">🛍️ منتجات مشابهة</h3>
-            <div className="grid grid-cols-2 gap-3" data-testid="related-products">
-              {relatedProducts.map((rp: any) => {
-                const rpImg = (rp.imageUrls && rp.imageUrls[0]) || rp.imageUrl || "/placeholder.png";
-                const rpPrice = Number(rp.price) || 0;
-                return (
-                  <Link
-                    key={rp.id}
-                    href={`/product-v2/${rp.id}`}
-                    className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-cyan-400 transition active:scale-[0.98]"
-                    data-testid={`related-product-${rp.id}`}
-                  >
-                    <div className="aspect-square bg-gray-100 overflow-hidden">
-                      <img src={rpImg} alt={rp.name} className="w-full h-full object-cover" loading="lazy" />
-                    </div>
-                    <div className="p-2">
-                      <h4 className="text-xs font-bold text-gray-800 line-clamp-2 min-h-[2.2em]">{rp.name}</h4>
-                      <p className="text-cyan-600 font-bold text-sm mt-1">
-                        {formatNum(rpPrice)} <span className="text-[10px] text-gray-500">ر.ي</span>
-                      </p>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
+                {rv.comment && (
+                  <p className="text-xs text-gray-700 leading-relaxed">{rv.comment}</p>
+                )}
+              </div>
+            ))}
           </div>
         )}
+      </div>
+    ),
+
+    // منتجات مشابهة
+    related: relatedProducts.length > 0 ? (
+      <div className="border-t border-gray-100 mt-2 px-4 py-4" data-testid="section-related">
+        <h3 className="font-bold text-sm mb-3">🛍️ منتجات مشابهة</h3>
+        <div className="grid grid-cols-2 gap-3" data-testid="related-products">
+          {relatedProducts.map((rp: any) => {
+            const rpImg = (rp.imageUrls && rp.imageUrls[0]) || rp.imageUrl || "/placeholder.png";
+            const rpPrice = Number(rp.price) || 0;
+            return (
+              <Link
+                key={rp.id}
+                href={`/product/${rp.id}`}
+                className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-cyan-400 transition active:scale-[0.98]"
+                data-testid={`related-product-${rp.id}`}
+              >
+                <div className="aspect-square bg-gray-100 overflow-hidden">
+                  <img src={rpImg} alt={rp.name} className="w-full h-full object-cover" loading="lazy" />
+                </div>
+                <div className="p-2">
+                  <h4 className="text-xs font-bold text-gray-800 line-clamp-2 min-h-[2.2em]">{rp.name}</h4>
+                  <p className="text-cyan-600 font-bold text-sm mt-1">
+                    {formatNum(rpPrice)} <span className="text-[10px] text-gray-500">ر.ي</span>
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    ) : null,
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 pb-24" dir="rtl" data-testid="product-detail-v2">
+      <div className="max-w-[480px] mx-auto bg-white min-h-screen shadow-xl">
+
+        {/* ── ① Header ── */}
+        <header className="sticky top-0 bg-white/95 backdrop-blur z-40 flex items-center justify-between px-4 h-14 border-b border-gray-100">
+          <button
+            onClick={() => setLocation("/products")}
+            className="p-2 -mr-2 text-gray-700"
+            data-testid="button-back"
+          >
+            <ArrowLeft className="w-5 h-5 -scale-x-100" />
+          </button>
+          <div className="flex items-center gap-2">
+            {el.wishlist && (
+              <button
+                onClick={() => toggleWishlist.mutate()}
+                className="p-2 relative"
+                data-testid="button-wishlist"
+              >
+                <Heart className={`w-5 h-5 ${inWishlist ? "fill-red-500 text-red-500" : "text-gray-700"}`} />
+              </button>
+            )}
+            <Link href="/cart" className="p-2 relative" data-testid="link-cart-header">
+              <ShoppingCart className="w-5 h-5 text-gray-700" />
+              {cartCount > 0 && (
+                <span className="absolute -top-0.5 -left-0.5 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+                  {cartCount}
+                </span>
+              )}
+            </Link>
+            {el.share && (
+              <button className="p-2 -ml-2 text-gray-700" data-testid="button-more">
+                <MoreVertical className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* ── Ordered, config-driven sections ── */}
+        {ordered.map((s) => (
+          <Fragment key={s.id}>{sectionNodes[s.id] ?? null}</Fragment>
+        ))}
 
         {/* Bottom spacer to avoid sticky CTA overlap */}
         <div className="h-24" aria-hidden="true" />
@@ -920,34 +957,36 @@ export default function ProductDetailV2() {
       </div>
 
       {/* ── ⑪ Sticky CTA ── */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-[0_-2px_8px_rgba(0,0,0,0.05)]">
-        <div className="max-w-[480px] mx-auto flex items-center gap-2 p-3">
-          <button
-            onClick={() => setLocation("/cart")}
-            className="bg-cyan-50 text-cyan-700 p-2.5 rounded-xl border border-cyan-200 relative"
-            data-testid="button-go-cart"
-          >
-            <ShoppingCart className="w-5 h-5" />
-            {cartCount > 0 && (
-              <span className="absolute -top-1 -left-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
-                {cartCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={handleAddToCart}
-            disabled={addToCartMutation.isPending}
-            className="flex-1 bg-gradient-to-l from-cyan-500 to-blue-600 text-white font-bold py-3 rounded-xl shadow-md flex items-center justify-center gap-2 text-sm disabled:opacity-60"
-            data-testid="button-add-to-cart"
-          >
-            {addToCartMutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <>أضف للسلة — <span>{formatNum(selectedTier.totalPrice)} ر.ي</span></>
-            )}
-          </button>
+      {showSticky && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-[0_-2px_8px_rgba(0,0,0,0.05)]">
+          <div className="max-w-[480px] mx-auto flex items-center gap-2 p-3">
+            <button
+              onClick={() => setLocation("/cart")}
+              className="bg-cyan-50 text-cyan-700 p-2.5 rounded-xl border border-cyan-200 relative"
+              data-testid="button-go-cart"
+            >
+              <ShoppingCart className="w-5 h-5" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -left-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+                  {cartCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={handleAddToCart}
+              disabled={addToCartMutation.isPending}
+              className="flex-1 bg-gradient-to-l from-cyan-500 to-blue-600 text-white font-bold py-3 rounded-xl shadow-md flex items-center justify-center gap-2 text-sm disabled:opacity-60"
+              data-testid="button-add-to-cart"
+            >
+              {addToCartMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>أضف للسلة — <span>{formatNum(selectedTier.totalPrice)} ر.ي</span></>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Upload Modal ── */}
       {uploadModalOpen && (

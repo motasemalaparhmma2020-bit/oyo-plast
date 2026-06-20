@@ -9247,6 +9247,19 @@ export default function Admin() {
                 </Button>
               </a>
             </div>
+            <div className="mb-4 p-4 bg-gradient-to-l from-cyan-50 to-sky-50 dark:from-cyan-950/40 dark:to-sky-950/40 border border-cyan-200 dark:border-cyan-800 rounded-lg flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-sm text-cyan-900 dark:text-cyan-100 flex items-center gap-2">
+                  🧩 منشئ صفحة المنتج الجديدة
+                </h3>
+                <p className="text-xs text-cyan-700 dark:text-cyan-300">تحكّم كامل بالصفحة الجديدة: مفتاح رئيسي، نطاق التفعيل (الكل/الطباعة/منتجات محددة)، إظهار/إخفاء وترتيب كل قسم، وتفعيل/تعطيل كل عنصر.</p>
+              </div>
+              <a href="/admin/pdp-builder" data-testid="link-pdp-builder">
+                <Button className="gap-1 bg-cyan-600 hover:bg-cyan-700">
+                  فتح
+                </Button>
+              </a>
+            </div>
             <div className="mb-4 p-4 bg-gradient-to-l from-blue-50 to-sky-50 dark:from-blue-950/40 dark:to-sky-950/40 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center justify-between gap-3">
               <div>
                 <h3 className="font-bold text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">

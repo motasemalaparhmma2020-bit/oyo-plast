@@ -8954,6 +8954,78 @@ h1{font-size:18px;color:#222;margin:4px 0;}
     }
   });
 
+  // ─── New PDP Layout Config (لوحة تحكم واحدة للصفحة الجديدة) ───────────────
+  let pdpConfigCache: { value: any; at: number } | null = null;
+  const PDP_CACHE_MS = 15000;
+  async function loadPdpConfig() {
+    if (pdpConfigCache && Date.now() - pdpConfigCache.at < PDP_CACHE_MS) return pdpConfigCache.value;
+    const { db: dbInstance } = await import("./db");
+    const { settings } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const { PDP_CONFIG_SETTINGS_KEY, mergePdpConfig } = await import("@shared/pdp-config");
+    const [row] = await dbInstance.select().from(settings).where(eq(settings.key, PDP_CONFIG_SETTINGS_KEY)).limit(1);
+    let parsed: any = null;
+    if (row?.value) { try { parsed = JSON.parse(row.value); } catch { parsed = null; } }
+    const cfg = mergePdpConfig(parsed);
+    pdpConfigCache = { value: cfg, at: Date.now() };
+    return cfg;
+  }
+
+  app.get("/api/admin/pdp-config", requireAdmin, async (_req, res) => {
+    try {
+      res.json(await loadPdpConfig());
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل جلب إعدادات الصفحة", details: e.message });
+    }
+  });
+
+  app.post("/api/admin/pdp-config", requireAdmin, async (req, res) => {
+    try {
+      const { pdpConfigSchema, PDP_CONFIG_SETTINGS_KEY } = await import("@shared/pdp-config");
+      const parsed = pdpConfigSchema.parse(req.body);
+      const json = JSON.stringify(parsed);
+      const { db: dbInstance } = await import("./db");
+      const { settings } = await import("@shared/schema");
+      await dbInstance
+        .insert(settings)
+        .values({ key: PDP_CONFIG_SETTINGS_KEY, value: json })
+        .onConflictDoUpdate({ target: settings.key, set: { value: json } });
+      pdpConfigCache = null; // أبطل الكاش فوراً حتى ينعكس التغيير
+      res.json(parsed);
+    } catch (e: any) {
+      if (e?.name === "ZodError") return res.status(400).json({ message: "إعداد غير صالح", details: e.errors });
+      res.status(500).json({ message: "فشل حفظ إعدادات الصفحة", details: e.message });
+    }
+  });
+
+  // قرار عام: هل تُعرض الصفحة الجديدة لهذا المنتج؟ (لا يكشف قوائم التفعيل)
+  app.get("/api/pdp-layout/decision/:id", async (req, res) => {
+    try {
+      res.setHeader("Cache-Control", "no-store");
+      const config = await loadPdpConfig();
+      const publicConfig = { version: config.version, sections: config.sections, elements: config.elements };
+      const productId = parseInt(req.params.id);
+      if (Number.isNaN(productId) || !config.enabled) {
+        return res.json({ useNewPdp: false, config: publicConfig });
+      }
+      const { decideUseNewPdp } = await import("@shared/pdp-config");
+      const { pool: dbPool } = await import("./db");
+      const { rows } = await dbPool.query(
+        `SELECT id, product_type AS "productType", allow_design_upload AS "allowDesignUpload",
+                has_printing_options AS "hasPrintingOptions", show_live_preview AS "showLivePreview",
+                enable_studio_preview AS "enableStudioPreview", printing_category_id AS "printingCategoryId"
+         FROM products WHERE id = $1 LIMIT 1`,
+        [productId],
+      );
+      const product = rows[0];
+      if (!product) return res.json({ useNewPdp: false, config: publicConfig });
+      const useNewPdp = decideUseNewPdp(product, config);
+      res.json({ useNewPdp, config: publicConfig });
+    } catch (e: any) {
+      res.status(200).json({ useNewPdp: false, config: null, error: e.message });
+    }
+  });
+
   // ─── Cart (Protected) ─────────────────────────────────────────────────
   app.get("/api/cart", async (req, res) => {
     try {

@@ -50,6 +50,7 @@ const CategoryPage = lazy(() => import("@/pages/CategoryPage"));
 const CategoriesPage = lazy(() => import("@/pages/CategoriesPage"));
 const ProductDetail = lazy(() => import("@/pages/ProductDetail"));
 const ProductDetailV2 = lazy(() => import("@/pages/ProductDetailV2"));
+const ProductDetailRouter = lazy(() => import("@/pages/ProductDetailRouter"));
 const ProductPreviewMockup = lazy(() => import("@/pages/ProductPreviewMockup"));
 const Cart = lazy(() => import("@/pages/Cart"));
 const Checkout = lazy(() => import("@/pages/Checkout"));
@@ -71,6 +72,7 @@ const AdminAIAgents = lazy(() => import("@/pages/AdminAIAgents"));
 const AdminDiagnostics = lazy(() => import("@/pages/AdminDiagnostics"));
 const AdminVolumeOffers = lazy(() => import("@/pages/AdminVolumeOffers"));
 const AdminStaff = lazy(() => import("@/pages/AdminStaff"));
+const AdminPdpBuilder = lazy(() => import("@/pages/AdminPdpBuilder"));
 const Wishlist = lazy(() => import("@/pages/Wishlist"));
 const Notifications = lazy(() => import("@/pages/Notifications"));
 const NotificationSettings = lazy(() => import("@/pages/NotificationSettings"));
@@ -583,6 +585,7 @@ function Router() {
             <Route path="/admin/diagnostics" component={AdminDiagnostics} />
             <Route path="/admin/volume-offers" component={AdminVolumeOffers} />
             <Route path="/admin/staff" component={AdminStaff} />
+            <Route path="/admin/pdp-builder" component={AdminPdpBuilder} />
             <Route path="/about" component={About} />
             <Route path="/privacy" component={Privacy} />
             <Route path="/terms" component={Terms} />
@@ -607,10 +610,10 @@ function Router() {
             <Route path="/products" component={Products} />
             <Route path="/categories" component={CategoriesPage} />
             <Route path="/category/:slug" component={CategoryPage} />
-            <Route path="/product/:id" component={ProductDetail} />
-            <Route path="/products/:id" component={ProductDetail} />
-            <Route path="/product-v2/:id" component={ProductDetailV2} />
-            <Route path="/products-v2/:id" component={ProductDetailV2} />
+            <Route path="/product/:id" component={ProductDetailRouter} />
+            <Route path="/products/:id" component={ProductDetailRouter} />
+            <Route path="/product-v2/:id" component={() => <ProductDetailV2 />} />
+            <Route path="/products-v2/:id" component={() => <ProductDetailV2 />} />
             <Route path="/cart" component={Cart} />
             <Route path="/compare" component={Compare} />
             
