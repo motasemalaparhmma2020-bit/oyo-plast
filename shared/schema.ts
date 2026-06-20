@@ -187,6 +187,7 @@ export const orders = pgTable("orders", {
   couponCode: text("coupon_code"), // Applied coupon code
   discountAmount: numeric("discount_amount"), // Discount amount applied
   subtotalBeforeDiscount: numeric("subtotal_before_discount"), // Original subtotal before discount
+  localId: text("local_id"), // مُعرّف محلي للطلبات المُنشأة أوفلاين (idempotency يمنع التكرار عند المزامنة)
   // Marketer-related fields
   marketerId: varchar("marketer_id").references(() => users.id), // Who placed the order (if marketer)
   endCustomerContactId: integer("end_customer_contact_id"), // Reference to end customer if marketer order
@@ -687,6 +688,7 @@ export const displaySettings = pgTable("display_settings", {
   categoriesShape: text("categories_shape").default("circle").notNull(),        // circle | rounded
   categoriesBorderRadius: integer("categories_border_radius").default(12).notNull(), // انحناء الزوايا (بكسل) — يُستخدم في وضع rounded
   // ── إعدادات التقسيط ────────────────────────────────────────────────────────
+  creditOptionEnabled: boolean("credit_option_enabled").default(true).notNull(),       // تفعيل خيار الائتمان (الشراء بالأجل) في صفحة الدفع
   installmentEnabled: boolean("installment_enabled").default(true).notNull(),           // تفعيل نظام التقسيط
   installmentMinAmount: integer("installment_min_amount").default(50000).notNull(),     // الحد الأدنى للطلب لتفعيل التقسيط (ريال يمني)
   installmentPercentages: text("installment_percentages").default("30,40,50").notNull(), // النسب المتاحة للمقدّم (مفصولة بفواصل)

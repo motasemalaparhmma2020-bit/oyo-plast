@@ -90,7 +90,7 @@ export function PrintingAssistant() {
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<Msg[]>([GREETING]);
   const [input, setInput] = useState("");
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [productType, setProductType] = useState<string | undefined>();
   const [showQuickTypes, setShowQuickTypes] = useState(true);
   const [designFile, setDesignFile] = useState<File | null>(null);

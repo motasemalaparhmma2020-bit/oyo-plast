@@ -733,7 +733,7 @@ export function Navbar() {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>مرحباً، {user?.firstName || user?.email || "مستخدم"}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild><Link href="/register" className="cursor-pointer">ملفي الشخصي</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link href="/profile" className="cursor-pointer">ملفي الشخصي</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild><Link href="/orders" className="cursor-pointer">طلباتي</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/wishlist" className="cursor-pointer flex items-center gap-2"><Heart className="h-4 w-4" />المفضلة</Link>

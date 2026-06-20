@@ -112,6 +112,7 @@ import { GlobalBottomNav } from "@/components/GlobalBottomNav";
 import { SplashScreen } from "@/components/SplashScreen";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { FloatingRobot } from "@/components/FloatingRobot";
+import CustomerChatWidget from "@/components/CustomerChatWidget";
 import { CompareBar } from "@/components/CompareBar";
 import OnboardingFlow from "@/components/OnboardingFlow";
 import { useOfflineSync } from "@/hooks/use-offline-sync";
@@ -703,6 +704,7 @@ function Router() {
         <PwaInstallBanner />
         <WhatsAppButton settings={displaySettingsForNav} />
         <FloatingRobot />
+        <CustomerChatWidget />
       </div>
     </>
   );

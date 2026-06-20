@@ -8,7 +8,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import sharp from "sharp";
-import { adminLimiter, orderLimiter, loginLimiter, logSecurityEvent, getSecurityLogs } from "./security";
+import { adminLimiter, orderLimiter, loginLimiter, aiLimiter, logSecurityEvent, getSecurityLogs } from "./security";
 
 // ─── معالجة الصورة بالضغط والتقليص ─────────────────────────────────────────
 async function processImage(
@@ -3941,6 +3941,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.post("/api/ai/store-assistant", aiLimiter, async (req, res) => {
+    try {
+      const { message, history } = req.body || {};
+      if (!message || typeof message !== "string" || message.trim().length === 0) {
+        return res.status(400).json({ message: "الرسالة مطلوبة" });
+      }
+      if (message.length > 1200) {
+        return res.status(400).json({ message: "الرسالة طويلة جداً" });
+      }
+      const { handleStoreChat } = await import("./store-assistant");
+      const result = await handleStoreChat({
+        message: message.trim(),
+        history: Array.isArray(history) ? history.slice(-12) : [],
+      });
+      res.json(result);
+    } catch (e: any) {
+      console.error("[/api/ai/store-assistant] خطأ:", e?.message);
+      res.status(500).json({ reply: "عذراً، حصل خلل. حاول مرة أخرى." });
+    }
+  });
+
   app.post("/api/ai/chat", async (req, res) => {
     try {
       const { message, history, productId, uploadedLogoUrl, mockupsShownCount } = req.body || {};
@@ -4347,7 +4368,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         'sadeemShowOldPrice', 'sadeemShowDiscountBadge',
         'sadeemShowRating', 'sadeemShowSoldCount',
         'sadeemShowShipping', 'sadeemShowReturns',
-        'codEnabled', 'installmentEnabled',
+        'codEnabled', 'installmentEnabled', 'creditOptionEnabled',
         // ── أقسام الصفحة الرئيسية ──
         'showWhyUs', 'whyUsOnHome', 'whyUsOnAccount',
         'showStats', 'statsOnHome', 'statsOnAccount',
@@ -4708,6 +4729,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
           discountAmount: safeDiscount > 0 ? safeDiscount : null,
           subtotalBeforeDiscount: safeDiscount > 0 ? serverSubtotalRounded : null,
           userId,
+          localId: (req.body as any)?.localId || null,
         });
       } catch (orderErr: any) {
         // فشل إنشاء الطلب → استرجاع الحجز الائتماني (compensating action)
@@ -9860,8 +9882,14 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const syncUserId = getUserId((req as any).user);
       for (const orderData of pendingOrders) {
         try {
-          // اربط الطلب بالمستخدم الحالي إن كان مسجَّلاً (للأوفلاين sync)
-          const order = await storage.createOrder({ ...orderData, userId: orderData.userId || syncUserId });
+          // دفاع بالعمق: المزامنة الأوفلاين تقبل الدفع عند الاستلام فقط (مطابقة قيد الواجهة)
+          const pm = String(orderData.paymentMethod || "cash_on_delivery");
+          if (pm !== "cash_on_delivery") {
+            results.push({ success: false, localId: orderData.localId, error: "المزامنة الأوفلاين تدعم الدفع عند الاستلام فقط" });
+            continue;
+          }
+          // الأمان: تجاهل userId المُرسَل من العميل — اربط بالجلسة فقط (يمنع IDOR)
+          const order = await storage.createOrder({ ...orderData, userId: syncUserId || null });
           results.push({ success: true, id: order.id, localId: orderData.localId });
         } catch (err: any) {
           results.push({ success: false, localId: orderData.localId, error: err.message });

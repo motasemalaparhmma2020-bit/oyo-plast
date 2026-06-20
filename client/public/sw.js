@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6";
 const CACHE_STATIC  = "oyoplast-static-"  + CACHE_VERSION;
 const CACHE_IMAGES  = "oyoplast-images-"  + CACHE_VERSION;
 const CACHE_PAGES   = "oyoplast-pages-"   + CACHE_VERSION;
@@ -103,7 +103,29 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ── صفحات HTML: الشبكة أولاً — إذا فشلت صفحة offline ──
+  // ── تنقّل SPA: الشبكة أولاً — عند الفشل نُعيد هيكل التطبيق المخزَّن ──
+  // المفتاح: نُفضّل هيكل التطبيق "/" (app shell) قبل offline.html، حتى يُقلِع
+  // التطبيق ويعمل التوجيه الداخلي + بيانات المنتجات المخزّنة في IndexedDB.
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request)
+        .then((res) => {
+          if (res.ok) caches.open(CACHE_PAGES).then((c) => c.put(request, res.clone()));
+          return res;
+        })
+        .catch(async () => {
+          return (
+            (await caches.match("/")) ||
+            (await caches.match(request)) ||
+            (await caches.match("/offline.html")) ||
+            new Response("التطبيق غير متصل", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } })
+          );
+        })
+    );
+    return;
+  }
+
+  // ── صفحات/موارد أخرى same-origin: الشبكة أولاً ثم الكاش ──
   if (
     url.origin === self.location.origin &&
     !url.pathname.startsWith("/api/")
@@ -117,8 +139,7 @@ self.addEventListener("fetch", (event) => {
           return res;
         })
         .catch(() =>
-          caches.match(request)
-            .then((cached) => cached || caches.match("/offline.html") || caches.match("/"))
+          caches.match(request).then((cached) => cached || caches.match("/"))
         )
     );
   }

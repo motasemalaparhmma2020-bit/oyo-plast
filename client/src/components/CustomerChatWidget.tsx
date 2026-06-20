@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { MessageCircle, Send, X, Loader2 } from "lucide-react";
 import type { Conversation, Message } from "@shared/schema";
+
+const HIDE_PATHS = ["/printing", "/marketer/dashboard", "/supplier", "/admin", "/staff", "/checkout"];
 
 const STORAGE_KEY = "customer_chat_phone";
 const NAME_KEY = "customer_chat_name";
@@ -26,6 +29,7 @@ interface Props {
  */
 export default function CustomerChatWidget({ relatedOrderId, relatedProductId, buttonLabel = "تواصل مع المبيعات" }: Props) {
   const { toast } = useToast();
+  const [location] = useLocation();
   const [open, setOpen] = useState(false);
   const [phone, setPhone] = useState<string>(() => localStorage.getItem(STORAGE_KEY) || "");
   const [name, setName] = useState<string>(() => localStorage.getItem(NAME_KEY) || "");
@@ -83,6 +87,8 @@ export default function CustomerChatWidget({ relatedOrderId, relatedProductId, b
   });
 
   const canSend = phone.trim().length >= 9 && draft.trim().length > 0;
+
+  if (HIDE_PATHS.some((p) => location.startsWith(p))) return null;
 
   return (
     <>

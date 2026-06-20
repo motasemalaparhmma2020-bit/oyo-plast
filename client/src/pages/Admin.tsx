@@ -4139,6 +4139,30 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
               </p>
             )}
 
+            {/* ── إعدادات الائتمان (الشراء بالأجل) ── */}
+            <div className="border-t border-green-100 dark:border-green-900 pt-5 space-y-4">
+              <p className="text-xs font-bold text-green-700 dark:text-green-300 uppercase tracking-wide">نظام الائتمان (الشراء بالأجل)</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium">تفعيل خيار الائتمان</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    إظهار خيار "الشراء بالأجل" للعملاء المؤهّلين في صفحة الدفع
+                  </p>
+                </div>
+                <Switch
+                  checked={settings?.creditOptionEnabled ?? true}
+                  onCheckedChange={v => handleUpdate('creditOptionEnabled', v)}
+                  disabled={updateMutation.isPending}
+                  data-testid="switch-credit-enabled"
+                />
+              </div>
+              {!(settings?.creditOptionEnabled ?? true) && (
+                <p className="text-xs text-orange-600 bg-orange-50 dark:bg-orange-950/30 rounded-lg px-3 py-2">
+                  ⚠️ خيار الائتمان (الشراء بالأجل) مخفي الآن من صفحة الدفع
+                </p>
+              )}
+            </div>
+
             {/* ── إعدادات التقسيط ── */}
             <div className="border-t border-green-100 dark:border-green-900 pt-5 space-y-4">
               <p className="text-xs font-bold text-green-700 dark:text-green-300 uppercase tracking-wide">نظام التقسيط</p>

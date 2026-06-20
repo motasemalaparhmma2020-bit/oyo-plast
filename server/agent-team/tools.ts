@@ -6,7 +6,7 @@
  * النظام فعلياً *فقط* بعد موافقة الأدمن في لوحة /admin/ai-agents.
  */
 import { pool } from "../db";
-import { createNotification } from "../lib/notifications";
+import { createNotification, broadcastPromo } from "../lib/notifications";
 
 export interface ToolExecResult {
   ok: boolean;
@@ -60,6 +60,50 @@ export const AGENT_TOOLS: AgentTool[] = [
         if (nid) sent++;
       }
       return { ok: true, message: `تم إرسال الإشعار الجماعي إلى ${sent} عميل`, data: { sent } };
+    },
+  },
+  {
+    name: "promote_product",
+    label: "حملة ترويجية لمنتج",
+    description:
+      "إنشاء إشعار ترويجي لمنتج حقيقي وإرساله فقط للعملاء الذين فعّلوا إشعارات العروض (opt-in). يقرأ اسم المنتج وسعره وخصمه من قاعدة البيانات — لا تخترع بيانات.",
+    argsHint: '{ "productId": 52, "headline": "عنوان جذّاب اختياري" }',
+    allow: ["nour", "omar", "rashed"],
+    async execute(args) {
+      const productId = Number(args?.productId);
+      if (!productId) return { ok: false, message: "productId غير صالح" };
+      const r = await pool.query(
+        `SELECT id, name, price, original_price, discount_percent, is_active
+         FROM products WHERE id=$1`,
+        [productId],
+      );
+      const p = r.rows[0];
+      if (!p) return { ok: false, message: `المنتج #${productId} غير موجود` };
+      if (p.is_active === false)
+        return { ok: false, message: `المنتج «${p.name}» غير مُفعّل — فعّله أولاً قبل الترويج له` };
+
+      const headline = String(args?.headline || "").trim();
+      const price = Number(p.price) || 0;
+      const discount = Number(p.discount_percent) || 0;
+      const title = headline || `🎉 عرض على ${p.name}`;
+      const priceText = price > 0 ? ` — ${price.toLocaleString()} ر.ي` : "";
+      const discountText = discount > 0 ? ` · خصم ${discount}%` : "";
+      const message = `${p.name}${priceText}${discountText}. اطلبه الآن قبل نفاد الكمية!`;
+
+      const { recipients } = await broadcastPromo({
+        title,
+        message,
+        actionUrl: `/product/${p.id}`,
+        mode: "opt_in",
+      });
+      return {
+        ok: true,
+        message:
+          recipients > 0
+            ? `تم إرسال عرض «${p.name}» إلى ${recipients} عميل (مفعّلي إشعارات العروض فقط)`
+            : `تمّت العملية لكن لا يوجد عملاء فعّلوا إشعارات العروض حالياً — لم يصل لأحد`,
+        data: { productId: p.id, recipients },
+      };
     },
   },
   {

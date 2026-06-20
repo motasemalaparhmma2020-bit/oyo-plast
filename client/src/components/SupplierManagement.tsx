@@ -7,6 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
@@ -538,6 +542,7 @@ export default function SupplierManagement({ adminToken }: SupplierManagementPro
   const [editSupplier, setEditSupplier] = useState<Supplier | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<Supplier | null>(null);
 
   const { data: suppliers = [], isLoading, refetch } = useQuery<Supplier[]>({
     queryKey: ["/api/admin/suppliers"],
@@ -611,17 +616,31 @@ export default function SupplierManagement({ adminToken }: SupplierManagementPro
     onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
   });
 
-  const { mutate: deleteSupplier } = useMutation({
-    mutationFn: async (id: number) => {
+  const { mutate: setActive, isPending: isToggling } = useMutation({
+    mutationFn: async ({ supplier, active }: { supplier: Supplier; active: boolean }) => {
       if (!adminToken) throw new Error("رمز الأدمن مفقود");
-      const res = await fetch(`/api/admin/suppliers/${id}`, {
-        method: "DELETE",
-        headers: { "x-admin-token": adminToken! },
+      const res = await fetch(`/api/admin/suppliers/${supplier.id}`, {
+        method: "PUT",
+        headers: { "x-admin-token": adminToken!, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: supplier.name,
+          phone: supplier.phone,
+          email: supplier.email,
+          cities: supplier.cities,
+          commissionRate: Number(supplier.commission_rate),
+          notes: supplier.notes,
+          isActive: active,
+        }),
       });
-      if (!res.ok) throw new Error("فشل");
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "فشل");
+      return res.json();
     },
-    onSuccess: () => { toast({ title: "تم إيقاف المورد" }); invalidate(); },
-    onError: () => toast({ title: "خطأ", variant: "destructive" }),
+    onSuccess: (_d, v) => {
+      toast({ title: v.active ? "✅ تم تفعيل المورد" : "تم إيقاف المورد" });
+      invalidate();
+      if (selectedSupplier) setSelectedSupplier(s => s ? { ...s, is_active: v.active } : s);
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
   });
 
   const totalBalanceDue = suppliers.reduce((a, s) => a + Number(s.balance_due || 0), 0);
@@ -930,24 +949,59 @@ export default function SupplierManagement({ adminToken }: SupplierManagementPro
                     <Edit2 className="w-3.5 h-3.5" />
                     تعديل
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      if (confirm(`هل تريد إيقاف المورد "${supplier.name}"؟`))
-                        deleteSupplier(supplier.id);
-                    }}
-                    className="gap-1 text-red-500 hover:text-red-600 hover:bg-red-50"
-                    data-testid={`button-delete-supplier-${supplier.id}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
+                  {supplier.is_active ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setDeactivateTarget(supplier)}
+                      disabled={isToggling}
+                      className="gap-1 text-red-500 hover:text-red-600 hover:bg-red-50"
+                      data-testid={`button-deactivate-supplier-${supplier.id}`}
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      إيقاف
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setActive({ supplier, active: true })}
+                      disabled={isToggling}
+                      className="gap-1 text-green-600 hover:text-green-700 hover:bg-green-50"
+                      data-testid={`button-activate-supplier-${supplier.id}`}
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      تفعيل
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      {/* تأكيد إيقاف المورد (بديل confirm الأصلي الذي كان يُجمّد الشاشة) */}
+      <AlertDialog open={!!deactivateTarget} onOpenChange={o => { if (!o) setDeactivateTarget(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>إيقاف المورد</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل تريد إيقاف المورد "{deactivateTarget?.name}"؟ لن يظهر في التوزيع، ويمكنك تفعيله لاحقاً بضغطة واحدة.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-deactivate">إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (deactivateTarget) setActive({ supplier: deactivateTarget, active: false }); setDeactivateTarget(null); }}
+              className="bg-red-500 hover:bg-red-600"
+              data-testid="button-confirm-deactivate"
+            >
+              إيقاف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* تعديل المورد */}
       {editSupplier && (

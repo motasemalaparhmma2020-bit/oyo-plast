@@ -127,6 +127,21 @@ export const orderLimiter = rateLimit({
   },
 });
 
+// مساعد الذكاء الاصطناعي: 20 رسالة / 5 دقائق لكل IP (يمنع استنزاف رصيد DeepSeek/Gemini)
+export const aiLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { reply: "أرسلت رسائل كثيرة بسرعة. انتظر بضع دقائق ثم حاول مجدداً." },
+  handler: async (req, res, next, options) => {
+    const ip = req.ip || "unknown";
+    await logSecurityEvent("rate_limit_ai", ip, req.path, req.method,
+      `تجاوز حد مساعد الذكاء الاصطناعي`, "warning", req.get("user-agent"));
+    res.status(429).json(options.message);
+  },
+});
+
 // ─── XSS Sanitization Middleware ────────────────────────────────────
 export function sanitizeInputs(req: Request, _res: Response, next: NextFunction) {
   if (req.body && typeof req.body === "object") {

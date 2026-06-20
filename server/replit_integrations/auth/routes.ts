@@ -471,16 +471,49 @@ export function registerAuthRoutes(app: Express): void {
       return res.status(401).json({ message: "غير مصرح" });
     }
     try {
-      const { fullName } = req.body;
       const userId = req.user.claims.sub;
-      if (fullName && fullName.trim().length >= 2) {
+      const body = req.body || {};
+
+      // الحقول المسموح بتعديلها من قِبل العميل نفسه → اسم العمود في قاعدة البيانات
+      const FIELD_MAP: Record<string, string> = {
+        fullName: "full_name",
+        phone: "phone",
+        governorate: "governorate",
+        district: "district",
+        city: "city",
+        neighborhood: "neighborhood",
+        street: "street",
+        landmark: "landmark",
+        businessName: "business_name",
+        businessType: "business_type",
+      };
+
+      if (body.fullName !== undefined && String(body.fullName).trim().length < 2) {
+        return res.status(400).json({ message: "الاسم يجب أن يكون حرفين على الأقل" });
+      }
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      let idx = 1;
+      for (const [key, col] of Object.entries(FIELD_MAP)) {
+        if (body[key] !== undefined) {
+          const v = body[key] === null ? null : String(body[key]).trim();
+          sets.push(`${col} = $${idx++}`);
+          values.push(v === "" ? null : v);
+        }
+      }
+
+      if (sets.length > 0) {
+        sets.push(`updated_at = NOW()`);
+        values.push(userId);
         const client = await pool.connect();
         try {
-          await client.query(`UPDATE users SET full_name = $1 WHERE id = $2`, [fullName.trim(), userId]);
+          await client.query(`UPDATE users SET ${sets.join(", ")} WHERE id = $${idx}`, values);
         } finally {
           client.release();
         }
       }
+
       const user = await authStorage.getUser(userId);
       res.json({ message: "تم تحديث الملف الشخصي", user });
     } catch (error) {

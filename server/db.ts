@@ -41,6 +41,16 @@ export const db = drizzle(pool, { schema });
     console.warn("[migrate] feature-toggle columns:", (e as Error).message);
   }
 
+  // ── Auto-migrate: credit option toggle on display settings (June 2026) ──
+  try {
+    await pool.query(`
+      ALTER TABLE display_settings
+        ADD COLUMN IF NOT EXISTS credit_option_enabled boolean NOT NULL DEFAULT true
+    `);
+  } catch (e) {
+    console.warn("[migrate] credit_option_enabled column:", (e as Error).message);
+  }
+
   // ── Auto-migrate: account deletion requests table (June 2026) ──
   try {
     await pool.query(`
@@ -74,6 +84,17 @@ export const db = drizzle(pool, { schema });
     `);
   } catch (e) {
     console.warn("[migrate] orders supplier columns:", (e as Error).message);
+  }
+
+  // ── Auto-migrate: مُعرّف الطلب المحلي (idempotency للطلبات الأوفلاين) ──
+  // فهرس فريد جزئي يمنع إنشاء نسخة مكررة لنفس الطلب عند مزامنته من وضع عدم الاتصال.
+  try {
+    await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS local_id TEXT`);
+    await pool.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS orders_local_id_unique ON orders (local_id) WHERE local_id IS NOT NULL`,
+    );
+  } catch (e) {
+    console.warn("[migrate] orders local_id:", (e as Error).message);
   }
 
   // أعمدة حقول التفاعل في الموردين

@@ -18,6 +18,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Product } from "@shared/schema";
 import { useDigitalWallets } from "@/hooks/use-digital-wallets";
 import { GuestCartItem, getGuestCart, setGuestCart as saveGuestCart, clearGuestCart } from "@/lib/cartUtils";
+import { savePendingOrder } from "@/lib/offlineDb";
 import { useDisplaySettings } from "@/hooks/use-display-settings";
 import { OrderItemCompactMeta, OrderItemCollapsibleMeta } from "@/components/OrderItemDetails";
 
@@ -139,7 +140,9 @@ export default function Checkout() {
   const creditTierColor = creditInfo?.tier_color || "#666";
   // الائتمان مستقل تماماً — يظهر لأي مستخدم مسجّل له فئة ائتمانية غير محظورة
   // لا يرتبط ظهوره بالمحافظ أو الدفع عند الاستلام
+  const creditOptionEnabled: boolean = displaySettings?.creditOptionEnabled ?? true;
   const creditEnabled =
+    creditOptionEnabled &&
     isAuthenticated &&
     !!creditInfo &&
     !creditFrozen &&
@@ -406,34 +409,68 @@ export default function Checkout() {
         : installmentType === "supplier_guaranteed"
         ? `\n[تقسيط بكفيل مورد: ${guarantorName} / ${guarantorPhone}${guarantorNotes ? " - " + guarantorNotes : ""}]`
         : "";
-      const rawRes = await fetch("/api/orders/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          customerName: formData.customerName || user?.fullName || "عميل",
-          customerEmail: user?.email || "guest@oyoplast.com",
-          customerPhone: formData.customerPhone,
-          shippingCity: formData.shippingCity,
-          shippingAddress: formData.shippingAddress,
-          shippingOption: "standard",
-          shippingCost: effectiveShippingFee,
-          paymentMethod: normalizedPaymentMethod,
-          purchaseCode: formData.purchaseCode || undefined,
-          notes: (formData.notes || "") + deliveryNote + bankTransferNote + installmentNote,
-          total: finalTotal,
-          depositAmount: installmentType ? depositAmount : undefined,
-          items: cartItems,
-          couponCode: couponData?.code || null,
-          discountAmount: discountAmount > 0 ? discountAmount : null,
-          subtotalBeforeDiscount: discountAmount > 0 ? subtotal : null,
-          // ── GPS Coordinates ──
-          customerLat: locationLat ?? undefined,
-          customerLng: locationLng ?? undefined,
-          locationAccuracy: locationAccuracy ?? undefined,
-          locationMethod: locationLat ? "gps" : "manual",
-        }),
-      });
+      // مُعرّف ثابت يُرسَل أونلاين وأوفلاين معاً → idempotency يمنع ازدواج الطلب عند المزامنة
+      const offlineLocalId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const orderPayload = {
+        localId: offlineLocalId,
+        customerName: formData.customerName || user?.fullName || "عميل",
+        customerEmail: user?.email || "guest@oyoplast.com",
+        customerPhone: formData.customerPhone,
+        shippingCity: formData.shippingCity,
+        shippingAddress: formData.shippingAddress,
+        shippingOption: "standard",
+        shippingCost: effectiveShippingFee,
+        paymentMethod: normalizedPaymentMethod,
+        purchaseCode: formData.purchaseCode || undefined,
+        notes: (formData.notes || "") + deliveryNote + bankTransferNote + installmentNote,
+        total: finalTotal,
+        depositAmount: installmentType ? depositAmount : undefined,
+        items: cartItems,
+        couponCode: couponData?.code || null,
+        discountAmount: discountAmount > 0 ? discountAmount : null,
+        subtotalBeforeDiscount: discountAmount > 0 ? subtotal : null,
+        // ── GPS Coordinates ──
+        customerLat: locationLat ?? undefined,
+        customerLng: locationLng ?? undefined,
+        locationAccuracy: locationAccuracy ?? undefined,
+        locationMethod: locationLat ? "gps" : "manual",
+      };
+
+      // ── وضع عدم الاتصال: الطلبات البسيطة (الدفع عند الاستلام، بلا إيصال/تقسيط)
+      //    تُحفظ محلياً وتُرفع تلقائياً عند عودة الإنترنت عبر useOfflineSync ──
+      const offlineEligible = !receiptFile && !installmentType && !isWalletPayment && !isBankTransfer;
+      const queueOffline = async () => {
+        await savePendingOrder({ ...orderPayload, userId: user?.id || null });
+        clearGuestCart();
+        await queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+        toast({
+          title: "✅ تم استلام طلبك",
+          description: "أنت غير متصل بالإنترنت الآن — سيُرفع طلبك تلقائياً فور عودة الاتصال",
+        });
+        setLocation("/orders", { replace: true });
+      };
+
+      if (!navigator.onLine && offlineEligible) {
+        await queueOffline();
+        return;
+      }
+
+      let rawRes: Response;
+      try {
+        rawRes = await fetch("/api/orders/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(orderPayload),
+        });
+      } catch {
+        // فشل الشبكة فجأة أثناء الإرسال — احفظ الطلب محلياً إن كان مؤهّلاً
+        if (offlineEligible) {
+          await queueOffline();
+          return;
+        }
+        throw new Error("تعذّر الاتصال بالخادم. تحقّق من الإنترنت وحاول مرة أخرى");
+      }
 
       let orderData: any;
       try {

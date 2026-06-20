@@ -423,7 +423,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createOrder(data: any): Promise<Order> {
-    return await db.transaction(async (tx) => {
+    try {
+      return await db.transaction(async (tx) => {
+      // ── 0. Idempotency: إن وُجد طلب بنفس localId، أعِده بدل إنشاء نسخة مكررة ──
+      // يمنع ازدواج الطلب عند مزامنة الطلبات الأوفلاين أو عند فقدان رد الخادم.
+      if (data.localId) {
+        const [existing] = await tx
+          .select()
+          .from(orders)
+          .where(eq(orders.localId, String(data.localId)))
+          .limit(1);
+        if (existing) return existing;
+      }
+
       // ── 1. التحقق من وجود جميع المنتجات قبل إنشاء أي سجل ───────────
       const itemsList: any[] = data.items ?? [];
       for (const item of itemsList) {
@@ -459,6 +471,7 @@ export class DatabaseStorage implements IStorage {
         couponCode: data.couponCode || null,
         discountAmount: data.discountAmount ? String(data.discountAmount) : null,
         subtotalBeforeDiscount: data.subtotalBeforeDiscount ? String(data.subtotalBeforeDiscount) : null,
+        localId: data.localId ? String(data.localId) : null,
         status: "pending",
       }).returning();
 
@@ -537,7 +550,19 @@ export class DatabaseStorage implements IStorage {
       }
 
       return order;
-    });
+      });
+    } catch (e: any) {
+      // سباق متزامن على نفس localId: الفهرس الفريد رفض النسخة الثانية — أعِد الطلب الموجود
+      if (data.localId && (e?.code === "23505" || /local_id|orders_local_id_unique/i.test(e?.message || ""))) {
+        const [existing] = await db
+          .select()
+          .from(orders)
+          .where(eq(orders.localId, String(data.localId)))
+          .limit(1);
+        if (existing) return existing;
+      }
+      throw e;
+    }
   }
 
   async getProductReviews(productId: number): Promise<any[]> {
