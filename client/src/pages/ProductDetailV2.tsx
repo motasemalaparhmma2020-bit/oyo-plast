@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { useParams, useLocation, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ChevronRight, Heart, ShoppingCart, MoreVertical, Camera, Sparkles, X, Upload, Check, Loader2, Star, ArrowLeft } from "lucide-react";
+import { ChevronRight, Heart, ShoppingCart, MoreVertical, Camera, Sparkles, X, Upload, Check, Loader2, Star, ArrowLeft, Image as ImageIcon, Type, Zap, Wand2 } from "lucide-react";
 import { useAddToCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -122,6 +122,16 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
   const [enhanceModalOpen, setEnhanceModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAiEnhancing, setIsAiEnhancing] = useState(false);
+  // ── حالة استوديو المعاينة (سريعة / استوديو AI / نص) ──
+  const [previewMode, setPreviewMode] = useState<"plain" | "quick" | "studio">("plain");
+  const [quickImageUrl, setQuickImageUrl] = useState<string | null>(null);
+  const [studioImageUrl, setStudioImageUrl] = useState<string | null>(null);
+  const [isGenQuick, setIsGenQuick] = useState(false);
+  const [isGenStudio, setIsGenStudio] = useState(false);
+  const [studioCount, setStudioCount] = useState(0);
+  const [designTab, setDesignTab] = useState<"upload" | "text">("upload");
+  const [textFields, setTextFields] = useState({ shop: "", phone: "", addr: "", activity: "" });
+  const [textMerged, setTextMerged] = useState(false);
 
   // رفع الشعار إلى Cloudinary (يستبدل dataURL ضخم بـ URL قصير وآمن)
   const uploadLogoToCloud = async (dataUrl: string): Promise<string | null> => {
@@ -246,6 +256,12 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
       setLogoDataUrl(dataUrl);
       setEnhancedLogoUrl(dataUrl);
       setLogoCloudUrl(null); // إعادة تعيين قبل الرفع الجديد
+      // إعادة ضبط المعاينات عند رفع شعار جديد
+      setQuickImageUrl(null);
+      setStudioImageUrl(null);
+      setPreviewMode("plain");
+      setStudioCount(0);
+      setTextMerged(false);
       setUploadModalOpen(false);
       if (hasMixedBg) {
         toast({
@@ -321,6 +337,137 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
     }
   };
 
+  // ── ضبط رابط الشعار المرفوع للسحابة (وكيل الاستوديو يحتاج رابطاً لا dataURL) ──
+  const ensureLogoUrl = async (): Promise<string | null> => {
+    if (logoCloudUrl) return logoCloudUrl;
+    if (logoDataUrl) return await uploadLogoToCloud(logoDataUrl);
+    return null;
+  };
+  const toAbsUrl = (u: string) =>
+    u && u.startsWith("http") ? u : `${window.location.origin}${u || ""}`;
+  const buildTextContent = () =>
+    [textFields.shop, textFields.activity, textFields.phone, textFields.addr]
+      .filter(Boolean)
+      .join(" · ");
+
+  // ── معاينة سريعة — تركيب الشعار على صورة المنتج عبر Canvas (فورية، مجانية، وتعمل لكل المنتجات) ──
+  const runQuickPreview = async () => {
+    if (isGenQuick || isGenStudio) return;
+    if (!logoDataUrl) {
+      toast({ title: "ارفع شعارك أولاً", variant: "destructive" });
+      return;
+    }
+    setIsGenQuick(true);
+    try {
+      const loadImg = (src: string) =>
+        new Promise<HTMLImageElement>((resolve, reject) => {
+          const im = new Image();
+          im.crossOrigin = "anonymous";
+          im.onload = () => resolve(im);
+          im.onerror = () => reject(new Error("تعذّر تحميل الصورة"));
+          im.src = src;
+        });
+      const [pImg, lImg] = await Promise.all([
+        loadImg(toAbsUrl(currentBagImage)),
+        loadImg(logoDataUrl),
+      ]);
+      const maxDim = 900;
+      const baseW = pImg.naturalWidth || maxDim;
+      const baseH = pImg.naturalHeight || maxDim;
+      const scale = Math.min(1, maxDim / Math.max(baseW, baseH));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(baseW * scale);
+      canvas.height = Math.round(baseH * scale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("canvas غير متاح");
+      ctx.drawImage(pImg, 0, 0, canvas.width, canvas.height);
+      // ضع الشعار داخل منطقة الطباعة مع الحفاظ على نسبة أبعاده
+      const bx = (printArea.x / 100) * canvas.width;
+      const by = (printArea.y / 100) * canvas.height;
+      const bw = (printArea.width / 100) * canvas.width;
+      const bh = (printArea.height / 100) * canvas.height;
+      const ratio = Math.min(bw / (lImg.naturalWidth || 1), bh / (lImg.naturalHeight || 1)) || 1;
+      const dw = (lImg.naturalWidth || 1) * ratio;
+      const dh = (lImg.naturalHeight || 1) * ratio;
+      ctx.drawImage(lImg, bx + (bw - dw) / 2, by + (bh - dh) / 2, dw, dh);
+      // نص اختياري أسفل المنتج
+      const txt = buildTextContent();
+      if (txt) {
+        ctx.fillStyle = selectedPrintColor?.hex || "#000000";
+        ctx.textAlign = "center";
+        ctx.font = `bold ${Math.round(canvas.width * 0.045)}px Cairo, sans-serif`;
+        ctx.fillText(txt.slice(0, 40), canvas.width / 2, canvas.height * 0.93);
+      }
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+      setQuickImageUrl(dataUrl);
+      setPreviewMode("quick");
+      toast({ title: "✅ معاينة سريعة جاهزة" });
+    } catch (e: any) {
+      toast({
+        title: "⚠️ تعذّرت المعاينة السريعة",
+        description: "جرّب «معاينة استوديو AI»",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenQuick(false);
+    }
+  };
+
+  // ── معاينة استوديو AI (Gemini) — الوكيل يضع الشعار في مكانه الصحيح على الكيس ──
+  const runStudioPreview = async (altIndex = 0) => {
+    if (isGenQuick || isGenStudio) return;
+    const logoUrl = await ensureLogoUrl();
+    if (!logoUrl) {
+      toast({ title: "ارفع شعارك أولاً", variant: "destructive" });
+      return;
+    }
+    setIsGenStudio(true);
+    try {
+      const res = await fetch("/api/studio-preview/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productImageUrl: toAbsUrl(currentBagImage),
+          logoUrl,
+          bagColor: selectedBagColor?.name,
+          printColor: selectedPrintColor?.name,
+          textContent: buildTextContent(),
+          businessType: textFields.activity || "محل",
+          productId: Number(id),
+          productName: (product as any)?.name,
+          altIndex,
+        }),
+      });
+      const json = await res.json().catch(() => ({} as any));
+      if (res.ok && json.imageUrl) {
+        setStudioImageUrl(json.imageUrl);
+        setPreviewMode("studio");
+        setStudioCount((c) => c + 1);
+        toast({ title: "✨ معاينة الاستوديو جاهزة" });
+      } else throw new Error(json.message || "فشل التوليد");
+    } catch (e: any) {
+      toast({ title: "⚠️ تعذّرت معاينة الاستوديو", description: e?.message, variant: "destructive" });
+    } finally {
+      setIsGenStudio(false);
+    }
+  };
+
+  const mergeText = () => {
+    if (!textFields.shop && !textFields.phone && !textFields.addr && !textFields.activity) {
+      toast({ title: "أدخل بياناً واحداً على الأقل" });
+      return;
+    }
+    setTextMerged(true);
+    toast({ title: "✅ أُضيف النص — أنشئ المعاينة لرؤيته" });
+  };
+
+  // عند تغيير لون الكيس أو لون الطباعة تصبح المعاينات المُولّدة قديمة — ألغِها وارجع للوضع العادي
+  useEffect(() => {
+    setQuickImageUrl(null);
+    setStudioImageUrl(null);
+    setPreviewMode("plain");
+  }, [selectedBagColor?.name, selectedPrintColor?.name]);
+
   // ── Wishlist ──
   const { data: wishlistItems = [] } = useQuery<any[]>({
     queryKey: ["/api/wishlist"],
@@ -372,6 +519,8 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
       printColorHex: selectedPrintColor?.hex,
       logo: finalLogoUrl ? "uploaded" : null,
       printArea,
+      previewMode,
+      previewImageUrl: previewMode === "studio" ? studioImageUrl : null,
     };
     addToCartMutation.mutate({
       productId: Number(id),
@@ -470,24 +619,37 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
   const ordered = visibleSectionsSorted(cfg).filter((s) => s.id !== "stickyCart");
   const showSticky = cfg.sections.find((s) => s.id === "stickyCart")?.visible !== false;
 
+  // ── صورة العرض الرئيسية: استوديو ← سريعة ← صورة المنتج ──
+  const displayImage =
+    previewMode === "studio" && studioImageUrl
+      ? studioImageUrl
+      : previewMode === "quick" && quickImageUrl
+      ? quickImageUrl
+      : currentBagImage;
+  const anyGenerating = isGenQuick || isGenStudio;
+  const previewThumbs = [
+    { key: "plain" as const, url: currentBagImage, label: "المنتج" },
+    ...(quickImageUrl ? [{ key: "quick" as const, url: quickImageUrl, label: "سريعة" }] : []),
+    ...(studioImageUrl ? [{ key: "studio" as const, url: studioImageUrl, label: "استوديو" }] : []),
+  ];
+
   // ── سجل الأقسام (registry): كل قسم محتوى مستقل يُرتَّب ويُظهر/يُخفى من الإعدادات ──
   const sectionNodes: Record<string, JSX.Element | null> = {
     // ② معرض الصورة + المعاينة الحية
     gallery: (
-      <div className="relative bg-gray-50" data-testid="section-gallery">
+      <div className="relative bg-white" data-testid="section-gallery">
         <div
-          className="w-full aspect-square flex items-center justify-center relative overflow-hidden"
-          style={{ background: `linear-gradient(135deg, ${selectedBagColor.hex}22, ${selectedBagColor.hex}44)` }}
+          className="w-full aspect-square relative overflow-hidden bg-white"
           data-testid="img-main"
         >
           <img
-            src={currentBagImage}
+            src={displayImage}
             alt={product.name}
-            className="max-w-[80%] max-h-[80%] object-contain transition-all"
+            className="w-full h-full object-contain transition-all duration-500"
             onError={(e) => { (e.target as HTMLImageElement).src = product.mainImage || "/placeholder.png"; }}
           />
-          {/* Logo overlay on print area — tinted via CSS mask so any color works */}
-          {logoDataUrl && (
+          {/* معاينة فورية: الشعار فوق صورة المنتج الحقيقية (وضع المنتج فقط) */}
+          {previewMode === "plain" && logoDataUrl && (
             <div
               className="absolute pointer-events-none"
               style={{
@@ -508,8 +670,24 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
               data-testid="logo-overlay-main"
             />
           )}
-          {/* Image counter dots */}
-          {images.length > 1 && (
+          {/* شارة وضع المعاينة */}
+          {previewMode !== "plain" && (
+            <div className="absolute top-3 left-3 flex items-center gap-1 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
+              {previewMode === "studio" ? (
+                <><Sparkles className="w-3 h-3" /> معاينة استوديو AI</>
+              ) : (
+                <><Zap className="w-3 h-3" /> معاينة سريعة</>
+              )}
+            </div>
+          )}
+          {/* Discount badge */}
+          {discountPercent > 0 && (
+            <div className="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-md">
+              -{discountPercent}%
+            </div>
+          )}
+          {/* نقاط صور المنتج (وضع المنتج فقط) */}
+          {previewMode === "plain" && images.length > 1 && (
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
               {images.map((_, i) => (
                 <button
@@ -521,13 +699,34 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
               ))}
             </div>
           )}
-          {/* Discount badge */}
-          {discountPercent > 0 && (
-            <div className="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-md">
-              -{discountPercent}%
+          {/* تراكب الانتظار أثناء التوليد */}
+          {anyGenerating && (
+            <div className="absolute inset-0 grid place-items-center bg-white/70 backdrop-blur-sm">
+              <div className="flex flex-col items-center gap-2 text-slate-700">
+                <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
+                <span className="text-sm font-bold">
+                  {isGenStudio ? "يُنشئ معاينة الاستوديو…" : "يُجهّز المعاينة…"}
+                </span>
+              </div>
             </div>
           )}
         </div>
+        {/* شريط المصغّرات: المنتج / سريعة / استوديو */}
+        {(quickImageUrl || studioImageUrl) && (
+          <div className="flex items-center gap-2 overflow-x-auto px-3 py-2.5 bg-white">
+            {previewThumbs.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setPreviewMode(t.key)}
+                className={`relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border-2 ${previewMode === t.key ? "border-cyan-500" : "border-gray-200"}`}
+                data-testid={`button-preview-thumb-${t.key}`}
+              >
+                <img src={t.url} alt={t.label} className="h-full w-full object-cover" />
+                <span className="absolute inset-x-0 bottom-0 bg-black/55 text-center text-[8px] font-bold text-white">{t.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     ),
 
@@ -746,77 +945,111 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
               {logoDataUrl ? "تغيير الشعار" : "ارفع شعارك وشاهد المعاينة فوراً"}
             </button>
           )}
-          {el.quickPreview && logoDataUrl && (
-            <div data-testid="block-preview">
-              <div className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5 justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-cyan-500" />
-                  معاينتك الفورية:
-                </span>
-                {el.studioPreview && originalLogoUrl && (
+          {logoDataUrl && (
+            <div className="rounded-2xl border-2 border-cyan-100 bg-white p-3 space-y-3" data-testid="block-design-studio">
+              {/* تبويبات: التصميم المرفوع / أضف نصاً */}
+              <div className="flex rounded-xl bg-gray-100 p-1">
+                {[
+                  { k: "upload", label: "التصميم المرفوع", icon: <ImageIcon className="w-4 h-4" /> },
+                  { k: "text", label: "أضف نصاً", icon: <Type className="w-4 h-4" /> },
+                ].map((t) => (
                   <button
-                    onClick={handleAiEnhance}
-                    disabled={isAiEnhancing}
-                    className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 px-2 py-1 rounded-lg font-bold disabled:opacity-50"
-                    data-testid="button-ai-enhance"
+                    key={t.k}
+                    onClick={() => setDesignTab(t.k as any)}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition ${designTab === t.k ? "bg-white text-gray-800 shadow" : "text-gray-500"}`}
+                    data-testid={`tab-design-${t.k}`}
                   >
-                    {isAiEnhancing ? <Loader2 className="w-3 h-3 animate-spin" /> : "🪄 تحسين بالـ AI"}
+                    {t.icon} {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {designTab === "upload" ? (
+                <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-2.5">
+                  <img src={logoDataUrl} alt="logo" className="h-14 w-14 rounded-lg border border-gray-200 bg-white object-contain p-1" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-1 text-sm font-bold text-gray-700">
+                      <Check className="w-4 h-4 text-green-600" /> تم رفع شعارك
+                    </div>
+                    {originalLogoUrl && (
+                      <button
+                        onClick={handleAiEnhance}
+                        disabled={isAiEnhancing}
+                        className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 disabled:opacity-50"
+                        data-testid="button-ai-enhance"
+                      >
+                        {isAiEnhancing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                        تنظيف خلفية الشعار بالـ AI
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2" data-testid="block-text-fields">
+                  <p className="text-[11px] text-gray-500">ادمج بيانات متجرك في التصميم تلقائياً.</p>
+                  {[
+                    { k: "shop", ph: "اسم المتجر" },
+                    { k: "phone", ph: "رقم الهاتف" },
+                    { k: "addr", ph: "العنوان" },
+                    { k: "activity", ph: "نشاط المتجر (مثال: مقهى)" },
+                  ].map((f) => (
+                    <input
+                      key={f.k}
+                      value={(textFields as any)[f.k]}
+                      onChange={(e) => setTextFields({ ...textFields, [f.k]: e.target.value })}
+                      placeholder={f.ph}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-cyan-400"
+                      data-testid={`input-text-${f.k}`}
+                    />
+                  ))}
+                  <button
+                    onClick={mergeText}
+                    className="w-full rounded-xl bg-cyan-500 py-2.5 text-sm font-bold text-white"
+                    data-testid="button-merge-text"
+                  >
+                    ادمج النص في التصميم
+                  </button>
+                  {textMerged && (
+                    <p className="flex items-center gap-1 text-[11px] font-bold text-green-600">
+                      <Check className="w-3 h-3" /> سيظهر النص في المعاينة المُولّدة.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* أزرار توليد المعاينة الحقيقية */}
+              <div className="grid grid-cols-2 gap-2">
+                {el.quickPreview && (
+                  <button
+                    onClick={runQuickPreview}
+                    disabled={anyGenerating}
+                    className="flex flex-col items-center gap-0.5 rounded-xl border-2 border-cyan-200 py-2.5 disabled:opacity-50"
+                    data-testid="button-quick-preview"
+                  >
+                    <span className="flex items-center gap-1 text-sm font-bold text-gray-700">
+                      <Zap className="w-4 h-4 text-cyan-500" /> معاينة سريعة
+                    </span>
+                    <span className="text-[10px] font-bold text-green-600">مجانية · فورية</span>
+                  </button>
+                )}
+                {el.studioPreview && (
+                  <button
+                    onClick={() => runStudioPreview()}
+                    disabled={anyGenerating}
+                    className="flex flex-col items-center gap-0.5 rounded-xl bg-gradient-to-l from-cyan-500 to-blue-500 py-2.5 text-white disabled:opacity-50"
+                    data-testid="button-studio-preview"
+                  >
+                    <span className="flex items-center gap-1 text-sm font-bold">
+                      <Sparkles className="w-4 h-4" /> معاينة استوديو AI
+                    </span>
+                    <span className="text-[10px] font-bold text-white/90">
+                      وكيل ذكي يضع الشعار تلقائياً
+                    </span>
                   </button>
                 )}
               </div>
-              <div className="flex justify-center">
-                <div
-                  className="border-2 border-cyan-200 rounded-xl p-2 bg-cyan-50 relative overflow-hidden flex items-center justify-center"
-                  style={{
-                    width: `${previewWidth}px`,
-                    height: `${previewHeight}px`,
-                    background: `linear-gradient(135deg, ${selectedBagColor.hex}33, ${selectedBagColor.hex}66)`,
-                  }}
-                  data-testid="block-preview-canvas"
-                >
-                  {/* Bag silhouette behind logo */}
-                  <div
-                    className="absolute inset-2 rounded-lg"
-                    style={{ background: selectedBagColor.hex, opacity: 0.85 }}
-                  />
-                  <img
-                    src={logoDataUrl}
-                    alt="logo preview"
-                    className="relative z-10 object-contain"
-                    style={{
-                      width: `${printArea.width}%`,
-                      height: `${printArea.height}%`,
-                      // Tint logo with print color
-                      filter: (() => {
-                        const c = selectedPrintColor.hex.toLowerCase();
-                        if (c === "#ffffff") return "brightness(0) invert(1)";
-                        if (c === "#000000") return "brightness(0)";
-                        return undefined;
-                      })(),
-                    }}
-                  />
-                  {selectedPrintColor.hex !== "#FFFFFF" && selectedPrintColor.hex !== "#000000" && (
-                    <div
-                      className="absolute z-20 pointer-events-none"
-                      style={{
-                        width: `${printArea.width}%`,
-                        height: `${printArea.height}%`,
-                        background: selectedPrintColor.hex,
-                        WebkitMaskImage: `url(${logoDataUrl})`,
-                        maskImage: `url(${logoDataUrl})`,
-                        WebkitMaskRepeat: "no-repeat",
-                        maskRepeat: "no-repeat",
-                        WebkitMaskSize: "contain",
-                        maskSize: "contain",
-                        WebkitMaskPosition: "center",
-                        maskPosition: "center",
-                      }}
-                    />
-                  )}
-                </div>
-              </div>
-              <p className="text-center text-[11px] text-gray-500 mt-1.5">
-                الموقع تلقائي من إعدادات المنتج • {previewWidth}×{previewHeight}
+              <p className="text-center text-[11px] text-gray-500">
+                تظهر المعاينة بالأعلى على صورة المنتج ↑
               </p>
             </div>
           )}
