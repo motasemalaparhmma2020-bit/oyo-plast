@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,19 +26,29 @@ export default function AdminBroadcastNotifications() {
   const [lastResult, setLastResult] = useState<{ recipients: number; mode: string } | null>(null);
 
   const send = useMutation({
-    mutationFn: async (mode: "opt_in" | "bypass") =>
-      apiRequest("POST", "/api/admin/notifications/broadcast", {
-        title: title.trim(),
-        message: message.trim(),
-        actionUrl: actionUrl.trim() || undefined,
-        mode,
-        roles: roles.length ? roles : undefined,
-      }),
-    onSuccess: async (res: any) => {
-      const data = await res.json?.() ?? res;
+    mutationFn: async (mode: "opt_in" | "bypass") => {
+      const adminToken = localStorage.getItem("admin_token") ?? "";
+      const r = await fetch("/api/admin/notifications/broadcast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+        body: JSON.stringify({
+          title: title.trim(),
+          message: message.trim(),
+          actionUrl: actionUrl.trim() || undefined,
+          mode,
+          roles: roles.length ? roles : undefined,
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.text().catch(() => "خطأ في الشبكة");
+        throw new Error(err);
+      }
+      return r.json();
+    },
+    onSuccess: (data: any) => {
       setLastResult({ recipients: data.recipients ?? 0, mode: data.mode });
       toast({
-        title: "تم البث",
+        title: "تم البث ✅",
         description: `تم إرسال الإشعار إلى ${data.recipients ?? 0} مستخدم.`,
       });
       setTitle("");
