@@ -43,6 +43,8 @@ export const users = pgTable("users", {
   role: varchar("role").default("customer"), // owner, product_manager, order_manager, delivery, finance, customer
   permissions: jsonb("permissions"),
   isPhoneVerified: varchar("is_phone_verified").default("false"),
+  referralCode: varchar("referral_code"),       // كود الإحالة الخاص بالعميل (يُولَّد عند الطلب)
+  referredByCode: varchar("referred_by_code"),  // الكود الذي أحال هذا العميل
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

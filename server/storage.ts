@@ -363,6 +363,10 @@ export class DatabaseStorage implements IStorage {
       offerBannerCols: 2,
       shippingFee: 0,
       codEnabled: true,
+      freeShippingFirstOrder: false,
+      referralEnabled: false,
+      referralFriendDiscountPercent: 15,
+      referralRewardYer: 1000,
       updatedAt: new Date(),
     };
   }

@@ -775,6 +775,11 @@ export const displaySettings = pgTable("display_settings", {
   orderShowDesignFile: boolean("order_show_design_file").default(true).notNull(),
   orderShowDesignNotes: boolean("order_show_design_notes").default(true).notNull(),
   orderItemMode: text("order_item_mode").default("collapsible").notNull(),     // compact | collapsible
+  // ── حملات تسويقية (يونيو 2026) ──────────────────────────────────────────────
+  freeShippingFirstOrder: boolean("free_shipping_first_order").default(false).notNull(),                 // أول توصيل مجاني للعملاء الجدد
+  referralEnabled: boolean("referral_enabled").default(false).notNull(),                                 // تفعيل نظام الإحالة المزدوجة
+  referralFriendDiscountPercent: integer("referral_friend_discount_percent").default(15).notNull(),      // خصم الصديق على أول طلب %
+  referralRewardYer: integer("referral_reward_yer").default(1000).notNull(),                             // مكافأة المُحيل (ريال يمني)
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -847,6 +852,19 @@ export const coupons = pgTable("coupons", {
   expiresAt: timestamp("expires_at"), // Expiration date (null = never)
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// ─── الإحالة المزدوجة بين العملاء (Customer-to-Customer Referral) ─────────────
+export const referrals = pgTable("referrals", {
+  id: serial("id").primaryKey(),
+  referrerUserId: varchar("referrer_user_id").references(() => users.id).notNull(), // صاحب الكود (المُحيل)
+  referredUserId: varchar("referred_user_id").references(() => users.id),           // الصديق المُحال (بعد تسجيله)
+  referredPhone: text("referred_phone"),                                            // هاتف الصديق (لمنع التكرار)
+  status: text("status").default("pending").notNull(),                              // pending | rewarded
+  rewardAmountYer: numeric("reward_amount_yer").default("0").notNull(),             // مبلغ مكافأة المُحيل
+  orderId: integer("order_id").references(() => orders.id),                         // أول طلب مؤهِّل للصديق
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export type Referral = typeof referrals.$inferSelect;
 
 // ─── جداول منظومة المسوقين المستقلين ─────────────────────────────────────────
 

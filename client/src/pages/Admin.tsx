@@ -3743,6 +3743,62 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                 )}
               </div>
 
+              {/* ── حملات تسويقية: شحن أول طلب + الإحالة المزدوجة ── */}
+              <div className="space-y-3 rounded-lg border-2 border-emerald-200 dark:border-emerald-800 p-4 bg-emerald-50/30 dark:bg-emerald-950/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="font-semibold text-sm">توصيل مجاني لأول طلب</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">يُلغى رسم التوصيل تلقائياً في أول طلب لكل عميل</p>
+                  </div>
+                  <Switch
+                    checked={settings?.freeShippingFirstOrder ?? false}
+                    onCheckedChange={v => handleUpdate('freeShippingFirstOrder', v)}
+                    disabled={updateMutation.isPending}
+                    data-testid="switch-free-shipping-first-order"
+                  />
+                </div>
+
+                <div className="border-t border-emerald-200 dark:border-emerald-800 pt-3 flex items-center justify-between">
+                  <div>
+                    <Label className="font-semibold text-sm">برنامج "ادعُ صديقاً"</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">خصم للصديق عند أول طلب + مكافأة محفظة للمُحيل</p>
+                  </div>
+                  <Switch
+                    checked={settings?.referralEnabled ?? false}
+                    onCheckedChange={v => handleUpdate('referralEnabled', v)}
+                    disabled={updateMutation.isPending}
+                    data-testid="switch-referral-enabled"
+                  />
+                </div>
+                {(settings?.referralEnabled ?? false) && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">خصم الصديق (%)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={settings?.referralFriendDiscountPercent ?? 15}
+                        onChange={e => setSettings((s: any) => ({ ...s, referralFriendDiscountPercent: Number(e.target.value) }))}
+                        onBlur={e => handleUpdate('referralFriendDiscountPercent', Number(e.target.value))}
+                        data-testid="input-referral-friend-discount"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">مكافأة المُحيل (ر.ي)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={settings?.referralRewardYer ?? 1000}
+                        onChange={e => setSettings((s: any) => ({ ...s, referralRewardYer: Number(e.target.value) }))}
+                        onBlur={e => handleUpdate('referralRewardYer', Number(e.target.value))}
+                        data-testid="input-referral-reward-yer"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* ── إخفاء اسم المنتج في الشريط العلوي ── */}
               <div className="flex items-center justify-between rounded-lg border px-4 py-3">
                 <div>

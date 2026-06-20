@@ -107,8 +107,11 @@ const DataDeletion = lazy(() => import("@/pages/DataDeletion"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 const Compare = lazy(() => import("@/pages/Compare"));
 const MarketingPlan = lazy(() => import("@/pages/MarketingPlan"));
+const Invite = lazy(() => import("@/pages/Invite"));
+const ReferralLanding = lazy(() => import("@/pages/ReferralLanding"));
 
 import { Footer, MobileFooter } from "@/components/Footer";
+import { PromoBar } from "@/components/PromoBar";
 import { GlobalBottomNav } from "@/components/GlobalBottomNav";
 import { SplashScreen } from "@/components/SplashScreen";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
@@ -556,6 +559,18 @@ function Router() {
     location.startsWith('/order-confirmation') ||
     isProductDetail; // إخفاء دائم في صفحة المنتج لتجنب تراكم الأشرطة
 
+  // شريط العروض العالمي: يظهر في كل الصفحات عدا صفحة المنتج (له شريطه الخاص)
+  // ولوحات الأدمن/الموظفين/الموردين والصفحات الإدارية الكاملة.
+  const hidePromoBar =
+    isProductDetail ||
+    location.startsWith('/admin') ||
+    location.startsWith('/staff') ||
+    location.startsWith('/supplier') ||
+    location.startsWith('/marketer/dashboard') ||
+    location === '/auth' ||
+    location === '/register' ||
+    location === '/onboarding';
+
   return (
     <>
       <MobilePwaLock />
@@ -567,6 +582,7 @@ function Router() {
       <OfflineSyncProvider />
       <div className="min-h-screen bg-gray-50 dark:bg-background font-sans flex flex-col pb-16">
         <LoginTopBanner />
+        {!hidePromoBar && <PromoBar />}
         {!isProductDetail && location !== '/profile' && location !== '/account' && <Navbar />}
         <main className="flex-grow">
           <Suspense fallback={<PageLoader />}>
@@ -640,6 +656,8 @@ function Router() {
             <Route path="/supplier/statement" component={SupplierStatement} />
             <Route path="/supplier/order/:token" component={SupplierOrderView} />
             <Route path="/m/:code" component={MarketerLanding} />
+            <Route path="/r/:code" component={ReferralLanding} />
+            <Route path="/invite" component={Invite} />
             <Route path="/join-marketer" component={MarketerApply} />
             <Route path="/marketer/login" component={MarketerLogin} />
             <Route path="/marketer/dashboard" component={MarketerDashboard} />

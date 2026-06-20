@@ -64,6 +64,12 @@ export default function Checkout() {
     queryKey: ["/api/display-settings"],
   });
 
+  // ── حملة «أول توصيل مجاني» للعملاء الجدد ──
+  const { data: firstOrderElig } = useQuery<{ freeShippingFirstOrder: boolean; isFirstOrder: boolean }>({
+    queryKey: ["/api/orders/first-order-eligibility"],
+  });
+  const firstOrderFree: boolean = !!(firstOrderElig?.freeShippingFirstOrder && firstOrderElig?.isFirstOrder);
+
   const shippingFee: number = displaySettings?.shippingFee ?? 0;
   const freeShippingMin: number = displaySettings?.sadeemFreeShippingMin ?? 0;
   const codEnabled: boolean = displaySettings?.codEnabled ?? true;
@@ -268,9 +274,10 @@ export default function Checkout() {
   );
 
   const effectiveShippingFee = useMemo(() => {
+    if (firstOrderFree) return 0;
     if (freeShippingMin === 0) return 0;
     return subtotal - discountAmount >= freeShippingMin ? 0 : shippingFee;
-  }, [subtotal, discountAmount, shippingFee, freeShippingMin]);
+  }, [subtotal, discountAmount, shippingFee, freeShippingMin, firstOrderFree]);
 
   const finalTotal = useMemo(() =>
     subtotal - discountAmount + effectiveShippingFee,
@@ -315,6 +322,29 @@ export default function Checkout() {
     } catch { setCouponError("خطأ في التحقق"); }
     finally { setIsValidatingCoupon(false); }
   };
+
+  // تطبيق كود الإحالة المحفوظ تلقائياً (حملة الإحالة المزدوجة)
+  useEffect(() => {
+    const refCode = localStorage.getItem("referralCode");
+    if (!refCode || couponData) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/coupons/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: refCode.trim().toUpperCase() }),
+        });
+        const data = await res.json();
+        if (res.ok && data.code) {
+          setCouponData({ code: data.code, discountPercent: Number(data.discountPercent) });
+          setCouponCode(data.code);
+        } else {
+          localStorage.removeItem("referralCode"); // غير صالح (مثلاً إحالة ذاتية)
+        }
+      } catch { /* تجاهل */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1658,8 +1688,13 @@ export default function Checkout() {
               </div>
             )}
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">التوصيل</span>
-              <span className={effectiveShippingFee === 0 ? "text-green-600 font-semibold" : "font-semibold"}>
+              <span className="text-muted-foreground">
+                التوصيل
+                {firstOrderFree && (
+                  <span className="mr-1 text-green-600 font-bold" data-testid="badge-first-order-shipping">🎉 أول توصيل مجاني</span>
+                )}
+              </span>
+              <span className={effectiveShippingFee === 0 ? "text-green-600 font-semibold" : "font-semibold"} data-testid="text-shipping-fee">
                 {effectiveShippingFee === 0 ? "مجاني" : `${formatPrice(effectiveShippingFee)} ${currLabel}`}
               </span>
             </div>

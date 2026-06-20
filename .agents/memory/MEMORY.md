@@ -5,6 +5,7 @@
 - [Agent executive tools](agent-tools-approval.md) — propose→approve→execute flow; gate tools server-side both at parse & approve, make approval idempotent, WhatsApp is disabled (use in-app notifications).
 - [Dev preview stale bundle](dev-preview-stale-bundle.md) — PWA service worker + failing Vite HMR can serve old UI; verify FE changes via curl/tsc, not one screenshot.
 - [Push Notifications VAPID Native](push-notifications-vapid.md) — web-push package unavailable; use Node.js native crypto (createECDH prime256v1 + createSign ES256 + JWK); sends payload-less push; sw.js already has handlers.
+- [Referral self-referral guard](referral-self-guard.md) — block wallet reward by phone match too, not just account id; guest checkout with own code bypasses the id-only check.
 - [Pre-existing tsc errors vs tsx runtime](repo-precommit-typecheck.md) — `npm run check` has known pre-existing errors; app runs via tsx; filter check output to your edited files to judge regressions.
 - [Polling-count sound effects](polling-count-sound.md) — chime/alert on a growing query count must gate on first load (data===undefined + init ref) or it fires on every mount when unread already exist.
 - [Credit system toggles](credit-system-toggles.md) — two similar admin switches: master `credit_system_enabled` (settings KV, gate everywhere) vs per-display `credit_option_enabled`; don't confuse them.

@@ -1,8 +1,43 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Rocket, Target, Gift, Megaphone, Calendar, Wallet, Film,
   Share2, BarChart3, AlertTriangle, Star, Lightbulb, Printer, ListChecks,
+  MessageCircle, Copy, Check,
 } from "lucide-react";
+
+const whatsappTexts: { label: string; text: string }[] = [
+  {
+    label: "أول توصيل مجاني (للعملاء الجدد)",
+    text:
+      "مرحباً 👋 من أويو بلاست!\n" +
+      "عرض خاص لأول طلب لك: 🚚 توصيل *مجاني* بدون حد أدنى.\n" +
+      "اطبع شعارك أو صمّم منتجك وشاهد المعاينة الحية قبل الطباعة.\n" +
+      "اطلب الآن: ",
+  },
+  {
+    label: "ادعُ صديقاً (إحالة)",
+    text:
+      "🎁 وفّر على أول طلب لك من أويو بلاست!\n" +
+      "استخدم رابط دعوة صديقك واحصل على خصم فوري.\n" +
+      "وكل صديق تدعوه = رصيد يُضاف إلى محفظتك تلقائياً.\n" +
+      "ابدأ من هنا: ",
+  },
+  {
+    label: "عرض ترويجي عام",
+    text:
+      "🔥 عروض أويو بلاست هذا الأسبوع!\n" +
+      "خصومات على مستلزمات التغليف والطباعة المخصصة.\n" +
+      "اطبع اسمك وشعارك بأفضل الأسعار في اليمن.\n" +
+      "تصفّح المتجر: ",
+  },
+  {
+    label: "تذكير بسلة متروكة",
+    text:
+      "مرحباً 👋 لاحظنا أنك تركت منتجات في سلتك بأويو بلاست.\n" +
+      "منتجاتك ما زالت محجوزة لك ✅\n" +
+      "أكمل طلبك الآن قبل نفاد الكمية: ",
+  },
+];
 
 /**
  * صفحة داخلية خاصة بمالك المتجر: خطة تسويقية شاملة لأويو بلاست.
@@ -236,9 +271,18 @@ function Bul({ children }: { children: React.ReactNode }) {
 }
 
 export default function MarketingPlan() {
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+
   useEffect(() => {
     document.title = "خطة التسويق الشاملة — أويو بلاست";
   }, []);
+
+  function copyText(text: string, idx: number) {
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopiedIdx(idx);
+      setTimeout(() => setCopiedIdx(null), 1800);
+    });
+  }
 
   return (
     <div dir="rtl" className="min-h-screen bg-gray-50 print:bg-white" data-testid="page-marketing-plan">
@@ -495,6 +539,32 @@ export default function MarketingPlan() {
             نصيحتي الأخيرة: ميزتك الفريدة هي المعاينة الحية للطباعة — اجعلها بطلة كل فيديو وصورة.
             لا أحد في اليمن يسوّق «شوف شعارك قبل ما تطبعه». هذه قصتك.
           </p>
+        </Card>
+
+        {/* رسائل واتساب جاهزة */}
+        <SectionTitle icon={MessageCircle} id="whatsapp-texts">رسائل واتساب جاهزة (انسخ وأرسل)</SectionTitle>
+        <Card className="print:hidden">
+          <p className="text-[15px] text-gray-700 mb-3 leading-relaxed">
+            رسائل مكتوبة مسبقاً لحملاتك. اضغط "نسخ" ثم الصقها في واتساب وأضِف رابط متجرك في النهاية.
+          </p>
+          <div className="space-y-3">
+            {whatsappTexts.map((w, idx) => (
+              <div key={idx} className="rounded-lg border border-gray-200 p-3 bg-gray-50" data-testid={`whatsapp-text-${idx}`}>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="font-bold text-sm text-[#1565C0]">{w.label}</span>
+                  <button
+                    onClick={() => copyText(w.text, idx)}
+                    className="shrink-0 inline-flex items-center gap-1 bg-[#2196F3] text-white text-xs font-bold px-3 py-1.5 rounded-full active:opacity-70"
+                    data-testid={`button-copy-whatsapp-${idx}`}
+                  >
+                    {copiedIdx === idx ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedIdx === idx ? "تم النسخ" : "نسخ"}
+                  </button>
+                </div>
+                <p className="text-[14px] text-gray-700 leading-relaxed whitespace-pre-line">{w.text}</p>
+              </div>
+            ))}
+          </div>
         </Card>
 
         <p className="text-center text-xs text-gray-400 mt-6">

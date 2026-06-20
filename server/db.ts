@@ -264,4 +264,53 @@ export const db = drizzle(pool, { schema });
   } catch (e) {
     console.warn("[migrate] studio_preview_logs:", (e as Error).message);
   }
+
+  // ── Auto-migrate: حملات تسويقية — شحن أول طلب + الإحالة المزدوجة (يونيو 2026) ──
+  try {
+    await pool.query(`
+      ALTER TABLE display_settings
+        ADD COLUMN IF NOT EXISTS free_shipping_first_order boolean NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS referral_enabled boolean NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS referral_friend_discount_percent integer NOT NULL DEFAULT 15,
+        ADD COLUMN IF NOT EXISTS referral_reward_yer integer NOT NULL DEFAULT 1000
+    `);
+  } catch (e) {
+    console.warn("[migrate] marketing campaign display_settings cols:", (e as Error).message);
+  }
+
+  try {
+    await pool.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS referral_code TEXT,
+        ADD COLUMN IF NOT EXISTS referred_by_code TEXT
+    `);
+    await pool.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS users_referral_code_unique ON users (referral_code) WHERE referral_code IS NOT NULL`,
+    );
+  } catch (e) {
+    console.warn("[migrate] users referral cols:", (e as Error).message);
+  }
+
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS referrals (
+        id SERIAL PRIMARY KEY,
+        referrer_user_id VARCHAR NOT NULL,
+        referred_user_id VARCHAR,
+        referred_phone TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        reward_amount_yer NUMERIC NOT NULL DEFAULT 0,
+        order_id INTEGER,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS referrals_referred_user_unique ON referrals (referred_user_id) WHERE referred_user_id IS NOT NULL`,
+    );
+    await pool.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS referrals_referred_phone_unique ON referrals (referred_phone) WHERE referred_phone IS NOT NULL`,
+    );
+  } catch (e) {
+    console.warn("[migrate] referrals table:", (e as Error).message);
+  }
 })();

@@ -4413,8 +4413,12 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       ];
       // add new int fields
       intFields.push('pdpColorThumbnailW', 'pdpColorThumbnailH', 'pdpSizeButtonW', 'pdpSizeButtonH');
+      // ── حملات تسويقية: حقول رقمية ──
+      intFields.push('referralFriendDiscountPercent', 'referralRewardYer');
       // add new bool fields
       boolFields.push('pdpColorCollapsible', 'pdpSizeShowPrice', 'pdpSizeCollapsible');
+      // ── حملات تسويقية: مفاتيح تشغيل ──
+      boolFields.push('freeShippingFirstOrder', 'referralEnabled');
 
       const body = req.body as Record<string, unknown>;
       const patch: Record<string, any> = {
@@ -4510,6 +4514,28 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   });
 
   // ─── Create Order (Public - for checkout) ────────────────────────
+  // أهلية «أول توصيل مجاني» — يستخدمها الـCheckout لعرض الشحن مجاناً
+  app.get("/api/orders/first-order-eligibility", async (req, res) => {
+    try {
+      const { pool: fsPool } = await import("./db");
+      const cfg = await fsPool.query(`SELECT free_shipping_first_order FROM display_settings LIMIT 1`);
+      const enabled = !!(cfg.rows.length && cfg.rows[0].free_shipping_first_order === true);
+      const user = (req as any).user;
+      const userId = getUserId(user);
+      let isFirstOrder = true; // الضيوف الجدد مؤهَّلون مبدئياً؛ الخادم يتحقق نهائياً عند الإنشاء
+      if (userId) {
+        const r = await fsPool.query(
+          `SELECT COUNT(*)::int AS c FROM orders WHERE user_id=$1 AND status <> 'cancelled'`,
+          [userId],
+        );
+        isFirstOrder = (r.rows[0]?.c ?? 0) === 0;
+      }
+      res.json({ freeShippingFirstOrder: enabled, isFirstOrder });
+    } catch {
+      res.json({ freeShippingFirstOrder: false, isFirstOrder: false });
+    }
+  });
+
   app.post("/api/orders/create", orderLimiter, async (req, res) => {
     try {
       const { validateOrderCreation } = await import("./lib/errorHandler");
@@ -4620,6 +4646,31 @@ h1{font-size:18px;color:#222;margin:4px 0;}
           safeShipping = maxFee;
         }
       }
+      // ── حملة «أول توصيل مجاني» للعملاء الجدد (الخادم مصدر الحقيقة) ───────────
+      // يُلغى الشحن تلقائياً على أول طلب للعميل الجديد عند تفعيل المفتاح في الأدمن.
+      try {
+        const { pool: fsPool } = await import("./db");
+        const fsCfg = await fsPool.query(`SELECT free_shipping_first_order FROM display_settings LIMIT 1`);
+        if (fsCfg.rows.length && fsCfg.rows[0].free_shipping_first_order === true) {
+          let priorCount = 1; // افتراض غير مؤهَّل ما لم نتأكد
+          if (userId) {
+            const r = await fsPool.query(
+              `SELECT COUNT(*)::int AS c FROM orders WHERE user_id=$1 AND status <> 'cancelled'`,
+              [userId],
+            );
+            priorCount = r.rows[0]?.c ?? 0;
+          } else if (customerPhone) {
+            const r = await fsPool.query(
+              `SELECT COUNT(*)::int AS c FROM orders WHERE customer_phone=$1 AND status <> 'cancelled'`,
+              [String(customerPhone)],
+            );
+            priorCount = r.rows[0]?.c ?? 0;
+          }
+          if (priorCount === 0) safeShipping = 0;
+        }
+      } catch (fsErr: any) {
+        console.warn("[first-order-shipping] check failed:", fsErr.message);
+      }
       const safeDiscount = Math.max(0, Number(discountAmount) || 0);
       const total = Math.max(0, Math.round((serverSubtotal - safeDiscount + safeShipping) * 100) / 100);
       const serverSubtotalRounded = Math.round(serverSubtotal * 100) / 100;
@@ -4721,7 +4772,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
           shippingCity,
           shippingAddress,
           shippingOption,
-          shippingCost,
+          shippingCost: safeShipping,
           notes: (notes || "") + creditNoteAddon,
           total,
           items,
@@ -4794,6 +4845,93 @@ h1{font-size:18px;color:#222;margin:4px 0;}
             );
           }
         } catch { /* non-fatal */ }
+      }
+
+      // ── حملة الإحالة المزدوجة: مكافأة المُحيل عند أول طلب للصديق ──────────────
+      // معاملة ذرّية: تسجيل الإحالة + شحن محفظة المُحيل. الفهرس الفريد يمنع التكرار.
+      if (couponCode) {
+        try {
+          const { pool: rPool } = await import("./db");
+          const cfg = (await rPool.query(
+            `SELECT referral_enabled, referral_reward_yer FROM display_settings LIMIT 1`,
+          )).rows[0] || {};
+          const refEnabled = cfg.referral_enabled === true;
+          const rewardYer = Number(cfg.referral_reward_yer) || 0;
+          if (refEnabled && rewardYer > 0) {
+            const owner = await rPool.query(
+              `SELECT id, phone FROM users WHERE referral_code=$1`,
+              [String(couponCode).toUpperCase()],
+            );
+            const referrerId = owner.rows[0]?.id;
+            // منع الإحالة الذاتية عبر الهاتف (يغطي الشراء كضيف بنفس الكود)
+            const normDigits = (v: any) => String(v || "").replace(/\D/g, "");
+            const refPhoneN = normDigits(owner.rows[0]?.phone);
+            const buyerPhoneN = normDigits(customerPhone);
+            const phoneSelfReferral = !!refPhoneN && !!buyerPhoneN && (
+              refPhoneN === buyerPhoneN ||
+              (refPhoneN.length >= 9 && buyerPhoneN.length >= 9 &&
+                refPhoneN.slice(-9) === buyerPhoneN.slice(-9))
+            );
+            // يجب أن يكون كود إحالة عميل، وليس إحالة ذاتية (لا بالحساب ولا بالهاتف)
+            if (referrerId && referrerId !== userId && !phoneSelfReferral) {
+              // الصديق يجب أن يكون في أول طلب له (نستثني الطلب الحالي)
+              let priorCount = 1;
+              if (userId) {
+                priorCount = (await rPool.query(
+                  `SELECT COUNT(*)::int AS c FROM orders WHERE user_id=$1 AND status<>'cancelled' AND id<>$2`,
+                  [userId, order.id],
+                )).rows[0]?.c ?? 0;
+              } else if (customerPhone) {
+                priorCount = (await rPool.query(
+                  `SELECT COUNT(*)::int AS c FROM orders WHERE customer_phone=$1 AND status<>'cancelled' AND id<>$2`,
+                  [String(customerPhone), order.id],
+                )).rows[0]?.c ?? 0;
+              }
+              if (priorCount === 0) {
+                const client = await rPool.connect();
+                try {
+                  await client.query("BEGIN");
+                  const ins = await client.query(
+                    `INSERT INTO referrals (referrer_user_id, referred_user_id, referred_phone, status, reward_amount_yer, order_id)
+                     VALUES ($1,$2,$3,'rewarded',$4,$5)
+                     ON CONFLICT DO NOTHING
+                     RETURNING id`,
+                    [referrerId, userId || null, customerPhone ? String(customerPhone) : null, rewardYer.toFixed(2), order.id],
+                  );
+                  if (ins.rows.length) {
+                    const w = await client.query(`SELECT id FROM wallets WHERE user_id=$1 FOR UPDATE`, [referrerId]);
+                    let walletId: number;
+                    if (w.rows.length) {
+                      walletId = w.rows[0].id;
+                      await client.query(
+                        `UPDATE wallets SET balance_yer = balance_yer + $1, updated_at=NOW() WHERE id=$2`,
+                        [rewardYer, walletId],
+                      );
+                    } else {
+                      walletId = (await client.query(
+                        `INSERT INTO wallets (user_id, balance_yer) VALUES ($1,$2) RETURNING id`,
+                        [referrerId, rewardYer],
+                      )).rows[0].id;
+                    }
+                    await client.query(
+                      `INSERT INTO wallet_transactions (wallet_id, user_id, type, amount, currency, description, order_id)
+                       VALUES ($1,$2,'deposit',$3,'YER',$4,$5)`,
+                      [walletId, referrerId, rewardYer, `مكافأة إحالة صديق (طلب #${order.id})`, order.id],
+                    );
+                  }
+                  await client.query("COMMIT");
+                } catch (txErr) {
+                  await client.query("ROLLBACK");
+                  throw txErr;
+                } finally {
+                  client.release();
+                }
+              }
+            }
+          }
+        } catch (refErr: any) {
+          console.warn("[referral-reward] failed:", refErr.message);
+        }
       }
 
       logOrderCreation(order.id, {
@@ -7815,6 +7953,18 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       if (!code) return res.status(400).json({ message: "الرجاء إدخال كود الكوبون" });
       const { pool: dbPool } = await import("./db");
 
+      // منع العميل من استخدام كود إحالته الخاص (إحالة ذاتية)
+      const reqUserId = getUserId((req as any).user);
+      if (reqUserId) {
+        const own = await dbPool.query(
+          `SELECT 1 FROM users WHERE id=$1 AND referral_code=$2`,
+          [reqUserId, String(code).toUpperCase()],
+        );
+        if (own.rows.length) {
+          return res.status(400).json({ message: "لا يمكنك استخدام كود الإحالة الخاص بك" });
+        }
+      }
+
       // أولاً: تحقق من كوبونات المسوقين المستقلين
       const smRes = await dbPool.query(
         `SELECT * FROM standalone_marketers WHERE coupon_code=$1 AND is_active=true`,
@@ -7849,6 +7999,74 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       });
     } catch (e: any) {
       res.status(500).json({ message: "فشل التحقق من الكوبون" });
+    }
+  });
+
+  // ── حملة الإحالة المزدوجة: بيانات العميل + كوده الشخصي ──────────────────────
+  app.get("/api/referral/me", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const userId = getUserId(user);
+      if (!userId) return res.status(401).json({ message: "يجب تسجيل الدخول" });
+      const { pool: rPool } = await import("./db");
+
+      const cfg = (await rPool.query(
+        `SELECT referral_enabled, referral_friend_discount_percent, referral_reward_yer FROM display_settings LIMIT 1`,
+      )).rows[0] || {};
+      const referralEnabled = cfg.referral_enabled === true;
+      const friendDiscountPercent = Number(cfg.referral_friend_discount_percent) || 15;
+      const rewardYer = Number(cfg.referral_reward_yer) || 0;
+
+      // كود العميل (يُولَّد كسولاً مع ضمان التفرّد عبر المستخدمين/الكوبونات/المسوقين)
+      let code: string | null =
+        (await rPool.query(`SELECT referral_code FROM users WHERE id=$1`, [userId])).rows[0]?.referral_code ?? null;
+      if (!code) {
+        for (let attempt = 0; attempt < 8 && !code; attempt++) {
+          const cand = "REF" + Math.random().toString(36).slice(2, 8).toUpperCase();
+          const clash = await rPool.query(
+            `SELECT 1 FROM users WHERE referral_code=$1
+             UNION SELECT 1 FROM coupons WHERE code=$1
+             UNION SELECT 1 FROM standalone_marketers WHERE coupon_code=$1`,
+            [cand],
+          );
+          if (!clash.rows.length) {
+            try {
+              await rPool.query(`UPDATE users SET referral_code=$1 WHERE id=$2`, [cand, userId]);
+              code = cand;
+            } catch { /* تعارض نادر — أعد المحاولة */ }
+          }
+        }
+      }
+
+      // مزامنة صف الكوبون المطابق ليُطبَّق خصم الصديق عبر مسار الكوبونات القائم
+      if (code) {
+        await rPool.query(
+          `INSERT INTO coupons (code, marketer_id, discount_percent, marketer_commission_percent, is_active)
+           VALUES ($1,$2,$3,0,$4)
+           ON CONFLICT (code) DO UPDATE SET discount_percent=EXCLUDED.discount_percent, is_active=EXCLUDED.is_active`,
+          [code, userId, friendDiscountPercent, referralEnabled],
+        );
+      }
+
+      const stats = (await rPool.query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE status='rewarded')::int AS rewarded,
+                COALESCE(SUM(reward_amount_yer) FILTER (WHERE status='rewarded'),0) AS earned
+         FROM referrals WHERE referrer_user_id=$1`,
+        [userId],
+      )).rows[0];
+
+      res.json({
+        referralEnabled,
+        referralCode: code,
+        friendDiscountPercent,
+        rewardYer,
+        totalReferrals: stats?.total ?? 0,
+        rewardedReferrals: stats?.rewarded ?? 0,
+        totalEarnedYer: Number(stats?.earned ?? 0),
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: "فشل تحميل بيانات الإحالة" });
     }
   });
 

@@ -11,7 +11,7 @@ import {
   CheckCircle2, Truck, RefreshCcw, LogIn, UserPlus, Bell, Heart,
   MapPin, Settings as SettingsIcon, MessageCircle, Handshake,
   CreditCard, User, Ticket, ShieldCheck, HelpCircle, LogOut, ExternalLink, AlertTriangle,
-  Smartphone, BellRing, BellOff,
+  Smartphone, BellRing, BellOff, Gift,
 } from "lucide-react";
 import type { Order } from "@shared/schema";
 import CustomerChatWidget from "@/components/CustomerChatWidget";
@@ -151,6 +151,7 @@ export default function MyAccount() {
     { icon: User,         label: "ملفي الشخصي",  href: "/profile",           color: "text-cyan-600",   bg: "bg-cyan-100 dark:bg-cyan-950/40",     testid: "tool-profile" },
     { icon: Bell,         label: "إشعاراتي",     href: "/notifications",     color: "text-purple-600", bg: "bg-purple-100 dark:bg-purple-950/40", testid: "tool-notifications" },
     { icon: Ticket,       label: "كوبوناتي",     href: "/my-coupons",        color: "text-rose-600",   bg: "bg-rose-100 dark:bg-rose-950/40",     testid: "tool-coupons" },
+    { icon: Gift,         label: "ادعُ أصدقاءك", href: "/invite",            color: "text-pink-600",   bg: "bg-pink-100 dark:bg-pink-950/40",     testid: "tool-invite" },
     { icon: ShieldCheck,  label: "أمان",         href: "/settings#security", color: "text-teal-600",   bg: "bg-teal-100 dark:bg-teal-950/40",     testid: "tool-security" },
     { icon: MessageCircle,label: "دعم واتساب",   href: "https://wa.me/967774997589?text=مرحباً،%20أحتاج%20للمساعدة", external: true, color: "text-green-600",  bg: "bg-green-100 dark:bg-green-950/40", testid: "tool-support" },
     { icon: HelpCircle,   label: "الإعدادات",    href: "/settings",          color: "text-slate-600",  bg: "bg-slate-100 dark:bg-slate-800",      testid: "tool-help" },
