@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link, useRoute } from "wouter";
-import { 
+import {
+  ChevronLeft,
   Package, 
   Clock, 
   CheckCircle, 
@@ -301,6 +302,19 @@ export default function Orders() {
                     <CheckCircle className="h-6 w-6 text-green-600" />
                     <span className="text-green-800 font-medium">تم إكمال الطلب بنجاح</span>
                   </div>
+                )}
+
+                {(order.status === 'delivered' || order.status === 'completed') && (
+                  <Link href={`/rate-order/${order.id}`}>
+                    <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors" data-testid={`btn-rate-order-${order.id}`}>
+                      <span className="text-2xl">⭐</span>
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-amber-800 dark:text-amber-200">قيّم منتجاتك</p>
+                        <p className="text-xs text-amber-600 dark:text-amber-400">شاركنا رأيك — يساعد العملاء الآخرين</p>
+                      </div>
+                      <ChevronLeft className="h-4 w-4 text-amber-600" />
+                    </div>
+                  </Link>
                 )}
 
                 <div className="grid grid-cols-2 gap-4 text-sm">

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import {
-  ShoppingBag, Wallet, Award, ChevronRight, Package, Clock,
+  ShoppingBag, Wallet, Award, ChevronRight, ChevronLeft, Package, Clock,
   CheckCircle2, Truck, RefreshCcw, LogIn, UserPlus, Bell, Heart,
   MapPin, Settings as SettingsIcon, MessageCircle, Handshake,
   CreditCard, User, Ticket, ShieldCheck, HelpCircle, LogOut, ExternalLink, AlertTriangle,
@@ -195,13 +195,15 @@ export default function MyAccount() {
             <div className="flex-1 min-w-0">
               <h2 className="text-lg font-bold truncate" data-testid="text-user-name">{displayName}</h2>
               <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                <Badge
-                  className="text-[10px] font-bold border-0 px-1.5 py-0"
-                  style={{ background: tierColor, color: "white" }}
-                  data-testid="badge-tier"
-                >
-                  {tierIcon} {tierName}
-                </Badge>
+                {displaySettings?.showFinancialSection !== false && (
+                  <Badge
+                    className="text-[10px] font-bold border-0 px-1.5 py-0"
+                    style={{ background: tierColor, color: "white" }}
+                    data-testid="badge-tier"
+                  >
+                    {tierIcon} {tierName}
+                  </Badge>
+                )}
                 {(user as any)?.city && (
                   <span className="text-[11px] text-white/80 flex items-center gap-1">
                     <MapPin className="h-3 w-3" />
@@ -216,29 +218,31 @@ export default function MyAccount() {
 
       <div className="container max-w-2xl mx-auto px-4 -mt-5 relative z-10 space-y-3">
         {/* ──────── 4 Finance Cards ──────── */}
-        <div className="grid grid-cols-4 gap-2">
-          {financeCards.map(c => {
-            const Icon = c.icon;
-            return (
-              <Link key={c.key} href={c.href}>
-                <Card className="hover-elevate cursor-pointer h-full" data-testid={`card-${c.key}`}>
-                  <CardContent className="p-2.5 text-center">
-                    <div
-                      className="w-9 h-9 rounded-full flex items-center justify-center mx-auto mb-1"
-                      style={{ background: `${c.bg}20` }}
-                    >
-                      <Icon className="h-4.5 w-4.5" style={{ color: c.bg }} />
-                    </div>
-                    <p className="text-sm font-bold truncate" style={{ color: c.bg }} data-testid={`text-${c.key}-value`}>
-                      {c.value}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">{c.label}</p>
-                  </CardContent>
-                </Card>
-              </Link>
-            );
-          })}
-        </div>
+        {displaySettings?.showFinancialSection !== false && (
+          <div className="grid grid-cols-4 gap-2">
+            {financeCards.map(c => {
+              const Icon = c.icon;
+              return (
+                <Link key={c.key} href={c.href}>
+                  <Card className="hover-elevate cursor-pointer h-full" data-testid={`card-${c.key}`}>
+                    <CardContent className="p-2.5 text-center">
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center mx-auto mb-1"
+                        style={{ background: `${c.bg}20` }}
+                      >
+                        <Icon className="h-4.5 w-4.5" style={{ color: c.bg }} />
+                      </div>
+                      <p className="text-sm font-bold truncate" style={{ color: c.bg }} data-testid={`text-${c.key}-value`}>
+                        {c.value}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">{c.label}</p>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        )}
 
         {/* ──────── Orders Status Strip ──────── */}
         <Card data-testid="card-orders-strip">
@@ -345,6 +349,24 @@ export default function MyAccount() {
                   <p className="text-xs text-white/85 truncate">اربح عمولات أو وسّع تجارتك معنا</p>
                 </div>
                 <ExternalLink className="h-5 w-5 shrink-0" />
+              </CardContent>
+            </Card>
+          </Link>
+        )}
+
+        {/* ──────── بطاقة الإحالة / ادعُ أصدقاءك ──────── */}
+        {displaySettings?.referralEnabled && (
+          <Link href="/invite" data-testid="card-referral-promo">
+            <Card className="border-2 border-pink-200 dark:border-pink-800 bg-gradient-to-l from-pink-50 to-white dark:from-pink-950/30 dark:to-background hover-elevate cursor-pointer">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-pink-500/15 flex items-center justify-center shrink-0">
+                  <span className="text-2xl">🎁</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm text-pink-700 dark:text-pink-300">ادعُ صديقاً واربح معاً</p>
+                  <p className="text-xs text-muted-foreground">شارك رابطك الخاص واحصل على مكافآت عند كل شراء</p>
+                </div>
+                <ChevronLeft className="h-5 w-5 text-pink-400 shrink-0" />
               </CardContent>
             </Card>
           </Link>

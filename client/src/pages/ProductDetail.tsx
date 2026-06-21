@@ -897,16 +897,22 @@ export default function ProductDetail() {
   }, [uploadedDesignUrl, (product as any)?.printArea]);
 
   // ── Phase 5: رسم المعاينة على Canvas ──────────────────────────────────
-  useEffect(() => {
-    if (!uploadedDesignUrl || !logoPosition || !previewCanvasRef.current || !product?.imageUrl) return;
+  // نحتفظ بمرجع ثابت للـ logoPosition لتجنّب الـ stale closure داخل bg.onload
+  const logoPositionRef = useRef(logoPosition);
+  useEffect(() => { logoPositionRef.current = logoPosition; }, [logoPosition]);
+  const uploadedDesignUrlRef = useRef(uploadedDesignUrl);
+  useEffect(() => { uploadedDesignUrlRef.current = uploadedDesignUrl; }, [uploadedDesignUrl]);
+
+  const drawCanvas = useCallback((imgSrc: string) => {
+    if (!previewCanvasRef.current) return;
     const canvas = previewCanvasRef.current;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const W = canvas.width, H = canvas.height;
     const bg = new Image();
-    bg.crossOrigin = "anonymous";
+    // لا نستخدم crossOrigin للخلفية — صور Cloudinary قد لا ترسل CORS headers
+    // وهذا يسبب ظهور canvas فارغ عند تغيير اللون
     bg.onload = () => {
-      // حدّث aspect ratio لمزامنة الحاوية مع الـ canvas (لا letterboxing → إحداثيات السحب = إحداثيات الرسم)
       if (bg.width > 0 && bg.height > 0) {
         const ar = bg.width / bg.height;
         if (Math.abs(ar - previewImgAspect) > 0.01) setPreviewImgAspect(ar);
@@ -914,29 +920,47 @@ export default function ProductDetail() {
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = "#fff";
       ctx.fillRect(0, 0, W, H);
-      // ارسم صورة المنتج لتملأ الـ canvas بالكامل (الحاوية بنفس النسبة)
       ctx.drawImage(bg, 0, 0, W, H);
-      // ارسم الشعار بنسب مئوية من كامل الـ canvas
+      // ارسم الشعار فوق الخلفية
+      const currentLogo = uploadedDesignUrlRef.current;
+      const currentPos = logoPositionRef.current;
+      if (!currentLogo || !currentPos) return;
       const logo = new Image();
+      logo.crossOrigin = "anonymous";
       logo.onload = () => {
-        const lx = W * logoPosition.x / 100;
-        const ly = H * logoPosition.y / 100;
-        const lw = W * logoPosition.width / 100;
-        const lh = H * logoPosition.height / 100;
+        const lx = W * currentPos.x / 100;
+        const ly = H * currentPos.y / 100;
+        const lw = W * currentPos.width / 100;
+        const lh = H * currentPos.height / 100;
+        ctx.save();
+        ctx.direction = "rtl";
         ctx.drawImage(logo, lx, ly, lw, lh);
+        ctx.restore();
       };
-      logo.src = uploadedDesignUrl;
+      logo.src = currentLogo;
     };
     bg.onerror = () => {
-      ctx.fillStyle = "#f3f4f6";
-      ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = "#9ca3af";
-      ctx.font = "12px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("لا يمكن تحميل صورة المنتج", W / 2, H / 2);
+      // عند فشل التحميل أعد رسم الـ canvas مع رسالة خطأ بسيطة
+      if (!previewCanvasRef.current) return;
+      const c2 = previewCanvasRef.current.getContext("2d");
+      if (!c2) return;
+      c2.fillStyle = "#f3f4f6";
+      c2.fillRect(0, 0, W, H);
+      c2.fillStyle = "#9ca3af";
+      c2.font = "12px Cairo, sans-serif";
+      c2.textAlign = "center";
+      c2.direction = "rtl";
+      c2.fillText("لا يمكن تحميل صورة المنتج", W / 2, H / 2);
     };
-    bg.src = stableMainImageUrl || effectiveMainImageUrl;
-  }, [uploadedDesignUrl, logoPosition, stableMainImageUrl, effectiveMainImageUrl]);
+    bg.src = imgSrc;
+  }, [previewImgAspect]);
+
+  useEffect(() => {
+    if (!uploadedDesignUrl || !logoPosition || !product?.imageUrl) return;
+    const src = stableMainImageUrl || effectiveMainImageUrl;
+    if (!src) return;
+    drawCanvas(src);
+  }, [uploadedDesignUrl, logoPosition, stableMainImageUrl, effectiveMainImageUrl, drawCanvas]);
 
   // ── Phase 5: handlers للسحب ──────────────────────────────────────────
   const handlePreviewPointerDown = (e: React.PointerEvent) => {
@@ -1826,6 +1850,11 @@ export default function ProductDetail() {
                                 {Number(v.discount || 0) > 0 && (
                                   <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] font-bold px-1 rounded">-{v.discount}%</span>
                                 )}
+                                {(v as any).badge && (
+                                  <span className="absolute bottom-0 inset-x-0 text-center bg-[#2196F3]/90 text-white text-[8px] font-bold py-0.5 leading-tight">
+                                    {(v as any).badge === 'recommended' ? '⭐ موصى به' : (v as any).badge === 'best_seller' ? '🔥 الأكثر' : (v as any).badge === 'new' ? '✨ جديد' : '💥 عرض'}
+                                  </span>
+                                )}
                               </button>
                             );
                           })}
@@ -1877,6 +1906,12 @@ export default function ProductDetail() {
                                     {savings > 0 ? `وفّر ${savings}%` : `-${discPct}%`}
                                   </span>
                                 )}
+                                {/* بادج موصى به */}
+                                {(v as any).badge && (
+                                  <span className="absolute top-2 right-2 bg-[#2196F3] text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full leading-tight">
+                                    {(v as any).badge === 'recommended' ? '⭐ موصى به' : (v as any).badge === 'best_seller' ? '🔥 الأكثر' : (v as any).badge === 'new' ? '✨ جديد' : '💥 عرض'}
+                                  </span>
+                                )}
                                 <span className={`font-extrabold text-sm leading-tight ${isSelected ? 'text-primary' : 'text-foreground'}`}>
                                   🎁 {v.label}
                                 </span>
@@ -1920,6 +1955,11 @@ export default function ProductDetail() {
                                 data-testid={`button-smart-variant-${type}-${v.id}`}>
                                 {Number(v.discount || 0) > 0 && (
                                   <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] font-bold px-1 rounded">-{v.discount}%</span>
+                                )}
+                                {(v as any).badge && (
+                                  <span className="absolute bottom-0 inset-x-0 text-center bg-[#2196F3]/90 text-white text-[8px] font-bold py-0.5 rounded-b leading-tight">
+                                    {(v as any).badge === 'recommended' ? '⭐ موصى به' : (v as any).badge === 'best_seller' ? '🔥 الأكثر' : (v as any).badge === 'new' ? '✨' : '💥'}
+                                  </span>
                                 )}
                                 <span className="text-sm">{v.label}</span>
                                 {priceNum > 0 && (

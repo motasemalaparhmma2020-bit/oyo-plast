@@ -740,6 +740,7 @@ export const displaySettings = pgTable("display_settings", {
   showSupportRobot: boolean("show_support_robot").default(true),                  // إظهار روبوت الدعم
   supportRobotPages: text("support_robot_pages").default("all"),                  // all أو قائمة مسارات
   showCustomerChat: boolean("show_customer_chat").default(true),                  // إظهار قسم "تواصل مع المبيعات"
+  showFinancialSection: boolean("show_financial_section").default(true),           // إظهار بطاقات "حسابي المالي" (محفظة/نقاط/ائتمان/مفضلة)
   // ── منتقي الألوان في صفحة المنتج (PDP) ─────────────────────────────────────
   pdpColorThumbnailW: integer("pdp_color_thumbnail_w").default(72).notNull(),   // عرض الصورة المصغرة للون (بكسل)
   pdpColorThumbnailH: integer("pdp_color_thumbnail_h").default(72).notNull(),   // ارتفاع الصورة المصغرة للون (بكسل)

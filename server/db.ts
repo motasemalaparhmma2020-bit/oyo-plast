@@ -61,6 +61,25 @@ export const db = drizzle(pool, { schema });
     console.warn("[migrate] show_customer_chat column:", (e as Error).message);
   }
 
+  // ── Auto-migrate: show_financial_section toggle (June 2026) ──
+  try {
+    await pool.query(`
+      ALTER TABLE display_settings
+        ADD COLUMN IF NOT EXISTS show_financial_section boolean DEFAULT true
+    `);
+  } catch (e) {
+    console.warn("[migrate] show_financial_section column:", (e as Error).message);
+  }
+
+  // ── تفعيل برنامج الإحالة تلقائياً إن كان معطّلاً (June 2026) ──
+  try {
+    await pool.query(`
+      UPDATE display_settings SET referral_enabled = true WHERE referral_enabled = false OR referral_enabled IS NULL
+    `);
+  } catch (e) {
+    console.warn("[migrate] enable referral:", (e as Error).message);
+  }
+
   // ── Auto-migrate: account deletion requests table (June 2026) ──
   try {
     await pool.query(`

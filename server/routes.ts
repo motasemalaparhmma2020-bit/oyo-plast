@@ -2584,6 +2584,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         await recalcSoldCountForOrder(order.id, "dec");
       }
 
+      // إشعار داخلي "قيّم منتجاتك" عند تأكيد التسليم من المورد
+      if (status === "delivered" && order.user_id) {
+        try {
+          const { notifyOrderDelivered } = await import("./lib/notifications");
+          await notifyOrderDelivered(String(order.user_id), order.id);
+        } catch { /* non-fatal */ }
+      }
+
       // إشعار العميل تلقائياً عند الشحن والتسليم
       const customerNotifyMap: Record<string, string> = {
         shipped:   "shipped",

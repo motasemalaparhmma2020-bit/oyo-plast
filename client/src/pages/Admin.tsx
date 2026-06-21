@@ -191,6 +191,7 @@ interface SmartVariant {
   costPriceY?: string; // سعر التكلفة (ريال يمني) — تكلفة الشراء من المورد
   costPriceSar?: string; // سعر التكلفة (ريال سعودي) — اختياري
   minOrderQty?: number; // أقل كمية شراء من المورد
+  badge?: string; // بادج توصية: "recommended" | "best_seller" | ""
 }
 const SMART_VARIANT_TYPE_LABELS: Record<SmartVariantType, string> = {
   color: "لون",
@@ -4022,6 +4023,26 @@ function DisplaySettingsSection({ adminToken }: { adminToken: string | null }) {
                     </div>
                   </div>
 
+                  {/* حسابي المالي */}
+                  <div className="rounded-xl border bg-white dark:bg-background p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center">
+                          <span className="text-white text-lg">💳</span>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm">حسابي المالي</p>
+                          <p className="text-xs text-muted-foreground">بطاقات المحفظة / النقاط / الائتمان / المفضلة في حسابي</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={settings?.showFinancialSection !== false}
+                        onCheckedChange={v => handleUpdate('showFinancialSection', v)}
+                        data-testid="switch-show-financial-section"
+                      />
+                    </div>
+                  </div>
+
                   {/* واتساب */}
                   <div className="rounded-xl border bg-white dark:bg-background p-4 space-y-3">
                     <div className="flex items-center justify-between">
@@ -7717,6 +7738,26 @@ export default function Admin() {
                                               data-testid={`input-variant-min-qty-${idx}`}
                                             />
                                           </div>
+                                        </div>
+                                        {/* بادج الخيار */}
+                                        <div className="flex items-center gap-2">
+                                          <Label className="text-[10px] text-gray-500 dark:text-gray-400 w-10 flex-shrink-0">بادج</Label>
+                                          <select
+                                            value={v.badge || ""}
+                                            onChange={(e) => {
+                                              const updated = [...smartVariantsList];
+                                              updated[idx] = { ...updated[idx], badge: e.target.value };
+                                              setSmartVariantsList(updated);
+                                            }}
+                                            className="h-8 text-sm flex-1 border border-input rounded-md px-2 bg-background dark:bg-background"
+                                            data-testid={`select-variant-badge-${idx}`}
+                                          >
+                                            <option value="">بدون بادج</option>
+                                            <option value="recommended">⭐ موصى به</option>
+                                            <option value="best_seller">🔥 الأكثر مبيعاً</option>
+                                            <option value="new">✨ جديد</option>
+                                            <option value="sale">💥 عرض خاص</option>
+                                          </select>
                                         </div>
                                         {(() => {
                                           const sell = parseFloat(v.price || "0");
