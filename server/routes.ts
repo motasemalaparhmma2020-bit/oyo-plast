@@ -8150,9 +8150,10 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       const cfg = (await rPool.query(
         `SELECT referral_enabled, referral_friend_discount_percent, referral_reward_yer FROM display_settings LIMIT 1`,
       )).rows[0] || {};
+      const { effectiveReferralRewardYer } = await import("./lib/rewards");
       const referralEnabled = cfg.referral_enabled === true;
       const friendDiscountPercent = Number(cfg.referral_friend_discount_percent) || 15;
-      const rewardYer = Number(cfg.referral_reward_yer) || 0;
+      const rewardYer = effectiveReferralRewardYer(cfg.referral_reward_yer);
 
       // كود العميل (يُولَّد كسولاً مع ضمان التفرّد عبر المستخدمين/الكوبونات/المسوقين)
       let code: string | null =

@@ -80,6 +80,17 @@ export const db = drizzle(pool, { schema });
     console.warn("[migrate] enable referral:", (e as Error).message);
   }
 
+  // ── ضمان مكافأة إحالة غير صفرية للمتاجر القديمة (تبقى الإحالة فعّالة فعلياً) ──
+  // متاجر تركت referral_reward_yer = 0/NULL لن تدفع شيئاً للمُحيل؛ نضبطها على الافتراضي.
+  try {
+    await pool.query(`
+      UPDATE display_settings SET referral_reward_yer = 1000
+      WHERE referral_reward_yer IS NULL OR referral_reward_yer <= 0
+    `);
+  } catch (e) {
+    console.warn("[migrate] referral reward default:", (e as Error).message);
+  }
+
   // ── Auto-migrate: الدخول اليومي + سجل أحداث الولاء (June 2026) ──
   try {
     // ملاحظة: users.id من نوع VARCHAR (مصادقة Replit/هاتف) — لذا user_id هنا VARCHAR لا INTEGER

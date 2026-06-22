@@ -11,6 +11,21 @@
 
 import { pool } from "../db";
 
+/**
+ * Default referrer payout (YER) used when display_settings.referral_reward_yer is
+ * missing or 0. Referral is "activated" via referral_enabled, so once enabled the
+ * payout must be a real non-zero amount — mirrors the friend-discount `|| 15`
+ * fallback. Single source of truth for both payout logic and the /api/referral/me
+ * display so the two never drift.
+ */
+export const DEFAULT_REFERRAL_REWARD_YER = 1000;
+
+/** Resolve the effective referrer payout from a raw display_settings value. */
+export function effectiveReferralRewardYer(raw: any): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_REFERRAL_REWARD_YER;
+}
+
 function normPhone(v: any): string {
   return String(v || "").replace(/\D/g, "");
 }
@@ -129,8 +144,10 @@ export async function grantReferralRewardForOrder(orderId: number): Promise<void
       `SELECT referral_enabled, referral_reward_yer FROM display_settings LIMIT 1`,
     )).rows[0] || {};
     const refEnabled = cfg.referral_enabled === true;
-    const rewardYer = Number(cfg.referral_reward_yer) || 0;
-    if (!refEnabled || rewardYer <= 0) return;
+    if (!refEnabled) return;
+    // Once referral is enabled the payout is guaranteed non-zero (falls back to
+    // the default when the store left referral_reward_yer at 0/NULL).
+    const rewardYer = effectiveReferralRewardYer(cfg.referral_reward_yer);
 
     const owner = await pool.query(
       `SELECT id, phone FROM users WHERE referral_code=$1`,
