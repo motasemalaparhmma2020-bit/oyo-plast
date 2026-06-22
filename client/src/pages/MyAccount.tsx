@@ -127,6 +127,9 @@ export default function MyAccount() {
   const displayName = (user as any)?.fullName || (user as any)?.firstName || "عميلنا الكريم";
   const userInitial = displayName.charAt(0);
   const creditAvailable = Number(credit?.available_credit ?? 0);
+  // نظام الائتمان الرئيسي (kill-switch) — يُخفى القسم المالي بالكامل عند إيقافه من الأدمن
+  const creditSystemEnabled = credit?.system_enabled !== false;
+  const showFinance = displaySettings?.showFinancialSection !== false && creditSystemEnabled;
   const showPartnership = (user as any)?.accountType !== "marketer" && !marketerAccount;
 
   const orderCounts = {
@@ -161,7 +164,7 @@ export default function MyAccount() {
     { icon: MessageCircle,label: "دعم واتساب",   href: "https://wa.me/967774997589?text=مرحباً،%20أحتاج%20للمساعدة", external: true, color: "text-green-600",  bg: "bg-green-100 dark:bg-green-950/40", testid: "tool-support" },
     { icon: HelpCircle,   label: "الإعدادات",    href: "/settings",          color: "text-slate-600",  bg: "bg-slate-100 dark:bg-slate-800",      testid: "tool-help" },
     { icon: LogOut,       label: "خروج",         onClick: () => { try { logout(); } catch {} },        color: "text-red-600",    bg: "bg-red-100 dark:bg-red-950/40",       testid: "tool-logout" },
-  ];
+  ].filter((t) => creditSystemEnabled || t.testid !== "tool-debts");
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 pb-24" dir="rtl">
@@ -195,7 +198,7 @@ export default function MyAccount() {
             <div className="flex-1 min-w-0">
               <h2 className="text-lg font-bold truncate" data-testid="text-user-name">{displayName}</h2>
               <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                {displaySettings?.showFinancialSection !== false && (
+                {showFinance && (
                   <Badge
                     className="text-[10px] font-bold border-0 px-1.5 py-0"
                     style={{ background: tierColor, color: "white" }}
@@ -218,7 +221,7 @@ export default function MyAccount() {
 
       <div className="container max-w-2xl mx-auto px-4 -mt-5 relative z-10 space-y-3">
         {/* ──────── 4 Finance Cards ──────── */}
-        {displaySettings?.showFinancialSection !== false && (
+        {showFinance && (
           <div className="grid grid-cols-4 gap-2">
             {financeCards.map(c => {
               const Icon = c.icon;

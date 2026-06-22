@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { useParams, useLocation, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ChevronRight, Heart, ShoppingCart, MoreVertical, Camera, Sparkles, X, Upload, Check, Loader2, Star, ArrowLeft, Image as ImageIcon, Type, Zap, Wand2 } from "lucide-react";
+import { ChevronRight, Heart, ShoppingCart, Share2, MessageCircle, Copy, Camera, Sparkles, X, Upload, Check, Loader2, Star, ArrowLeft, Image as ImageIcon, Type, Zap, Wand2 } from "lucide-react";
 import { useAddToCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -88,6 +88,15 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
     },
     [product]
   );
+  // ── الخيار الموصى به = أفضل قيمة (أقل سعر للقطعة) ──
+  const recommendedTierIdx = useMemo(() => {
+    if (quantityTiers.length === 0) return 0;
+    let best = 0;
+    for (let i = 1; i < quantityTiers.length; i++) {
+      if (Number(quantityTiers[i].unitPrice) < Number(quantityTiers[best].unitPrice)) best = i;
+    }
+    return best;
+  }, [quantityTiers]);
   const bagColors = useMemo<BagColor[]>(
     () => {
       const ac = parseJson<any[]>((product as any)?.availableColors, []);
@@ -132,6 +141,7 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
   const [designTab, setDesignTab] = useState<"upload" | "text">("upload");
   const [textFields, setTextFields] = useState({ shop: "", phone: "", addr: "", activity: "" });
   const [textMerged, setTextMerged] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   // رفع الشعار إلى Cloudinary (يستبدل dataURL ضخم بـ URL قصير وآمن)
   const uploadLogoToCloud = async (dataUrl: string): Promise<string | null> => {
@@ -168,8 +178,8 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
     if (printColorOptions.length > 0) setSelectedPrintColor(printColorOptions[0]);
   }, [printColorOptions]);
   useEffect(() => {
-    if (quantityTiers.length > 0) setSelectedTier(quantityTiers[0]);
-  }, [quantityTiers]);
+    if (quantityTiers.length > 0) setSelectedTier(quantityTiers[recommendedTierIdx] ?? quantityTiers[0]);
+  }, [quantityTiers, recommendedTierIdx]);
 
   // ── Images list ──
   const images: string[] = useMemo(() => {
@@ -263,6 +273,8 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
       setStudioCount(0);
       setTextMerged(false);
       setUploadModalOpen(false);
+      // إعادة الاختيار إلى الكمية الموصى بها بعد رفع التصميم
+      setSelectedTier(quantityTiers[recommendedTierIdx] ?? quantityTiers[0]);
       if (hasMixedBg) {
         toast({
           title: "⚠️ خلفية معقدة",
@@ -668,6 +680,67 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
     ...(studioImageUrl ? [{ key: "studio" as const, url: studioImageUrl, label: "استوديو" }] : []),
   ];
 
+  // ── مشاركة المنتج (رابط + صورة + شبكات اجتماعية) ──
+  const productShareUrl = () => (typeof window !== "undefined" ? window.location.href : "");
+  const productShareText = () => `${product.name}\n${productShareUrl()}`;
+  const copyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(productShareUrl());
+      toast({ title: "✅ تم نسخ رابط المنتج" });
+    } catch {
+      toast({ title: "تعذّر نسخ الرابط", variant: "destructive" });
+    }
+  };
+  const copyShareImage = async () => {
+    try {
+      const resp = await fetch(displayImage, { mode: "cors" });
+      const blob = await resp.blob();
+      if ((navigator as any).clipboard?.write && typeof ClipboardItem !== "undefined") {
+        await (navigator as any).clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+        toast({ title: "✅ تم نسخ صورة المنتج" });
+        return;
+      }
+      throw new Error("unsupported");
+    } catch {
+      copyShareLink();
+    }
+  };
+  const shareNative = async () => {
+    const url = productShareUrl();
+    const title = product.name;
+    try {
+      let files: File[] | undefined;
+      try {
+        const resp = await fetch(displayImage, { mode: "cors" });
+        const blob = await resp.blob();
+        const file = new File([blob], "oyo-product.jpg", { type: blob.type || "image/jpeg" });
+        if ((navigator as any).canShare?.({ files: [file] })) files = [file];
+      } catch {}
+      if (navigator.share) {
+        await navigator.share(files ? { title, text: productShareText(), files } : { title, text: title, url });
+        setShareOpen(false);
+        return;
+      }
+    } catch {
+      /* المستخدم ألغى المشاركة أو غير مدعومة */
+    }
+    copyShareLink();
+  };
+  const shareWhatsApp = () => {
+    window.open(`https://wa.me/?text=${encodeURIComponent(productShareText())}`, "_blank");
+    setShareOpen(false);
+  };
+  const shareFacebook = () => {
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(productShareUrl())}`, "_blank");
+    setShareOpen(false);
+  };
+  const shareInstagram = async () => {
+    await copyShareLink();
+    toast({ title: "📋 تم نسخ الرابط", description: "الصقه في انستغرام لمشاركته" });
+    window.open("https://www.instagram.com/", "_blank");
+    setShareOpen(false);
+  };
+
   // ── سجل الأقسام (registry): كل قسم محتوى مستقل يُرتَّب ويُظهر/يُخفى من الإعدادات ──
   const sectionNodes: Record<string, JSX.Element | null> = {
     // ② معرض الصورة + المعاينة الحية
@@ -935,20 +1008,31 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
       el.quantityStepper && quantityTiers.length > 0 ? (
         <div className="px-4 pt-3" data-testid="section-printing-calculator">
           <div className="text-sm font-semibold text-gray-700 mb-1.5">📦 اختر الكمية:</div>
-          <div className="flex gap-2">
-            {quantityTiers.map((t) => {
+          <div className="flex gap-2 mt-1.5">
+            {quantityTiers.map((t, i) => {
               const active = selectedTier.qty === t.qty;
+              const isRecommended = i === recommendedTierIdx;
               return (
                 <button
                   key={t.qty}
                   onClick={() => setSelectedTier(t)}
-                  className={`flex-1 border-2 rounded-xl p-2.5 text-center transition-all bg-white ${
+                  className={`relative flex-1 border-2 rounded-xl p-2.5 text-center transition-all bg-white ${
                     active
                       ? "border-cyan-500 bg-cyan-50 shadow-md"
+                      : isRecommended
+                      ? "border-cyan-300 hover:border-cyan-400"
                       : "border-gray-200 hover:border-gray-300"
                   }`}
                   data-testid={`button-tier-${t.qty}`}
                 >
+                  {isRecommended && (
+                    <span
+                      className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap bg-[#2196F3] text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow"
+                      data-testid={`badge-recommended-tier-${t.qty}`}
+                    >
+                      ⭐ موصى به
+                    </span>
+                  )}
                   <div className="font-extrabold text-base">{formatNum(t.qty)}</div>
                   <div className="text-[11px] text-gray-500 -mt-0.5">كيس</div>
                   <div className={`inline-block text-[10px] px-2 py-0.5 rounded-full mt-1 ${
@@ -1272,8 +1356,12 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
               )}
             </Link>
             {el.share && (
-              <button className="p-2 -ml-2 text-gray-700" data-testid="button-more">
-                <MoreVertical className="w-5 h-5" />
+              <button
+                onClick={() => setShareOpen(true)}
+                className="p-2 -ml-2 text-gray-700"
+                data-testid="button-share"
+              >
+                <Share2 className="w-5 h-5" />
               </button>
             )}
           </div>
@@ -1424,6 +1512,54 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
             <p className="text-[11px] text-center text-gray-500">
               اضغط على الصورة المفضلة لديك. النسخة المحسّنة تم إزالة الخلفية وتحسين التباين منها.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Share Bottom Sheet ── */}
+      {shareOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[200] flex items-end justify-center"
+          onClick={(e) => { if (e.target === e.currentTarget) setShareOpen(false); }}
+          data-testid="modal-share"
+        >
+          <div className="bg-white w-full max-w-[480px] rounded-t-2xl p-4 pb-7 space-y-4" dir="rtl">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base">مشاركة المنتج</h3>
+              <button onClick={() => setShareOpen(false)} data-testid="button-close-share">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="flex items-center gap-3">
+              <img src={displayImage} alt={product.name} className="w-12 h-12 rounded-lg object-contain border border-gray-200" />
+              <p className="text-sm font-semibold line-clamp-2 flex-1">{product.name}</p>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              <button onClick={shareWhatsApp} className="flex flex-col items-center gap-1.5" data-testid="button-share-whatsapp">
+                <span className="w-12 h-12 rounded-full bg-green-500 text-white flex items-center justify-center"><MessageCircle className="w-6 h-6" /></span>
+                <span className="text-[11px] text-gray-600">واتساب</span>
+              </button>
+              <button onClick={shareFacebook} className="flex flex-col items-center gap-1.5" data-testid="button-share-facebook">
+                <span className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center text-xl font-extrabold leading-none">f</span>
+                <span className="text-[11px] text-gray-600">فيسبوك</span>
+              </button>
+              <button onClick={shareInstagram} className="flex flex-col items-center gap-1.5" data-testid="button-share-instagram">
+                <span className="w-12 h-12 rounded-full text-white flex items-center justify-center bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600"><Camera className="w-6 h-6" /></span>
+                <span className="text-[11px] text-gray-600">انستغرام</span>
+              </button>
+              <button onClick={shareNative} className="flex flex-col items-center gap-1.5" data-testid="button-share-native">
+                <span className="w-12 h-12 rounded-full bg-gray-800 text-white flex items-center justify-center"><Share2 className="w-6 h-6" /></span>
+                <span className="text-[11px] text-gray-600">المزيد</span>
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button onClick={copyShareLink} className="flex items-center justify-center gap-2 border border-gray-200 rounded-xl py-2.5 text-sm font-semibold text-gray-700" data-testid="button-copy-link">
+                <Copy className="w-4 h-4" /> نسخ الرابط
+              </button>
+              <button onClick={copyShareImage} className="flex items-center justify-center gap-2 border border-gray-200 rounded-xl py-2.5 text-sm font-semibold text-gray-700" data-testid="button-copy-image">
+                <ImageIcon className="w-4 h-4" /> نسخ الصورة
+              </button>
+            </div>
           </div>
         </div>
       )}
