@@ -3136,6 +3136,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── أهلية التقييم: هل أتمّ العميل عملية شراء واحدة على الأقل؟ ──────────────
+  //   يطابق الطلب بالحساب (user_id) أو برقم الجوال (للطلبات التي تمت كضيف)،
+  //   مع تطبيع الرقم لآخر 9 أرقام (يتجاهل +967 / الصفر البادئ / المسافات).
+  const userHasPurchased = async (dbPool: any, userId: string): Promise<boolean> => {
+    try {
+      const ures = await dbPool.query(`SELECT phone FROM users WHERE id = $1`, [userId]);
+      const digits = String(ures.rows[0]?.phone || "").replace(/\D/g, "");
+      const phoneTail = digits.length >= 9 ? digits.slice(-9) : null;
+      const r = await dbPool.query(
+        `SELECT 1 FROM orders o
+         WHERE COALESCE(o.status, '') <> 'cancelled'
+           AND (
+             o.user_id = $1
+             OR ($2::text IS NOT NULL
+                 AND RIGHT(regexp_replace(COALESCE(o.customer_phone, ''), '[^0-9]', '', 'g'), 9) = $2)
+           )
+         LIMIT 1`,
+        [userId, phoneTail]
+      );
+      return r.rows.length > 0;
+    } catch (e: any) {
+      console.error("[userHasPurchased] فشل التحقق من الأهلية:", e?.message);
+      return false;
+    }
+  };
+
   // ─── Product Reviews ─────────────────────────────────────────────
   app.get("/api/products/:id/reviews", async (req, res) => {
     try {
@@ -3159,24 +3185,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!rating || rating < 1 || rating > 5) {
         return res.status(400).json({ message: "التقييم يجب أن يكون بين 1 و 5" });
       }
-      const userId = req.user?.id || req.session?.userId;
+      const userId = getUserId((req as any).user) || (req as any).session?.userId;
       if (!userId) return res.status(401).json({ message: "غير مصرح" });
 
       const { pool: dbPool } = await import("./db");
 
-      // ── يجب أن يكون لدى المستخدم طلب delivered يحتوي هذا المنتج (Task 5) ─────
-      const purchased = await dbPool.query(
-        `SELECT 1 FROM order_items oi
-         JOIN orders o ON o.id = oi.order_id
-         WHERE oi.product_id = $1
-           AND o.user_id = $2
-           AND (o.status IN ('delivered', 'completed') OR o.delivery_status = 'delivered')
-         LIMIT 1`,
-        [productId, userId]
-      );
-      if (purchased.rows.length === 0) {
+      // ── الأهلية: أي عميل اشترى مرة واحدة من المتجر (بالحساب أو برقم جواله) يحقّ له تقييم أي منتج ──
+      const eligible = await userHasPurchased(dbPool, userId);
+      if (!eligible) {
         return res.status(403).json({
-          message: "يمكنك تقييم المنتج فقط بعد استلام طلب يحتوي هذا المنتج",
+          message: "يمكنك التقييم بعد إتمام أول عملية شراء من المتجر",
           notPurchased: true,
         });
       }
@@ -3199,21 +3217,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── هل قيّم المستخدم هذا المنتج مسبقاً؟ + هل يحقّ له التقييم؟ ─────────────
   app.get("/api/products/:id/my-review", async (req: any, res) => {
     try {
-      const userId = req.user?.id || req.session?.userId;
+      const userId = getUserId((req as any).user) || (req as any).session?.userId;
       if (!userId) return res.json({ reviewed: false, canReview: false });
       const { pool: dbPool } = await import("./db");
       const productId = parseInt(req.params.id);
       if (Number.isNaN(productId)) return res.json({ reviewed: false, canReview: false });
 
-      // أهلية التقييم: يكفي أن يكون لدى المستخدم أي طلب مُستَلَم (ليس بالضرورة هذا المنتج)
-      const purchased = await dbPool.query(
-        `SELECT 1 FROM orders
-         WHERE user_id = $1
-           AND (status IN ('delivered', 'completed') OR delivery_status = 'delivered')
-         LIMIT 1`,
-        [userId]
-      );
-      const canReview = purchased.rows.length > 0;
+      // أهلية التقييم: أي عميل اشترى مرة واحدة (بالحساب أو برقم جواله للطلبات كضيف) — أي منتج
+      const canReview = await userHasPurchased(dbPool, userId);
 
       const r = await dbPool.query(
         `SELECT id, rating, comment, is_approved FROM reviews WHERE product_id=$1 AND user_id=$2 LIMIT 1`,
@@ -3229,8 +3240,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/upload/review", upload.single("image"), async (req: any, res) => {
     // يتطلب مستخدم مسجل (Task 5 security fix)
-    if (!req.isAuthenticated?.() || !(req.user?.id || req.session?.userId)) {
+    const uploadUserId = getUserId((req as any).user) || (req as any).session?.userId;
+    if (!req.isAuthenticated?.() || !uploadUserId) {
       return res.status(401).json({ message: "يجب تسجيل الدخول" });
+    }
+    // نفس شرط أهلية التقييم: لا رفع صور مراجعة إلا لمن أتمّ عملية شراء (منع استخدام الرفع كمستودع)
+    {
+      const { pool: dbPool } = await import("./db");
+      if (!(await userHasPurchased(dbPool, uploadUserId))) {
+        return res.status(403).json({ message: "رفع صور المراجعة متاح للمشترين فقط" });
+      }
     }
     if (!req.file) return res.status(400).json({ message: "لا يوجد ملف" });
     if (!req.file.mimetype?.startsWith("image/")) {

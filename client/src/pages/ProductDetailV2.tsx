@@ -549,6 +549,41 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
     ? reviews.reduce((s: number, r: any) => s + (Number(r.rating) || 0), 0) / reviews.length
     : Number((product as any)?.rating) || 0;
 
+  // ── أهلية التقييم + هل قيّم المستخدم هذا المنتج مسبقاً؟ (مصدر الحقيقة: الخادم) ──
+  const { data: myReviewData } = useQuery<{ reviewed: boolean; canReview?: boolean; rating?: number; comment?: string; isApproved?: boolean }>({
+    queryKey: ["/api/products", id, "my-review"],
+    queryFn: async () => {
+      const res = await fetch(`/api/products/${id}/my-review`, { credentials: "include" });
+      if (!res.ok) return { reviewed: false, canReview: false };
+      return res.json();
+    },
+    enabled: isAuthenticated && !!id,
+    staleTime: 2 * 60_000,
+  });
+  const alreadyReviewed = myReviewData?.reviewed === true;
+  const canReviewProduct = isAuthenticated && myReviewData?.canReview === true;
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const submitReviewMutation = useMutation({
+    mutationFn: async ({ rating, comment }: { rating: number; comment: string }) =>
+      apiRequest("POST", `/api/products/${id}/reviews`, { rating, comment }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products", Number(id), "reviews"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/products", id, "my-review"] });
+      setReviewComment("");
+      setReviewRating(5);
+      toast({ title: "✅ تم إرسال تقييمك — سيظهر بعد المراجعة" });
+    },
+    onError: (err: any) => {
+      if (err?.status === 409) {
+        toast({ title: "لقد قيّمت هذا المنتج مسبقاً", variant: "destructive" });
+        queryClient.invalidateQueries({ queryKey: ["/api/products", id, "my-review"] });
+      } else {
+        toast({ title: "خطأ في إضافة التقييم", variant: "destructive" });
+      }
+    },
+  });
+
   // ── Related Products (same category, exclude current) ──
   const productCategoryId = (product as any)?.categoryId;
   const { data: relatedRaw = [] } = useQuery<any[]>({
@@ -1079,6 +1114,71 @@ export default function ProductDetailV2({ config }: { config?: PdpConfig } = {})
             <span className="text-xs text-gray-500">({reviews.length})</span>
           </div>
         </div>
+
+        {/* ── نموذج إضافة تقييم — متاح لأي عميل أتمّ عملية شراء واحدة ── */}
+        {!isAuthenticated ? (
+          <div className="border border-gray-200 rounded-xl p-4 text-center space-y-2 bg-gray-50 mb-3" data-testid="review-login-prompt">
+            <Star className="w-7 h-7 mx-auto fill-amber-200 text-amber-400" />
+            <p className="font-semibold text-sm">هل اشتريت هذا المنتج؟</p>
+            <p className="text-xs text-gray-500">سجّل دخولك لتترك تقييمك</p>
+            <button onClick={() => setLocation("/auth")} className="mt-1 px-4 py-1.5 rounded-lg border border-cyan-300 text-cyan-700 text-xs font-bold" data-testid="button-login-to-review">
+              تسجيل الدخول
+            </button>
+          </div>
+        ) : canReviewProduct && alreadyReviewed ? (
+          <div className="border border-blue-200 rounded-xl p-4 text-center space-y-1.5 bg-blue-50/50 mb-3" data-testid="review-already">
+            <Check className="w-7 h-7 mx-auto text-blue-500" />
+            <p className="font-semibold text-sm">شكراً على تقييمك!</p>
+            {myReviewData?.isApproved === false && (
+              <p className="text-xs text-gray-500">تقييمك بانتظار موافقة الفريق</p>
+            )}
+            <div className="flex justify-center gap-0.5">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <Star key={s} className={`w-4 h-4 ${s <= (myReviewData?.rating ?? 5) ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
+              ))}
+            </div>
+            {myReviewData?.comment && <p className="text-xs text-gray-500 italic">{myReviewData.comment}</p>}
+          </div>
+        ) : canReviewProduct ? (
+          <div className="border border-green-200 rounded-xl p-4 space-y-3 bg-green-50/40 mb-3" data-testid="review-form">
+            <p className="font-semibold text-sm flex items-center gap-2">
+              <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
+              أضف تقييمك <span className="text-xs text-green-600 font-normal">✅ عميل مشترٍ</span>
+            </p>
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button key={star} onClick={() => setReviewRating(star)} className="p-0.5" data-testid={`button-rating-${star}`}>
+                  <Star className={`w-7 h-7 transition-colors ${star <= reviewRating ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={reviewComment}
+              onChange={(e) => setReviewComment(e.target.value)}
+              placeholder="شاركنا رأيك في هذا المنتج..."
+              rows={2}
+              className="w-full resize-none text-sm rounded-lg border border-gray-200 p-2 focus:outline-none focus:border-cyan-400"
+              data-testid="input-review-comment"
+            />
+            <button
+              onClick={() => submitReviewMutation.mutate({ rating: reviewRating, comment: reviewComment })}
+              disabled={submitReviewMutation.isPending}
+              className="w-full bg-cyan-600 text-white text-sm font-bold py-2 rounded-lg flex items-center justify-center gap-1.5 disabled:opacity-60"
+              data-testid="button-submit-review"
+            >
+              {submitReviewMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              إرسال التقييم
+            </button>
+            <p className="text-[10px] text-gray-500 text-center">سيظهر تقييمك بعد مراجعة الفريق</p>
+          </div>
+        ) : (
+          <div className="border border-gray-200 rounded-xl p-4 text-center space-y-1.5 bg-gray-50 mb-3" data-testid="review-not-eligible">
+            <ShoppingCart className="w-7 h-7 mx-auto text-gray-300" />
+            <p className="font-semibold text-sm">التقييم متاح للمشترين فقط</p>
+            <p className="text-xs text-gray-500">يمكنك التقييم بعد أول عملية شراء من المتجر</p>
+          </div>
+        )}
+
         {reviews.length === 0 ? (
           <p className="text-xs text-gray-500 text-center py-3" data-testid="text-no-reviews">
             لا توجد مراجعات بعد. كن أول من يقيّم هذا المنتج ✨

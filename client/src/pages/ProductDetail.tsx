@@ -193,7 +193,7 @@ export default function ProductDetail() {
     staleTime: 2 * 60000,
   });
   const alreadyReviewed = myReviewData?.reviewed === true;
-  const hasDeliveredOrder = isAuthenticated && myReviewData?.canReview === true;
+  const canReviewProduct = isAuthenticated && myReviewData?.canReview === true;
 
   // ── PDP Layout ─────────────────────────────────────────────────────────
   const pdp: PdpLayout = useMemo(() => {
@@ -3478,7 +3478,7 @@ export default function ProductDetail() {
                       تسجيل الدخول
                     </Button>
                   </div>
-                ) : hasDeliveredOrder && alreadyReviewed ? (
+                ) : canReviewProduct && alreadyReviewed ? (
                   <div className="border rounded-xl p-4 text-center space-y-2 bg-blue-50/40 dark:bg-blue-950/20 border-blue-200">
                     <CheckCircle2 className="h-8 w-8 mx-auto text-blue-500" />
                     <p className="font-semibold text-sm">شكراً على تقييمك!</p>
@@ -3492,7 +3492,7 @@ export default function ProductDetail() {
                     </div>
                     {myReviewData?.comment && <p className="text-xs text-muted-foreground italic">{myReviewData.comment}</p>}
                   </div>
-                ) : hasDeliveredOrder ? (
+                ) : canReviewProduct ? (
                   <div className="border rounded-xl p-4 space-y-3 bg-green-50/30 dark:bg-green-950/20 border-green-200">
                     <p className="font-semibold text-sm flex items-center gap-2">
                       <Star className="h-4 w-4 text-yellow-500 fill-yellow-400" />
@@ -3541,7 +3541,7 @@ export default function ProductDetail() {
                   <div className="border rounded-xl p-4 text-center space-y-2 bg-gray-50 dark:bg-gray-800/50">
                     <Package className="h-8 w-8 mx-auto text-gray-300" />
                     <p className="font-semibold text-sm">التقييم متاح للمشترين فقط</p>
-                    <p className="text-xs text-muted-foreground">يمكنك تقييم المنتج بعد استلام طلبك</p>
+                    <p className="text-xs text-muted-foreground">يمكنك التقييم بعد أول عملية شراء من المتجر</p>
                   </div>
                 )}
                 {/* Reviews List */}

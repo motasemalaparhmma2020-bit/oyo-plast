@@ -15,5 +15,5 @@
 - [Offline order idempotency](offline-order-idempotency.md) — offline checkout needs ONE shared localId on both online+offline paths + partial unique index; sync must ignore client userId (IDOR) and stay COD-only.
 - [New PDP config constraints](pdp-config-constraints.md) — decision endpoint must never leak scope.productIds; gallery+stickyCart stay always-visible (else unsellable); kill-switch needs staleTime:0.
 - [Client IP for rate limiting](rate-limit-client-ip.md) — trust proxy=1 is set; use req.ip not raw x-forwarded-for (spoofable); charge multi-output AI endpoints cost N.
-- [Product review eligibility](review-eligibility.md) — reviews need a logged-in buyer with a delivered/completed order; compute canReview server-side (`/my-review`), never from `/api/orders` (no items); guests (user_id NULL) can't review.
+- [Product review eligibility](review-eligibility.md) — store-wide: ANY non-cancelled purchase (matched by user_id OR phone-tail, since orders are guest checkouts) lets a user review ANY product; admin-moderated; canReview server-side via shared `userHasPurchased`.
 - [Authenticated user id resolution](auth-user-id-resolution.md) — never `req.user.id` (always undefined); use `getUserId(req.user)||req.session.userId`; id is VARCHAR UUID so user-keyed tables need VARCHAR user_id.
