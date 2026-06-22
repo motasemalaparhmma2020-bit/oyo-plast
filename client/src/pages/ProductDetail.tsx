@@ -13,7 +13,8 @@ import { useAddToCart } from "@/hooks/use-cart";
 import {
   ShoppingCart, Loader2, Minus, Plus, ArrowRight, Upload, Check, Star,
   Camera, X, Zap, Package, ChevronLeft, ChevronRight, Printer, Truck,
-  RefreshCcw, Heart, CreditCard, Award, Lock, CheckCircle2, Search, ChevronDown, ChevronUp
+  RefreshCcw, Heart, CreditCard, Award, Lock, CheckCircle2, Search, ChevronDown, ChevronUp,
+  Share2
 } from "lucide-react";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -3686,6 +3687,22 @@ export default function ProductDetail() {
             className="p-2 rounded-full bg-black/25 hover:bg-black/40 backdrop-blur-sm transition-colors shrink-0"
             data-testid="button-wishlist-top">
             <Heart className={`h-5 w-5 ${inWishlist ? 'text-red-400 fill-red-400' : 'text-white'}`} />
+          </button>
+          <button
+            onClick={() => {
+              const url = window.location.href;
+              const title = product?.name || document.title;
+              if (navigator.share) {
+                navigator.share({ title, url }).catch(() => {});
+              } else {
+                navigator.clipboard?.writeText(url).then(() => {
+                  toast({ title: "✅ تم نسخ رابط المنتج" });
+                });
+              }
+            }}
+            className="p-2 rounded-full bg-black/25 hover:bg-black/40 backdrop-blur-sm transition-colors shrink-0"
+            data-testid="button-share-top">
+            <Share2 className="h-5 w-5 text-white" />
           </button>
         </div>
       </div>

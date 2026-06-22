@@ -3189,16 +3189,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const productId = parseInt(req.params.id);
       if (Number.isNaN(productId)) return res.json({ reviewed: false, canReview: false });
 
-      // أهلية التقييم: يجب أن يكون لدى المستخدم طلب مُستَلَم يحتوي هذا المنتج
-      // (نفس منطق POST — حتى لا تختلف الواجهة عن الخادم)
+      // أهلية التقييم: يكفي أن يكون لدى المستخدم أي طلب مُستَلَم (ليس بالضرورة هذا المنتج)
       const purchased = await dbPool.query(
-        `SELECT 1 FROM order_items oi
-         JOIN orders o ON o.id = oi.order_id
-         WHERE oi.product_id = $1
-           AND o.user_id = $2
-           AND (o.status IN ('delivered', 'completed') OR o.delivery_status = 'delivered')
+        `SELECT 1 FROM orders
+         WHERE user_id = $1
+           AND (status IN ('delivered', 'completed') OR delivery_status = 'delivered')
          LIMIT 1`,
-        [productId, userId]
+        [userId]
       );
       const canReview = purchased.rows.length > 0;
 
@@ -3295,9 +3292,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // جلب منتجات الطلب القابلة للتقييم — يستثني المنتجات المُقيَّمة
   app.get("/api/orders/:id/rateable", async (req: any, res) => {
     try {
-      if (!req.isAuthenticated?.()) return res.status(401).json({ message: "يجب تسجيل الدخول" });
       const userId = req.user?.id || req.session?.userId;
-      if (!userId) return res.status(401).json({ message: "غير مصرح" });
+      if (!userId) return res.status(401).json({ message: "يجب تسجيل الدخول" });
       const orderId = parseInt(req.params.id);
       if (Number.isNaN(orderId)) return res.status(400).json({ message: "معرف غير صحيح" });
 
@@ -3357,9 +3353,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // تقديم تقييمات متعددة دفعة واحدة للطلب
   app.post("/api/orders/:id/rate", async (req: any, res) => {
     try {
-      if (!req.isAuthenticated?.()) return res.status(401).json({ message: "يجب تسجيل الدخول" });
       const userId = req.user?.id || req.session?.userId;
-      if (!userId) return res.status(401).json({ message: "غير مصرح" });
+      if (!userId) return res.status(401).json({ message: "يجب تسجيل الدخول" });
       const orderId = parseInt(req.params.id);
       if (Number.isNaN(orderId)) return res.status(400).json({ message: "معرف غير صحيح" });
 
@@ -4427,6 +4422,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       boolFields.push('pdpColorCollapsible', 'pdpSizeShowPrice', 'pdpSizeCollapsible');
       // ── حملات تسويقية: مفاتيح تشغيل ──
       boolFields.push('freeShippingFirstOrder', 'referralEnabled');
+      boolFields.push('showFinancialSection', 'showCustomerChat');
 
       const body = req.body as Record<string, unknown>;
       const patch: Record<string, any> = {

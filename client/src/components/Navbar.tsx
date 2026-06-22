@@ -24,7 +24,6 @@ import {
   Truck,
   Camera,
   Loader2,
-  Share2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -634,19 +633,6 @@ export function Navbar() {
     window.dispatchEvent(new Event('currencyChange'));
   };
 
-  const isProductPage = /^\/product\/\d+/.test(location);
-  const handleShare = () => {
-    const url = window.location.href;
-    const title = document.title;
-    if (navigator.share) {
-      navigator.share({ title, url }).catch(() => {});
-    } else {
-      navigator.clipboard?.writeText(url).then(() => {
-        toast({ title: "✅ تم نسخ رابط المنتج" });
-      });
-    }
-  };
-
   const cartCount = cart?.reduce((acc: number, item: any) => acc + (item.quantity || 0), 0) || 0;
 
   const { data: unreadCount } = useQuery<{ count: number }>({
@@ -723,18 +709,6 @@ export function Navbar() {
           >
             {currency === 'YER' ? 'SAR' : 'YER'}
           </Button>
-
-          {/* زر المشاركة — يظهر فقط في صفحة المنتج */}
-          {isProductPage && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleShare}
-              data-testid="button-share-product"
-            >
-              <Share2 className={`h-5 w-5 transition-colors ${transparent ? "text-white drop-shadow" : "text-[#2196F3]"}`} />
-            </Button>
-          )}
 
           {/* الإشعارات (مع جرس + صوت) */}
           {isAuthenticated && <NotificationBell />}
