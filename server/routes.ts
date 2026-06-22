@@ -295,7 +295,7 @@ export async function computeServerUnitPrice(
   const r = await _pool.query(
     `SELECT p.price, p.smart_variants, p.printing_price_per_unit,
             p.printing_design_fee_override, p.printing_color_price_override, p.printing_side_price_override,
-            p.printing_category_id,
+            p.printing_category_id, p.enable_studio_preview, p.studio_preview_price,
             pc.design_fee_per_mockup, pc.color_price_per_color, pc.price_per_side
        FROM products p
        LEFT JOIN printing_categories pc ON pc.id = p.printing_category_id
@@ -442,15 +442,30 @@ export async function computeServerUnitPrice(
   if (proPrintingPerUnit < 0) proPrintingPerUnit = 0;
   if (proPrintingPerUnit > 100000) proPrintingPerUnit = 0; // sanity cap
 
-  // (5) معاينة فورية (preview fee) — رسم إضافي من smart variants
+  // (5) رسوم معاينة الاستوديو (preview fee) — server-side فقط (مانع التلاعب)
+  // الأولوية: smart preview variant → product.studio_preview_price → settings.preview_fee_price
   let previewFee = 0;
   try {
     const sv = typeof row.smart_variants === "string" ? JSON.parse(row.smart_variants) : row.smart_variants;
     const previewId = item.selectedPreview;
+    // (أ) متغيّر ذكي من نوع preview مُختار صراحةً
     if (sv && Array.isArray(sv.variants) && previewId) {
       const v = sv.variants.find((x: any) => x.id === previewId && x.type === 'preview');
       if (v) {
         previewFee = parseFloat(String(v.price ?? "0")) || 0;
+      }
+    }
+    // (ب) المسار على مستوى المنتج: العميل طلب معاينة الاستوديو والمنتج مفعّل لها
+    if (previewFee === 0 && item.useStudioPreview === true && row.enable_studio_preview === true) {
+      const productFee = parseFloat(String(row.studio_preview_price ?? "0")) || 0;
+      if (productFee > 0) {
+        previewFee = productFee;
+      } else {
+        // الرجوع للرسم الافتراضي من إعدادات الاستوديو
+        try {
+          const sRes = await _pool.query(`SELECT preview_fee_price FROM studio_preview_settings WHERE id = 1`);
+          previewFee = parseFloat(String(sRes.rows[0]?.preview_fee_price ?? "0")) || 0;
+        } catch { /* ignore */ }
       }
     }
   } catch { /* ignore */ }
@@ -2890,7 +2905,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     printing_design_fee_override, printing_color_price_override, printing_side_price_override,
     print_area, base_image_public_id, available_colors,
     print_color_options, quantity_tiers, preview_width, preview_height,
-    show_live_preview, enable_volume_offers, enable_quantity_tiers, enable_studio_preview`;
+    show_live_preview, enable_volume_offers, enable_quantity_tiers, enable_studio_preview, studio_preview_price`;
 
   // عند أوّل تحميل، نُسخّن الكاش حتّى mapProductRow يستخدم السعر الصحيح
   getExchangeRate().catch(() => {});
@@ -2990,6 +3005,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       enableVolumeOffers: r.enable_volume_offers ?? false,
       enableQuantityTiers: r.enable_quantity_tiers ?? false,
       enableStudioPreview: r.enable_studio_preview ?? false,
+      studioPreviewPrice: Number(r.studio_preview_price ?? 0),
       // 💰 COGS — يُكشف فقط لمسارات الأدمن (opts.includeCogs=true). البيانات سرّية ولا تُرسل في الـ API العام.
       ...(opts?.includeCogs ? (() => {
         if (!r.smart_variants) return { costPriceY: null, costPriceSar: null, profitMarginY: null, profitPercent: null };
@@ -3582,6 +3598,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         enableVolumeOffers: data.enableVolumeOffers ?? false,
         enableQuantityTiers: data.enableQuantityTiers ?? false,
         enableStudioPreview: data.enableStudioPreview ?? false,
+        studioPreviewPrice: data.studioPreviewPrice != null && data.studioPreviewPrice !== "" ? String(data.studioPreviewPrice) : "0",
         enableVariantUI: data.enableVariantUI ?? false,
         colorImages: data.colorImages || null,
         // ── Phase 7: تخصيصات الأدمن ─────────────────────────────────────
@@ -3655,9 +3672,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "hasFreeShipping", "productType", "enableSmartVariants", "smartVariants",
         // Feature toggles (May 19, 2026)
         "showLivePreview", "enableVolumeOffers", "enableQuantityTiers", "enableStudioPreview",
+        "studioPreviewPrice",
         // Phase 7
         "printColorOptions", "quantityTiers", "previewWidth", "previewHeight",
       ];
+      // تطبيع سعر معاينة الاستوديو إلى نص رقمي
+      if (Object.prototype.hasOwnProperty.call(data, "studioPreviewPrice")) {
+        data.studioPreviewPrice = data.studioPreviewPrice != null && data.studioPreviewPrice !== ""
+          ? String(data.studioPreviewPrice) : "0";
+      }
       // Phase 7: تطبيع JSON objects → strings
       if (Object.prototype.hasOwnProperty.call(data, "printColorOptions")) {
         const v = data.printColorOptions;
@@ -3937,6 +3960,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         message: message.trim(),
         history: Array.isArray(history) ? history.slice(-16) : [],
         productType: typeof productType === "string" ? productType : undefined,
+        userId: getUserId((req as any).user) || (req as any).session?.userId,
       });
       res.json(result);
     } catch (e: any) {
@@ -6997,12 +7021,12 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   // قراءة نقاط المستخدم
   app.get("/api/points", async (req, res) => {
     try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const userId = getUserId((req as any).user) || (req as any).session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
       const { pool: dbPool } = await import("./db");
       const result = await dbPool.query(
         "SELECT * FROM reward_points WHERE user_id=$1",
-        [user.id]
+        [userId]
       );
       if (!result.rows.length) {
         return res.json({ points: 0, lifetimePoints: 0 });
@@ -7017,12 +7041,12 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   // سجل معاملات النقاط
   app.get("/api/points/history", async (req, res) => {
     try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const userId = getUserId((req as any).user) || (req as any).session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
       const { pool: dbPool } = await import("./db");
       const result = await dbPool.query(
         "SELECT * FROM points_transactions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50",
-        [user.id]
+        [userId]
       );
       res.json(result.rows);
     } catch (e: any) {
@@ -7033,12 +7057,12 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   // حساب تكلفة استرداد النقاط (100 نقطة = 1000 ر.ي)
   app.post("/api/points/redeem-estimate", async (req, res) => {
     try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const userId = getUserId((req as any).user) || (req as any).session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
       const { pointsToUse } = req.body;
       if (!pointsToUse || pointsToUse <= 0) return res.status(400).json({ message: "عدد النقاط غير صالح" });
       const { pool: dbPool } = await import("./db");
-      const result = await dbPool.query("SELECT points FROM reward_points WHERE user_id=$1", [user.id]);
+      const result = await dbPool.query("SELECT points FROM reward_points WHERE user_id=$1", [userId]);
       const availablePoints = result.rows[0]?.points || 0;
       const actualPoints = Math.min(pointsToUse, availablePoints);
       const discountAmount = Math.floor(actualPoints / 100) * 1000; // 100 نقطة = 1000 ر.ي
@@ -7075,12 +7099,12 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   // alias for /api/points/history (للتوافق مع النظام القديم)
   app.get("/api/points/transactions", async (req, res) => {
     try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const userId = getUserId((req as any).user) || (req as any).session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
       const { pool: dbPool } = await import("./db");
       const result = await dbPool.query(
         "SELECT * FROM points_transactions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50",
-        [user.id]
+        [userId]
       );
       res.json(result.rows);
     } catch (e: any) {
@@ -7093,14 +7117,14 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   // ═══════════════════════════════════════════════════════════════════
   app.get("/api/wallet", async (req, res) => {
     try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const userId = getUserId((req as any).user) || (req as any).session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
       const { pool: dbPool } = await import("./db");
       const r = await dbPool.query(
         `SELECT id, user_id as "userId", balance_yer as "balanceYer", balance_sar as "balanceSar",
                 created_at as "createdAt", updated_at as "updatedAt"
          FROM wallets WHERE user_id=$1`,
-        [user.id]
+        [userId]
       );
       if (!r.rows.length) {
         try {
@@ -7109,14 +7133,14 @@ h1{font-size:18px;color:#222;margin:4px 0;}
              ON CONFLICT (user_id) DO UPDATE SET updated_at=NOW()
              RETURNING id, user_id as "userId", balance_yer as "balanceYer", balance_sar as "balanceSar",
                        created_at as "createdAt", updated_at as "updatedAt"`,
-            [user.id]
+            [userId]
           );
           return res.json(ins.rows[0]);
         } catch (insertErr: any) {
           // FK error or race — return empty wallet representation gracefully
           console.warn("[/api/wallet] auto-create failed:", insertErr.message);
           return res.json({
-            id: 0, userId: user.id, balanceYer: "0", balanceSar: "0",
+            id: 0, userId: userId, balanceYer: "0", balanceSar: "0",
             createdAt: null, updatedAt: null,
           });
         }
@@ -7130,14 +7154,14 @@ h1{font-size:18px;color:#222;margin:4px 0;}
 
   app.get("/api/wallet/transactions", async (req, res) => {
     try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const userId = getUserId((req as any).user) || (req as any).session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
       const { pool: dbPool } = await import("./db");
       const r = await dbPool.query(
         `SELECT id, wallet_id as "walletId", user_id as "userId", type, amount, currency,
                 description, order_id as "orderId", created_at as "createdAt"
          FROM wallet_transactions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50`,
-        [user.id]
+        [userId]
       );
       res.json(r.rows);
     } catch (e: any) {
@@ -7147,19 +7171,19 @@ h1{font-size:18px;color:#222;margin:4px 0;}
 
   app.get("/api/account/summary", async (req, res) => {
     try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const userId = getUserId((req as any).user) || (req as any).session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
       const { pool: dbPool } = await import("./db");
       const [wRes, pRes, oRes] = await Promise.all([
-        dbPool.query(`SELECT balance_yer, balance_sar FROM wallets WHERE user_id=$1`, [user.id]),
-        dbPool.query(`SELECT points, lifetime_points FROM reward_points WHERE user_id=$1`, [user.id]),
+        dbPool.query(`SELECT balance_yer, balance_sar FROM wallets WHERE user_id=$1`, [userId]),
+        dbPool.query(`SELECT points, lifetime_points FROM reward_points WHERE user_id=$1`, [userId]),
         dbPool.query(
           `SELECT
              COUNT(*)::int AS total,
              COUNT(*) FILTER (WHERE status IN ('pending','deposit_paid'))::int AS pending,
              COUNT(*) FILTER (WHERE status IN ('delivered','completed'))::int AS completed
            FROM orders WHERE user_id=$1`,
-          [user.id]
+          [userId]
         ),
       ]);
       const w = wRes.rows[0] || { balance_yer: "0", balance_sar: "0" };
@@ -7217,8 +7241,8 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   // ═══════════════════════════════════════════════════════════════════
   app.get("/api/my/coupons", async (req, res) => {
     try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const userId = getUserId((req as any).user) || (req as any).session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
       const { pool: dbPool } = await import("./db");
       const r = await dbPool.query(
         `SELECT
@@ -7230,7 +7254,7 @@ h1{font-size:18px;color:#222;margin:4px 0;}
          WHERE user_id=$1 AND coupon_code IS NOT NULL AND coupon_code <> ''
          GROUP BY coupon_code
          ORDER BY MAX(created_at) DESC`,
-        [user.id]
+        [userId]
       );
       const rows = r.rows.map((row: any) => ({
         code: String(row.code),
@@ -7250,12 +7274,12 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   // ═══════════════════════════════════════════════════════════════════
   app.get("/api/loyalty/summary", async (req, res) => {
     try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ message: "غير مصرح" });
+      const userId = getUserId((req as any).user) || (req as any).session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
       const { pool: dbPool } = await import("./db");
       const r = await dbPool.query(
         `SELECT points, lifetime_points FROM reward_points WHERE user_id=$1`,
-        [user.id]
+        [userId]
       );
       const points = Number(r.rows[0]?.points ?? 0);
       const lifetime = Number(r.rows[0]?.lifetime_points ?? 0);
@@ -7264,6 +7288,125 @@ h1{font-size:18px;color:#222;margin:4px 0;}
       res.json({ points, lifetimePoints: lifetime, redeemableValue });
     } catch (e: any) {
       res.status(500).json({ message: "فشل جلب ملخص النقاط" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // الدخول اليومي (Daily Check-in) — نقاط ولاء يومية مع سلسلة
+  // ═══════════════════════════════════════════════════════════════════
+  // التاريخ بتوقيت اليمن (Asia/Aden) لتفادي مشكلة منتصف الليل UTC
+  function adenDateStr(offsetDays = 0): string {
+    const now = new Date();
+    now.setUTCDate(now.getUTCDate() + offsetDays);
+    return now.toLocaleDateString("en-CA", { timeZone: "Asia/Aden" }); // YYYY-MM-DD
+  }
+  // نقاط الدخول اليومي حسب طول السلسلة
+  function checkinPointsForStreak(streak: number): number {
+    const base = 2;
+    if (streak >= 7) return base * 2;   // x2
+    if (streak >= 3) return Math.round(base * 1.5); // x1.5 = 3
+    return base;
+  }
+
+  // حالة الدخول اليومي + آخر 7 أيام (للتقويم الأسبوعي)
+  app.get("/api/loyalty/checkin/status", async (req, res) => {
+    try {
+      const userId = getUserId((req as any).user) || (req as any).session?.userId;
+      if (!userId) return res.status(401).json({ message: "غير مصرح" });
+      const { pool: dbPool } = await import("./db");
+      const today = adenDateStr(0);
+      const r = await dbPool.query(
+        `SELECT checkin_date, points, streak FROM daily_checkins
+         WHERE user_id=$1 AND checkin_date >= (CURRENT_DATE - INTERVAL '8 days')
+         ORDER BY checkin_date DESC`,
+        [userId]
+      );
+      const rows = r.rows || [];
+      const byDate: Record<string, any> = {};
+      for (const row of rows) {
+        const key = new Date(row.checkin_date).toLocaleDateString("en-CA", { timeZone: "Asia/Aden" });
+        byDate[key] = row;
+      }
+      const checkedInToday = !!byDate[today];
+      // سلسلة حالية: أطول تسلسل ينتهي اليوم أو أمس
+      let currentStreak = 0;
+      if (byDate[today]) currentStreak = Number(byDate[today].streak || 0);
+      else if (byDate[adenDateStr(-1)]) currentStreak = Number(byDate[adenDateStr(-1)].streak || 0);
+      // آخر 7 أيام (من الأقدم للأحدث) لعرض التقويم
+      const last7: Array<{ date: string; checked: boolean; points: number }> = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = adenDateStr(-i);
+        last7.push({ date: d, checked: !!byDate[d], points: byDate[d] ? Number(byDate[d].points || 0) : 0 });
+      }
+      const nextStreak = checkedInToday ? currentStreak : currentStreak + 1;
+      res.json({
+        checkedInToday,
+        currentStreak,
+        nextReward: checkinPointsForStreak(nextStreak),
+        last7,
+      });
+    } catch (e: any) {
+      console.error("[loyalty/checkin/status]", e?.message || e);
+      res.status(500).json({ message: "فشل جلب حالة الدخول اليومي" });
+    }
+  });
+
+  // تنفيذ الدخول اليومي — transaction-safe، يرفض التكرار في نفس اليوم
+  app.post("/api/loyalty/checkin", async (req, res) => {
+    const userId = getUserId((req as any).user) || (req as any).session?.userId;
+    if (!userId) return res.status(401).json({ message: "غير مصرح" });
+    const { pool: dbPool } = await import("./db");
+    const client = await dbPool.connect();
+    try {
+      await client.query("BEGIN");
+      const today = adenDateStr(0);
+      const yesterday = adenDateStr(-1);
+      // هل سجّل أمس؟ لحساب السلسلة
+      const prev = await client.query(
+        `SELECT streak FROM daily_checkins WHERE user_id=$1 AND checkin_date=$2`,
+        [userId, yesterday]
+      );
+      const streak = prev.rows[0] ? Number(prev.rows[0].streak || 0) + 1 : 1;
+      const points = checkinPointsForStreak(streak);
+      // إدراج آمن ضد التكرار عبر القيد الفريد (user_id, checkin_date)
+      const ins = await client.query(
+        `INSERT INTO daily_checkins (user_id, checkin_date, points, streak)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id, checkin_date) DO NOTHING
+         RETURNING id`,
+        [userId, today, points, streak]
+      );
+      if (ins.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({ message: "سجّلت دخولك اليوم بالفعل. عُد غداً!", alreadyCheckedIn: true });
+      }
+      // منح النقاط في النظام الموحّد (reward_points + points_transactions)
+      await client.query(
+        `INSERT INTO reward_points (user_id, points, lifetime_points)
+         VALUES ($1, $2, $2)
+         ON CONFLICT (user_id)
+         DO UPDATE SET points = reward_points.points + $2, lifetime_points = reward_points.lifetime_points + $2`,
+        [userId, points]
+      );
+      await client.query(
+        `INSERT INTO points_transactions (user_id, points, type, description)
+         VALUES ($1, $2, 'earn', $3)`,
+        [userId, points, `دخول يومي — سلسلة ${streak} ${streak >= 7 ? "🔥 (×2)" : streak >= 3 ? "⚡ (×1.5)" : "يوم"}`]
+      );
+      // سجل حدث ولاء بصلاحية 90 يوماً (لإثراء مستقبلي/انتهاء)
+      await client.query(
+        `INSERT INTO loyalty_events (user_id, points, type, earned_at, expires_at)
+         VALUES ($1, $2, 'daily_checkin', NOW(), NOW() + INTERVAL '90 days')`,
+        [userId, points]
+      );
+      await client.query("COMMIT");
+      res.json({ success: true, points, streak, message: `+${points} نقطة! سلسلتك الآن ${streak} ${streak === 1 ? "يوم" : "أيام"}.` });
+    } catch (e: any) {
+      try { await client.query("ROLLBACK"); } catch {}
+      console.error("[loyalty/checkin]", e?.message || e);
+      res.status(500).json({ message: "فشل تنفيذ الدخول اليومي" });
+    } finally {
+      client.release();
     }
   });
 

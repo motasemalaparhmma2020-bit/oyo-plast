@@ -80,6 +80,49 @@ export const db = drizzle(pool, { schema });
     console.warn("[migrate] enable referral:", (e as Error).message);
   }
 
+  // ── Auto-migrate: الدخول اليومي + سجل أحداث الولاء (June 2026) ──
+  try {
+    // ملاحظة: users.id من نوع VARCHAR (مصادقة Replit/هاتف) — لذا user_id هنا VARCHAR لا INTEGER
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS daily_checkins (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR NOT NULL,
+        checkin_date DATE NOT NULL,
+        points INTEGER NOT NULL DEFAULT 0,
+        streak INTEGER NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT uq_daily_checkin_user_date UNIQUE (user_id, checkin_date)
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS loyalty_events (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR NOT NULL,
+        points INTEGER NOT NULL,
+        type VARCHAR(40) NOT NULL,
+        earned_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        expires_at TIMESTAMP
+      )
+    `);
+    // إصلاح لمرة واحدة: إن كانت الجداول أُنشئت سابقاً بـ INTEGER، نحوّلها لـ VARCHAR
+    await pool.query(`ALTER TABLE daily_checkins ALTER COLUMN user_id TYPE VARCHAR USING user_id::VARCHAR`);
+    await pool.query(`ALTER TABLE loyalty_events ALTER COLUMN user_id TYPE VARCHAR USING user_id::VARCHAR`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_loyalty_events_user ON loyalty_events(user_id, expires_at)`);
+  } catch (e) {
+    console.warn("[migrate] daily_checkins/loyalty_events:", (e as Error).message);
+  }
+
+  // ── Auto-migrate: مفتاح معاينة الاستوديو على مستوى المنتج (June 2026) ──
+  try {
+    await pool.query(`
+      ALTER TABLE products
+        ADD COLUMN IF NOT EXISTS enable_studio_preview boolean NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS studio_preview_price numeric NOT NULL DEFAULT 0
+    `);
+  } catch (e) {
+    console.warn("[migrate] enable_studio_preview column:", (e as Error).message);
+  }
+
   // ── Auto-migrate: account deletion requests table (June 2026) ──
   try {
     await pool.query(`

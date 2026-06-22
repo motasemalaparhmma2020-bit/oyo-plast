@@ -19,6 +19,7 @@ import {
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { compositePrintPreview, compositeSuggestions, type PrintArea } from "@/lib/printPreviewCompositor";
 import useEmblaCarousel from "embla-carousel-react";
 
 // ── PdpCollapsible — حاوية قابلة للطي لمنتقي الألوان والمقاس ───────────────
@@ -656,16 +657,31 @@ export default function ProductDetail() {
     return null;
   }, [smartVariantsData, showSmartVariants, selectedSmartVariant, lastClickedType, currency]);
 
-  // ── Preview Fee: رسم إضافي للمعاينة الفورية — لا يؤثر على السعر الأساسي ──────
+  // ── Preview Fee: رسم إضافي لمعاينة الاستوديو — لا يؤثر على السعر الأساسي ──────
+  // الأولوية: smart preview variant → سعر معاينة الاستوديو على مستوى المنتج
   const previewFee = useMemo(() => {
-    if (!showSmartVariants || !smartVariantsData) return 0;
-    const previewId = selectedSmartVariant['preview'];
-    if (!previewId) return 0;
-    const v = smartVariantsData.variants.find(x => x.id === previewId && x.type === 'preview');
-    if (!v) return 0;
-    const price = Number(currency === 'SAR' && v.priceSar ? v.priceSar : v.price || 0);
-    return price;
-  }, [showSmartVariants, smartVariantsData, selectedSmartVariant, currency]);
+    // (أ) متغيّر ذكي من نوع preview
+    if (showSmartVariants && smartVariantsData) {
+      const previewId = selectedSmartVariant['preview'];
+      if (previewId) {
+        const v = smartVariantsData.variants.find(x => x.id === previewId && x.type === 'preview');
+        if (v) return Number(currency === 'SAR' && v.priceSar ? v.priceSar : v.price || 0);
+      }
+    }
+    // (ب) المسار على مستوى المنتج: المنتج مفعّل + رسم > 0 + العميل ولّد معاينة الاستوديو
+    // الرسم مخزّن بالريال اليمني؛ نحوّله للسعودي بنفس نسبة المنتج (price/priceSar)
+    const studioFee = Number((product as any)?.studioPreviewPrice ?? 0);
+    if ((product as any)?.enableStudioPreview && studioFee > 0 && studioPreviewUrl) {
+      if (currency === 'SAR') {
+        const yer = Number((product as any)?.price ?? 0);
+        const sar = Number((product as any)?.priceSar ?? 0);
+        const rate = yer > 0 && sar > 0 ? yer / sar : 0;
+        return rate > 0 ? studioFee / rate : 0;
+      }
+      return studioFee;
+    }
+    return 0;
+  }, [showSmartVariants, smartVariantsData, selectedSmartVariant, currency, product, studioPreviewUrl]);
 
   const currentPrice = useMemo(() => {
     if (!product) return '0';
@@ -872,12 +888,17 @@ export default function ProductDetail() {
       ...(showSmartVariants && smartVariantsData && selectedSmartVariant['preview'] ? {
         selectedPreview: selectedSmartVariant['preview'],
       } : {}),
+      // ── رسوم معاينة الاستوديو على مستوى المنتج — العميل ولّد المعاينة فعلاً ──
+      ...((product as any)?.enableStudioPreview && Number((product as any)?.studioPreviewPrice ?? 0) > 0 && studioPreviewUrl ? {
+        useStudioPreview: true,
+      } : {}),
     };
   }, [product?.id, effectiveQty, selectedSize, selectedColor, enableCustomPrinting, designNotes, uploadedDesignUrl,
       enableBagPrinting, selectedBagColor, printColors,
       productPrintingCat, printWidth, printHeight, printFinish, printColorSeparation, professionalPrintingUnitPrice,
       totalPrice, selectedSmartVariant, smartVariantsData, showSmartVariants,
-      hasPhase4Pricing, printingColors, printingSides, phase4PrintingBreakdown, logoPosition, selectedDynamicBagColor]);
+      hasPhase4Pricing, printingColors, printingSides, phase4PrintingBreakdown, logoPosition, selectedDynamicBagColor,
+      studioPreviewUrl]);
 
   // ── Phase 5: تهيئة موضع الشعار من إعدادات المنتج عند رفع التصميم ──────
   useEffect(() => {
@@ -929,14 +950,19 @@ export default function ProductDetail() {
       const logo = new Image();
       logo.crossOrigin = "anonymous";
       logo.onload = () => {
-        const lx = W * currentPos.x / 100;
-        const ly = H * currentPos.y / 100;
-        const lw = W * currentPos.width / 100;
-        const lh = H * currentPos.height / 100;
-        ctx.save();
-        ctx.direction = "rtl";
-        ctx.drawImage(logo, lx, ly, lw, lh);
-        ctx.restore();
+        // صندوق المنطقة المحددة
+        const boxX = W * currentPos.x / 100;
+        const boxY = H * currentPos.y / 100;
+        const boxW = W * currentPos.width / 100;
+        const boxH = H * currentPos.height / 100;
+        // نحافظ على نسبة الشعار ونضعه **وسط** الصندوق (لا تشويه، تمركز مضمون)
+        const logoAr = (logo.naturalWidth / logo.naturalHeight) || 1;
+        let drawW = boxW;
+        let drawH = boxW / logoAr;
+        if (drawH > boxH) { drawH = boxH; drawW = boxH * logoAr; }
+        const drawX = boxX + (boxW - drawW) / 2;
+        const drawY = boxY + (boxH - drawH) / 2;
+        ctx.drawImage(logo, drawX, drawY, drawW, drawH);
       };
       logo.src = currentLogo;
     };
@@ -947,11 +973,12 @@ export default function ProductDetail() {
       if (!c2) return;
       c2.fillStyle = "#f3f4f6";
       c2.fillRect(0, 0, W, H);
+      // رمز بدل النص العربي (canvas لا يشكّل الحروف العربية فتظهر مكسّرة)
       c2.fillStyle = "#9ca3af";
-      c2.font = "12px Cairo, sans-serif";
+      c2.font = "28px sans-serif";
       c2.textAlign = "center";
-      c2.direction = "rtl";
-      c2.fillText("لا يمكن تحميل صورة المنتج", W / 2, H / 2);
+      c2.textBaseline = "middle";
+      c2.fillText("🖼️", W / 2, H / 2);
     };
     bg.src = imgSrc;
   }, [previewImgAspect]);
@@ -1224,28 +1251,57 @@ export default function ProductDetail() {
     }
   };
 
+  // المعاينة الفورية: تركيب على الجهاز يضع الشعار **وسط الكيس** (بلا Cloudinary)
+  const currentPreviewArea = (): PrintArea =>
+    logoPosition
+      ? { x: logoPosition.x, y: logoPosition.y, width: logoPosition.width, height: logoPosition.height }
+      : ((product as any)?.printArea && typeof (product as any).printArea === "object"
+          ? (product as any).printArea
+          : { x: 25, y: 25, width: 50, height: 50 });
+
   const generateQuickPreview = async () => {
     if (!product || !uploadedDesignUrl) return;
     setStudioPreviewLoading(true);
     try {
-      const r = await apiRequest('POST', '/api/studio-preview/quick', {
-        productImage: product.imageUrl || product.images?.[0],
+      const src = stableMainImageUrl || effectiveMainImageUrl || product.imageUrl || (product as any).images?.[0] || "";
+      const dataUrl = await compositePrintPreview({
+        productImageUrl: src,
         logoUrl: uploadedDesignUrl,
-        bagColor: selectedDynamicBagColor?.name || selectedBagColor || 'white',
-        printColor: selectedInkColor?.name || 'black',
-        textContent: studioPreviewText || undefined,
+        printArea: currentPreviewArea(),
       });
-      const d = await r.json();
-      if (d.success) {
-        setQuickPreviewUrl(d.imageUrl);
-        toast({ title: "\u2705 \u0645\u0639\u0627\u064a\u0646\u0629 \u0633\u0631\u064a\u0639\u0629 \u062c\u0627\u0647\u0632\u0629" });
-      } else {
-        toast({ title: d.error || "\u0641\u0634\u0644 \u0641\u064a \u0627\u0644\u0645\u0639\u0627\u064a\u0646\u0629 \u0627\u0644\u0633\u0631\u064a\u0639\u0629", variant: "destructive" });
-      }
+      setQuickPreviewUrl(dataUrl);
+      setActivePreviewTab('quick');
+      toast({ title: "\u2705 \u0645\u0639\u0627\u064a\u0646\u0629 \u0641\u0648\u0631\u064a\u0629 \u062c\u0627\u0647\u0632\u0629 \u2014 \u0627\u0644\u062a\u0635\u0645\u064a\u0645 \u0648\u0633\u0637 \u0627\u0644\u0643\u064a\u0633" });
     } catch (e: any) {
-      toast({ title: e?.message || "\u0641\u0634\u0644 \u0641\u064a \u0627\u0644\u0645\u0639\u0627\u064a\u0646\u0629 \u0627\u0644\u0633\u0631\u064a\u0639\u0629", variant: "destructive" });
+      toast({ title: "\u062a\u0639\u0630\u0651\u0631 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0645\u0639\u0627\u064a\u0646\u0629 \u0627\u0644\u0641\u0648\u0631\u064a\u0629", variant: "destructive" });
     } finally {
       setStudioPreviewLoading(false);
+    }
+  };
+
+  // 3 اقتراحات فورية بألوان أكياس مختلفة (تركيب على الجهاز — بلا تكلفة)
+  const [instantSuggestions, setInstantSuggestions] = useState<{ name: string; hex: string; url: string }[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const generateInstantSuggestions = async () => {
+    if (!product || !uploadedDesignUrl) return;
+    setSuggestionsLoading(true);
+    try {
+      const src = stableMainImageUrl || effectiveMainImageUrl || product.imageUrl || (product as any).images?.[0] || "";
+      const list = await compositeSuggestions({
+        productImageUrl: src,
+        logoUrl: uploadedDesignUrl,
+        printArea: currentPreviewArea(),
+      });
+      setInstantSuggestions(list);
+      if (list.length === 0) {
+        toast({ title: "\u062a\u0639\u0630\u0651\u0631 \u062a\u0648\u0644\u064a\u062f \u0627\u0644\u0627\u0642\u062a\u0631\u0627\u062d\u0627\u062a", variant: "destructive" });
+      } else {
+        toast({ title: `\u2705 ${list.length} \u0627\u0642\u062a\u0631\u0627\u062d\u0627\u062a \u0641\u0648\u0631\u064a\u0629` });
+      }
+    } catch {
+      toast({ title: "\u062a\u0639\u0630\u0651\u0631 \u062a\u0648\u0644\u064a\u062f \u0627\u0644\u0627\u0642\u062a\u0631\u0627\u062d\u0627\u062a", variant: "destructive" });
+    } finally {
+      setSuggestionsLoading(false);
     }
   };
 
@@ -1493,7 +1549,7 @@ export default function ProductDetail() {
                 />
                 <div className="absolute bottom-2 left-2 right-2 flex justify-center">
                   <span className="bg-black/60 text-white text-[10px] px-2 py-1 rounded-full">
-                    {activePreviewTab === 'studio' ? '✨ معاينة استوديو Gemini AI' : '⚡ معاينة سريعة Cloudinary'}
+                    {activePreviewTab === 'studio' ? '✨ معاينة استوديو Gemini AI' : '⚡ معاينة فورية — التصميم وسط الكيس'}
                   </span>
                 </div>
               </div>
@@ -2604,12 +2660,12 @@ export default function ProductDetail() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => { generateQuickPreview(); setActivePreviewTab('quick'); }}
+                        onClick={() => generateQuickPreview()}
                         disabled={studioPreviewLoading}
                         className="text-xs font-bold border-sky-300 text-sky-700 hover:bg-sky-50 dark:hover:bg-sky-950/30"
                         data-testid="button-quick-preview">
                         <Zap className="h-3.5 w-3.5 ml-1" />
-                        ⚡ سريعة مجانية
+                        ⚡ معاينة فورية
                       </Button>
                       <Button
                         type="button"
@@ -2631,6 +2687,45 @@ export default function ProductDetail() {
                         )}
                       </Button>
                     </div>
+
+                    {/* زر 3 اقتراحات فورية (ألوان أكياس مختلفة — بلا تكلفة) */}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={generateInstantSuggestions}
+                      disabled={suggestionsLoading}
+                      className="w-full text-xs font-bold border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                      data-testid="button-instant-suggestions">
+                      {suggestionsLoading ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 ml-1 animate-spin" />
+                          جارٍ التوليد...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCcw className="h-3.5 w-3.5 ml-1" />
+                          🎨 اقتراحات فورية (3 ألوان)
+                        </>
+                      )}
+                    </Button>
+                    {instantSuggestions.length > 0 && (
+                      <div className="grid grid-cols-3 gap-2" data-testid="grid-instant-suggestions">
+                        {instantSuggestions.map((s, i) => (
+                          <button
+                            type="button"
+                            key={s.hex}
+                            onClick={() => { setQuickPreviewUrl(s.url); setActivePreviewTab('quick'); }}
+                            className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-right"
+                            data-testid={`img-instant-suggestion-${i}`}>
+                            <img src={s.url} alt={`اقتراح ${s.name}`} className="w-full h-auto object-contain" loading="lazy" />
+                            <div className="bg-gray-50 dark:bg-gray-900 p-1 text-center">
+                              <p className="text-[10px] font-bold text-gray-600 dark:text-gray-300">{s.name}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
 
                     {/* عرض المعاينات المولدة */}
                     {studioPreviewUrl && (
@@ -2660,7 +2755,7 @@ export default function ProductDetail() {
                         />
                         <div className="bg-sky-50 dark:bg-sky-950/30 p-2 text-center">
                           <p className="text-[10px] font-bold text-sky-700 dark:text-sky-300">
-                            معاينة سريعة — عرض فوري عبر Cloudinary
+                            معاينة فورية — التصميم وسط الكيس
                           </p>
                         </div>
                       </div>
@@ -3184,6 +3279,19 @@ export default function ProductDetail() {
                             onPointerCancel={handlePreviewPointerUp}
                             data-testid="drag-logo-overlay"
                           />
+                          {/* نص المتجر كطبقة HTML (RTL / Cairo) — لتفادي تكسّر الحروف العربية على الـ canvas */}
+                          {studioPreviewText.trim() && (
+                            <div
+                              dir="rtl"
+                              className="absolute left-0 right-0 bottom-2 px-2 text-center pointer-events-none"
+                              style={{ fontFamily: "Cairo, sans-serif" }}
+                              data-testid="overlay-store-text"
+                            >
+                              <span className="inline-block max-w-[90%] truncate rounded bg-black/55 px-2 py-0.5 text-[11px] font-bold text-white">
+                                {studioPreviewText.trim()}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         {/* شريط تكبير/تصغير */}
                         <div className="mt-3 flex items-center gap-2">

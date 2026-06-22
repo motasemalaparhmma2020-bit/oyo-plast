@@ -1,13 +1,24 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   ChevronRight, Award, Loader2, Clock, Gift, ShoppingBag, TrendingUp,
+  Flame, CheckCircle2, CalendarCheck,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { RewardPoints, PointsTransaction } from "@shared/schema";
+
+type CheckinStatus = {
+  checkedInToday: boolean;
+  currentStreak: number;
+  nextReward: number;
+  last7: Array<{ date: string; checked: boolean; points: number }>;
+};
+const DAY_LABELS = ["أحد", "إثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
 
 function goBackSafe(setLocation: (p: string) => void) {
   try {
@@ -20,6 +31,7 @@ function goBackSafe(setLocation: (p: string) => void) {
 export default function LoyaltyPage() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
 
   const { data: points, isLoading } = useQuery<{ points: number; lifetimePoints: number }>({
     queryKey: ["/api/points"],
@@ -28,6 +40,27 @@ export default function LoyaltyPage() {
   const { data: txs = [], isLoading: txLoading } = useQuery<PointsTransaction[]>({
     queryKey: ["/api/points/transactions"],
     enabled: isAuthenticated,
+  });
+  const { data: checkin } = useQuery<CheckinStatus>({
+    queryKey: ["/api/loyalty/checkin/status"],
+    enabled: isAuthenticated,
+  });
+
+  const checkinMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/loyalty/checkin");
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      toast({ title: "🎉 تم تسجيل دخولك اليومي", description: data?.message || "تمت إضافة نقاطك" });
+      queryClient.invalidateQueries({ queryKey: ["/api/loyalty/checkin/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/points"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/points/transactions"] });
+    },
+    onError: (err: any) => {
+      toast({ title: "تنبيه", description: err?.message || "سجّلت دخولك اليوم بالفعل", variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["/api/loyalty/checkin/status"] });
+    },
   });
 
   const current = points?.points ?? 0;
@@ -75,6 +108,66 @@ export default function LoyaltyPage() {
       </div>
 
       <div className="container max-w-2xl mx-auto px-4 -mt-8 relative z-10 space-y-4">
+        {/* Daily check-in */}
+        {isAuthenticated && (
+          <Card data-testid="card-daily-checkin">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-sm flex items-center gap-1.5">
+                  <CalendarCheck className="h-4 w-4 text-sky-600" />
+                  الدخول اليومي
+                </h3>
+                {(checkin?.currentStreak ?? 0) > 0 && (
+                  <span className="flex items-center gap-1 text-xs font-bold text-orange-600" data-testid="text-checkin-streak">
+                    <Flame className="h-4 w-4" />
+                    سلسلة {checkin?.currentStreak} {checkin?.currentStreak === 1 ? "يوم" : "أيام"}
+                  </span>
+                )}
+              </div>
+
+              {/* تقويم آخر 7 أيام */}
+              <div className="grid grid-cols-7 gap-1.5 mb-3">
+                {(checkin?.last7 ?? Array.from({ length: 7 }, () => null)).map((d, i) => {
+                  const dayNum = d ? new Date(d.date + "T00:00:00").getDay() : i;
+                  const checked = !!d?.checked;
+                  return (
+                    <div key={i} className="flex flex-col items-center gap-1" data-testid={`checkin-day-${i}`}>
+                      <span className="text-[9px] text-muted-foreground">{DAY_LABELS[dayNum]}</span>
+                      <div className={`w-full aspect-square rounded-lg flex items-center justify-center border ${
+                        checked
+                          ? "bg-sky-500 border-sky-500 text-white"
+                          : "bg-muted/40 border-border/50 text-muted-foreground"
+                      }`}>
+                        {checked
+                          ? <CheckCircle2 className="h-4 w-4" />
+                          : <span className="text-[10px]">{d ? "؟" : ""}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <Button
+                className="w-full bg-sky-500 hover:bg-sky-600 text-white disabled:opacity-60"
+                disabled={checkin?.checkedInToday || checkinMutation.isPending}
+                onClick={() => checkinMutation.mutate()}
+                data-testid="button-daily-checkin"
+              >
+                {checkinMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin ml-1" />
+                ) : checkin?.checkedInToday ? (
+                  <><CheckCircle2 className="h-4 w-4 ml-1" /> سجّلت دخولك اليوم ✓</>
+                ) : (
+                  <><Gift className="h-4 w-4 ml-1" /> سجّل دخولك واكسب {checkin?.nextReward ?? 2} نقاط</>
+                )}
+              </Button>
+              <p className="text-[11px] text-muted-foreground text-center mt-2">
+                داوم يومياً: 3 أيام = نقاط ×1.5 ⚡ — 7 أيام = نقاط ×2 🔥
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {/* How to earn */}
         <Card>
           <CardContent className="p-4">

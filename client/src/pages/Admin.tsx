@@ -247,6 +247,7 @@ interface ProductFormData {
   showLivePreview: boolean;
   enableVolumeOffers: boolean;
   enableStudioPreview: boolean;
+  studioPreviewPrice: number;
   enableQuantityTiers: boolean;
   originalPrice: string;
   originalPriceSar: string;
@@ -297,6 +298,7 @@ const emptyProductForm: ProductFormData = {
   showLivePreview: false,
   enableVolumeOffers: false,
   enableStudioPreview: false,
+  studioPreviewPrice: 0,
   enableQuantityTiers: false,
   originalPrice: "",
   originalPriceSar: "",
@@ -5849,6 +5851,7 @@ export default function Admin() {
           showLivePreview: data.showLivePreview,
           enableVolumeOffers: data.enableVolumeOffers,
           enableStudioPreview: data.enableStudioPreview,
+          studioPreviewPrice: data.studioPreviewPrice,
           enableQuantityTiers: data.enableQuantityTiers,
           enableVariantUI: data.enableVariantUI,
           colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
@@ -5940,6 +5943,7 @@ export default function Admin() {
         showLivePreview: data.showLivePreview,
         enableVolumeOffers: data.enableVolumeOffers,
         enableStudioPreview: data.enableStudioPreview,
+        studioPreviewPrice: data.studioPreviewPrice,
         enableQuantityTiers: data.enableQuantityTiers,
         enableVariantUI: data.enableVariantUI,
         colorImages: colorImagesList.length > 0 ? JSON.stringify(colorImagesList) : null,
@@ -6215,6 +6219,7 @@ export default function Admin() {
       showLivePreview: (product as any).showLivePreview ?? false,
       enableVolumeOffers: (product as any).enableVolumeOffers ?? false,
       enableStudioPreview: (product as any).enableStudioPreview ?? false,
+      studioPreviewPrice: Number((product as any).studioPreviewPrice ?? 0),
       enableQuantityTiers: (product as any).enableQuantityTiers ?? false,
       originalPrice: (product as any).originalPrice != null ? String((product as any).originalPrice) : "",
       originalPriceSar: (product as any).originalPriceSar != null ? String((product as any).originalPriceSar) : "",
@@ -8145,6 +8150,27 @@ export default function Admin() {
                               data-testid="checkbox-enable-studio-preview"
                             />
                           </label>
+
+                          {/* studioPreviewPrice — يظهر فقط عند تفعيل معاينة الاستوديو */}
+                          {productForm.enableStudioPreview && (
+                            <label className="flex items-center justify-between gap-3 bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900 rounded-lg p-2.5">
+                              <div className="flex items-center gap-2">
+                                <span>💰</span>
+                                <div>
+                                  <span className="text-sm font-semibold">رسوم معاينة الاستوديو</span>
+                                  <p className="text-[11px] text-muted-foreground">ر.ي تُضاف لكل قطعة عند طلب المعاينة الاحترافية. اتركها 0 لاستخدام الرسم الافتراضي من إعدادات الاستوديو.</p>
+                                </div>
+                              </div>
+                              <input
+                                type="number"
+                                min={0}
+                                value={productForm.studioPreviewPrice}
+                                onChange={(e) => setProductForm({ ...productForm, studioPreviewPrice: Number(e.target.value) || 0 })}
+                                className="w-24 text-sm border rounded-md px-2 py-1.5 bg-white dark:bg-gray-800 text-left"
+                                data-testid="input-studio-preview-price"
+                              />
+                            </label>
+                          )}
 
                           {/* ── قسم الكميات والعروض ── */}
                           <p className="text-[10px] font-bold text-orange-600 dark:text-orange-400 px-1 pt-1 pb-0.5">— عروض الكميات —</p>

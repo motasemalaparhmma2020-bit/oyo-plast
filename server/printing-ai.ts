@@ -241,11 +241,56 @@ ${DESIGN_DESCRIPTION_GUIDE}
 - استخدم الإيموجي باعتدال${trainingCtx}`;
 }
 
+// ─── سياق العميل — اسمه + آخر مشترياته (لتخصيص الردود) ───────────────────────
+async function buildCustomerContext(userId?: string): Promise<string> {
+  if (!userId) return "";
+  try {
+    const u = await dbPool.query(`SELECT full_name, first_name, phone FROM users WHERE id=$1`, [userId]);
+    const name = (u.rows[0]?.full_name || u.rows[0]?.first_name)?.trim();
+    // آخر 5 منتجات اشتراها (للتوصية والتخصيص)
+    const items = await dbPool.query(
+      `SELECT oi.product_name, SUM(oi.quantity)::int AS qty
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       WHERE o.user_id = $1 AND o.status <> 'cancelled' AND oi.product_name IS NOT NULL
+       GROUP BY oi.product_name
+       ORDER BY MAX(oi.id) DESC
+       LIMIT 5`,
+      [userId]
+    );
+    const parts: string[] = ["\n\n## معلومات العميل الحالي (استخدمها لتخصيص ردودك بلطف):"];
+    if (name) parts.push(`- الاسم: ${name} (نادِه باسمه عند الترحيب أول مرة فقط، باحترام)`);
+    if (items.rows.length) {
+      const list = items.rows.map((r: any) => `${r.product_name}${r.qty > 1 ? ` (×${r.qty})` : ""}`).join("، ");
+      parts.push(`- اشترى سابقاً: ${list}`);
+      parts.push("- إن ناسب السياق، اقترح إعادة الطلب أو منتجات مكمّلة لما اشتراه — دون إلحاح.");
+    } else {
+      parts.push("- عميل جديد بلا مشتريات سابقة — رحّب به ووضّح خياراتنا بإيجاز.");
+    }
+    return parts.join("\n");
+  } catch (e: any) {
+    console.warn("[Printing AI] فشل جلب سياق العميل:", e?.message);
+    return "";
+  }
+}
+
+// ─── أمثلة few-shot لضبط نبرة وأسلوب الردود ──────────────────────────────────
+const FEW_SHOT = `
+
+## أمثلة على أسلوب الرد المطلوب (للاسترشاد بالنبرة فقط — لا تكررها حرفياً):
+مثال 1 —
+العميل: "أبغى أطبع شعار محلي على أكياس"
+الرد الجيد: "تمام! 👍 عندنا أكياس بأحجام وألوان مختلفة. كم كيس تقريباً تحتاج؟ وعندك الشعار جاهز كملف ولا تبغى خدمة تصميم؟"
+مثال 2 —
+العميل: "كم سعر التيشيرتات؟"
+الرد الجيد: "حسب الكمية ونوع الطباعة 😊. لو تقول لي العدد المطلوب ومقاس الطباعة، أعطيك تقدير دقيق على طول."`;
+
 // ─── واجهة handlePrintingChat ─────────────────────────────────────────────────
 export interface PrintingChatInput {
   message: string;
   history: Array<{ role: "user" | "model"; text: string }>;
   productType?: string;
+  userId?: string;
 }
 
 export interface PrintingChatOutput {
@@ -263,8 +308,12 @@ export async function handlePrintingChat(input: PrintingChatInput): Promise<Prin
   }
 
   try {
-    // جلب System Prompt ديناميكي من قاعدة البيانات
-    const systemPrompt = await buildPrintingSystemPrompt();
+    // جلب System Prompt ديناميكي من قاعدة البيانات + سياق العميل + أمثلة
+    const [basePrompt, customerCtx] = await Promise.all([
+      buildPrintingSystemPrompt(),
+      buildCustomerContext(input.userId),
+    ]);
+    const systemPrompt = basePrompt + FEW_SHOT + customerCtx;
 
     // تصفية التاريخ — Gemini يشترط أن يبدأ بـ user
     const rawHistory = input.history.slice(-16);
