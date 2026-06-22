@@ -3336,7 +3336,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // جلب منتجات الطلب القابلة للتقييم — يستثني المنتجات المُقيَّمة
   app.get("/api/orders/:id/rateable", async (req: any, res) => {
     try {
-      const userId = req.user?.id || req.session?.userId;
+      const userId = getUserId(req.user) || req.session?.userId;
       if (!userId) return res.status(401).json({ message: "يجب تسجيل الدخول" });
       const orderId = parseInt(req.params.id);
       if (Number.isNaN(orderId)) return res.status(400).json({ message: "معرف غير صحيح" });
@@ -3397,7 +3397,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // تقديم تقييمات متعددة دفعة واحدة للطلب
   app.post("/api/orders/:id/rate", async (req: any, res) => {
     try {
-      const userId = req.user?.id || req.session?.userId;
+      const userId = getUserId(req.user) || req.session?.userId;
       if (!userId) return res.status(401).json({ message: "يجب تسجيل الدخول" });
       const orderId = parseInt(req.params.id);
       if (Number.isNaN(orderId)) return res.status(400).json({ message: "معرف غير صحيح" });

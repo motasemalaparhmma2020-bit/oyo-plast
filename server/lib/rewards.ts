@@ -1,5 +1,5 @@
 /**
- * Unified rewards helpers (Task #21 — activate the rewards loop).
+ * Unified rewards helpers — the customer rewards loop.
  *
  * Single source of truth for loyalty points + customer-to-customer referral payouts.
  * Every grant is idempotent and race-safe (transaction + advisory lock), so the same
