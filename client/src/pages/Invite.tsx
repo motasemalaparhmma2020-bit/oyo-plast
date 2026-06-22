@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Loader2, Gift, Copy, Check, Share2, Users, Wallet, ArrowRight, UserPlus,
 } from "lucide-react";
+import { SiWhatsapp, SiFacebook, SiInstagram } from "react-icons/si";
 
 interface ReferralMe {
   referralEnabled: boolean;
@@ -24,7 +25,7 @@ export default function Invite() {
   const { toast } = useToast();
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
 
-  const { data, isLoading } = useQuery<ReferralMe>({
+  const { data, isLoading, error, refetch } = useQuery<ReferralMe>({
     queryKey: ["/api/referral/me"],
     enabled: isAuthenticated,
     retry: false,
@@ -49,6 +50,20 @@ export default function Invite() {
 
   function shareWhatsApp() {
     window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank");
+  }
+
+  function shareFacebook() {
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`, "_blank");
+  }
+
+  function shareInstagram() {
+    // إنستغرام لا يدعم مشاركة نص مباشرة عبر الويب — ننسخ الدعوة ونفتح إنستغرام
+    navigator.clipboard?.writeText(shareText).then(() => {
+      toast({ title: "✅ تم نسخ الدعوة", description: "الصقها في قصتك أو رسائل إنستغرام" });
+      window.open("https://www.instagram.com/", "_blank");
+    }).catch(() => {
+      window.open("https://www.instagram.com/", "_blank");
+    });
   }
 
   function shareNative() {
@@ -78,6 +93,26 @@ export default function Invite() {
         <Link href="/auth">
           <Button className="px-8" data-testid="button-login-to-invite">تسجيل الدخول</Button>
         </Link>
+      </div>
+    );
+  }
+
+  if (isAuthenticated && (error || (!isLoading && !data))) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center px-6 text-center" dir="rtl">
+        <Gift className="h-14 w-14 text-gray-300 mb-4" />
+        <h1 className="text-xl font-bold mb-2">تعذّر تحميل صفحة الدعوة</h1>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
+          تحقق من اتصالك بالإنترنت وحاول مجدداً.
+        </p>
+        <div className="flex gap-3">
+          <Button onClick={() => refetch()} className="px-8" data-testid="button-retry-invite">
+            إعادة المحاولة
+          </Button>
+          <Link href="/">
+            <Button variant="outline" className="px-6" data-testid="button-back-home-error">الرئيسية</Button>
+          </Link>
+        </div>
       </div>
     );
   }
@@ -158,15 +193,34 @@ export default function Invite() {
               </Button>
             </div>
 
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">شارك عبر</p>
             <div className="grid grid-cols-2 gap-2">
               <Button
                 onClick={shareWhatsApp}
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-green-600 hover:bg-green-700 text-white"
                 disabled={!link}
                 data-testid="button-share-whatsapp"
               >
-                <Share2 className="h-4 w-4 ml-1" />
-                مشاركة واتساب
+                <SiWhatsapp className="h-4 w-4 ml-1" />
+                واتساب
+              </Button>
+              <Button
+                onClick={shareFacebook}
+                className="bg-[#1877F2] hover:bg-[#1668d6] text-white"
+                disabled={!link}
+                data-testid="button-share-facebook"
+              >
+                <SiFacebook className="h-4 w-4 ml-1" />
+                فيسبوك
+              </Button>
+              <Button
+                onClick={shareInstagram}
+                className="bg-gradient-to-tr from-[#feda75] via-[#d62976] to-[#4f5bd5] hover:opacity-90 text-white border-0"
+                disabled={!link}
+                data-testid="button-share-instagram"
+              >
+                <SiInstagram className="h-4 w-4 ml-1" />
+                إنستغرام
               </Button>
               <Button
                 onClick={shareNative}

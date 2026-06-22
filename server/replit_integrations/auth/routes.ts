@@ -5,6 +5,7 @@ import { hashPassword, verifyPassword } from "../../auth-utils";
 import { z } from "zod";
 import { pool } from "../../db";
 import { generateOTP, sendOTP, normalizePhone } from "../../lib/otp-sender";
+import { awardWelcomeBonus } from "../../lib/rewards";
 
 const registerSchema = z.object({
   email: z.string().email("البريد الإلكتروني غير صالح"),
@@ -61,6 +62,9 @@ export function registerAuthRoutes(app: Express): void {
         phone,
         accountType,
       });
+
+      // 🎁 هدية ترحيب 10 نقاط (مرة واحدة لكل مستخدم)
+      awardWelcomeBonus(user.id).catch((e: any) => console.warn("[welcome-bonus]", e?.message));
 
       // Log in the user automatically
       const sessionUser = {
@@ -218,6 +222,9 @@ export function registerAuthRoutes(app: Express): void {
           throw e;
         }
         const isNewUser = true;
+
+        // 🎁 هدية ترحيب 10 نقاط للمستخدم الجديد (مرة واحدة)
+        awardWelcomeBonus(user.id).catch((e: any) => console.warn("[welcome-bonus]", e?.message));
 
         // تسجيل عملية التسجيل في السجل (للحماية من spam)
         await client.query(

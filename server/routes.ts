@@ -2599,11 +2599,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         await recalcSoldCountForOrder(order.id, "dec");
       }
 
-      // إشعار داخلي "قيّم منتجاتك" عند تأكيد التسليم من المورد
+      // مكافآت التسليم من المورد (احتياط idempotent إن لم يمرّ الطلب بالتأكيد)
       if (status === "delivered" && order.user_id) {
         try {
           const { notifyOrderDelivered } = await import("./lib/notifications");
           await notifyOrderDelivered(String(order.user_id), order.id);
+          if (order.total) {
+            await awardOrderPoints(String(order.user_id), order.id, Number(order.total));
+          }
+        } catch { /* non-fatal */ }
+      }
+      if (status === "delivered" && order.id) {
+        try {
+          const { grantReferralRewardForOrder } = await import("./lib/rewards");
+          await grantReferralRewardForOrder(order.id);
         } catch { /* non-fatal */ }
       }
 
@@ -3334,7 +3343,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const { pool: dbPool } = await import("./db");
       const ord = await dbPool.query(
-        `SELECT id, user_id, status, delivery_status FROM orders WHERE id=$1 LIMIT 1`,
+        `SELECT id, user_id, status, delivery_status, admin_confirmed FROM orders WHERE id=$1 LIMIT 1`,
         [orderId]
       );
       if (ord.rows.length === 0) return res.status(404).json({ message: "الطلب غير موجود" });
@@ -3342,7 +3351,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (String(order.user_id) !== String(userId)) {
         return res.status(403).json({ message: "ليس لديك صلاحية" });
       }
-      const isDelivered = order.status === "delivered" || order.status === "completed" || order.delivery_status === "delivered";
+      const isDelivered = order.status !== "cancelled" && (order.admin_confirmed === true || order.status === "delivered" || order.status === "completed" || order.delivery_status === "delivered");
       if (!isDelivered) {
         return res.status(400).json({ message: "لا يمكن التقييم قبل التوصيل", notDelivered: true });
       }
@@ -3402,13 +3411,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // التحقق من ملكية الطلب وحالة التوصيل
       const ord = await dbPool.query(
-        `SELECT id, user_id, status, delivery_status FROM orders WHERE id=$1 LIMIT 1`,
+        `SELECT id, user_id, status, delivery_status, admin_confirmed FROM orders WHERE id=$1 LIMIT 1`,
         [orderId]
       );
       if (ord.rows.length === 0) return res.status(404).json({ message: "الطلب غير موجود" });
       const order = ord.rows[0];
       if (String(order.user_id) !== String(userId)) return res.status(403).json({ message: "ليس لديك صلاحية" });
-      const isDelivered = order.status === "delivered" || order.status === "completed" || order.delivery_status === "delivered";
+      const isDelivered = order.status !== "cancelled" && (order.admin_confirmed === true || order.status === "delivered" || order.status === "completed" || order.delivery_status === "delivered");
       if (!isDelivered) return res.status(400).json({ message: "لا يمكن التقييم قبل التوصيل" });
 
       // قائمة المنتجات التي يحق للمستخدم تقييمها (تنتمي فعلاً للطلب)
@@ -3457,6 +3466,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             throw insertErr;
           }
         }
+      }
+
+      // مكافأة 5 نقاط عند تقييم الطلب (مرة واحدة لكل طلب)
+      if (saved.length > 0) {
+        try {
+          const { awardReviewPoints } = await import("./lib/rewards");
+          await awardReviewPoints(String(userId), orderId);
+        } catch { /* non-fatal */ }
       }
 
       res.json({ ok: true, saved: saved.length, skipped });
@@ -4894,92 +4911,10 @@ h1{font-size:18px;color:#222;margin:4px 0;}
         } catch { /* non-fatal */ }
       }
 
-      // ── حملة الإحالة المزدوجة: مكافأة المُحيل عند أول طلب للصديق ──────────────
-      // معاملة ذرّية: تسجيل الإحالة + شحن محفظة المُحيل. الفهرس الفريد يمنع التكرار.
-      if (couponCode) {
-        try {
-          const { pool: rPool } = await import("./db");
-          const cfg = (await rPool.query(
-            `SELECT referral_enabled, referral_reward_yer FROM display_settings LIMIT 1`,
-          )).rows[0] || {};
-          const refEnabled = cfg.referral_enabled === true;
-          const rewardYer = Number(cfg.referral_reward_yer) || 0;
-          if (refEnabled && rewardYer > 0) {
-            const owner = await rPool.query(
-              `SELECT id, phone FROM users WHERE referral_code=$1`,
-              [String(couponCode).toUpperCase()],
-            );
-            const referrerId = owner.rows[0]?.id;
-            // منع الإحالة الذاتية عبر الهاتف (يغطي الشراء كضيف بنفس الكود)
-            const normDigits = (v: any) => String(v || "").replace(/\D/g, "");
-            const refPhoneN = normDigits(owner.rows[0]?.phone);
-            const buyerPhoneN = normDigits(customerPhone);
-            const phoneSelfReferral = !!refPhoneN && !!buyerPhoneN && (
-              refPhoneN === buyerPhoneN ||
-              (refPhoneN.length >= 9 && buyerPhoneN.length >= 9 &&
-                refPhoneN.slice(-9) === buyerPhoneN.slice(-9))
-            );
-            // يجب أن يكون كود إحالة عميل، وليس إحالة ذاتية (لا بالحساب ولا بالهاتف)
-            if (referrerId && referrerId !== userId && !phoneSelfReferral) {
-              // الصديق يجب أن يكون في أول طلب له (نستثني الطلب الحالي)
-              let priorCount = 1;
-              if (userId) {
-                priorCount = (await rPool.query(
-                  `SELECT COUNT(*)::int AS c FROM orders WHERE user_id=$1 AND status<>'cancelled' AND id<>$2`,
-                  [userId, order.id],
-                )).rows[0]?.c ?? 0;
-              } else if (customerPhone) {
-                priorCount = (await rPool.query(
-                  `SELECT COUNT(*)::int AS c FROM orders WHERE customer_phone=$1 AND status<>'cancelled' AND id<>$2`,
-                  [String(customerPhone), order.id],
-                )).rows[0]?.c ?? 0;
-              }
-              if (priorCount === 0) {
-                const client = await rPool.connect();
-                try {
-                  await client.query("BEGIN");
-                  const ins = await client.query(
-                    `INSERT INTO referrals (referrer_user_id, referred_user_id, referred_phone, status, reward_amount_yer, order_id)
-                     VALUES ($1,$2,$3,'rewarded',$4,$5)
-                     ON CONFLICT DO NOTHING
-                     RETURNING id`,
-                    [referrerId, userId || null, customerPhone ? String(customerPhone) : null, rewardYer.toFixed(2), order.id],
-                  );
-                  if (ins.rows.length) {
-                    const w = await client.query(`SELECT id FROM wallets WHERE user_id=$1 FOR UPDATE`, [referrerId]);
-                    let walletId: number;
-                    if (w.rows.length) {
-                      walletId = w.rows[0].id;
-                      await client.query(
-                        `UPDATE wallets SET balance_yer = balance_yer + $1, updated_at=NOW() WHERE id=$2`,
-                        [rewardYer, walletId],
-                      );
-                    } else {
-                      walletId = (await client.query(
-                        `INSERT INTO wallets (user_id, balance_yer) VALUES ($1,$2) RETURNING id`,
-                        [referrerId, rewardYer],
-                      )).rows[0].id;
-                    }
-                    await client.query(
-                      `INSERT INTO wallet_transactions (wallet_id, user_id, type, amount, currency, description, order_id)
-                       VALUES ($1,$2,'deposit',$3,'YER',$4,$5)`,
-                      [walletId, referrerId, rewardYer, `مكافأة إحالة صديق (طلب #${order.id})`, order.id],
-                    );
-                  }
-                  await client.query("COMMIT");
-                } catch (txErr) {
-                  await client.query("ROLLBACK");
-                  throw txErr;
-                } finally {
-                  client.release();
-                }
-              }
-            }
-          }
-        } catch (refErr: any) {
-          console.warn("[referral-reward] failed:", refErr.message);
-        }
-      }
+      // ── حملة الإحالة المزدوجة ──────────────────────────────────────────────
+      // مكافأة المُحيل لم تَعُد تُمنح عند إنشاء الطلب. أصبحت تُمنح عند *تأكيد* الطلب
+      // (PATCH /api/admin/orders/:id/confirm) عبر grantReferralRewardForOrder في
+      // server/lib/rewards.ts — لتفادي مكافأة الطلبات الوهمية/الملغاة (الدفع عند الاستلام).
 
       logOrderCreation(order.id, {
         customerName,
@@ -6595,9 +6530,15 @@ h1{font-size:18px;color:#222;margin:4px 0;}
           }
         } catch { /* non-fatal */ }
       }
-      // منح نقاط الولاء عند تسليم الطلب
+      // منح نقاط الولاء + مكافأة الإحالة عند تسليم الطلب (احتياط idempotent إن لم يُؤكَّد)
       if (newStatus === "delivered" && order?.userId && order?.total) {
-        await awardOrderPoints(Number(order.userId), order.id, Number(order.total));
+        await awardOrderPoints(String(order.userId), order.id, Number(order.total));
+      }
+      if (newStatus === "delivered" && order?.id) {
+        try {
+          const { grantReferralRewardForOrder } = await import("./lib/rewards");
+          await grantReferralRewardForOrder(order.id);
+        } catch { /* non-fatal */ }
       }
       // Task 3: تحديث sold_count تلقائياً
       if (order) {
@@ -6643,20 +6584,64 @@ h1{font-size:18px;color:#222;margin:4px 0;}
     try {
       const { db: dbInstance } = await import("./db");
       const { orders: ordersTable } = await import("@shared/schema");
-      const { eq: eqFn } = await import("drizzle-orm");
+      const { eq: eqFn, and: andFn, ne: neFn, sql: sqlFn } = await import("drizzle-orm");
+      const orderId = parseInt(req.params.id);
       const confirmed = req.body?.confirmed !== false; // default true
-      const updateData: any = {
-        adminConfirmed: confirmed,
-        confirmedAt: confirmed ? new Date() : null,
-        confirmedBy: confirmed ? (req.body?.confirmedBy || "admin") : null,
+
+      // إطلاق مكافآت التأكيد (دون حجب الاستجابة). كل المكافآت idempotent، لذا الاستدعاء
+      // آمن للإعادة: إن فشل الإطلاق الأول صامتاً، يكفي تأكيدٌ متكرر لإكمال الناقص.
+      const fireConfirmRewards = (order: any) => {
+        if (!order || order.status === "cancelled" || order.adminConfirmed !== true) return;
+        (async () => {
+          try {
+            const { grantReferralRewardForOrder } = await import("./lib/rewards");
+            // مكافأة الإحالة (تشمل الضيف والمسجّل، idempotent)
+            await grantReferralRewardForOrder(orderId);
+            // نقاط الولاء + دعوة التقييم للعميل المسجّل
+            if (order.userId && order.total) {
+              await awardOrderPoints(String(order.userId), orderId, Number(order.total));
+              const { notifyOrderDelivered } = await import("./lib/notifications");
+              await notifyOrderDelivered(String(order.userId), orderId);
+            }
+          } catch (rewErr: any) {
+            console.warn("[confirm-rewards] failed:", rewErr?.message);
+          }
+        })();
       };
-      const [order] = await dbInstance
+
+      // إلغاء التأكيد: تحديث بسيط بلا أي مكافآت
+      if (!confirmed) {
+        const [order] = await dbInstance
+          .update(ordersTable)
+          .set({ adminConfirmed: false, confirmedAt: null, confirmedBy: null })
+          .where(eqFn(ordersTable.id, orderId))
+          .returning();
+        if (!order) return res.status(404).json({ message: "الطلب غير موجود" });
+        return res.json(order);
+      }
+
+      // تأكيد: انتقال ذرّي false→true فقط (نتجاهل المؤكَّد مسبقاً أو الملغى)
+      const confirmedBy = req.body?.confirmedBy || "admin";
+      const [transitioned] = await dbInstance
         .update(ordersTable)
-        .set(updateData)
-        .where(eqFn(ordersTable.id, parseInt(req.params.id)))
+        .set({ adminConfirmed: true, confirmedAt: new Date(), confirmedBy })
+        .where(andFn(
+          eqFn(ordersTable.id, orderId),
+          sqlFn`${ordersTable.adminConfirmed} IS DISTINCT FROM true`,
+          neFn(ordersTable.status, "cancelled"),
+        ))
         .returning();
-      if (!order) return res.status(404).json({ message: "الطلب غير موجود" });
-      res.json(order);
+
+      if (transitioned) {
+        res.json(transitioned);
+        fireConfirmRewards(transitioned);
+      } else {
+        // مؤكَّد مسبقاً أو ملغى — نُعيد الحالة الحالية، ونعيد محاولة أي مكافأة ناقصة (idempotent)
+        const [cur] = await dbInstance.select().from(ordersTable).where(eqFn(ordersTable.id, orderId));
+        if (!cur) return res.status(404).json({ message: "الطلب غير موجود" });
+        res.json(cur);
+        fireConfirmRewards(cur);
+      }
     } catch (e: any) {
       res.status(500).json({ message: "فشل تأكيد الطلب", details: e.message });
     }
@@ -7092,24 +7077,10 @@ h1{font-size:18px;color:#222;margin:4px 0;}
   });
 
   // منح النقاط عند اكتمال الطلب (تُستدعى داخلياً)
-  async function awardOrderPoints(userId: number, orderId: number, orderTotal: number) {
+  async function awardOrderPoints(userId: string | number, orderId: number, orderTotal: number) {
     try {
-      const { pool: dbPool } = await import("./db");
-      const pointsEarned = Math.floor(orderTotal / 1000); // 1 نقطة لكل 1000 ر.ي
-      if (pointsEarned <= 0) return;
-      // تأكد من وجود سجل للمستخدم
-      await dbPool.query(
-        `INSERT INTO reward_points (user_id, points, lifetime_points)
-         VALUES ($1, $2, $2)
-         ON CONFLICT (user_id)
-         DO UPDATE SET points = reward_points.points + $2, lifetime_points = reward_points.lifetime_points + $2`,
-        [userId, pointsEarned]
-      );
-      // سجل المعاملة
-      await dbPool.query(
-        `INSERT INTO points_transactions (user_id, points, type, description, order_id) VALUES ($1, $2, $3, $4, $5)`,
-        [userId, pointsEarned, "earn", `شراء - طلب #${orderId}`, orderId]
-      );
+      const { awardPurchasePoints } = await import("./lib/rewards");
+      await awardPurchasePoints(String(userId), orderId, Number(orderTotal));
     } catch (e: any) {
       console.error("Points award error:", e.message);
     }

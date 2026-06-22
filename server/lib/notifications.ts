@@ -273,15 +273,19 @@ export async function notifyOrderStatus(userId: string, orderId: number, statusL
 }
 
 export async function notifyOrderDelivered(userId: string, orderId: number) {
+  // Fired once when an order is confirmed (and again, harmlessly, on a later
+  // "delivered" transition). Wording is stage-neutral and the groupKey dedup is
+  // effectively permanent so the customer only ever sees one review invite.
   return createNotification({
     userId,
     type: "order_status",
     priority: "high",
-    title: `🎉 تم توصيل طلبك #${orderId}`,
-    message: "كيف كانت تجربتك؟ شاركنا تقييمك للمنتجات",
+    title: `🌟 قيّم طلبك #${orderId}`,
+    message: "بعد استلام منتجاتك، شاركنا رأيك — تقييمك يساعد بقية العملاء واكسب 5 نقاط 🎁",
     actionUrl: `/rate-order/${orderId}`,
     orderId,
     groupKey: `order_delivered:${orderId}`,
+    dedupMinutes: 60 * 24 * 3650,
   });
 }
 

@@ -178,7 +178,7 @@ export default function LoyaltyPage() {
             <div className="space-y-2">
               <div className="flex items-center gap-3 p-2 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/20">
                 <ShoppingBag className="h-5 w-5 text-emerald-600 shrink-0" />
-                <p className="text-sm">كل <strong>100 ر.ي</strong> من المشتريات = <strong>1 نقطة</strong></p>
+                <p className="text-sm">كل <strong>1,000 ر.ي</strong> من المشتريات = <strong>1 نقطة</strong></p>
               </div>
               <div className="flex items-center gap-3 p-2 rounded-lg bg-blue-50/60 dark:bg-blue-950/20">
                 <Gift className="h-5 w-5 text-blue-600 shrink-0" />

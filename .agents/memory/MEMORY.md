@@ -17,4 +17,5 @@
 - [Client IP for rate limiting](rate-limit-client-ip.md) — trust proxy=1 is set; use req.ip not raw x-forwarded-for (spoofable); charge multi-output AI endpoints cost N.
 - [Product review eligibility](review-eligibility.md) — store-wide: ANY non-cancelled purchase (matched by user_id OR phone-tail, since orders are guest checkouts) lets a user review ANY product; admin-moderated; canReview server-side via shared `userHasPurchased`.
 - [Authenticated user id resolution](auth-user-id-resolution.md) — never `req.user.id` (always undefined); use `getUserId(req.user)||req.session.userId`; id is VARCHAR UUID so user-keyed tables need VARCHAR user_id.
+- [Customer rewards loop](rewards-loop.md) — points+referral fire at admin order CONFIRM (not delivered); all grants idempotent (points_transactions order_id+type / referrals unique idx); repeat-confirm must re-run rewards since admin_confirmed already true.
 - [Product detail V1/V2 split](pdp-v1-v2-split.md) — ProductDetailV2.tsx is the LIVE page (V1 ProductDetail.tsx is legacy); V2 uses quantityTiers/bagColors/printColorOptions, NOT smartVariants, and has no admin badge field (derive "recommended" in code).
