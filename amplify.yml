@@ -18,7 +18,7 @@ frontend:
         - cd artifacts/mockup-sandbox
         - npm run build -- --verbose
   artifacts:
-    baseDirectory: artifacts/mockup-sandbox
+    baseDirectory: artifacts/mockup-sandbox/dist
     files:
       - '**/*'
   cache:
