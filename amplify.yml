@@ -17,6 +17,14 @@ frontend:
         - export NODE_OPTIONS="--max_old_space_size=4096"
         - cd artifacts/mockup-sandbox
         - npm run build -- --verbose
+    postBuild:
+      commands:
+        - echo "=== BUILD OUTPUT DIAGNOSTICS ==="
+        - echo "PWD: $(pwd)"
+        - echo "LIST ROOT:" && ls -la || true
+        - echo "LIST ARTIFACTS FOLDER:" && ls -la artifacts/mockup-sandbox || true
+        - echo "LIST DIST FOLDER:" && ls -la artifacts/mockup-sandbox/dist || true
+        - echo "FIND DIST FILES:" && find artifacts/mockup-sandbox/dist -maxdepth 3 -type f -print || true
   artifacts:
     baseDirectory: artifacts/mockup-sandbox/dist
     files:
