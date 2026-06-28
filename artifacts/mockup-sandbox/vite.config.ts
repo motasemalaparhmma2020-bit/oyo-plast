@@ -5,23 +5,24 @@ import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { mockupPreviewPlugin } from "./mockupPreviewPlugin";
 
+// Read environment values but be tolerant in CI/production builds.
 const rawPort = process.env.PORT;
+// If PORT is provided, parse it; otherwise leave undefined for Vite to pick a default in CI.
+const port = rawPort ? Number(rawPort) : undefined;
 
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
+// Validate only when a value is provided or when running in non-production (dev) environments.
+if (rawPort && (Number.isNaN(port as number) || (port as number) <= 0)) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const basePath = process.env.BASE_PATH;
+// Require PORT in development to catch configuration mistakes early, but allow omission in production/CI.
+if (!rawPort && process.env.NODE_ENV !== "production") {
+  throw new Error("PORT environment variable is required but was not provided.");
+}
 
-if (!basePath) {
+// Allow a sensible default for BASE_PATH in production (root '/') while enforcing it in development.
+const basePath = process.env.BASE_PATH ?? "/";
+if (!process.env.BASE_PATH && process.env.NODE_ENV !== "production") {
   throw new Error(
     "BASE_PATH environment variable is required but was not provided.",
   );
