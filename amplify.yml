@@ -13,6 +13,8 @@ frontend:
         - npm install --legacy-peer-deps --loglevel verbose
     build:
       commands:
+        - export npm_config_build_from_source=false
+        - export NODE_OPTIONS="--max_old_space_size=4096"
         - cd artifacts/mockup-sandbox
         - npm run build -- --verbose
   artifacts:
