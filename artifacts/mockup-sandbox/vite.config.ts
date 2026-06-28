@@ -55,6 +55,8 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist"),
     emptyOutDir: true,
+    // Temporarily disable minification on CI (prevents OOM kills during terser/minify step)
+    minify: false,
   },
   optimizeDeps: {
     include: ["react", "react-dom", "lucide-react"],
