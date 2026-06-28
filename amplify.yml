@@ -3,16 +3,22 @@ frontend:
   phases:
     preBuild:
       commands:
+        - echo "Use Node 20"
         - nvm install 20 || true
         - nvm use 20 || true
-        - npm ci
+        - node -v
+        - npm -v
+        - npm install -g npm@latest
+        - cd artifacts/mockup-sandbox
+        - npm ci --loglevel verbose
     build:
       commands:
+        - cd artifacts/mockup-sandbox
         - npm run build
   artifacts:
-    baseDirectory: dist
+    baseDirectory: artifacts/mockup-sandbox/dist
     files:
       - '**/*'
   cache:
     paths:
-      - node_modules/**/*
+      - artifacts/mockup-sandbox/node_modules/**/*
