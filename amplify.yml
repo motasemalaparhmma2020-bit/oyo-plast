@@ -10,7 +10,7 @@ frontend:
         - npm -v
         - npm install -g npm@latest
         - cd artifacts/mockup-sandbox
-        - npm ci --loglevel verbose
+        - npm install --legacy-peer-deps --loglevel verbose
     build:
       commands:
         - cd artifacts/mockup-sandbox
