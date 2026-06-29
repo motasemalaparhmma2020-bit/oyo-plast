@@ -1,5 +1,5 @@
 {
     "buildCommand": "npm run build",
     "outputDirectory": "dist/public",
-    "installCommand": "npm install --registry=https://registry.npmjs.org"
+    "installCommand": "npm install --registry=https://registry.npmjs.org --no-package-lock"
 }
